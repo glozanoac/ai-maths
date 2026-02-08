@@ -62,6 +62,14 @@
     breakable
 }
 
+\newtcolorbox{tdconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
 % ---- Operators ----
 \DeclareMathOperator{\Var}{Var}
 \DeclareMathOperator{\Cov}{Cov}
@@ -78,7 +86,7 @@
 % ---- Title ----
 \title{\textbf{Probability Foundations\\for Reinforcement Learning Theory}\\[10pt]
 \large A Self-Contained Reference with Complete Proofs}
-\author{Companion to \emph{TD Learning} and \emph{Expectation Cheatsheet}}
+\author{AI/ML Mathematics Series}
 \date{February 2026}
 
 \begin{document}
@@ -87,13 +95,15 @@
 
 \begin{abstract}
 This document provides a rigorous, self-contained treatment of the probability theory
-needed to read and understand the convergence proofs in the companion articles on
-Temporal-Difference learning, policy gradient methods, and related topics. We cover
-the foundations that complement the \emph{Expectation Cheatsheet}: conditional
-probability, independence, modes of convergence, concentration inequalities,
-Borel--Cantelli lemmas, the law of large numbers, Markov chain theory, and
-martingale convergence theorems. Every result is stated precisely and proved from
-first principles in the discrete (finite or countable) setting.
+needed to read and understand the convergence proofs in reinforcement learning ---
+Temporal-Difference learning, policy gradient methods, and related topics. We develop
+the complete probabilistic toolkit from first principles: probability spaces, random
+variables, expectation and its linearity, conditional expectation, the tower property,
+MDP expectation expansion, variance decomposition, independence, filtrations,
+martingale difference sequences, modes of convergence, concentration inequalities,
+Borel--Cantelli lemmas, the law of large numbers, Markov chain theory, martingale
+convergence theorems, and Jensen's inequality. Every result is stated precisely and
+proved in the discrete (finite or countable) setting.
 \end{abstract}
 
 \tableofcontents
@@ -106,30 +116,29 @@ first principles in the discrete (finite or countable) setting.
 \label{sec:intro}
 
 The convergence proofs in reinforcement learning rely on a core set of probabilistic
-tools. The companion \emph{Expectation Cheatsheet} develops the expectation-specific
-machinery: linearity, conditional expectation, the tower property, variance
-decomposition, martingale difference sequences, and Jensen's inequality. This
-document builds the broader probability foundation on which those tools rest.
+tools. This document develops the complete probability foundation from first
+principles, providing every definition, theorem, and proof needed to follow the
+convergence analyses in the companion articles on Temporal-Difference learning,
+policy gradient methods, and stochastic approximation.
 
 \medskip\noindent\textbf{What this document covers.}
 \begin{enumerate}[nosep]
     \item \textbf{Probability spaces and events} --- $\sigma$-algebras, Kolmogorov axioms, conditional probability, Bayes' theorem.
-    \item \textbf{Random variables and distributions} --- measurability, common distributions, joint distributions.
+    \item \textbf{Random variables and distributions} --- measurability, common distributions, joint distributions, expectation, linearity.
+    \item \textbf{Conditional expectation and the tower property} --- conditional expectation given events and random variables, linearity, pull-out property, law of total expectation.
+    \item \textbf{MDP expectation expansion} --- the mechanical expansion step in Bellman derivations.
+    \item \textbf{Variance and conditional variance} --- computational formulas, law of total variance.
     \item \textbf{Independence} --- independent events, independent random variables, product of expectations.
+    \item \textbf{Filtrations} --- natural filtration of an MDP, the Markov property and conditioning equivalence.
+    \item \textbf{Martingale difference sequences} --- definitions, zero mean, partial sums form martingales, uncorrelated increments.
     \item \textbf{Modes of convergence} --- almost sure, in probability, in $L^p$, in distribution, and their relationships.
-    \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding.
+    \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding, Jensen.
     \item \textbf{Borel--Cantelli lemmas} --- the bridge between summable probabilities and almost sure convergence.
     \item \textbf{Limit theorems} --- weak and strong law of large numbers, central limit theorem, monotone and dominated convergence.
     \item \textbf{Markov chains} --- transition matrices, stationary distributions, ergodicity.
     \item \textbf{Martingale convergence theory} --- supermartingales, Doob's convergence theorem, Robbins--Siegmund.
+    \item \textbf{Stochastic approximation noise decomposition} --- the TD noise pattern that drives all convergence proofs.
 \end{enumerate}
-
-\medskip\noindent\textbf{What is covered in the companion Expectation Cheatsheet.}
-Expectation, linearity, conditional expectation (definition, linearity, pull-out
-property), MDP expectation expansion, tower property, variance and total variance,
-filtrations, martingale difference sequences, Jensen's inequality, and the
-stochastic approximation noise decomposition. We do not duplicate those results here
-but reference them freely.
 
 %% ============================================================
 %% SECTION 2: PROBABILITY SPACES AND EVENTS
@@ -424,7 +433,7 @@ A random variable $Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$ for so
 \end{definition}
 
 \begin{remark}
-The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is why the pull-out property (Expectation Cheatsheet, Theorem 3.2) holds: if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
+The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is why the pull-out property (Theorem~\ref{thm:pull_out}) holds: if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
 \end{remark}
 
 \subsection{Distribution Functions}
@@ -512,8 +521,427 @@ The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over all val
 Marginalization is a direct application of the law of total probability (Theorem~\ref{thm:total_prob}) with the partition $\{Y = y_1\}, \{Y = y_2\}, \ldots$
 \end{remark}
 
+\subsection{Expectation}
+\label{subsec:expectation}
+
+\begin{definition}[Expectation]
+\label{def:expectation}
+The \emph{expectation} (or \emph{expected value}) of a discrete random variable $X$ with PMF $p_X$ is
+\begin{equation}
+    \E[X] = \sum_{x} x\, p_X(x),
+    \label{eq:expectation_def}
+\end{equation}
+provided the sum converges absolutely: $\sum_x |x|\, p_X(x) < \infty$.
+\end{definition}
+
+\begin{tdconnection}[Connection to TD Learning]
+The state-value function $V^\pi(s) = \E_\pi[G_0 \mid S_0 = s]$ is an expectation of the return $G_0 = \sum_{t=0}^\infty \gamma^t R_{t+1}$ over all trajectories from state $s$. Since the MDP has finite state and action spaces and $\gamma < 1$, the return is bounded, so the expectation is always well defined.
+\end{tdconnection}
+
+\subsection{Linearity of Expectation}
+\label{subsec:linearity}
+
+\begin{keyresult}[Linearity of Expectation]
+\begin{theorem}[Linearity]
+\label{thm:linearity}
+For any discrete random variables $X$ and $Y$ with finite expectations, and constants $a, b \in \R$:
+\begin{equation}
+    \E[aX + bY] = a\,\E[X] + b\,\E[Y].
+    \label{eq:linearity}
+\end{equation}
+This holds regardless of whether $X$ and $Y$ are independent.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $X$ take values $\{x_i\}$ and $Y$ take values $\{y_j\}$. Denote the joint PMF by $p_{X,Y}(x_i, y_j) = \Prob(X = x_i, Y = y_j)$. Then:
+\begin{align}
+    \E[aX + bY]
+    &= \sum_{i}\sum_{j} (a x_i + b y_j)\, p_{X,Y}(x_i, y_j) \nonumber\\
+    &= a \sum_{i}\sum_{j} x_i\, p_{X,Y}(x_i, y_j) + b \sum_{i}\sum_{j} y_j\, p_{X,Y}(x_i, y_j) \nonumber\\
+    &= a \sum_{i} x_i \underbrace{\sum_{j} p_{X,Y}(x_i, y_j)}_{= p_X(x_i)} + b \sum_{j} y_j \underbrace{\sum_{i} p_{X,Y}(x_i, y_j)}_{= p_Y(y_j)} \nonumber\\
+    &= a \sum_{i} x_i\, p_X(x_i) + b \sum_{j} y_j\, p_Y(y_j) \nonumber\\
+    &= a\,\E[X] + b\,\E[Y]. \label{eq:linearity_proof}
+\end{align}
+The marginal sums $\sum_j p_{X,Y}(x_i, y_j) = p_X(x_i)$ and $\sum_i p_{X,Y}(x_i, y_j) = p_Y(y_j)$ follow from the definition of marginal distributions. No independence assumption is needed.
+\end{proof}
+
+\begin{corollary}[Finite Sums]
+\label{cor:linearity_sum}
+For any random variables $X_1, \ldots, X_n$ with finite expectations and constants $a_1, \ldots, a_n$:
+\begin{equation}
+    \E\!\left[\sum_{k=1}^n a_k X_k\right] = \sum_{k=1}^n a_k\,\E[X_k].
+    \label{eq:linearity_sum}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:linearity} inductively $n-1$ times.
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+Linearity is used to split the return $G_t = R_{t+1} + \gamma G_{t+1}$ inside expectations:
+\[
+    \E_\pi[G_t \mid S_t = s] = \E_\pi[R_{t+1} \mid S_t = s] + \gamma\,\E_\pi[G_{t+1} \mid S_t = s].
+\]
+This is the first step of every Bellman equation derivation.
+\end{tdconnection}
+
 %% ============================================================
-%% SECTION 4: INDEPENDENCE
+%% SECTION 4: CONDITIONAL EXPECTATION AND TOWER PROPERTY
+%% ============================================================
+\section{Conditional Expectation and Tower Property}
+\label{sec:conditional}
+
+\subsection{Definition and Basic Properties}
+\label{subsec:cond_def}
+
+\begin{definition}[Conditional Expectation Given an Event]
+\label{def:cond_exp_event}
+For a discrete random variable $X$ and an event $B$ with $\Prob(B) > 0$:
+\begin{equation}
+    \E[X \mid B] = \sum_x x\, \Prob(X = x \mid B) = \sum_x x\, \frac{\Prob(X = x,\, B)}{\Prob(B)}.
+    \label{eq:cond_exp_event}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Conditional Expectation Given a Random Variable]
+\label{def:cond_exp_rv}
+For discrete random variables $X$ and $Y$, the \emph{conditional expectation of $X$ given $Y$} is the random variable $\E[X \mid Y]$ defined by
+\begin{equation}
+    \E[X \mid Y](\omega) = \E[X \mid Y = Y(\omega)] = \sum_x x\, \Prob(X = x \mid Y = Y(\omega)).
+    \label{eq:cond_exp_rv}
+\end{equation}
+That is, $\E[X \mid Y]$ is a function of $Y$: it assigns to each outcome $\omega$ the conditional mean of $X$ given the observed value of $Y$.
+\end{definition}
+
+\begin{tdconnection}[Connection to TD Learning]
+The value function $V^\pi(s) = \E_\pi[G_t \mid S_t = s]$ is a conditional expectation given a specific state. The notation $\E_\pi[\delta_t^\pi \mid S_t = s]$ conditions on the current state $s$ and averages over the randomness of $A_t$, $R_{t+1}$, and $S_{t+1}$.
+\end{tdconnection}
+
+\subsection{Linearity of Conditional Expectation}
+\label{subsec:cond_linearity}
+
+\begin{theorem}[Linearity of Conditional Expectation]
+\label{thm:cond_linearity}
+For discrete random variables $X$, $Y$, $Z$ and constants $a, b \in \R$:
+\begin{equation}
+    \E[aX + bY \mid Z] = a\,\E[X \mid Z] + b\,\E[Y \mid Z].
+    \label{eq:cond_linearity}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Fix $Z = z$ with $\Prob(Z = z) > 0$.
+
+\textbf{Step 1: Expand the definition of conditional expectation.}
+The conditional expectation of $aX + bY$ given $Z = z$ is computed by summing over all joint values $(x, y)$:
+\begin{equation}
+    \E[aX + bY \mid Z = z]
+    = \sum_{x,y} (ax + by)\, \Prob(X = x, Y = y \mid Z = z).
+    \label{eq:cond_lin_step1}
+\end{equation}
+
+\textbf{Step 2: Distribute the sum.}
+Since the sum $\sum_{x,y}$ is a finite sum and $(ax + by) = ax + by$, we can split it into two separate sums:
+\begin{equation}
+    = a \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z)
+    \;+\; b \sum_{x,y} y\, \Prob(X = x, Y = y \mid Z = z).
+    \label{eq:cond_lin_step2}
+\end{equation}
+
+\textbf{Step 3: Marginalize --- reduce $\sum_{x,y}$ to $\sum_x$ (and $\sum_y$).}
+This is the key step. Consider the first sum. Since $x$ does \emph{not} depend on $y$, we can rearrange the double sum by summing over $y$ first, with $x$ held fixed:
+\begin{align}
+    \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z)
+    &= \sum_x x \underbrace{\sum_y \Prob(X = x, Y = y \mid Z = z)}_{\text{sum over all possible } y}.
+    \label{eq:cond_lin_step3a}
+\end{align}
+The inner sum over $y$ is the \textbf{marginalization} (law of total probability applied conditionally). Since the events $\{Y = y\}$ for all $y$ form a partition of the sample space:
+\begin{align}
+    \sum_y \Prob(X = x, Y = y \mid Z = z)
+    &= \Prob\!\left(\bigcup_y \{X = x, Y = y\} \;\middle|\; Z = z\right) \nonumber\\
+    &= \Prob(X = x \mid Z = z).
+    \label{eq:cond_lin_marginal}
+\end{align}
+The union $\bigcup_y \{X = x, Y = y\}$ covers every possible value of $Y$ while keeping $X = x$ fixed, so it equals the event $\{X = x\}$.
+
+Substituting~\eqref{eq:cond_lin_marginal} back into~\eqref{eq:cond_lin_step3a}:
+\begin{equation}
+    \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z) = \sum_x x\, \Prob(X = x \mid Z = z).
+    \label{eq:cond_lin_step3b}
+\end{equation}
+
+By the \emph{same reasoning} applied to the second sum (sum over $x$ first, marginalize out $X$):
+\begin{equation}
+    \sum_{x,y} y\, \Prob(X = x, Y = y \mid Z = z) = \sum_y y\, \Prob(Y = y \mid Z = z).
+    \label{eq:cond_lin_step3c}
+\end{equation}
+
+\textbf{Step 4: Recognize the conditional expectations.}
+Substituting~\eqref{eq:cond_lin_step3b} and~\eqref{eq:cond_lin_step3c} into~\eqref{eq:cond_lin_step2}:
+\begin{align}
+    \E[aX + bY \mid Z = z]
+    &= a \sum_x x\, \Prob(X = x \mid Z = z) + b \sum_y y\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= a\,\E[X \mid Z = z] + b\,\E[Y \mid Z = z].
+    \label{eq:cond_lin_step4}
+\end{align}
+
+Since this holds for every value $z$ with $\Prob(Z = z) > 0$, we conclude as an identity of random variables:
+\begin{equation}
+    \E[aX + bY \mid Z] = a\,\E[X \mid Z] + b\,\E[Y \mid Z]. \qedhere
+\end{equation}
+\end{proof}
+
+\subsection{Pulling Out Known Factors}
+\label{subsec:pull_out}
+
+\begin{keyresult}[Pull-Out Property]
+\begin{theorem}[Pull-Out Property]
+\label{thm:pull_out}
+If $h(Z)$ is a function of $Z$ (i.e., $h(Z)$ is $\sigma(Z)$-measurable), then:
+\begin{equation}
+    \E[h(Z) \cdot X \mid Z] = h(Z) \cdot \E[X \mid Z].
+    \label{eq:pull_out}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Fix $Z = z$. Then $h(Z) = h(z)$ is a constant under this conditioning:
+\begin{align}
+    \E[h(Z) \cdot X \mid Z = z]
+    &= \sum_x h(z) \cdot x \cdot \Prob(X = x \mid Z = z) \nonumber\\
+    &= h(z) \sum_x x\, \Prob(X = x \mid Z = z) \nonumber\\
+    &= h(z) \cdot \E[X \mid Z = z]. \label{eq:pull_out_proof}
+\end{align}
+Since this holds for every $z$, the result follows as an identity of random variables.
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+When proving that the TD error has zero conditional mean, we condition on $S_t = s$ and pull out $V(S_t) = V(s)$:
+\[
+    \E[\delta_t \mid S_t = s] = \E[R_{t+1} + \gamma V(S_{t+1}) \mid S_t = s] - V(s).
+\]
+Here $V(s)$ exits the expectation because it is fully determined by $S_t$.
+\end{tdconnection}
+
+\subsection{Law of Total Expectation (Tower Property)}
+\label{subsec:tower}
+
+\begin{keyresult}[Law of Total Expectation]
+\begin{theorem}[Law of Total Expectation]
+\label{thm:tower}
+For discrete random variables $X$ and $Y$ with $\E[|X|] < \infty$:
+\begin{equation}
+    \E[X] = \E\!\left[\E[X \mid Y]\right] = \sum_y \E[X \mid Y = y]\, \Prob(Y = y).
+    \label{eq:tower}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Expand the right-hand side:
+\begin{align}
+    \sum_y \E[X \mid Y = y]\, \Prob(Y = y)
+    &= \sum_y \left(\sum_x x\, \Prob(X = x \mid Y = y)\right) \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \Prob(X = x \mid Y = y)\, \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \frac{\Prob(X = x, Y = y)}{\Prob(Y = y)} \cdot \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \Prob(X = x, Y = y) \nonumber\\
+    &= \sum_x x \sum_y \Prob(X = x, Y = y) \nonumber\\
+    &= \sum_x x\, \Prob(X = x) = \E[X]. \label{eq:tower_proof}
+\end{align}
+The interchange of summation is justified by absolute convergence.
+\end{proof}
+
+\begin{theorem}[Generalized Tower Property]
+\label{thm:tower_general}
+If $\mathcal{G} \subseteq \mathcal{H}$ are two $\sigma$-algebras (i.e., $\mathcal{G}$ contains ``less information'' than $\mathcal{H}$), then:
+\begin{equation}
+    \E\!\left[\E[X \mid \mathcal{H}] \;\middle|\; \mathcal{G}\right] = \E[X \mid \mathcal{G}].
+    \label{eq:tower_general}
+\end{equation}
+In particular, for random variables with $\sigma(Z) \subseteq \sigma(Y, Z)$:
+\begin{equation}
+    \E\!\left[\E[X \mid Y, Z] \;\middle|\; Z\right] = \E[X \mid Z].
+    \label{eq:tower_yz}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We prove~\eqref{eq:tower_yz} in the discrete case. Fix $Z = z$:
+\begin{align}
+    \E\!\left[\E[X \mid Y, Z] \;\middle|\; Z = z\right]
+    &= \sum_y \E[X \mid Y = y, Z = z]\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_y \left(\sum_x x\, \Prob(X = x \mid Y = y, Z = z)\right) \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_x x \sum_y \Prob(X = x \mid Y = y, Z = z)\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_x x \sum_y \frac{\Prob(X = x, Y = y, Z = z)}{\Prob(Y = y, Z = z)} \cdot \frac{\Prob(Y = y, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x \sum_y \frac{\Prob(X = x, Y = y, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x\, \frac{\Prob(X = x, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x\, \Prob(X = x \mid Z = z) = \E[X \mid Z = z]. \label{eq:tower_general_proof}
+\end{align}
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+The Bellman equation derivation uses the tower property with the Markov property. Starting from $V^\pi(s) = \E_\pi[R_1 + \gamma G_1 \mid S_0 = s]$:
+\[
+    \E_\pi[G_1 \mid S_0 = s] = \E_\pi\!\left[\E_\pi[G_1 \mid S_1] \;\middle|\; S_0 = s\right] = \E_\pi[V^\pi(S_1) \mid S_0 = s].
+\]
+The inner conditioning on $S_1$ uses the Markov property ($S_1$ screens off the future from $S_0$), and the outer averaging over $S_1$ given $S_0$ uses the tower property.
+\end{tdconnection}
+
+%% ============================================================
+%% SECTION 5: EXPANDING EXPECTATIONS IN AN MDP
+%% ============================================================
+\section{Expanding Expectations in an MDP}
+\label{sec:expanding}
+
+This section formalizes the mechanical step that appears in virtually every derivation in the TD article.
+
+\begin{theorem}[MDP Expectation Expansion]
+\label{thm:mdp_expansion}
+Let $(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ be a finite MDP with policy $\pi$. For any function $f: \mathcal{A} \times \mathcal{S} \times \R \to \R$:
+\begin{equation}
+    \E_\pi[f(A_t, S_{t+1}, R_{t+1}) \mid S_t = s] = \sum_{a \in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}} P(s'|s,a)\, f(a, s', r(s,a,s')).
+    \label{eq:mdp_expansion}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By the definition of conditional expectation and the MDP dynamics:
+\begin{align}
+    &\E_\pi[f(A_t, S_{t+1}, R_{t+1}) \mid S_t = s] \nonumber\\
+    &\quad= \sum_{a \in \mathcal{A}} \sum_{s' \in \mathcal{S}} f(a, s', r(s,a,s'))\, \Prob(A_t = a, S_{t+1} = s' \mid S_t = s). \label{eq:expand_step1}
+\end{align}
+By the chain rule for conditional probability:
+\begin{align}
+    \Prob(A_t = a, S_{t+1} = s' \mid S_t = s)
+    &= \Prob(A_t = a \mid S_t = s) \cdot \Prob(S_{t+1} = s' \mid S_t = s, A_t = a) \nonumber\\
+    &= \pi(a|s) \cdot P(s'|s,a). \label{eq:expand_step2}
+\end{align}
+Substituting~\eqref{eq:expand_step2} into~\eqref{eq:expand_step1} yields~\eqref{eq:mdp_expansion}.
+\end{proof}
+
+\begin{corollary}[Bellman Expectation --- Expectation Form]
+\label{cor:bellman_expansion}
+Setting $f(a, s', r) = r + \gamma V(s')$ in Theorem~\ref{thm:mdp_expansion}:
+\begin{equation}
+    \E_\pi[R_{t+1} + \gamma V(S_{t+1}) \mid S_t = s] = \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V(s')\bigr] = (\mathcal{T}^\pi V)(s).
+    \label{eq:bellman_expansion}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Direct substitution into~\eqref{eq:mdp_expansion}.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: VARIANCE AND CONDITIONAL VARIANCE
+%% ============================================================
+\section{Variance and Conditional Variance}
+\label{sec:variance}
+
+\subsection{Definitions}
+\label{subsec:var_def}
+
+\begin{definition}[Variance]
+\label{def:variance}
+The \emph{variance} of a random variable $X$ with $\E[X^2] < \infty$ is
+\begin{equation}
+    \Var(X) = \E\!\left[(X - \E[X])^2\right].
+    \label{eq:var_def}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Computational Formula for Variance]
+\label{thm:var_formula}
+\begin{equation}
+    \Var(X) = \E[X^2] - (\E[X])^2.
+    \label{eq:var_formula}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Let $\mu = \E[X]$. Expanding the square:
+\begin{align}
+    \Var(X) &= \E[(X - \mu)^2] \nonumber\\
+    &= \E[X^2 - 2\mu X + \mu^2] \nonumber\\
+    &= \E[X^2] - 2\mu\,\E[X] + \mu^2 \tag{linearity} \\
+    &= \E[X^2] - 2\mu^2 + \mu^2 \nonumber\\
+    &= \E[X^2] - \mu^2 = \E[X^2] - (\E[X])^2. \label{eq:var_formula_proof}
+\end{align}
+\end{proof}
+
+\begin{definition}[Conditional Variance]
+\label{def:cond_var}
+The \emph{conditional variance} of $X$ given $Y$ is the random variable
+\begin{equation}
+    \Var(X \mid Y) = \E\!\left[(X - \E[X \mid Y])^2 \;\middle|\; Y\right] = \E[X^2 \mid Y] - (\E[X \mid Y])^2.
+    \label{eq:cond_var}
+\end{equation}
+\end{definition}
+
+\begin{proof}[Proof of the computational formula~\eqref{eq:cond_var}]
+Fix $Y = y$ and let $\mu_y = \E[X \mid Y = y]$. Applying the same expansion as in Theorem~\ref{thm:var_formula} to the conditional expectation:
+\begin{align}
+    \Var(X \mid Y = y) &= \E[(X - \mu_y)^2 \mid Y = y] \nonumber\\
+    &= \E[X^2 \mid Y = y] - 2\mu_y\,\E[X \mid Y = y] + \mu_y^2 \nonumber\\
+    &= \E[X^2 \mid Y = y] - \mu_y^2. \label{eq:cond_var_proof}
+\end{align}
+\end{proof}
+
+\subsection{Law of Total Variance}
+\label{subsec:total_var}
+
+\begin{keyresult}[Law of Total Variance]
+\begin{theorem}[Law of Total Variance]
+\label{thm:total_variance}
+For random variables $X$ and $Y$ with $\E[X^2] < \infty$:
+\begin{equation}
+    \Var(X) = \E\!\left[\Var(X \mid Y)\right] + \Var\!\left(\E[X \mid Y]\right).
+    \label{eq:total_variance}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We compute each term on the right-hand side.
+
+\textbf{First term.} Using~\eqref{eq:cond_var}:
+\begin{align}
+    \E[\Var(X \mid Y)]
+    &= \E\!\left[\E[X^2 \mid Y] - (\E[X \mid Y])^2\right] \nonumber\\
+    &= \E[\E[X^2 \mid Y]] - \E[(\E[X \mid Y])^2] \nonumber\\
+    &= \E[X^2] - \E[(\E[X \mid Y])^2], \label{eq:total_var_first}
+\end{align}
+where the last equality uses the tower property $\E[\E[X^2 \mid Y]] = \E[X^2]$.
+
+\textbf{Second term.} Let $\mu = \E[X]$. By the computational formula for variance:
+\begin{align}
+    \Var(\E[X \mid Y])
+    &= \E[(\E[X \mid Y])^2] - (\E[\E[X \mid Y]])^2 \nonumber\\
+    &= \E[(\E[X \mid Y])^2] - (\E[X])^2 \nonumber\\
+    &= \E[(\E[X \mid Y])^2] - \mu^2. \label{eq:total_var_second}
+\end{align}
+
+\textbf{Sum.} Adding~\eqref{eq:total_var_first} and~\eqref{eq:total_var_second}:
+\begin{align}
+    \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])
+    &= \bigl(\E[X^2] - \E[(\E[X \mid Y])^2]\bigr) + \bigl(\E[(\E[X \mid Y])^2] - \mu^2\bigr) \nonumber\\
+    &= \E[X^2] - \mu^2 = \Var(X). \label{eq:total_var_sum}
+\end{align}
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+This is the central result for the bias-variance analysis. The article applies it with $X = G_t$ and $Y = (A_t, S_{t+1})$:
+\[
+    \Var_\pi(G_t \mid S_t) = \underbrace{\Var_\pi(R_{t+1} + \gamma V^\pi(S_{t+1}) \mid S_t)}_{\text{one-step variance}} + \gamma^2 \underbrace{\E_\pi[\Var_\pi(G_{t+1} \mid S_{t+1}) \mid S_t]}_{\text{future variance} \;\geq\; 0}.
+\]
+The TD(0) target $R_{t+1} + \gamma V(S_{t+1})$ captures only the first term, eliminating the non-negative future variance entirely. This is why TD has lower variance than Monte Carlo.
+\end{tdconnection}
+
+%% ============================================================
+%% SECTION 7: INDEPENDENCE
 %% ============================================================
 \section{Independence}
 \label{sec:independence}
@@ -625,7 +1053,162 @@ The \textbf{Markov property} is a conditional independence statement: given $S_t
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 5: MODES OF CONVERGENCE
+%% SECTION 8: FILTRATIONS
+%% ============================================================
+\section{Filtrations}
+\label{sec:filtrations}
+
+\begin{definition}[Filtration]
+\label{def:filtration}
+A \emph{filtration} on $(\Omega, \mathcal{F}, \Prob)$ is an increasing sequence of sub-$\sigma$-algebras:
+\begin{equation}
+    \mathcal{F}_0 \subseteq \mathcal{F}_1 \subseteq \mathcal{F}_2 \subseteq \cdots \subseteq \mathcal{F}.
+    \label{eq:filtration}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Natural Filtration of an MDP]
+\label{def:mdp_filtration}
+The \emph{natural filtration} of the MDP trajectory is
+\begin{equation}
+    \mathcal{F}_t = \sigma(S_0, A_0, R_1, S_1, A_1, R_2, \ldots, S_t),
+    \label{eq:mdp_filtration}
+\end{equation}
+the $\sigma$-algebra generated by all observations up to and including time $t$.
+\end{definition}
+
+\begin{remark}[Interpretation]
+$\mathcal{F}_t$ represents ``all information available at time $t$.'' Saying that a random variable $Z$ is $\mathcal{F}_t$-measurable means $Z$ can be computed from $(S_0, A_0, R_1, \ldots, S_t)$ alone. In particular:
+\begin{itemize}[nosep]
+    \item $V(S_t)$ is $\mathcal{F}_t$-measurable (it depends only on $S_t$, which is in $\mathcal{F}_t$).
+    \item $R_{t+1}$ and $S_{t+1}$ are \emph{not} $\mathcal{F}_t$-measurable (they are ``future'' information).
+\end{itemize}
+\end{remark}
+
+\begin{proposition}[Conditioning on $\mathcal{F}_t$ Refines Conditioning on $S_t$]
+\label{prop:filtration_refine}
+In an MDP with the Markov property, for any function of future observations $f(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$:
+\begin{equation}
+    \E[f(S_{t+1}, R_{t+1}, \ldots) \mid \mathcal{F}_t] = \E[f(S_{t+1}, R_{t+1}, \ldots) \mid S_t].
+    \label{eq:markov_filtration}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The Markov property states that the conditional distribution of the future trajectory given the entire history $\mathcal{F}_t$ depends only on $S_t$:
+\begin{equation}
+    \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid \mathcal{F}_t) = \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid S_t).
+\end{equation}
+Since conditional expectations are determined by conditional distributions,~\eqref{eq:markov_filtration} follows immediately.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+This is why the TD convergence proofs can freely switch between conditioning on the filtration $\mathcal{F}_t$ (needed for stochastic approximation theory) and conditioning on $S_t$ (more convenient for computation). The Markov property guarantees these are equivalent.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: MARTINGALE DIFFERENCE SEQUENCES
+%% ============================================================
+\section{Martingale Difference Sequences}
+\label{sec:mds}
+
+\subsection{Definitions}
+\label{subsec:mds_def}
+
+\begin{definition}[Martingale]
+\label{def:martingale}
+A sequence of random variables $\{M_n\}_{n \geq 0}$ is a \emph{martingale} with respect to a filtration $\{\mathcal{F}_n\}$ if for all $n \geq 0$:
+\begin{enumerate}[nosep]
+    \item $M_n$ is $\mathcal{F}_n$-measurable (adapted),
+    \item $\E[|M_n|] < \infty$ (integrable),
+    \item $\E[M_{n+1} \mid \mathcal{F}_n] = M_n$ (the ``fair game'' property).
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Martingale Difference Sequence]
+\label{def:mds}
+A sequence $\{w_n\}_{n \geq 1}$ is a \emph{martingale difference sequence} (MDS) with respect to $\{\mathcal{F}_n\}$ if for all $n \geq 1$:
+\begin{enumerate}[nosep]
+    \item $w_n$ is $\mathcal{F}_n$-measurable,
+    \item $\E[|w_n|] < \infty$,
+    \item $\E[w_n \mid \mathcal{F}_{n-1}] = 0$.
+\end{enumerate}
+\end{definition}
+
+\subsection{Fundamental Properties}
+\label{subsec:mds_props}
+
+\begin{theorem}[MDS Implies Zero Unconditional Mean]
+\label{thm:mds_zero_mean}
+If $\{w_n\}$ is an MDS, then $\E[w_n] = 0$ for all $n$.
+\end{theorem}
+
+\begin{proof}
+By the tower property (Theorem~\ref{thm:tower}):
+\begin{equation}
+    \E[w_n] = \E[\E[w_n \mid \mathcal{F}_{n-1}]] = \E[0] = 0. \label{eq:mds_zero_proof}
+\end{equation}
+\end{proof}
+
+\begin{theorem}[MDS Partial Sums Form a Martingale]
+\label{thm:mds_martingale}
+If $\{w_n\}_{n \geq 1}$ is an MDS with respect to $\{\mathcal{F}_n\}$, then $M_n = \sum_{k=1}^n w_k$ is a martingale with respect to $\{\mathcal{F}_n\}$ (with $M_0 = 0$).
+\end{theorem}
+
+\begin{proof}
+We verify the three martingale conditions.
+
+\textit{Adapted:} Each $w_k$ is $\mathcal{F}_k$-measurable, hence $\mathcal{F}_n$-measurable for $k \leq n$. So $M_n = \sum_{k=1}^n w_k$ is $\mathcal{F}_n$-measurable.
+
+\textit{Integrable:} $\E[|M_n|] \leq \sum_{k=1}^n \E[|w_k|] < \infty$ by the triangle inequality.
+
+\textit{Fair game:}
+\begin{align}
+    \E[M_{n+1} \mid \mathcal{F}_n]
+    &= \E\!\left[\sum_{k=1}^{n+1} w_k \;\middle|\; \mathcal{F}_n\right] \nonumber\\
+    &= \sum_{k=1}^n \E[w_k \mid \mathcal{F}_n] + \E[w_{n+1} \mid \mathcal{F}_n] \nonumber\\
+    &= \sum_{k=1}^n w_k + 0 = M_n. \label{eq:mds_martingale_proof}
+\end{align}
+Here we used: (a) linearity of conditional expectation; (b) $w_k$ is $\mathcal{F}_n$-measurable for $k \leq n$, so $\E[w_k \mid \mathcal{F}_n] = w_k$; (c) the MDS condition $\E[w_{n+1} \mid \mathcal{F}_n] = 0$.
+\end{proof}
+
+\begin{theorem}[Uncorrelated Increments of an MDS]
+\label{thm:mds_uncorrelated}
+If $\{w_n\}$ is an MDS with $\E[w_n^2] < \infty$ for all $n$, then for $m \neq n$:
+\begin{equation}
+    \E[w_m w_n] = 0.
+    \label{eq:mds_uncorrelated}
+\end{equation}
+Consequently, $\Var(M_n) = \sum_{k=1}^n \E[w_k^2]$.
+\end{theorem}
+
+\begin{proof}
+Without loss of generality, assume $m < n$. Then $w_m$ is $\mathcal{F}_{n-1}$-measurable. By the pull-out property (Theorem~\ref{thm:pull_out}) and the tower property:
+\begin{align}
+    \E[w_m w_n]
+    &= \E[\E[w_m w_n \mid \mathcal{F}_{n-1}]] \nonumber\\
+    &= \E[w_m \cdot \E[w_n \mid \mathcal{F}_{n-1}]] \nonumber\\
+    &= \E[w_m \cdot 0] = 0. \label{eq:mds_uncorrelated_proof}
+\end{align}
+For the variance of the partial sum:
+\begin{align}
+    \Var(M_n) &= \E[M_n^2] - (\E[M_n])^2 = \E[M_n^2] \qquad \text{(since } \E[M_n] = 0\text{)} \nonumber\\
+    &= \E\!\left[\left(\sum_{k=1}^n w_k\right)^2\right]
+    = \sum_{k=1}^n \E[w_k^2] + 2\sum_{j < k} \underbrace{\E[w_j w_k]}_{= 0}
+    = \sum_{k=1}^n \E[w_k^2]. \label{eq:mds_var_proof}
+\end{align}
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+The TD error under the true value function is an MDS:
+\[
+    \E_\pi[\delta_t^\pi \mid \mathcal{F}_t] = \E_\pi[R_{t+1} + \gamma V^\pi(S_{t+1}) - V^\pi(S_t) \mid S_t] = V^\pi(S_t) - V^\pi(S_t) = 0.
+\]
+This is \emph{the} central fact enabling all convergence proofs. In the stochastic approximation formulation, the noise term $w_k(s) = R_{n_k+1} + \gamma V_k(S_{n_k+1}) - (\mathcal{T}^\pi V_k)(s)$ satisfies $\E[w_k(s) \mid \mathcal{F}_k] = 0$. The uncorrelated increments property (Theorem~\ref{thm:mds_uncorrelated}) ensures accumulated noise doesn't grow too fast, which is essential for the Robbins-Monro conditions.
+\end{tdconnection}
+
+%% ============================================================
+%% SECTION 10: MODES OF CONVERGENCE
 %% ============================================================
 \section{Modes of Convergence}
 \label{sec:convergence}
@@ -975,8 +1558,73 @@ Optimizing over $\lambda$ as in Hoeffding's proof gives $\Prob(M_n - M_0 \geq t)
 The Azuma--Hoeffding inequality bounds the fluctuations of martingales, which arise in TD learning as partial sums of TD errors. It provides finite-sample concentration bounds for value function estimates, complementing the asymptotic convergence guaranteed by stochastic approximation theory.
 \end{rlconnection}
 
+\subsection{Jensen's Inequality}
+\label{subsec:jensen}
+
+\begin{definition}[Convex Function]
+\label{def:convex}
+A function $\varphi: \R \to \R$ is \emph{convex} if for all $x, y \in \R$ and $\lambda \in [0,1]$:
+\begin{equation}
+    \varphi(\lambda x + (1-\lambda) y) \leq \lambda\, \varphi(x) + (1-\lambda)\, \varphi(y).
+    \label{eq:convex_def}
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Supporting Hyperplane / Tangent Line]
+\label{lem:supporting}
+If $\varphi$ is convex, then for any $c \in \R$, there exists a constant $m \in \R$ (a subgradient) such that:
+\begin{equation}
+    \varphi(x) \geq \varphi(c) + m(x - c) \quad \text{for all } x \in \R.
+    \label{eq:supporting}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Define $m = \sup_{y < c} \frac{\varphi(c) - \varphi(y)}{c - y}$. By convexity, the slopes of secant lines through $(c, \varphi(c))$ are non-decreasing. For any $x > c$, the secant slope from $c$ to $x$ is at least $m$:
+\begin{equation}
+    \frac{\varphi(x) - \varphi(c)}{x - c} \geq m,
+\end{equation}
+which gives $\varphi(x) \geq \varphi(c) + m(x - c)$. For $x < c$, the secant slope from $x$ to $c$ is at most $m$:
+\begin{equation}
+    \frac{\varphi(c) - \varphi(x)}{c - x} \leq m,
+\end{equation}
+which rearranges to $\varphi(x) \geq \varphi(c) + m(x - c)$. The case $x = c$ is trivial.
+\end{proof}
+
+\begin{keyresult}[Jensen's Inequality]
+\begin{theorem}[Jensen's Inequality]
+\label{thm:jensen}
+If $\varphi$ is convex and $\E[|X|] < \infty$, then:
+\begin{equation}
+    \varphi\!\left(\E[X]\right) \leq \E[\varphi(X)].
+    \label{eq:jensen}
+\end{equation}
+Conditional version: $\varphi\!\left(\E[X \mid Y]\right) \leq \E[\varphi(X) \mid Y]$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $c = \E[X]$. By Lemma~\ref{lem:supporting}, there exists $m$ such that $\varphi(X) \geq \varphi(c) + m(X - c)$ pointwise. Taking expectations:
+\begin{align}
+    \E[\varphi(X)]
+    &\geq \E[\varphi(c) + m(X - c)] \nonumber\\
+    &= \varphi(c) + m\bigl(\E[X] - c\bigr) \tag{linearity}\\
+    &= \varphi(c) + m \cdot 0 = \varphi(c) = \varphi(\E[X]). \label{eq:jensen_proof}
+\end{align}
+
+For the conditional version, fix $Y = y$ and apply the unconditional Jensen's inequality to the conditional distribution of $X$ given $Y = y$. Since this holds for every $y$, it holds as a random variable inequality.
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+Jensen's inequality is used in Appendix B of the article to prove the contraction property $\|\mathbf{P}_\pi \mathbf{v}\|_{d^\pi} \leq \|\mathbf{v}\|_{d^\pi}$. The key step: $(\mathbf{P}_\pi \mathbf{v})(s') = \sum_s \frac{d^\pi(s) P_\pi(s'|s)}{d^\pi(s')} v(s)$ is a weighted average of $v(s)$ with weights summing to $1$ (a conditional expectation). Since $\varphi(x) = x^2$ is convex:
+\[
+    \left(\sum_s w_s\, v(s)\right)^2 \leq \sum_s w_s\, v(s)^2.
+\]
+This proves $\mathbf{P}_\pi$ is non-expansive in the $d^\pi$-weighted norm, which in turn shows the matrix $\mathbf{A}$ in the linear TD fixed-point equation is negative definite.
+\end{tdconnection}
+
 %% ============================================================
-%% SECTION 7: BOREL-CANTELLI LEMMAS
+%% SECTION 12: BOREL-CANTELLI LEMMAS
 %% ============================================================
 \section{Borel--Cantelli Lemmas}
 \label{sec:borel_cantelli}
@@ -1494,7 +2142,7 @@ In the linear TD convergence proof (Theorem 6.2 of the TD article), the key matr
 \section{Martingale Convergence Theory}
 \label{sec:martingale_convergence}
 
-The Expectation Cheatsheet defines martingales and martingale difference sequences and proves their basic properties. Here we develop the convergence theory that underpins the stochastic approximation proofs.
+Martingales and martingale difference sequences were defined in Section~\ref{sec:mds}. Here we develop the convergence theory that underpins the stochastic approximation proofs.
 
 \subsection{Submartingales and Supermartingales}
 \label{subsec:sub_super}
@@ -1518,7 +2166,7 @@ If $\{M_n\}$ is a martingale and $\varphi$ is convex with $\E[|\varphi(M_n)|] < 
 \end{proposition}
 
 \begin{proof}
-By Jensen's inequality (conditional version, from the Expectation Cheatsheet):
+By Jensen's inequality (conditional version, Theorem~\ref{thm:jensen}):
 \begin{equation}
     \E[\varphi(M_{n+1}) \mid \mathcal{F}_n] \geq \varphi(\E[M_{n+1} \mid \mathcal{F}_n]) = \varphi(M_n).
 \end{equation}
@@ -1665,12 +2313,61 @@ Conclusion (2) gives $\sum_n \alpha_n \|V_n - V^\pi\|^2 < \infty$, and since $\s
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 11: SUMMARY
+%% SECTION 16: STOCHASTIC APPROXIMATION NOISE DECOMPOSITION
+%% ============================================================
+\section{The Stochastic Approximation Noise Decomposition}
+\label{sec:noise}
+
+This section collects the key expectation facts into the single pattern that drives all TD convergence proofs.
+
+\begin{theorem}[TD Noise Decomposition]
+\label{thm:noise_decomp}
+In a finite MDP under policy $\pi$, define the noise at state visit $k$ of state $s$:
+\begin{equation}
+    w_k(s) = R_{n_k+1} + \gamma V_k(S_{n_k+1}) - (\mathcal{T}^\pi V_k)(s),
+    \label{eq:noise_def}
+\end{equation}
+where $n_k$ is the time of the $k$-th visit to $s$. Then:
+\begin{enumerate}[nosep]
+    \item $\E[w_k(s) \mid \mathcal{F}_k] = 0$ \hfill (martingale difference)
+    \item $\E[w_k(s)^2 \mid \mathcal{F}_k] \leq C(1 + \|V_k\|_\infty^2)$ for some constant $C$ \hfill (bounded variance)
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{Part 1.} Conditioning on $\mathcal{F}_k$ (which includes $V_k$ and $S_{n_k} = s$), and using Proposition~\ref{prop:filtration_refine} to reduce conditioning on $\mathcal{F}_k$ to conditioning on $S_{n_k} = s$:
+\begin{align}
+    \E[w_k(s) \mid \mathcal{F}_k]
+    &= \E[R_{n_k+1} + \gamma V_k(S_{n_k+1}) \mid S_{n_k} = s, V_k] - (\mathcal{T}^\pi V_k)(s). \label{eq:noise_step1}
+\end{align}
+By Theorem~\ref{thm:mdp_expansion} (MDP expectation expansion) applied to the function $f(a, s') = r(s,a,s') + \gamma V_k(s')$:
+\begin{align}
+    \E[R_{n_k+1} + \gamma V_k(S_{n_k+1}) \mid S_{n_k} = s, V_k]
+    &= \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V_k(s')\bigr] \nonumber\\
+    &= (\mathcal{T}^\pi V_k)(s). \label{eq:noise_step2}
+\end{align}
+Substituting~\eqref{eq:noise_step2} into~\eqref{eq:noise_step1}: $\E[w_k(s) \mid \mathcal{F}_k] = (\mathcal{T}^\pi V_k)(s) - (\mathcal{T}^\pi V_k)(s) = 0$.
+
+\textbf{Part 2.} Since the MDP is finite, rewards are bounded: $|R_{n_k+1}| \leq R_{\max}$. The value estimate satisfies $|V_k(s')| \leq \|V_k\|_\infty$. Therefore:
+\begin{align}
+    |w_k(s)| &\leq |R_{n_k+1}| + \gamma |V_k(S_{n_k+1})| + |(\mathcal{T}^\pi V_k)(s)| \nonumber\\
+    &\leq R_{\max} + \gamma \|V_k\|_\infty + (R_{\max} + \gamma \|V_k\|_\infty) \nonumber\\
+    &= 2R_{\max} + 2\gamma \|V_k\|_\infty. \label{eq:noise_bound_step}
+\end{align}
+Therefore $w_k(s)^2 \leq (2R_{\max} + 2\gamma \|V_k\|_\infty)^2 \leq C(1 + \|V_k\|_\infty^2)$ for $C = 8\max(R_{\max}^2, \gamma^2)$.
+\end{proof}
+
+\begin{remark}
+Theorem~\ref{thm:noise_decomp} shows that the TD update fits precisely into the Robbins-Monro framework (Theorem~\ref{thm:robbins_siegmund}): $V_{k+1}(s) = V_k(s) + \alpha_k(s)[h(V_k)(s) + w_k(s)]$ where $h(V)(s) = (\mathcal{T}^\pi V)(s) - V(s)$ has unique root $V^\pi$, and $w_k(s)$ is zero-mean noise with bounded variance. The convergence then follows from stochastic approximation theory.
+\end{remark}
+
+%% ============================================================
+%% SECTION 17: SUMMARY
 %% ============================================================
 \section{Summary of Key Results}
 \label{sec:summary}
 
-The following table collects the main results and their roles in the companion RL documents.
+The following table collects the main results and their roles in the RL documents.
 
 \begin{center}
 \renewcommand{\arraystretch}{1.5}
@@ -1678,9 +2375,23 @@ The following table collects the main results and their roles in the companion R
 \toprule
 \textbf{Result} & \textbf{Statement} & \textbf{Role in RL Proofs} \\
 \midrule
+Linearity (\ref{thm:linearity}) & $\E[aX + bY] = a\E[X] + b\E[Y]$ & Splitting $G_t = R_{t+1} + \gamma G_{t+1}$ \\
+\addlinespace
+Pull-out (\ref{thm:pull_out}) & $\E[h(Z)X \mid Z] = h(Z)\E[X \mid Z]$ & Extracting $V(s)$ from $\E[\delta_t \mid S_t]$ \\
+\addlinespace
+MDP expansion (\ref{thm:mdp_expansion}) & $\E_\pi[f(A,S') \mid S\!=\!s] = \sum_a \pi \sum_{s'} P \cdot f$ & Every Bellman derivation \\
+\addlinespace
+Tower property (\ref{thm:tower}) & $\E[\E[X \mid Y]] = \E[X]$ & Bellman recursion, MDS $\Rightarrow$ zero mean \\
+\addlinespace
+Total variance (\ref{thm:total_variance}) & $\Var(X) = \E[\Var(X|Y)] + \Var(\E[X|Y])$ & Bias-variance tradeoff \\
+\addlinespace
 Bayes' theorem (\ref{thm:bayes}) & $\Prob(B|A) = \frac{\Prob(A|B)\Prob(B)}{\Prob(A)}$ & Importance sampling ratios \\
 \addlinespace
 Product of expectations (\ref{thm:product_exp}) & $\E[\prod X_i] = \prod \E[X_i]$ if independent & Variance of sums, noise bounds \\
+\addlinespace
+MDS condition (\ref{def:mds}) & $\E[w_n \mid \mathcal{F}_{n-1}] = 0$ & All convergence proofs \\
+\addlinespace
+Uncorrelated MDS (\ref{thm:mds_uncorrelated}) & $\E[w_m w_n] = 0$ for $m \neq n$ & Noise variance bounds \\
 \addlinespace
 Modes of convergence (\ref{thm:conv_hierarchy}) & a.s.\ $\Rightarrow$ in prob.\ $\Rightarrow$ in dist.; $L^p \Rightarrow$ in prob. & Interpreting convergence theorems \\
 \addlinespace
@@ -1691,6 +2402,8 @@ Chebyshev (\ref{thm:chebyshev}) & $\Prob(|X - \mu| \geq \varepsilon) \leq \sigma
 Hoeffding (\ref{thm:hoeffding}) & Sub-Gaussian tail for bounded averages & Finite-sample bounds on MC estimates \\
 \addlinespace
 Azuma--Hoeffding (\ref{thm:azuma}) & Concentration for bounded martingales & Finite-sample bounds on TD estimates \\
+\addlinespace
+Jensen's (\ref{thm:jensen}) & $\varphi(\E[X]) \leq \E[\varphi(X)]$ & $\|\mathbf{P}_\pi \mathbf{v}\|_{d^\pi}$ contraction \\
 \addlinespace
 Borel--Cantelli (\ref{thm:bc1}, \ref{thm:bc2}) & $\sum \Prob(A_n) < \infty \Rightarrow \Prob(A_n \text{ i.o.}) = 0$ & Upgrading to a.s.\ convergence \\
 \addlinespace

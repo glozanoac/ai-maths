@@ -11,8 +11,7 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 - `01-math-foundations/` — Mathematical Foundations
   - `01-measure-theory/` — Durrett Ch.1-6, Billingsley Ch.1-7
     - 01-measure-spaces (σ-algebras, measures, Carathéodory extension, measurable functions, π-λ theorem)
-    - probability-foundations (convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales)
-    - expectation-cheatsheet (linearity, conditional expectation, tower property, variance, MDS, Jensen)
+    - probability-foundations (expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales)
   - `02-functional-analysis/` — Kreyszig Ch.1-5
   - `03-optimization/` — Boyd Ch.2-11, Nesterov Ch.1-4, Borkar Ch.1-6
   - `04-game-theory/` — Fudenberg & Tirole Ch.1-3,6,12-13
@@ -54,4 +53,4 @@ Within each phase, documents build on each other:
 
 - Documents are LaTeX-generated PDFs; source `.tex` files may be present for newer documents
 - Commit messages reference the primary topic added
-- After any modification commit the changes with a meaningful commit message.
+- After any modification compile and commit the changes with a meaningful commit message.
