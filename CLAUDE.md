@@ -16,6 +16,8 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 - `supplement/` — Prerequisite mathematical foundations
   - Expectation Cheatsheet (linearity, conditional expectation, tower property, variance, MDS, Jensen's inequality)
   - Probability Foundations (σ-algebras, independence, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingale convergence, Robbins-Siegmund)
+- `lessons/` — Structured lessons (102 sessions, aligned with curriculum.pdf)
+  - 01: Measure Spaces (σ-algebras, measures, Carathéodory extension, measurable functions, Borel σ-algebra, π-λ theorem)
 - `dl/` — Deep learning architectures
   - Recurrent Neural Networks (BPTT derivation, vanishing/exploding gradient analysis, mitigation strategies)
   - LSTM Networks (gating mechanisms, cell state dynamics, BPTT through gates, variants including GRU)
