@@ -245,9 +245,20 @@ Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space.
 
 \medskip
 \textit{Claim 1: The $B_n$ are pairwise disjoint.}
-Let $i < j$. We must show $B_i \cap B_j = \emptyset$.
-Since $A_1 \subseteq A_2 \subseteq \cdots$, we have $A_i \subseteq A_{j-1}$. By definition $B_i \subseteq A_i$ (either $B_1 = A_1$ or $B_i = A_i \setminus A_{i-1} \subseteq A_i$), so $B_i \subseteq A_{j-1}$.
-But $B_j = A_j \setminus A_{j-1}$, meaning $B_j \cap A_{j-1} = \emptyset$. Since $B_i \subseteq A_{j-1}$, we conclude $B_i \cap B_j = \emptyset$.
+Let $i < j$. We must show $B_i \cap B_j = \emptyset$, i.e., there is no $\omega$ belonging to both $B_i$ and $B_j$. We proceed by contradiction.
+
+Suppose $\omega \in B_i \cap B_j$.
+
+\emph{Step 1: $\omega \in B_i$ implies $\omega \in A_{j-1}$.}
+If $i = 1$, then $B_1 = A_1$, so $\omega \in A_1$. If $i \geq 2$, then $B_i = A_i \setminus A_{i-1} \subseteq A_i$, so $\omega \in A_i$.
+In either case $\omega \in A_i$. Since $i < j$ and the sets are nested ($A_1 \subseteq A_2 \subseteq \cdots$), we have $i \leq j - 1$, hence $A_i \subseteq A_{j-1}$. Therefore $\omega \in A_{j-1}$.
+
+\emph{Step 2: $\omega \in B_j$ implies $\omega \notin A_{j-1}$.}
+Since $j \geq 2$ (because $i \geq 1$ and $i < j$), we have $B_j = A_j \setminus A_{j-1} = \{\alpha \in A_j : \alpha \notin A_{j-1}\}$.
+So $\omega \in B_j$ gives $\omega \notin A_{j-1}$ by definition of set difference.
+
+\emph{Conclusion.}
+Step~1 gives $\omega \in A_{j-1}$ and Step~2 gives $\omega \notin A_{j-1}$. This is a contradiction, so no such $\omega$ exists and $B_i \cap B_j = \emptyset$.
 
 \medskip
 \textit{Claim 2: $A_N = \bigcup_{k=1}^N B_k$ for every $N \geq 1$.}
