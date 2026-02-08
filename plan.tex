@@ -1,251 +1,395 @@
 \documentclass[a3paper,landscape]{article}
-\usepackage[margin=1cm]{geometry}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc,shadows.blur,fit,backgrounds}
+\usepackage[margin=1.2cm,bottom=1.5cm]{geometry}
 \usepackage[T1]{fontenc}
-\usepackage{hyperref}
-\hypersetup{colorlinks=true,linkcolor=black}
-
-\pagestyle{empty}
+\usepackage{pgfgantt}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multicol}
+\usepackage{amsmath,amssymb}
 
 % ---- Phase Colors ----
-\definecolor{ph1}{HTML}{E8F5E9}  % green - math foundations
-\definecolor{ph1b}{HTML}{388E3C}
-\definecolor{ph2}{HTML}{E3F2FD}  % blue - core RL
-\definecolor{ph2b}{HTML}{1976D2}
-\definecolor{ph3}{HTML}{FFF3E0}  % orange - DL foundations
-\definecolor{ph3b}{HTML}{E65100}
-\definecolor{ph4}{HTML}{F3E5F5}  % purple - deep RL
-\definecolor{ph4b}{HTML}{7B1FA2}
-\definecolor{ph5}{HTML}{FFEBEE}  % red - MARL
-\definecolor{ph5b}{HTML}{C62828}
-\definecolor{ph6}{HTML}{E0F7FA}  % teal - aerospace
-\definecolor{ph6b}{HTML}{00695C}
+\definecolor{ph1}{HTML}{388E3C}
+\definecolor{ph1f}{HTML}{C8E6C9}
+\definecolor{ph2}{HTML}{1976D2}
+\definecolor{ph2f}{HTML}{BBDEFB}
+\definecolor{ph3}{HTML}{E65100}
+\definecolor{ph3f}{HTML}{FFE0B2}
+\definecolor{ph4}{HTML}{7B1FA2}
+\definecolor{ph4f}{HTML}{E1BEE7}
+\definecolor{ph5}{HTML}{C62828}
+\definecolor{ph5f}{HTML}{FFCDD2}
+\definecolor{ph6}{HTML}{00695C}
+\definecolor{ph6f}{HTML}{B2DFDB}
+
+\pagestyle{empty}
 
 \begin{document}
 
 \begin{center}
-{\Huge\bfseries Curriculum Dependency Graph}\\[4pt]
-{\large A Rigorous Learning Path to Multi-Agent Deep Reinforcement Learning}
+{\LARGE\bfseries Study Plan --- Gantt Chart}\\[4pt]
+{\large Schedule: 8\,PM\,--\,2\,AM daily (6\,h/day, 7 days/week) \quad$\vert$\quad
+Start: \textbf{Feb 9, 2026} \quad$\vert$\quad
+End: \textbf{Jun 19, 2026} \quad$\vert$\quad
+Total: \textbf{748\,h} in \textbf{131 days} (19 weeks)}
 \end{center}
 
 \vspace{0.3cm}
 
 \begin{center}
-\begin{tikzpicture}[
-    >={Stealth[length=5pt,width=4pt]},
-    node distance=1.2cm and 1.6cm,
-    every node/.style={align=center, font=\small},
-    phase1/.style={
-        rectangle, rounded corners=4pt, draw=ph1b, fill=ph1,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    phase2/.style={
-        rectangle, rounded corners=4pt, draw=ph2b, fill=ph2,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    phase3/.style={
-        rectangle, rounded corners=4pt, draw=ph3b, fill=ph3,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    phase4/.style={
-        rectangle, rounded corners=4pt, draw=ph4b, fill=ph4,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    phase5/.style={
-        rectangle, rounded corners=4pt, draw=ph5b, fill=ph5,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    phase6/.style={
-        rectangle, rounded corners=4pt, draw=ph6b, fill=ph6,
-        text width=3.2cm, minimum height=1.1cm,
-        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
-    },
-    depedge/.style={->, thick, color=#1!70!black},
-    depedge/.default={gray},
-    critical/.style={->, very thick, color=red!70!black},
-]
+\begin{ganttchart}[
+    x unit=2.05mm,
+    y unit title=7mm,
+    y unit chart=5.8mm,
+    title label font=\scriptsize\bfseries,
+    bar label font=\scriptsize,
+    group label font=\scriptsize\bfseries,
+    milestone label font=\scriptsize\itshape,
+    bar height=0.55,
+    group height=0.28,
+    group peaks tip position=0,
+    group left shift=0,
+    group right shift=0,
+    today=1,
+    today label={\tiny\itshape Today (Feb 8)},
+    today rule/.style={draw=red!70, ultra thick, dashed},
+    vgrid={*6{draw=gray!15}, {draw=gray!40}},
+    hgrid={draw=gray!25},
+    title/.style={fill=gray!10, draw=gray!40},
+    link/.style={-latex, thick, rounded corners=1pt},
+    link bulge=4,
+    link tolerance=2,
+]{1}{131}
 
 % ================================================================
-% PHASE I: MATHEMATICAL FOUNDATIONS (top row)
+% TITLE ROW 1: Months
 % ================================================================
-\node[phase1] (prob) {\textbf{1.1} Measure Theory\\[-1pt] \& Probability\\[-1pt] {\scriptsize Durrett Ch.\,1--6}\\[-1pt] {\scriptsize\bfseries 80\,h}};
-
-\node[phase1, right=1.8cm of prob] (func) {\textbf{1.2} Functional\\[-1pt] Analysis\\[-1pt] {\scriptsize Kreyszig Ch.\,1--5}\\[-1pt] {\scriptsize\bfseries 34\,h}};
-
-\node[phase1, right=1.8cm of func] (optim) {\textbf{1.3} Optimization\\[-1pt] Theory\\[-1pt] {\scriptsize Boyd; Nesterov; Borkar}\\[-1pt] {\scriptsize\bfseries 92\,h}};
-
-\node[phase1, right=1.8cm of optim] (game) {\textbf{1.4} Game\\[-1pt] Theory\\[-1pt] {\scriptsize Fudenberg \& Tirole}\\[-1pt] {\scriptsize\bfseries 34\,h}};
-
-% Phase I label
-\begin{scope}[on background layer]
-\node[draw=ph1b, fill=ph1!30, rounded corners=6pt, dashed,
-      fit=(prob)(func)(optim)(game),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph1b}]above left:Phase I --- Mathematical Foundations (240\,h)}] {};
-\end{scope}
+\gantttitle{February 2026}{20}
+\gantttitle{March}{31}
+\gantttitle{April}{30}
+\gantttitle{May}{31}
+\gantttitle{June}{19} \\
 
 % ================================================================
-% PHASE II: CORE RL (second row)
+% TITLE ROW 2: Weeks
 % ================================================================
-\node[phase2, below=2.2cm of prob] (mdp) {\textbf{2.1} Markov Decision\\[-1pt] Processes\\[-1pt] {\scriptsize Puterman Ch.\,2--8}\\[-1pt] {\scriptsize\bfseries 46\,h}};
-
-\node[phase2, right=1.8cm of mdp] (rlalg) {\textbf{2.2} RL Algorithms\\[-1pt] {\scriptsize S\&B + B\&T}\\[-1pt] {\scriptsize\bfseries 82\,h}};
-
-\node[phase2, right=1.8cm of rlalg] (pg) {\textbf{2.3} Policy Gradient\\[-1pt] Theory\\[-1pt] {\scriptsize Papers: PGT$\to$PPO}\\[-1pt] {\scriptsize\bfseries 28\,h}};
-
-\begin{scope}[on background layer]
-\node[draw=ph2b, fill=ph2!30, rounded corners=6pt, dashed,
-      fit=(mdp)(rlalg)(pg),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph2b}]above left:Phase II --- Core RL Theory (156\,h)}] {};
-\end{scope}
-
-% ================================================================
-% PHASE III: DEEP LEARNING FOUNDATIONS (second row, right)
-% ================================================================
-\node[phase3, right=1.8cm of pg] (nn) {\textbf{3.1} Neural Network\\[-1pt] Theory\\[-1pt] {\scriptsize Bach Ch.\,1--8}\\[-1pt] {\scriptsize\bfseries 42\,h}};
-
-\node[phase3, below=1.6cm of nn] (dlopt) {\textbf{3.2} Optimization\\[-1pt] for Deep Learning\\[-1pt] {\scriptsize SGD, Adam papers}\\[-1pt] {\scriptsize\bfseries 24\,h}};
-
-\begin{scope}[on background layer]
-\node[draw=ph3b, fill=ph3!30, rounded corners=6pt, dashed,
-      fit=(nn)(dlopt),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph3b}]above left:Phase III --- DL Foundations (66\,h)}] {};
-\end{scope}
+\gantttitle{W1}{7}
+\gantttitle{W2}{7}
+\gantttitle{W3}{7}
+\gantttitle{W4}{7}
+\gantttitle{W5}{7}
+\gantttitle{W6}{7}
+\gantttitle{W7}{7}
+\gantttitle{W8}{7}
+\gantttitle{W9}{7}
+\gantttitle{W10}{7}
+\gantttitle{W11}{7}
+\gantttitle{W12}{7}
+\gantttitle{W13}{7}
+\gantttitle{W14}{7}
+\gantttitle{W15}{7}
+\gantttitle{W16}{7}
+\gantttitle{W17}{7}
+\gantttitle{W18}{7}
+\gantttitle{~~}{5} \\
 
 % ================================================================
-% PHASE IV: DEEP RL (third row)
+% PHASE I: MATHEMATICAL FOUNDATIONS
 % ================================================================
-\node[phase4, below=2.2cm of mdp] (vdrl) {\textbf{4.1} Value-Based\\[-1pt] Deep RL\\[-1pt] {\scriptsize DQN, C51}\\[-1pt] {\scriptsize\bfseries 24\,h}};
+\ganttgroup[
+    group/.append style={fill=ph1f, draw=ph1, thick}
+]{Phase I: Mathematical Foundations \normalfont\scriptsize(240\,h \,$\mid$\, Feb\,9\,--\,Mar\,22)}{1}{42} \\
 
-\node[phase4, right=1.8cm of vdrl] (pdrl) {\textbf{4.2} Policy-Based\\[-1pt] Deep RL\\[-1pt] {\scriptsize DDPG, TD3, SAC}\\[-1pt] {\scriptsize\bfseries 26\,h}};
+\ganttbar[
+    bar/.append style={fill=ph1f, draw=ph1},
+    name=m11
+]{1.1 Measure Theory \& Probability (80\,h)}{1}{14} \\
 
-\node[phase4, right=1.8cm of pdrl] (mbrl) {\textbf{4.3} Model-Based\\[-1pt] RL\\[-1pt] {\scriptsize Dyna, MuZero, Dreamer}\\[-1pt] {\scriptsize\bfseries 18\,h}};
+\ganttbar[
+    bar/.append style={fill=ph1f, draw=ph1},
+    name=m12
+]{1.2 Functional Analysis (34\,h)}{15}{20} \\
 
-\begin{scope}[on background layer]
-\node[draw=ph4b, fill=ph4!30, rounded corners=6pt, dashed,
-      fit=(vdrl)(pdrl)(mbrl),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph4b}]above left:Phase IV --- Deep RL (68\,h)}] {};
-\end{scope}
+\ganttbar[
+    bar/.append style={fill=ph1f, draw=ph1},
+    name=m13
+]{1.3 Optimization Theory (92\,h)}{21}{36} \\
 
-% ================================================================
-% PHASE V: MULTI-AGENT RL (fourth row)
-% ================================================================
-\node[phase5, below=2.2cm of vdrl] (sgames) {\textbf{5.1} Stochastic\\[-1pt] Games\\[-1pt] {\scriptsize Shoham; Filar \& Vrieze}\\[-1pt] {\scriptsize\bfseries 42\,h}};
+\ganttbar[
+    bar/.append style={fill=ph1f, draw=ph1},
+    name=m14
+]{1.4 Game Theory (34\,h)}{37}{42} \\
 
-\node[phase5, right=1.8cm of sgames] (coop) {\textbf{5.2} Cooperative\\[-1pt] MARL\\[-1pt] {\scriptsize VDN, QMIX, MAPPO}\\[-1pt] {\scriptsize\bfseries 28\,h}};
-
-\node[phase5, right=1.8cm of coop] (comp) {\textbf{5.3} Competitive \&\\[-1pt] Mixed MARL\\[-1pt] {\scriptsize MADDPG, LOLA, PSRO}\\[-1pt] {\scriptsize\bfseries 30\,h}};
-
-\node[phase5, right=1.8cm of comp] (mfg) {\textbf{5.4} Mean-Field\\[-1pt] Games\\[-1pt] {\scriptsize Carmona \& Delarue}\\[-1pt] {\scriptsize\bfseries 28\,h}};
-
-\node[phase5, below=1.5cm of $(coop)!0.5!(comp)$] (comm) {\textbf{5.5} Communication\\[-1pt] in MARL\\[-1pt] {\scriptsize CommNet, DIAL}\\[-1pt] {\scriptsize\bfseries 14\,h}};
-
-\begin{scope}[on background layer]
-\node[draw=ph5b, fill=ph5!30, rounded corners=6pt, dashed,
-      fit=(sgames)(coop)(comp)(mfg)(comm),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph5b}]above left:Phase V --- Multi-Agent RL (142\,h)}] {};
-\end{scope}
+\ganttmilestone[
+    milestone/.append style={fill=ph1, draw=ph1},
+    name=ms1
+]{Phase I Complete (Mar 22)}{42} \\
 
 % ================================================================
-% PHASE VI: AEROSPACE (bottom row)
+% PHASE II: CORE RL THEORY
 % ================================================================
-\node[phase6, below=2.5cm of sgames] (safe) {\textbf{6.1} Safety \&\\[-1pt] Constraints\\[-1pt] {\scriptsize Altman; CPO}\\[-1pt] {\scriptsize\bfseries 26\,h}};
+\ganttgroup[
+    group/.append style={fill=ph2f, draw=ph2, thick}
+]{Phase II: Core RL Theory \normalfont\scriptsize(156\,h \,$\mid$\, Mar\,23\,--\,Apr\,18)}{43}{69} \\
 
-\node[phase6, right=1.8cm of safe] (pomdp) {\textbf{6.2} Partial\\[-1pt] Observability\\[-1pt] {\scriptsize Krishnamurthy}\\[-1pt] {\scriptsize\bfseries 20\,h}};
+\ganttbar[
+    bar/.append style={fill=ph2f, draw=ph2},
+    name=m21
+]{2.1 Markov Decision Processes (46\,h)}{43}{50} \\
 
-\node[phase6, right=1.8cm of pomdp] (sim2r) {\textbf{6.3} Sim-to-Real\\[-1pt] Transfer\\[-1pt] {\scriptsize Domain randomization}\\[-1pt] {\scriptsize\bfseries 6\,h}};
+\ganttbar[
+    bar/.append style={fill=ph2f, draw=ph2},
+    name=m22
+]{2.2 RL Algorithms: S\&B + B\&T (82\,h)}{51}{64} \\
 
-\node[phase6, right=1.8cm of sim2r] (multi) {\textbf{6.4} Multi-Vehicle\\[-1pt] Coordination\\[-1pt] {\scriptsize Formation, collision}\\[-1pt] {\scriptsize\bfseries 24\,h}};
+\ganttbar[
+    bar/.append style={fill=ph2f, draw=ph2},
+    name=m23
+]{2.3 Policy Gradient Theory (28\,h)}{65}{69} \\
 
-\begin{scope}[on background layer]
-\node[draw=ph6b, fill=ph6!30, rounded corners=6pt, dashed,
-      fit=(safe)(pomdp)(sim2r)(multi),
-      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph6b}]above left:Phase VI --- Aerospace Applications (76\,h)}] {};
-\end{scope}
-
-% ================================================================
-% DEPENDENCY ARROWS
-% ================================================================
-
-% --- Phase I → Phase II (critical path in bold red) ---
-\draw[critical] (prob) -- (mdp);
-\draw[critical] (func) -- (mdp);
-\draw[critical] (optim) -- (rlalg);
-
-% Phase I internal
-\draw[depedge=ph1b] (prob) -- (optim);
-
-% MDP → RL Algorithms → Policy Gradient
-\draw[critical] (mdp) -- (rlalg);
-\draw[critical] (rlalg) -- (pg);
-
-% --- Phase I → Phase III ---
-\draw[depedge=ph3b] (prob.south) -- ++(0,-0.4) -| (nn.north);
-\draw[depedge=ph3b] (optim) -- (nn);
-
-% Phase III internal
-\draw[depedge=ph3b] (nn) -- (dlopt);
-
-% --- Phase I/II/III → Phase IV ---
-\draw[critical] (rlalg) -- (vdrl);
-\draw[critical] (pg) -- (pdrl);
-\draw[depedge=ph4b] (dlopt) -- (pdrl);
-\draw[depedge=ph4b] (nn.south) -- ++(0,-0.5) -| (vdrl.north east);
-\draw[depedge=ph4b] (rlalg.south) -- ++(0,-0.4) -| (mbrl.north);
-
-% Phase IV internal
-\draw[depedge=ph4b] (vdrl) -- (pdrl);
-
-% --- Phase I → Phase V ---
-\draw[critical] (game.south) -- ++(0,-0.6) -| (sgames.north);
-
-% --- Phase IV → Phase V ---
-\draw[critical] (vdrl) -- (sgames);
-\draw[depedge=ph5b] (vdrl.south) -- ++(0,-0.4) -| (coop.north);
-\draw[depedge=ph5b] (pdrl.south) -- ++(0,-0.5) -| (comp.north);
-
-% Phase V internal
-\draw[critical] (sgames) -- (coop);
-\draw[critical] (sgames) -- (comp);
-\draw[depedge=ph5b] (prob.south) -- ++(0,-0.3) -| ([xshift=5pt]mfg.north);
-\draw[depedge=ph5b] (game.south) -- ++(0,-0.5) -| ([xshift=-5pt]mfg.north);
-\draw[depedge=ph5b] (coop) -- (comm);
-\draw[depedge=ph5b] (comp) -- (comm);
-
-% --- Phase IV/V → Phase VI ---
-\draw[depedge=ph6b] (pdrl.south) -- ++(0,-0.5) -| (safe.north);
-\draw[depedge=ph6b] (optim.south) -- ++(0,-0.3) -| ([xshift=5pt]safe.north);
-\draw[depedge=ph6b] (mdp.south) -- ++(0,-0.35) -| (pomdp.north);
-\draw[depedge=ph6b] (pdrl.south) -- ++(0,-0.5) -| (sim2r.north);
-\draw[depedge=ph6b] (mbrl.south) -- ++(0,-0.4) -| ([xshift=-5pt]sim2r.north);
-\draw[depedge=ph6b] (coop.south) -- ++(0,-0.35) -| (multi.north);
-\draw[depedge=ph6b] (safe.east) -- (pomdp.west);
-\draw[depedge=ph6b] (comm.south) -- ++(0,-0.35) -| ([xshift=5pt]multi.north);
+\ganttmilestone[
+    milestone/.append style={fill=ph2, draw=ph2},
+    name=ms2
+]{Phase II Complete (Apr 18)}{69} \\
 
 % ================================================================
-% LEGEND
+% PHASE III: DEEP LEARNING FOUNDATIONS
 % ================================================================
-\node[anchor=north west, font=\small] at ([xshift=-0.5cm,yshift=-0.5cm]safe.south west) {
-\begin{tikzpicture}[every node/.style={font=\small}]
-    \draw[critical] (0,0) -- (1.2,0) node[right] {Critical path};
-    \draw[depedge] (0,-0.5) -- (1.2,-0.5) node[right] {Dependency};
-    \node[phase1, text width=1.2cm, minimum height=0.5cm] at (5.5,0) {\scriptsize Ph.\,I};
-    \node[phase2, text width=1.2cm, minimum height=0.5cm] at (7,0) {\scriptsize Ph.\,II};
-    \node[phase3, text width=1.2cm, minimum height=0.5cm] at (8.5,0) {\scriptsize Ph.\,III};
-    \node[phase4, text width=1.2cm, minimum height=0.5cm] at (5.5,-0.55) {\scriptsize Ph.\,IV};
-    \node[phase5, text width=1.2cm, minimum height=0.5cm] at (7,-0.55) {\scriptsize Ph.\,V};
-    \node[phase6, text width=1.2cm, minimum height=0.5cm] at (8.5,-0.55) {\scriptsize Ph.\,VI};
-    \node[anchor=west, font=\bfseries] at (10,0) {Total: 748\,h};
-    \node[anchor=west] at (10,-0.55) {102 sessions};
-\end{tikzpicture}
-};
+\ganttgroup[
+    group/.append style={fill=ph3f, draw=ph3, thick}
+]{Phase III: DL Foundations \normalfont\scriptsize(66\,h \,$\mid$\, Apr\,19\,--\,Apr\,29)}{70}{80} \\
 
-\end{tikzpicture}
+\ganttbar[
+    bar/.append style={fill=ph3f, draw=ph3},
+    name=m31
+]{3.1 Neural Network Theory (42\,h)}{70}{76} \\
+
+\ganttbar[
+    bar/.append style={fill=ph3f, draw=ph3},
+    name=m32
+]{3.2 Optimization for DL (24\,h)}{77}{80} \\
+
+\ganttmilestone[
+    milestone/.append style={fill=ph3, draw=ph3},
+    name=ms3
+]{Phase III Complete (Apr 29)}{80} \\
+
+% ================================================================
+% PHASE IV: DEEP RL
+% ================================================================
+\ganttgroup[
+    group/.append style={fill=ph4f, draw=ph4, thick}
+]{Phase IV: Deep RL \normalfont\scriptsize(68\,h \,$\mid$\, Apr\,30\,--\,May\,11)}{81}{92} \\
+
+\ganttbar[
+    bar/.append style={fill=ph4f, draw=ph4},
+    name=m41
+]{4.1 Value-Based Deep RL (24\,h)}{81}{84} \\
+
+\ganttbar[
+    bar/.append style={fill=ph4f, draw=ph4},
+    name=m42
+]{4.2 Policy-Based Deep RL (26\,h)}{85}{89} \\
+
+\ganttbar[
+    bar/.append style={fill=ph4f, draw=ph4},
+    name=m43
+]{4.3 Model-Based RL (18\,h)}{90}{92} \\
+
+\ganttmilestone[
+    milestone/.append style={fill=ph4, draw=ph4},
+    name=ms4
+]{Phase IV Complete (May 11)}{92} \\
+
+% ================================================================
+% PHASE V: MULTI-AGENT RL
+% ================================================================
+\ganttgroup[
+    group/.append style={fill=ph5f, draw=ph5, thick}
+]{Phase V: Multi-Agent RL \normalfont\scriptsize(142\,h \,$\mid$\, May\,12\,--\,Jun\,5)}{93}{117} \\
+
+\ganttbar[
+    bar/.append style={fill=ph5f, draw=ph5},
+    name=m51
+]{5.1 Stochastic Games (42\,h)}{93}{99} \\
+
+\ganttbar[
+    bar/.append style={fill=ph5f, draw=ph5},
+    name=m52
+]{5.2 Cooperative MARL (28\,h)}{100}{104} \\
+
+\ganttbar[
+    bar/.append style={fill=ph5f, draw=ph5},
+    name=m53
+]{5.3 Competitive \& Mixed MARL (30\,h)}{105}{109} \\
+
+\ganttbar[
+    bar/.append style={fill=ph5f, draw=ph5},
+    name=m54
+]{5.4 Mean-Field Games (28\,h)}{110}{114} \\
+
+\ganttbar[
+    bar/.append style={fill=ph5f, draw=ph5},
+    name=m55
+]{5.5 Communication in MARL (14\,h)}{115}{117} \\
+
+\ganttmilestone[
+    milestone/.append style={fill=ph5, draw=ph5},
+    name=ms5
+]{Phase V Complete (Jun 5)}{117} \\
+
+% ================================================================
+% PHASE VI: AEROSPACE APPLICATIONS
+% ================================================================
+\ganttgroup[
+    group/.append style={fill=ph6f, draw=ph6, thick}
+]{Phase VI: Aerospace Applications \normalfont\scriptsize(76\,h \,$\mid$\, Jun\,6\,--\,Jun\,19)}{118}{131} \\
+
+\ganttbar[
+    bar/.append style={fill=ph6f, draw=ph6},
+    name=m61
+]{6.1 Safety \& Constraints (26\,h)}{118}{122} \\
+
+\ganttbar[
+    bar/.append style={fill=ph6f, draw=ph6},
+    name=m62
+]{6.2 Partial Observability (20\,h)}{123}{126} \\
+
+\ganttbar[
+    bar/.append style={fill=ph6f, draw=ph6},
+    name=m63
+]{6.3 Sim-to-Real Transfer (6\,h)}{127}{127} \\
+
+\ganttbar[
+    bar/.append style={fill=ph6f, draw=ph6},
+    name=m64
+]{6.4 Multi-Vehicle Coordination (24\,h)}{128}{131} \\
+
+\ganttmilestone[
+    milestone/.append style={fill=ph6, draw=ph6},
+    name=ms6
+]{CURRICULUM COMPLETE (Jun 19)}{131} \\
+
+% ================================================================
+% DEPENDENCY LINKS (critical path only, to avoid clutter)
+% ================================================================
+\ganttlink[link/.append style={draw=ph1!60}]{m11}{m12}
+\ganttlink[link/.append style={draw=ph1!60}]{m12}{m13}
+\ganttlink[link/.append style={draw=ph1!60}]{m13}{m14}
+\ganttlink[link/.append style={draw=ph2!60}]{m14}{m21}
+\ganttlink[link/.append style={draw=ph2!60}]{m21}{m22}
+\ganttlink[link/.append style={draw=ph2!60}]{m22}{m23}
+\ganttlink[link/.append style={draw=ph3!60}]{m23}{m31}
+\ganttlink[link/.append style={draw=ph3!60}]{m31}{m32}
+\ganttlink[link/.append style={draw=ph4!60}]{m32}{m41}
+\ganttlink[link/.append style={draw=ph4!60}]{m41}{m42}
+\ganttlink[link/.append style={draw=ph4!60}]{m42}{m43}
+\ganttlink[link/.append style={draw=ph5!60}]{m43}{m51}
+\ganttlink[link/.append style={draw=ph5!60}]{m51}{m52}
+\ganttlink[link/.append style={draw=ph5!60}]{m52}{m53}
+\ganttlink[link/.append style={draw=ph5!60}]{m53}{m54}
+\ganttlink[link/.append style={draw=ph5!60}]{m54}{m55}
+\ganttlink[link/.append style={draw=ph6!60}]{m55}{m61}
+\ganttlink[link/.append style={draw=ph6!60}]{m61}{m62}
+\ganttlink[link/.append style={draw=ph6!60}]{m62}{m63}
+\ganttlink[link/.append style={draw=ph6!60}]{m63}{m64}
+
+\end{ganttchart}
 \end{center}
+
+\vspace{0.4cm}
+
+% ================================================================
+% DETAILED SCHEDULE TABLE
+% ================================================================
+\begin{multicols}{2}
+
+\noindent{\large\bfseries Detailed Schedule}\\[4pt]
+{\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}l l l r r@{}}
+\toprule
+\textbf{Module} & \textbf{Start} & \textbf{End} & \textbf{Days} & \textbf{Hours} \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{\color{ph1}Phase I: Mathematical Foundations}} \\
+1.1 Measure Theory \& Probability & Feb 9  & Feb 22 & 14 & 80 \\
+1.2 Functional Analysis           & Feb 23 & Feb 28 &  6 & 34 \\
+1.3 Optimization Theory           & Mar 1  & Mar 16 & 16 & 92 \\
+1.4 Game Theory                   & Mar 17 & Mar 22 &  6 & 34 \\
+\addlinespace
+\multicolumn{5}{@{}l}{\textbf{\color{ph2}Phase II: Core RL Theory}} \\
+2.1 Markov Decision Processes      & Mar 23 & Mar 30 &  8 & 46 \\
+2.2 RL Algorithms (S\&B + B\&T)    & Mar 31 & Apr 13 & 14 & 82 \\
+2.3 Policy Gradient Theory         & Apr 14 & Apr 18 &  5 & 28 \\
+\addlinespace
+\multicolumn{5}{@{}l}{\textbf{\color{ph3}Phase III: DL Foundations}} \\
+3.1 Neural Network Theory         & Apr 19 & Apr 25 &  7 & 42 \\
+3.2 Optimization for DL           & Apr 26 & Apr 29 &  4 & 24 \\
+\addlinespace
+\multicolumn{5}{@{}l}{\textbf{\color{ph4}Phase IV: Deep RL}} \\
+4.1 Value-Based Deep RL           & Apr 30 & May 3  &  4 & 24 \\
+4.2 Policy-Based Deep RL          & May 4  & May 8  &  5 & 26 \\
+4.3 Model-Based RL                & May 9  & May 11 &  3 & 18 \\
+\bottomrule
+\end{tabular}
+}
+
+\columnbreak
+
+\noindent{\large\bfseries ~}\\[4pt]
+{\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}l l l r r@{}}
+\toprule
+\textbf{Module} & \textbf{Start} & \textbf{End} & \textbf{Days} & \textbf{Hours} \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{\color{ph5}Phase V: Multi-Agent RL}} \\
+5.1 Stochastic Games              & May 12 & May 18 &  7 & 42 \\
+5.2 Cooperative MARL              & May 19 & May 23 &  5 & 28 \\
+5.3 Competitive \& Mixed MARL     & May 24 & May 28 &  5 & 30 \\
+5.4 Mean-Field Games              & May 29 & Jun 2  &  5 & 28 \\
+5.5 Communication in MARL         & Jun 3  & Jun 5  &  3 & 14 \\
+\addlinespace
+\multicolumn{5}{@{}l}{\textbf{\color{ph6}Phase VI: Aerospace Applications}} \\
+6.1 Safety \& Constraints         & Jun 6  & Jun 10 &  5 & 26 \\
+6.2 Partial Observability         & Jun 11 & Jun 14 &  4 & 20 \\
+6.3 Sim-to-Real Transfer          & Jun 15 & Jun 15 &  1 &  6 \\
+6.4 Multi-Vehicle Coordination    & Jun 16 & Jun 19 &  4 & 24 \\
+\midrule
+\textbf{TOTAL} & \textbf{Feb 9} & \textbf{Jun 19} & \textbf{131} & \textbf{748} \\
+\bottomrule
+\end{tabular}
+}
+
+\vspace{0.8cm}
+
+\noindent{\large\bfseries Key Milestones}\\[4pt]
+{\small
+\begin{tabular}{@{}l l l@{}}
+\toprule
+\textbf{Milestone} & \textbf{Date} & \textbf{Cumulative Hours} \\
+\midrule
+$\blacklozenge$ Phase I Complete  & Mar 22 & 240\,h (32\%) \\
+$\blacklozenge$ Phase II Complete & Apr 18 & 396\,h (53\%) \\
+$\blacklozenge$ Phase III Complete & Apr 29 & 462\,h (62\%) \\
+$\blacklozenge$ Phase IV Complete & May 11 & 530\,h (71\%) \\
+$\blacklozenge$ Phase V Complete  & Jun 5  & 672\,h (90\%) \\
+$\blacklozenge$ \textbf{Curriculum Complete} & \textbf{Jun 19} & \textbf{748\,h (100\%)} \\
+\bottomrule
+\end{tabular}
+}
+
+\vspace{0.5cm}
+
+\noindent{\large\bfseries Tracking Progress}\\[4pt]
+{\small
+To check if you are \textbf{on track} or \textbf{delayed}:\\[3pt]
+\begin{tabular}{@{}r l@{}}
+\textbf{Formula:} & Expected day $= \lfloor(\text{today} - \text{Feb 9}) \rfloor$ \\
+                   & Expected hours $= \text{Expected day} \times 6$ \\[3pt]
+\textbf{On track:} & Actual hours $\geq$ Expected hours \\
+\textbf{Delayed:}   & Actual hours $<$ Expected hours; gap $=$ Expected $-$ Actual \\
+\textbf{Recovery:}  & Extra weekend sessions or extend to 3\,AM for catch-up days \\
+\end{tabular}
+}
+
+\end{multicols}
 
 \end{document}
