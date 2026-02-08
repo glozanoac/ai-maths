@@ -538,9 +538,30 @@ The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over all val
 \end{equation}
 \end{definition}
 
-\begin{remark}
-Marginalization is a direct application of the law of total probability (Theorem~\ref{thm:total_prob}) with the partition $\{Y = y_1\}, \{Y = y_2\}, \ldots$
-\end{remark}
+\begin{proposition}[Marginalization via Total Probability]
+\label{prop:marginalization}
+Let $X$ and $Y$ be discrete random variables. Then for every $x$ in the range of $X$:
+\[
+    p_X(x) = \sum_y p_{X,Y}(x,y).
+\]
+\end{proposition}
+
+\begin{proof}
+Let $Y$ take values in the countable set $\{y_1, y_2, \ldots\}$. The events $B_j = \{Y = y_j\}$ are pairwise disjoint (since $Y$ assigns a single value to each $\omega$), and they cover $\Omega$: every $\omega \in \Omega$ satisfies $Y(\omega) = y_j$ for exactly one $j$, so $\bigcup_j B_j = \Omega$.
+
+Fix an arbitrary $x$ in the range of $X$ and let $A = \{X = x\}$. Since $\bigcup_j B_j = \Omega$:
+\[
+    A = A \cap \Omega = A \cap \bigcup_j B_j = \bigcup_j (A \cap B_j).
+\]
+The sets $A \cap B_j = \{X = x, Y = y_j\}$ are pairwise disjoint (inherited from the $B_j$). By countable additivity of $\Prob$ (Definition~\ref{def:prob_measure}):
+\begin{align}
+    p_X(x) = \Prob(X = x) &= \Prob\!\Bigl(\bigcup_j (A \cap B_j)\Bigr) \nonumber\\
+    &= \sum_j \Prob(A \cap B_j) \nonumber\\
+    &= \sum_j \Prob(X = x, Y = y_j) = \sum_j p_{X,Y}(x, y_j). \label{eq:marginalization_proof}
+\end{align}
+
+Note that this derivation uses only countable additivity and requires no assumption that $\Prob(Y = y_j) > 0$: terms with $\Prob(Y = y_j) = 0$ simply contribute zero to the sum.
+\end{proof}
 
 \subsection{Linearity of Expectation}
 \label{subsec:linearity}
