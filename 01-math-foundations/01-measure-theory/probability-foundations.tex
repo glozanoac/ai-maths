@@ -124,7 +124,7 @@ policy gradient methods, and stochastic approximation.
 \medskip\noindent\textbf{What this document covers.}
 \begin{enumerate}[nosep]
     \item \textbf{Probability spaces and events} --- $\sigma$-algebras, Kolmogorov axioms, conditional probability, Bayes' theorem.
-    \item \textbf{Random variables and distributions} --- measurability, common distributions, joint distributions, expectation, linearity.
+    \item \textbf{Random variables and distributions} --- measurability, distribution functions, expectation, common distributions, joint distributions, linearity.
     \item \textbf{Conditional expectation and the tower property} --- conditional expectation given events and random variables, linearity, pull-out property, law of total expectation.
     \item \textbf{MDP expectation expansion} --- the mechanical expansion step in Bellman derivations.
     \item \textbf{Variance and conditional variance} --- computational formulas, law of total variance.
@@ -474,12 +474,29 @@ The right limit is analogous with $A_n = \{X \leq n\}$ increasing to $\Omega$ (e
 \textbf{(3)} Let $y_n \downarrow x$. Then $\{X \leq y_n\} \supseteq \{X \leq y_{n+1}\}$ and $\bigcap_n \{X \leq y_n\} = \{X \leq x\}$. By continuity from above, $\lim F(y_n) = F(x)$.
 \end{proof}
 
+\subsection{Expectation}
+\label{subsec:expectation}
+
+\begin{definition}[Expectation]
+\label{def:expectation}
+The \emph{expectation} (or \emph{expected value}) of a discrete random variable $X$ with PMF $p_X$ is
+\begin{equation}
+    \E[X] = \sum_{x} x\, p_X(x),
+    \label{eq:expectation_def}
+\end{equation}
+provided the sum converges absolutely: $\sum_x |x|\, p_X(x) < \infty$.
+\end{definition}
+
+\begin{tdconnection}[Connection to TD Learning]
+The state-value function $V^\pi(s) = \E_\pi[G_0 \mid S_0 = s]$ is an expectation of the return $G_0 = \sum_{t=0}^\infty \gamma^t R_{t+1}$ over all trajectories from state $s$. Since the MDP has finite state and action spaces and $\gamma < 1$, the return is bounded, so the expectation is always well defined.
+\end{tdconnection}
+
 \subsection{Common Distributions}
 \label{subsec:common_dist}
 
 \begin{definition}[Bernoulli Distribution]
 \label{def:bernoulli}
-A random variable $X$ has a \emph{Bernoulli distribution} with parameter $p \in [0,1]$, written $X \sim \text{Bernoulli}(p)$, if $\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$. Then $\E[X] = p$ and $\Var(X) = p(1-p)$.
+A random variable $X$ has a \emph{Bernoulli distribution} with parameter $p \in [0,1]$, written $X \sim \text{Bernoulli}(p)$, if $\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$. Then $\E[X] = 1 \cdot p + 0 \cdot (1-p) = p$.
 \end{definition}
 
 \begin{definition}[Categorical Distribution]
@@ -489,8 +506,12 @@ A random variable $X$ taking values in $\{1, 2, \ldots, k\}$ has a \emph{categor
 
 \begin{definition}[Geometric Distribution]
 \label{def:geometric}
-$X \sim \text{Geometric}(p)$ for $p \in (0,1]$ if $\Prob(X = k) = (1-p)^{k-1} p$ for $k = 1, 2, \ldots$. Then $\E[X] = 1/p$ and $\Var(X) = (1-p)/p^2$.
+$X \sim \text{Geometric}(p)$ for $p \in (0,1]$ if $\Prob(X = k) = (1-p)^{k-1} p$ for $k = 1, 2, \ldots$. Then $\E[X] = 1/p$.
 \end{definition}
+
+\begin{remark}
+The variance of these distributions ($\Var(X) = p(1-p)$ for Bernoulli, $\Var(X) = (1-p)/p^2$ for Geometric) will be computed in Section~\ref{sec:variance} once variance is formally defined.
+\end{remark}
 
 \begin{rlconnection}[Connection to RL]
 The categorical distribution models action selection under a stochastic policy: $A_t \sim \pi(\cdot \mid s)$ is categorical with $\Prob(A_t = a) = \pi(a \mid s)$. The geometric distribution arises in episode length analysis: in an MDP with a per-step termination probability $p$, the episode length is geometric.
@@ -520,23 +541,6 @@ The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over all val
 \begin{remark}
 Marginalization is a direct application of the law of total probability (Theorem~\ref{thm:total_prob}) with the partition $\{Y = y_1\}, \{Y = y_2\}, \ldots$
 \end{remark}
-
-\subsection{Expectation}
-\label{subsec:expectation}
-
-\begin{definition}[Expectation]
-\label{def:expectation}
-The \emph{expectation} (or \emph{expected value}) of a discrete random variable $X$ with PMF $p_X$ is
-\begin{equation}
-    \E[X] = \sum_{x} x\, p_X(x),
-    \label{eq:expectation_def}
-\end{equation}
-provided the sum converges absolutely: $\sum_x |x|\, p_X(x) < \infty$.
-\end{definition}
-
-\begin{tdconnection}[Connection to TD Learning]
-The state-value function $V^\pi(s) = \E_\pi[G_0 \mid S_0 = s]$ is an expectation of the return $G_0 = \sum_{t=0}^\infty \gamma^t R_{t+1}$ over all trajectories from state $s$. Since the MDP has finite state and action spaces and $\gamma < 1$, the return is bounded, so the expectation is always well defined.
-\end{tdconnection}
 
 \subsection{Linearity of Expectation}
 \label{subsec:linearity}
