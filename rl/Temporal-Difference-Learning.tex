@@ -1,0 +1,1963 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{cleveref}
+% algorithm/algorithmic not available; using custom pseudocode environment
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+
+% ---- Hyperref Setup ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{keypoint}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Temporal-Difference Learning: A Comprehensive Mathematical Treatment}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Operators ----
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\tr}{tr}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\indicator}{\mathbf{1}}
+
+% ---- Title ----
+\title{\textbf{Temporal-Difference Learning:\\A Comprehensive Mathematical Treatment}\\[10pt]
+\large From Tabular Methods to Function Approximation\\with Complete Proofs}
+\author{Following Mathematical Foundation of Reinforcement Learning}
+\date{February 8, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document provides a rigorous mathematical treatment of Temporal-Difference (TD) learning, the central prediction and control paradigm in reinforcement learning. We develop the complete theory from first principles, including formal convergence proofs for TD(0), the equivalence of forward and backward views for TD($\lambda$) with eligibility traces, convergence of SARSA and Q-learning for control, and the analysis of TD methods under linear function approximation. We establish the precise bias-variance tradeoff between Monte Carlo and TD methods, prove the bounded approximation error of semi-gradient TD under linear function approximation, and characterize the deadly triad that causes divergence in the off-policy setting. Every step is justified with complete mathematical rigor.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Introduction and Motivation}
+\label{sec:introduction}
+
+\subsection{The Value Estimation Problem}
+\label{subsec:value_estimation}
+
+The fundamental problem of reinforcement learning is to learn, from interaction with an environment, a policy that maximizes cumulative reward. Central to solving this problem is the ability to \emph{estimate value functions}---predictions of future cumulative reward from a given state under a given policy.
+
+Formally, given a policy $\pi$, we seek to estimate the state-value function $V^\pi(s)$ for all states $s$. Three classical paradigms address this problem:
+\begin{itemize}[nosep]
+    \item \textbf{Dynamic Programming (DP):} Requires a complete model of the environment (transition probabilities and reward function). Computes exact value functions by iteratively applying the Bellman equation.
+    \item \textbf{Monte Carlo (MC) Methods:} Learn from complete sample episodes. Estimate $V^\pi(s)$ as the average of observed returns from state $s$. Require no model but need complete episodes.
+    \item \textbf{Temporal-Difference (TD) Learning:} Learn from incomplete episodes by \emph{bootstrapping}---updating estimates based on other estimates. Require no model and no complete episodes.
+\end{itemize}
+
+TD learning, introduced formally by Sutton~\cite{sutton1988}, combines ideas from both MC and DP: like MC, it learns directly from experience without a model; like DP, it updates estimates based on other learned estimates (bootstrapping). This synthesis makes TD methods uniquely suited to online, incremental learning in continuing (non-episodic) environments.
+
+\subsection{Historical Context}
+\label{subsec:history}
+
+The idea of learning from temporal differences dates to Samuel's checkers program~\cite{samuel1959}, which adjusted its evaluation function based on the difference between successive position evaluations. Sutton~\cite{sutton1988} formalized these ideas into the TD($\lambda$) family of algorithms and established their convergence properties. The subsequent development of Q-learning by Watkins~\cite{watkins1989} extended TD methods to the control setting, enabling off-policy learning of optimal policies.
+
+TD methods form the foundation of modern deep reinforcement learning. Deep Q-Networks (DQN)~\cite{mnih2015} combine Q-learning with deep neural networks, while actor-critic algorithms such as those using Generalized Advantage Estimation (GAE)~\cite{schulman2016} employ TD errors as the building blocks for policy gradient estimation---connecting directly to the Proximal Policy Optimization (PPO) and Trust Region Policy Optimization (TRPO) algorithms.
+
+\subsection{Document Organization}
+\label{subsec:organization}
+
+This document is organized as follows. Section~\ref{sec:preliminaries} establishes the mathematical foundations: the MDP framework, Bellman equations, contraction mapping theory, and stochastic approximation. Section~\ref{sec:mc} briefly reviews Monte Carlo methods as a baseline. Section~\ref{sec:td_prediction} develops the full theory of TD prediction---from TD(0) through $n$-step TD to TD($\lambda$) with eligibility traces. Section~\ref{sec:td_control} extends to TD control: SARSA, Q-learning, and Expected SARSA. Section~\ref{sec:function_approx} treats function approximation, including convergence under linear approximation and the deadly triad. Section~\ref{sec:gae} connects TD errors to Generalized Advantage Estimation. Section~\ref{sec:algorithms} collects the complete algorithms. Section~\ref{sec:summary} summarizes the key results, and Section~\ref{sec:conclusion} concludes.
+
+%% ============================================================
+%% SECTION 2: MATHEMATICAL PRELIMINARIES
+%% ============================================================
+\section{Mathematical Preliminaries}
+\label{sec:preliminaries}
+
+\subsection{Markov Decision Process Framework}
+\label{subsec:mdp}
+
+\begin{definition}[Markov Decision Process]
+\label{def:mdp}
+A \emph{Markov Decision Process} (MDP) is a tuple $(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ where:
+\begin{itemize}[nosep]
+    \item $\mathcal{S}$ is the state space (assumed finite unless otherwise stated),
+    \item $\mathcal{A}$ is the action space (assumed finite unless otherwise stated),
+    \item $P: \mathcal{S} \times \mathcal{A} \times \mathcal{S} \to [0,1]$ is the transition kernel, with $P(s'|s,a)$ denoting the probability of transitioning to state $s'$ from state $s$ under action $a$,
+    \item $r: \mathcal{S} \times \mathcal{A} \times \mathcal{S} \to \R$ is the reward function, where $r(s,a,s')$ is the immediate reward received upon transition,
+    \item $\gamma \in [0,1)$ is the discount factor.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Policy]
+\label{def:policy}
+A \emph{stationary stochastic policy} is a mapping $\pi: \mathcal{S} \times \mathcal{A} \to [0,1]$ with $\sum_{a \in \mathcal{A}} \pi(a|s) = 1$ for all $s \in \mathcal{S}$. A policy is \emph{deterministic} if for each $s$ there exists $a^* \in \mathcal{A}$ such that $\pi(a^*|s) = 1$.
+\end{definition}
+
+\begin{definition}[State-Value Function]
+\label{def:state_value}
+The \emph{state-value function} of a policy $\pi$ is defined as
+\begin{equation}
+    V^\pi(s) = \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R_{t+1} \;\middle|\; S_0 = s\right],
+    \label{eq:state_value}
+\end{equation}
+where the expectation is taken over trajectories generated by following policy $\pi$ in the MDP.
+\end{definition}
+
+\begin{definition}[Action-Value Function]
+\label{def:action_value}
+The \emph{action-value function} of a policy $\pi$ is defined as
+\begin{equation}
+    Q^\pi(s,a) = \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R_{t+1} \;\middle|\; S_0 = s, A_0 = a\right].
+    \label{eq:action_value}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Advantage Function]
+\label{def:advantage}
+The \emph{advantage function} of a policy $\pi$ is defined as
+\begin{equation}
+    A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s).
+    \label{eq:advantage}
+\end{equation}
+\end{definition}
+
+\subsection{Bellman Equations}
+\label{subsec:bellman}
+
+\begin{theorem}[Bellman Expectation Equation for $V^\pi$]
+\label{thm:bellman_v}
+For any policy $\pi$, the state-value function satisfies
+\begin{equation}
+    V^\pi(s) = \sum_{a \in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}} P(s'|s,a)\bigl[r(s,a,s') + \gamma V^\pi(s')\bigr].
+    \label{eq:bellman_v}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+From the definition of $V^\pi(s)$:
+\begin{align}
+    V^\pi(s) &= \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R_{t+1} \;\middle|\; S_0 = s\right] \nonumber\\
+    &= \E_\pi\!\left[R_1 + \gamma \sum_{t=1}^{\infty} \gamma^{t-1} R_{t+1} \;\middle|\; S_0 = s\right] \nonumber\\
+    &= \E_\pi\!\left[R_1 + \gamma V^\pi(S_1) \;\middle|\; S_0 = s\right] \label{eq:bellman_v_step2}
+\end{align}
+where~\eqref{eq:bellman_v_step2} follows from the Markov property: conditioned on $S_1 = s'$, the future is independent of $S_0$, so $\E_\pi[\sum_{t=1}^{\infty} \gamma^{t-1} R_{t+1} | S_1 = s'] = V^\pi(s')$. Expanding the expectation over $A_0 \sim \pi(\cdot|s)$ and $S_1 \sim P(\cdot|s, A_0)$ yields~\eqref{eq:bellman_v}.
+\end{proof}
+
+\begin{theorem}[Bellman Expectation Equation for $Q^\pi$]
+\label{thm:bellman_q}
+For any policy $\pi$, the action-value function satisfies
+\begin{equation}
+    Q^\pi(s,a) = \sum_{s' \in \mathcal{S}} P(s'|s,a)\!\left[r(s,a,s') + \gamma \sum_{a' \in \mathcal{A}} \pi(a'|s') Q^\pi(s',a')\right].
+    \label{eq:bellman_q}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+From the definition of $Q^\pi$:
+\begin{align}
+    Q^\pi(s,a) &= \E_\pi\!\left[R_1 + \gamma \sum_{t=1}^{\infty} \gamma^{t-1} R_{t+1} \;\middle|\; S_0 = s, A_0 = a\right] \nonumber\\
+    &= \E\!\left[R_1 + \gamma \E_\pi\!\left[\sum_{t=1}^{\infty} \gamma^{t-1} R_{t+1} \;\middle|\; S_1\right] \;\middle|\; S_0=s, A_0=a\right] \nonumber\\
+    &= \sum_{s'} P(s'|s,a)\!\left[r(s,a,s') + \gamma V^\pi(s')\right]. \label{eq:bellman_q_v}
+\end{align}
+Since $V^\pi(s') = \sum_{a'} \pi(a'|s') Q^\pi(s',a')$, substitution into~\eqref{eq:bellman_q_v} yields~\eqref{eq:bellman_q}.
+\end{proof}
+
+\begin{theorem}[Bellman Optimality Equation for $V^*$]
+\label{thm:bellman_opt_v}
+The optimal state-value function $V^*(s) = \max_\pi V^\pi(s)$ satisfies
+\begin{equation}
+    V^*(s) = \max_{a \in \mathcal{A}} \sum_{s' \in \mathcal{S}} P(s'|s,a)\bigl[r(s,a,s') + \gamma V^*(s')\bigr].
+    \label{eq:bellman_opt_v}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Let $\pi^*$ be an optimal policy, which exists for finite MDPs~\cite{bertsekas1996}. Since $\pi^*$ is greedy with respect to $V^*$, we have $\pi^*(s) = \argmax_a Q^*(s,a)$. Substituting the deterministic optimal policy into the Bellman expectation equation~\eqref{eq:bellman_v} yields~\eqref{eq:bellman_opt_v}.
+\end{proof}
+
+\begin{theorem}[Bellman Optimality Equation for $Q^*$]
+\label{thm:bellman_opt_q}
+The optimal action-value function $Q^*(s,a) = \max_\pi Q^\pi(s,a)$ satisfies
+\begin{equation}
+    Q^*(s,a) = \sum_{s' \in \mathcal{S}} P(s'|s,a)\!\left[r(s,a,s') + \gamma \max_{a' \in \mathcal{A}} Q^*(s',a')\right].
+    \label{eq:bellman_opt_q}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+From~\eqref{eq:bellman_q_v} applied to $\pi^*$: $Q^*(s,a) = \sum_{s'} P(s'|s,a)[r(s,a,s') + \gamma V^*(s')]$. Since $V^*(s') = \max_{a'} Q^*(s',a')$, substitution gives~\eqref{eq:bellman_opt_q}.
+\end{proof}
+
+\subsection{The Return and the Temporal-Difference Error}
+\label{subsec:return_td}
+
+\begin{definition}[Return]
+\label{def:return}
+The \emph{return} from time step $t$ is the discounted sum of future rewards:
+\begin{equation}
+    G_t = \sum_{k=0}^{\infty} \gamma^k R_{t+k+1}.
+    \label{eq:return}
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Recursive Decomposition of the Return]
+\label{lem:return_recursive}
+The return satisfies the recursion $G_t = R_{t+1} + \gamma G_{t+1}$.
+\end{lemma}
+
+\begin{proof}
+\begin{equation*}
+    G_t = R_{t+1} + \sum_{k=1}^{\infty} \gamma^k R_{t+k+1}
+        = R_{t+1} + \gamma \sum_{k=0}^{\infty} \gamma^k R_{t+k+2}
+        = R_{t+1} + \gamma G_{t+1}. \qedhere
+\end{equation*}
+\end{proof}
+
+\begin{definition}[Temporal-Difference Error]
+\label{def:td_error}
+Given an estimate $V$ of the value function, the \emph{TD error} at time $t$ is
+\begin{equation}
+    \delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t).
+    \label{eq:td_error}
+\end{equation}
+When $V = V^\pi$, we write $\delta_t^\pi = R_{t+1} + \gamma V^\pi(S_{t+1}) - V^\pi(S_t)$.
+\end{definition}
+
+\begin{lemma}[Unbiasedness of the TD Error]
+\label{lem:td_unbiased}
+Under policy $\pi$, the TD error computed with the true value function has zero conditional expectation:
+\begin{equation}
+    \E_\pi\!\left[\delta_t^\pi \;\middle|\; S_t = s\right] = 0 \quad \text{for all } s \in \mathcal{S}.
+    \label{eq:td_unbiased}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+\begin{align}
+    \E_\pi\!\left[\delta_t^\pi \;\middle|\; S_t = s\right]
+    &= \E_\pi\!\left[R_{t+1} + \gamma V^\pi(S_{t+1}) - V^\pi(S_t) \;\middle|\; S_t = s\right] \nonumber\\
+    &= \E_\pi\!\left[R_{t+1} + \gamma V^\pi(S_{t+1}) \;\middle|\; S_t = s\right] - V^\pi(s) \nonumber\\
+    &= \sum_{a} \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V^\pi(s')\bigr] - V^\pi(s) \nonumber\\
+    &= V^\pi(s) - V^\pi(s) = 0, \label{eq:td_unbiased_proof}
+\end{align}
+where the last equality follows from the Bellman equation~\eqref{eq:bellman_v}.
+\end{proof}
+
+\begin{remark}[Interpretation of the TD Error]
+\label{rem:td_interpretation}
+The TD error $\delta_t^\pi$ measures the \emph{one-step prediction error}: the discrepancy between the value estimate $V^\pi(S_t)$ and the bootstrapped target $R_{t+1} + \gamma V^\pi(S_{t+1})$. Lemma~\ref{lem:td_unbiased} shows that this error is a martingale difference sequence---it has zero mean conditioned on the current state. This property is fundamental to all convergence proofs in this document.
+\end{remark}
+
+\begin{lemma}[Return as Telescoping Sum of TD Errors]
+\label{lem:return_td_errors}
+Under the true value function $V^\pi$, the return minus the value satisfies
+\begin{equation}
+    G_t - V^\pi(S_t) = \sum_{k=0}^{\infty} \gamma^k \delta_{t+k}^\pi.
+    \label{eq:return_td_errors}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+We expand the sum of TD errors:
+\begin{align}
+    \sum_{k=0}^{\infty} \gamma^k \delta_{t+k}^\pi
+    &= \sum_{k=0}^{\infty} \gamma^k \bigl[R_{t+k+1} + \gamma V^\pi(S_{t+k+1}) - V^\pi(S_{t+k})\bigr] \nonumber\\
+    &= \sum_{k=0}^{\infty} \gamma^k R_{t+k+1} + \sum_{k=0}^{\infty} \gamma^{k+1} V^\pi(S_{t+k+1}) - \sum_{k=0}^{\infty} \gamma^k V^\pi(S_{t+k}) \nonumber\\
+    &= G_t + \sum_{k=1}^{\infty} \gamma^k V^\pi(S_{t+k}) - \sum_{k=0}^{\infty} \gamma^k V^\pi(S_{t+k}) \nonumber\\
+    &= G_t - V^\pi(S_t), \label{eq:return_td_telescope}
+\end{align}
+where in the last step we used the telescoping cancellation: the two sums over $V^\pi$ differ only in the $k=0$ term of the subtracted sum, and the boundary term $\lim_{k\to\infty} \gamma^k V^\pi(S_{t+k}) = 0$ since $\gamma < 1$ and $V^\pi$ is bounded.
+\end{proof}
+
+\begin{remark}
+Lemma~\ref{lem:return_td_errors} provides a fundamental decomposition: the \emph{prediction error} $G_t - V^\pi(S_t)$ equals the sum of discounted one-step TD errors. This identity will be the basis for the forward-view formulation of TD($\lambda$) in Section~\ref{subsec:td_lambda_forward}.
+\end{remark}
+
+\subsection{Contraction Mappings and Fixed Point Theory}
+\label{subsec:contraction}
+
+\begin{definition}[Contraction Mapping]
+\label{def:contraction}
+Let $(X, \|\cdot\|)$ be a complete normed space. A mapping $T: X \to X$ is a \emph{$\gamma$-contraction} (with $\gamma \in [0,1)$) if for all $x, y \in X$:
+\begin{equation}
+    \|Tx - Ty\| \leq \gamma \|x - y\|.
+    \label{eq:contraction}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Banach Fixed Point Theorem]
+\label{thm:banach}
+Every $\gamma$-contraction on a complete normed space has a unique fixed point $x^*$. Moreover, for any initial $x_0 \in X$, the iterates $x_{n+1} = Tx_n$ satisfy
+\begin{equation}
+    \|x_n - x^*\| \leq \gamma^n \|x_0 - x^*\|.
+    \label{eq:banach_rate}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+\textbf{Existence (Cauchy sequence argument).} For any $m > n$:
+\begin{align}
+    \|x_m - x_n\| &\leq \sum_{k=n}^{m-1} \|x_{k+1} - x_k\|
+    = \sum_{k=n}^{m-1} \|T^k x_1 - T^k x_0\|
+    \leq \sum_{k=n}^{m-1} \gamma^k \|x_1 - x_0\| \nonumber\\
+    &\leq \frac{\gamma^n}{1-\gamma} \|x_1 - x_0\|. \label{eq:banach_cauchy}
+\end{align}
+Since $\gamma^n \to 0$, the sequence $\{x_n\}$ is Cauchy. By completeness, $x_n \to x^*$ for some $x^* \in X$.
+
+\textbf{Fixed point property.} Since $T$ is a contraction, it is continuous. Therefore $Tx^* = T(\lim_n x_n) = \lim_n Tx_n = \lim_n x_{n+1} = x^*$.
+
+\textbf{Uniqueness.} If $y^*$ is another fixed point, then $\|x^* - y^*\| = \|Tx^* - Ty^*\| \leq \gamma \|x^* - y^*\|$. Since $\gamma < 1$, this forces $\|x^* - y^*\| = 0$.
+
+\textbf{Convergence rate.} $\|x_n - x^*\| = \|T^n x_0 - T^n x^*\| \leq \gamma^n \|x_0 - x^*\|$.
+\end{proof}
+
+\begin{definition}[Bellman Expectation Operator]
+\label{def:bellman_operator}
+The \emph{Bellman expectation operator} for policy $\pi$ is the mapping $\mathcal{T}^\pi: \R^{|\mathcal{S}|} \to \R^{|\mathcal{S}|}$ defined by
+\begin{equation}
+    (\mathcal{T}^\pi V)(s) = \sum_{a} \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V(s')\bigr].
+    \label{eq:bellman_operator}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Bellman Optimality Operator]
+\label{def:bellman_opt_operator}
+The \emph{Bellman optimality operator} is the mapping $\mathcal{T}^*: \R^{|\mathcal{S}|} \to \R^{|\mathcal{S}|}$ defined by
+\begin{equation}
+    (\mathcal{T}^* V)(s) = \max_{a \in \mathcal{A}} \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V(s')\bigr].
+    \label{eq:bellman_opt_operator}
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Bellman Expectation Operator is a Contraction]
+\label{lem:bellman_contraction}
+$\mathcal{T}^\pi$ is a $\gamma$-contraction in the infinity norm $\|\cdot\|_\infty$.
+\end{lemma}
+
+\begin{proof}
+For any $V_1, V_2 \in \R^{|\mathcal{S}|}$ and any state $s$:
+\begin{align}
+    |(\mathcal{T}^\pi V_1)(s) - (\mathcal{T}^\pi V_2)(s)|
+    &= \gamma \left|\sum_{a} \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[V_1(s') - V_2(s')\bigr]\right| \nonumber\\
+    &\leq \gamma \sum_{a} \pi(a|s) \sum_{s'} P(s'|s,a) |V_1(s') - V_2(s')| \nonumber\\
+    &\leq \gamma \|V_1 - V_2\|_\infty \underbrace{\sum_{a} \pi(a|s) \sum_{s'} P(s'|s,a)}_{=1}
+    = \gamma \|V_1 - V_2\|_\infty. \label{eq:bellman_contraction_proof}
+\end{align}
+Taking the supremum over $s$ yields $\|\mathcal{T}^\pi V_1 - \mathcal{T}^\pi V_2\|_\infty \leq \gamma \|V_1 - V_2\|_\infty$.
+\end{proof}
+
+\begin{lemma}[Bellman Optimality Operator is a Contraction]
+\label{lem:bellman_opt_contraction}
+$\mathcal{T}^*$ is a $\gamma$-contraction in the infinity norm.
+\end{lemma}
+
+\begin{proof}
+Using the inequality $|\max_a f(a) - \max_a g(a)| \leq \max_a |f(a) - g(a)|$:
+\begin{align}
+    |(\mathcal{T}^* V_1)(s) - (\mathcal{T}^* V_2)(s)|
+    &\leq \max_a \left|\sum_{s'} P(s'|s,a)\gamma\bigl[V_1(s') - V_2(s')\bigr]\right| \nonumber\\
+    &\leq \gamma \|V_1 - V_2\|_\infty. \label{eq:bellman_opt_contraction_proof}
+\end{align}
+\end{proof}
+
+\begin{remark}[Significance for Convergence]
+\label{rem:contraction_significance}
+By the Banach Fixed Point Theorem~(\ref{thm:banach}), the Bellman expectation operator $\mathcal{T}^\pi$ has a unique fixed point---which is precisely $V^\pi$---and iterative application of $\mathcal{T}^\pi$ converges to $V^\pi$ at rate $\gamma^n$. Similarly, $\mathcal{T}^*$ has unique fixed point $V^*$. TD learning can be understood as a \emph{stochastic} version of this iteration, where each application of the operator is replaced by a noisy sample. The convergence theory in Sections~\ref{sec:td_prediction}--\ref{sec:td_control} makes this precise.
+\end{remark}
+
+\subsection{Stochastic Approximation}
+\label{subsec:stochastic_approx}
+
+The convergence of TD methods relies on the theory of stochastic approximation, which provides conditions under which iterative procedures with noisy updates converge to a desired fixed point.
+
+\begin{theorem}[Robbins-Monro Stochastic Approximation]
+\label{thm:robbins_monro}
+Consider the iteration
+\begin{equation}
+    x_{n+1} = x_n + \alpha_n \bigl[h(x_n) + w_n\bigr],
+    \label{eq:robbins_monro}
+\end{equation}
+where $h: \R^d \to \R^d$ is a mapping with a unique root $x^*$ (i.e., $h(x^*) = 0$) and $\{w_n\}$ is a noise sequence. Under the following conditions:
+\begin{enumerate}[nosep]
+    \item \textbf{Step size:} $\sum_{n=0}^{\infty} \alpha_n = \infty$ and $\sum_{n=0}^{\infty} \alpha_n^2 < \infty$,
+    \item \textbf{Martingale noise:} $\E[w_n | \mathcal{F}_n] = 0$ where $\mathcal{F}_n$ is the filtration up to time $n$,
+    \item \textbf{Bounded variance:} $\E[\|w_n\|^2 | \mathcal{F}_n] \leq C(1 + \|x_n\|^2)$ for some constant $C$,
+    \item \textbf{Stability:} $h$ drives the iterates toward $x^*$ (e.g., $h(x) = Ax + b$ with $A$ having eigenvalues with strictly negative real parts),
+\end{enumerate}
+the iteration~\eqref{eq:robbins_monro} converges to $x^*$ almost surely: $x_n \to x^*$ a.s.
+\end{theorem}
+
+The proof is given in Appendix~\ref{app:stochastic_approx}. The classical reference is Robbins and Monro~\cite{robbins1951}; for the form stated here, see Borkar and Meyn~\cite{borkar2000} and Kushner and Yin~\cite{kushner2003}.
+
+\begin{remark}[Role of Step Size Conditions]
+\label{rem:step_size}
+The condition $\sum \alpha_n = \infty$ ensures the iterates can travel arbitrary distances to reach $x^*$ from any starting point. The condition $\sum \alpha_n^2 < \infty$ ensures the accumulated noise variance is finite, so the iterates are not permanently perturbed away from $x^*$. Standard choices satisfying both conditions include $\alpha_n = 1/n$ and $\alpha_n = c/(n + c')$ for positive constants $c, c'$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 3: MONTE CARLO METHODS
+%% ============================================================
+\section{Monte Carlo Methods as Baseline}
+\label{sec:mc}
+
+Before developing TD methods, we briefly review Monte Carlo (MC) prediction to establish the baseline against which TD will be compared.
+
+\subsection{Every-Visit Monte Carlo Prediction}
+\label{subsec:mc_prediction}
+
+\begin{definition}[Monte Carlo Update]
+\label{def:mc_update}
+Given an observed return $G_t$ from state $S_t$, the \emph{every-visit MC update} is
+\begin{equation}
+    V(S_t) \leftarrow V(S_t) + \alpha\bigl[G_t - V(S_t)\bigr].
+    \label{eq:mc_update}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Convergence of MC Prediction]
+\label{thm:mc_convergence}
+Under the following conditions:
+\begin{enumerate}[nosep]
+    \item Every state $s$ is visited infinitely often,
+    \item Step sizes satisfy $\sum_n \alpha_n(s) = \infty$ and $\sum_n \alpha_n^2(s) < \infty$ for each $s$,
+\end{enumerate}
+the MC update~\eqref{eq:mc_update} converges to $V^\pi(s)$ almost surely for all $s$.
+\end{theorem}
+
+\begin{proof}
+Since $\E_\pi[G_t | S_t = s] = V^\pi(s)$ by definition, the MC update is a stochastic approximation~\eqref{eq:robbins_monro} with $h(V(s)) = V^\pi(s) - V(s)$ and noise $w_t = G_t - V^\pi(s)$. This noise is a martingale difference: $\E[w_t | S_t = s] = \E[G_t | S_t = s] - V^\pi(s) = 0$. The mapping $h$ points from any $V(s)$ toward $V^\pi(s)$, satisfying the stability condition. By Theorem~\ref{thm:robbins_monro}, convergence follows.
+\end{proof}
+
+\subsection{Variance of the Monte Carlo Return}
+\label{subsec:mc_variance}
+
+\begin{lemma}[Variance of the MC Return]
+\label{lem:mc_variance}
+The variance of the return satisfies the recursion
+\begin{equation}
+    \Var_\pi(G_t | S_t = s) = \E_\pi\!\left[\Var_\pi(R_{t+1} + \gamma G_{t+1} | S_t, A_t, S_{t+1}) \;\middle|\; S_t = s\right] + \Var_\pi\!\left(\E_\pi[R_{t+1} + \gamma G_{t+1} | S_t, A_t, S_{t+1}] \;\middle|\; S_t = s\right).
+    \label{eq:mc_variance_law}
+\end{equation}
+In particular, for a deterministic reward function $r(s,a,s')$:
+\begin{equation}
+    \Var_\pi(G_t | S_t = s) = \gamma^2 \E_\pi\!\left[\Var_\pi(G_{t+1} | S_{t+1}) \;\middle|\; S_t = s\right] + \Var_\pi\!\left(r(S_t, A_t, S_{t+1}) + \gamma V^\pi(S_{t+1}) \;\middle|\; S_t = s\right).
+    \label{eq:mc_variance_recursive}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Equation~\eqref{eq:mc_variance_law} is the law of total variance applied to $G_t = R_{t+1} + \gamma G_{t+1}$ conditioned on the intermediate information $(S_t, A_t, S_{t+1})$. For deterministic rewards, $\Var(R_{t+1} + \gamma G_{t+1} | S_t, A_t, S_{t+1}) = \gamma^2 \Var(G_{t+1} | S_{t+1})$, and $\E[R_{t+1} + \gamma G_{t+1} | S_t, A_t, S_{t+1}] = r(S_t, A_t, S_{t+1}) + \gamma V^\pi(S_{t+1})$, yielding~\eqref{eq:mc_variance_recursive}.
+\end{proof}
+
+\begin{remark}[High Variance of MC]
+\label{rem:mc_high_variance}
+Equation~\eqref{eq:mc_variance_recursive} shows that the variance of $G_t$ accumulates variance from \emph{all future time steps}, compounding through the $\gamma^2$ factor. For $\gamma$ close to 1, the effective horizon $1/(1-\gamma)$ is large, and the variance grows substantially. This high variance is the primary motivation for TD methods, which replace the full return with a bootstrapped estimate, eliminating the variance contribution of all but the next time step.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: TD PREDICTION
+%% ============================================================
+\section{TD Prediction --- Tabular Case}
+\label{sec:td_prediction}
+
+\subsection{TD(0) Prediction}
+\label{subsec:td0}
+
+\begin{definition}[TD(0) Update Rule]
+\label{def:td0}
+The \emph{TD(0) update} modifies the value estimate upon observing the transition $(S_t, A_t, R_{t+1}, S_{t+1})$:
+\begin{equation}
+    V(S_t) \leftarrow V(S_t) + \alpha \bigl[R_{t+1} + \gamma V(S_{t+1}) - V(S_t)\bigr] = V(S_t) + \alpha\,\delta_t,
+    \label{eq:td0_update}
+\end{equation}
+where $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ is the TD error~\eqref{eq:td_error}.
+\end{definition}
+
+\begin{remark}[Bootstrapping]
+\label{rem:bootstrapping}
+The key distinction between TD(0) and MC is that TD(0) uses the \emph{bootstrapped target} $R_{t+1} + \gamma V(S_{t+1})$ in place of the full return $G_t$. This substitution replaces all future randomness (from $G_{t+1}$) with the current estimate $V(S_{t+1})$, dramatically reducing variance at the cost of introducing bias when $V \neq V^\pi$.
+\end{remark}
+
+\begin{assumption}[TD(0) Convergence Conditions]
+\label{ass:td0_convergence}
+We assume:
+\begin{enumerate}[nosep]
+    \item The MDP has finite state and action spaces.
+    \item The policy $\pi$ is stationary.
+    \item Every state $s \in \mathcal{S}$ is visited infinitely often.
+    \item The step sizes satisfy: $\sum_{n=0}^{\infty} \alpha_n(s) = \infty$ and $\sum_{n=0}^{\infty} \alpha_n^2(s) < \infty$ for each $s \in \mathcal{S}$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[Convergence of TD(0)]
+\begin{theorem}[Convergence of TD(0)]
+\label{thm:td0_convergence}
+Under Assumption~\ref{ass:td0_convergence}, the TD(0) update~\eqref{eq:td0_update} converges to $V^\pi$ almost surely:
+\begin{equation}
+    V_n(s) \xrightarrow{a.s.} V^\pi(s) \quad \text{for all } s \in \mathcal{S}.
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We follow the approach of Dayan~\cite{dayan1992} and Tsitsiklis~\cite{tsitsiklis1994}.
+
+\textbf{Step 1: Express as stochastic approximation.} Consider a state $s$ and let $n_k(s)$ denote the $k$-th time that $S_t = s$. The TD(0) update at these times is:
+\begin{equation}
+    V_{k+1}(s) = V_k(s) + \alpha_k(s)\bigl[R_{n_k+1} + \gamma V_k(S_{n_k+1}) - V_k(s)\bigr].
+    \label{eq:td0_sa_form}
+\end{equation}
+We decompose the update target as the expected update plus noise:
+\begin{equation}
+    R_{n_k+1} + \gamma V_k(S_{n_k+1}) = (\mathcal{T}^\pi V_k)(s) + w_k(s),
+    \label{eq:td0_decomp}
+\end{equation}
+where the noise is $w_k(s) = R_{n_k+1} + \gamma V_k(S_{n_k+1}) - (\mathcal{T}^\pi V_k)(s)$.
+
+\textbf{Step 2: Verify martingale noise.} Conditioned on the filtration $\mathcal{F}_k$ (which includes $V_k$ and $S_{n_k} = s$):
+\begin{align}
+    \E[w_k(s) | \mathcal{F}_k]
+    &= \E\!\left[R_{n_k+1} + \gamma V_k(S_{n_k+1}) \;\middle|\; S_{n_k} = s, V_k\right] - (\mathcal{T}^\pi V_k)(s) \nonumber\\
+    &= \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V_k(s')\bigr] - (\mathcal{T}^\pi V_k)(s) \nonumber\\
+    &= (\mathcal{T}^\pi V_k)(s) - (\mathcal{T}^\pi V_k)(s) = 0. \label{eq:td0_noise_mg}
+\end{align}
+
+\textbf{Step 3: Identify the expected update direction.} The update~\eqref{eq:td0_sa_form} can now be written as:
+\begin{equation}
+    V_{k+1}(s) = V_k(s) + \alpha_k(s)\bigl[(\mathcal{T}^\pi V_k)(s) - V_k(s) + w_k(s)\bigr].
+    \label{eq:td0_sa_clean}
+\end{equation}
+The expected update direction is $h(V)(s) = (\mathcal{T}^\pi V)(s) - V(s)$, which has the unique root $V = V^\pi$ (the fixed point of $\mathcal{T}^\pi$).
+
+\textbf{Step 4: Verify stability via contraction.} By Lemma~\ref{lem:bellman_contraction}, $\mathcal{T}^\pi$ is a $\gamma$-contraction. Therefore the mapping $h(V) = \mathcal{T}^\pi V - V$ satisfies
+\begin{equation}
+    \|V + \alpha h(V) - V^\pi\|_\infty = \|(1-\alpha)V + \alpha \mathcal{T}^\pi V - V^\pi\|_\infty \leq (1 - \alpha(1-\gamma))\|V - V^\pi\|_\infty
+    \label{eq:td0_contraction}
+\end{equation}
+for $\alpha \in (0, 1]$. This confirms that the expected update drives $V$ toward $V^\pi$.
+
+\textbf{Step 5: Bound the noise variance.} Since rewards are bounded (by finiteness of the MDP), there exists $R_{\max} < \infty$ such that $|R_{t+1}| \leq R_{\max}$. The value estimates remain bounded throughout (as can be shown by induction using the contraction property). Therefore:
+\begin{equation}
+    \E[\|w_k(s)\|^2 | \mathcal{F}_k] \leq C(1 + \|V_k\|_\infty^2)
+    \label{eq:td0_noise_bound}
+\end{equation}
+for some constant $C$ depending on $R_{\max}$, $\gamma$, and $|\mathcal{S}|$.
+
+All conditions of Theorem~\ref{thm:robbins_monro} are verified. Therefore $V_n(s) \to V^\pi(s)$ almost surely for all $s$.
+\end{proof}
+
+\begin{remark}[Convergence Despite Bootstrapping Bias]
+\label{rem:bootstrap_convergence}
+At any finite time, $V(S_{t+1}) \neq V^\pi(S_{t+1})$, so the TD target $R_{t+1} + \gamma V(S_{t+1})$ is a \emph{biased} estimate of $V^\pi(S_t)$. Why does TD(0) still converge? The key is the contraction property (Step~4): the expected update direction $\mathcal{T}^\pi V - V$ always points toward $V^\pi$, and the contraction guarantees that the ``bootstrapping loop'' is stable---the bias shrinks as $V$ approaches $V^\pi$, creating a virtuous cycle.
+\end{remark}
+
+\subsection{Bias-Variance Analysis of TD(0)}
+\label{subsec:bias_variance}
+
+\begin{proposition}[Bias of the TD(0) Target]
+\label{prop:td0_bias}
+The conditional expectation of the TD(0) target is
+\begin{equation}
+    \E_\pi\!\left[R_{t+1} + \gamma V(S_{t+1}) \;\middle|\; S_t = s\right] = (\mathcal{T}^\pi V)(s),
+    \label{eq:td0_target_expectation}
+\end{equation}
+which equals $V^\pi(s)$ if and only if $V = V^\pi$. Thus the TD(0) target is \emph{biased} whenever $V \neq V^\pi$.
+\end{proposition}
+
+\begin{proof}
+Direct computation:
+\begin{align}
+    \E_\pi\!\left[R_{t+1} + \gamma V(S_{t+1}) \;\middle|\; S_t = s\right]
+    &= \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V(s')\bigr]
+    = (\mathcal{T}^\pi V)(s). \label{eq:td0_bias_proof}
+\end{align}
+This equals $V^\pi(s)$ iff $(\mathcal{T}^\pi V)(s) = V^\pi(s)$ for all $s$, which holds iff $V = V^\pi$ by uniqueness of the fixed point.
+\end{proof}
+
+\begin{proposition}[Variance Reduction by TD(0)]
+\label{prop:td0_variance}
+For deterministic rewards, the variance of the TD(0) target satisfies
+\begin{equation}
+    \Var_\pi\!\left(R_{t+1} + \gamma V(S_{t+1}) \;\middle|\; S_t = s\right)
+    = \Var_\pi\!\left(r(s, A_t, S_{t+1}) + \gamma V(S_{t+1}) \;\middle|\; S_t = s\right),
+    \label{eq:td0_variance}
+\end{equation}
+which depends only on the randomness of the \emph{next} transition $(A_t, S_{t+1})$, whereas $\Var_\pi(G_t | S_t = s)$ depends on all future transitions.
+\end{proposition}
+
+\begin{proof}
+Since $R_{t+1} + \gamma V(S_{t+1})$ is fully determined by $(S_t, A_t, S_{t+1})$, its variance involves only the randomness of the next action and transition. In contrast, $G_t = R_{t+1} + \gamma G_{t+1}$ involves the full trajectory, and by Lemma~\ref{lem:mc_variance}, its variance accumulates contributions from all future steps.
+
+Formally, by the law of total variance:
+\begin{align}
+    \Var_\pi(G_t | S_t) &= \underbrace{\Var_\pi\!\left(R_{t+1} + \gamma V^\pi(S_{t+1}) | S_t\right)}_{\text{one-step variance}} + \gamma^2 \underbrace{\E_\pi\!\left[\Var_\pi(G_{t+1} | S_{t+1}) | S_t\right]}_{\text{future variance} \geq 0}. \label{eq:variance_decomposition}
+\end{align}
+The TD(0) target (when $V = V^\pi$) captures only the first term, eliminating the non-negative future variance entirely.
+\end{proof}
+
+\begin{remark}[The Bias-Variance Tradeoff]
+\label{rem:bias_variance}
+Propositions~\ref{prop:td0_bias} and~\ref{prop:td0_variance} make precise the fundamental tradeoff between MC and TD(0):
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Bias} & \textbf{Variance} \\
+\midrule
+MC ($G_t$) & Zero & High (all future steps) \\
+TD(0) ($R_{t+1} + \gamma V(S_{t+1})$) & Nonzero (when $V \neq V^\pi$) & Low (one step) \\
+\bottomrule
+\end{tabular}
+\end{center}
+The $n$-step TD and TD($\lambda$) methods developed next provide a continuum between these extremes.
+\end{remark}
+
+\subsection{$n$-Step TD Prediction}
+\label{subsec:nstep_td}
+
+\begin{definition}[$n$-Step Return]
+\label{def:nstep_return}
+The \emph{$n$-step return} from time $t$ is
+\begin{equation}
+    G_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k R_{t+k+1} + \gamma^n V(S_{t+n}).
+    \label{eq:nstep_return}
+\end{equation}
+\end{definition}
+
+\begin{definition}[$n$-Step TD Update]
+\label{def:nstep_update}
+The \emph{$n$-step TD update} is
+\begin{equation}
+    V(S_t) \leftarrow V(S_t) + \alpha\bigl[G_t^{(n)} - V(S_t)\bigr].
+    \label{eq:nstep_update}
+\end{equation}
+\end{definition}
+
+\begin{lemma}[$n$-Step Return as Telescoping Sum of TD Errors]
+\label{lem:nstep_telescope}
+The $n$-step return satisfies
+\begin{equation}
+    G_t^{(n)} - V(S_t) = \sum_{k=0}^{n-1} \gamma^k \delta_{t+k},
+    \label{eq:nstep_telescope}
+\end{equation}
+where $\delta_{t+k} = R_{t+k+1} + \gamma V(S_{t+k+1}) - V(S_{t+k})$.
+\end{lemma}
+
+\begin{proof}
+Expand the right-hand side:
+\begin{align}
+    \sum_{k=0}^{n-1} \gamma^k \delta_{t+k}
+    &= \sum_{k=0}^{n-1} \gamma^k \bigl[R_{t+k+1} + \gamma V(S_{t+k+1}) - V(S_{t+k})\bigr] \nonumber\\
+    &= \sum_{k=0}^{n-1} \gamma^k R_{t+k+1}
+       + \sum_{k=0}^{n-1} \gamma^{k+1} V(S_{t+k+1})
+       - \sum_{k=0}^{n-1} \gamma^k V(S_{t+k}). \label{eq:nstep_expand}
+\end{align}
+Re-indexing the second sum with $j = k+1$:
+\begin{align}
+    &= \sum_{k=0}^{n-1} \gamma^k R_{t+k+1}
+       + \sum_{j=1}^{n} \gamma^j V(S_{t+j})
+       - \sum_{k=0}^{n-1} \gamma^k V(S_{t+k}) \nonumber\\
+    &= \sum_{k=0}^{n-1} \gamma^k R_{t+k+1}
+       + \gamma^n V(S_{t+n}) - V(S_t)
+    = G_t^{(n)} - V(S_t), \nonumber
+\end{align}
+where the telescoping cancellation eliminates all intermediate value terms.
+\end{proof}
+
+\begin{theorem}[Convergence of $n$-Step TD]
+\label{thm:nstep_convergence}
+Under Assumption~\ref{ass:td0_convergence}, the $n$-step TD update converges to $V^\pi$ for any fixed $n \geq 1$.
+\end{theorem}
+
+\begin{proof}
+Define the $n$-step Bellman operator $\mathcal{T}_n^\pi: \R^{|\mathcal{S}|} \to \R^{|\mathcal{S}|}$ by
+\begin{equation}
+    (\mathcal{T}_n^\pi V)(s) = \E_\pi\!\left[G_t^{(n)} \;\middle|\; S_t = s\right] = \E_\pi\!\left[\sum_{k=0}^{n-1}\gamma^k R_{t+k+1} + \gamma^n V(S_{t+n}) \;\middle|\; S_t = s\right].
+    \label{eq:nstep_operator}
+\end{equation}
+This operator is the $n$-fold composition $\mathcal{T}_n^\pi = (\mathcal{T}^\pi)^n$ applied to $V$ with intermediate terms expanded. Since $\mathcal{T}^\pi$ is a $\gamma$-contraction (Lemma~\ref{lem:bellman_contraction}), $\mathcal{T}_n^\pi$ is a $\gamma^n$-contraction:
+\begin{equation}
+    \|\mathcal{T}_n^\pi V_1 - \mathcal{T}_n^\pi V_2\|_\infty \leq \gamma^n \|V_1 - V_2\|_\infty.
+\end{equation}
+Its unique fixed point is $V^\pi$. The $n$-step TD update is a stochastic approximation of the iteration $V \leftarrow \mathcal{T}_n^\pi V$, and the same argument as in Theorem~\ref{thm:td0_convergence} (Steps 2--5) applies with $\mathcal{T}^\pi$ replaced by $\mathcal{T}_n^\pi$.
+\end{proof}
+
+\begin{remark}[Spectrum from TD(0) to MC]
+\label{rem:nstep_spectrum}
+Setting $n = 1$ recovers TD(0); taking $n \to \infty$ (with $n$ equal to the episode length) recovers the MC return $G_t$. Intermediate values of $n$ interpolate the bias-variance tradeoff: larger $n$ reduces bias (more actual rewards, less bootstrapping) but increases variance (more random transitions included). In practice, $n$ must be tuned for the specific problem.
+\end{remark}
+
+\subsection{TD($\lambda$) --- Forward View}
+\label{subsec:td_lambda_forward}
+
+Rather than choosing a single $n$, TD($\lambda$) takes a \emph{geometrically weighted average} of all $n$-step returns.
+
+\begin{definition}[$\lambda$-Return]
+\label{def:lambda_return}
+For $\lambda \in [0,1]$, the \emph{$\lambda$-return} is
+\begin{equation}
+    G_t^\lambda = (1-\lambda) \sum_{n=1}^{\infty} \lambda^{n-1} G_t^{(n)}.
+    \label{eq:lambda_return}
+\end{equation}
+\end{definition}
+
+The weighting factor $(1-\lambda)$ ensures normalization: $(1-\lambda)\sum_{n=1}^{\infty} \lambda^{n-1} = 1$.
+
+\begin{proposition}[Special Cases of the $\lambda$-Return]
+\label{prop:lambda_special}
+\begin{enumerate}[nosep]
+    \item When $\lambda = 0$: $G_t^0 = G_t^{(1)} = R_{t+1} + \gamma V(S_{t+1})$ (the TD(0) target).
+    \item When $\lambda = 1$: $G_t^1 = G_t$ (the full Monte Carlo return).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+For $\lambda = 0$: $G_t^0 = (1-0)\sum_{n=1}^{\infty} 0^{n-1} G_t^{(n)} = G_t^{(1)} = R_{t+1} + \gamma V(S_{t+1})$.
+
+For $\lambda = 1$: We use the identity $G_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k R_{t+k+1} + \gamma^n V(S_{t+n})$ and the telescoping relation. We have:
+\begin{align}
+    G_t^1 &= \lim_{N \to \infty} (1-\lambda)\sum_{n=1}^{N} \lambda^{n-1} G_t^{(n)} \bigg|_{\lambda=1}. \label{eq:lambda1_limit}
+\end{align}
+Taking the limit carefully (or using Lemma~\ref{lem:nstep_telescope} and summing the geometric series of TD errors), we obtain $G_t^1 = \sum_{k=0}^{\infty} \gamma^k R_{t+k+1} = G_t$, since the bootstrapped terms vanish: $\lim_{n\to\infty} \gamma^n V(S_{t+n}) = 0$.
+\end{proof}
+
+\begin{keyresult}[$\lambda$-Return as Weighted Sum of TD Errors]
+\begin{theorem}[$\lambda$-Return Decomposition]
+\label{thm:lambda_td_errors}
+The $\lambda$-return satisfies
+\begin{equation}
+    G_t^\lambda - V(S_t) = \sum_{k=0}^{\infty} (\gamma\lambda)^k \delta_{t+k}.
+    \label{eq:lambda_td_errors}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Starting from Definition~\ref{def:lambda_return} and applying Lemma~\ref{lem:nstep_telescope}:
+\begin{align}
+    G_t^\lambda - V(S_t)
+    &= (1-\lambda) \sum_{n=1}^{\infty} \lambda^{n-1} \bigl[G_t^{(n)} - V(S_t)\bigr] \nonumber\\
+    &= (1-\lambda) \sum_{n=1}^{\infty} \lambda^{n-1} \sum_{k=0}^{n-1} \gamma^k \delta_{t+k}. \label{eq:lambda_step1}
+\end{align}
+We interchange the order of summation. For a fixed $k$, the term $\gamma^k \delta_{t+k}$ appears in the inner sum for all $n \geq k+1$. Therefore:
+\begin{align}
+    G_t^\lambda - V(S_t)
+    &= (1-\lambda) \sum_{k=0}^{\infty} \gamma^k \delta_{t+k} \sum_{n=k+1}^{\infty} \lambda^{n-1} \nonumber\\
+    &= (1-\lambda) \sum_{k=0}^{\infty} \gamma^k \delta_{t+k} \cdot \frac{\lambda^k}{1-\lambda} \nonumber\\
+    &= \sum_{k=0}^{\infty} (\gamma\lambda)^k \delta_{t+k}, \label{eq:lambda_final}
+\end{align}
+where in the second line we computed $\sum_{n=k+1}^{\infty} \lambda^{n-1} = \lambda^k \sum_{j=0}^{\infty} \lambda^j = \lambda^k/(1-\lambda)$ for $\lambda < 1$. The interchange of summation is justified by absolute convergence, since $|\delta_{t+k}|$ is bounded and $\gamma\lambda < 1$.
+\end{proof}
+
+\begin{remark}[Interpretation of the $\lambda$-Return]
+\label{rem:lambda_interpretation}
+Theorem~\ref{thm:lambda_td_errors} reveals that the $\lambda$-return is a weighted sum of TD errors with exponentially decaying weights $(\gamma\lambda)^k$. The parameter $\lambda$ controls the decay rate:
+\begin{itemize}[nosep]
+    \item $\lambda = 0$: Only the immediate TD error $\delta_t$ contributes (TD(0)).
+    \item $\lambda = 1$: All TD errors contribute with weights $\gamma^k$ (equivalent to the MC return by Lemma~\ref{lem:return_td_errors}).
+    \item $0 < \lambda < 1$: The effective horizon of TD errors is $1/(1-\gamma\lambda)$.
+\end{itemize}
+This is the \emph{forward view} of TD($\lambda$): at each time step, we look forward at the sequence of future TD errors.
+\end{remark}
+
+\subsection{TD($\lambda$) --- Backward View with Eligibility Traces}
+\label{subsec:td_lambda_backward}
+
+The forward view requires waiting until the end of the episode (or a long lookahead) to compute $G_t^\lambda$. The backward view achieves the same result incrementally using \emph{eligibility traces}.
+
+\begin{definition}[Eligibility Trace]
+\label{def:eligibility_trace}
+The \emph{accumulating eligibility trace} for state $s$ is defined recursively:
+\begin{equation}
+    e_0(s) = 0, \qquad e_t(s) = \gamma\lambda\, e_{t-1}(s) + \indicator\{S_t = s\},
+    \label{eq:eligibility_trace}
+\end{equation}
+where $\indicator\{S_t = s\}$ is the indicator function that equals 1 if $S_t = s$ and 0 otherwise.
+\end{definition}
+
+\begin{definition}[TD($\lambda$) Backward View Update]
+\label{def:td_lambda_backward}
+The \emph{TD($\lambda$) backward view} updates \emph{all} states simultaneously at each time step:
+\begin{equation}
+    V(s) \leftarrow V(s) + \alpha\,\delta_t\, e_t(s) \quad \text{for all } s \in \mathcal{S},
+    \label{eq:td_lambda_backward}
+\end{equation}
+where $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$ is the current TD error.
+\end{definition}
+
+\begin{remark}[Intuition for Eligibility Traces]
+\label{rem:trace_intuition}
+The trace $e_t(s)$ records a ``fading memory'' of recent visits to state $s$. Each visit increments the trace by 1, and between visits the trace decays by $\gamma\lambda$ per step. When a TD error $\delta_t$ occurs, it is assigned as credit to each state in proportion to its trace---states visited recently and frequently receive the most credit. This is a form of \emph{credit assignment}: the TD error at time $t$ is propagated backward to all states that contributed to reaching the current state.
+\end{remark}
+
+\begin{keyresult}[Forward-Backward Equivalence]
+\begin{theorem}[Equivalence of Forward and Backward Views]
+\label{thm:forward_backward}
+In the \emph{offline} setting (updates accumulated during an episode and applied at the episode's end), the total update to $V(s)$ from the backward view equals the total update from the forward view:
+\begin{equation}
+    \sum_{t=0}^{T-1} \alpha\,\delta_t\, e_t(s) = \sum_{t=0}^{T-1} \alpha\bigl[G_t^\lambda - V(S_t)\bigr]\indicator\{S_t = s\},
+    \label{eq:forward_backward}
+\end{equation}
+where $T$ is the episode length.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove this by reorganizing the left-hand side.
+
+\textbf{Step 1: Expand the eligibility trace.} By unrolling the recursion~\eqref{eq:eligibility_trace}:
+\begin{equation}
+    e_t(s) = \sum_{j=0}^{t} (\gamma\lambda)^{t-j} \indicator\{S_j = s\}.
+    \label{eq:trace_unrolled}
+\end{equation}
+This follows by induction: $e_0(s) = \indicator\{S_0 = s\}$, and $e_t(s) = \gamma\lambda\, e_{t-1}(s) + \indicator\{S_t = s\} = \gamma\lambda \sum_{j=0}^{t-1}(\gamma\lambda)^{t-1-j}\indicator\{S_j=s\} + \indicator\{S_t=s\} = \sum_{j=0}^{t}(\gamma\lambda)^{t-j}\indicator\{S_j=s\}$.
+
+\textbf{Step 2: Substitute into the backward view sum.} The total backward-view update for state $s$ is:
+\begin{align}
+    \sum_{t=0}^{T-1} \delta_t\, e_t(s)
+    &= \sum_{t=0}^{T-1} \delta_t \sum_{j=0}^{t} (\gamma\lambda)^{t-j} \indicator\{S_j = s\}. \label{eq:fb_step2}
+\end{align}
+
+\textbf{Step 3: Interchange the order of summation.} We swap the sums over $t$ and $j$. For a fixed $j$, the inner condition $j \leq t$ means $t$ ranges from $j$ to $T-1$:
+\begin{align}
+    \sum_{t=0}^{T-1} \delta_t\, e_t(s)
+    &= \sum_{j=0}^{T-1} \indicator\{S_j = s\} \sum_{t=j}^{T-1} (\gamma\lambda)^{t-j} \delta_t. \label{eq:fb_step3}
+\end{align}
+
+\textbf{Step 4: Identify the forward view.} Substituting $k = t - j$ in the inner sum:
+\begin{equation}
+    \sum_{t=j}^{T-1} (\gamma\lambda)^{t-j} \delta_t = \sum_{k=0}^{T-1-j} (\gamma\lambda)^k \delta_{j+k}.
+    \label{eq:fb_step4}
+\end{equation}
+By Theorem~\ref{thm:lambda_td_errors} (applied to the finite-episode case where the sum truncates at the episode boundary), this equals $G_j^\lambda - V(S_j)$.
+
+Substituting back:
+\begin{equation}
+    \sum_{t=0}^{T-1} \delta_t\, e_t(s) = \sum_{j=0}^{T-1} \indicator\{S_j = s\}\bigl[G_j^\lambda - V(S_j)\bigr],
+    \label{eq:fb_final}
+\end{equation}
+which, upon multiplying both sides by $\alpha$, gives~\eqref{eq:forward_backward}.
+\end{proof}
+
+\begin{remark}[Computational Advantage of the Backward View]
+\label{rem:backward_advantage}
+The forward view requires computing $G_t^\lambda$, which needs future rewards up to the end of the episode. The backward view~\eqref{eq:td_lambda_backward} uses only the current TD error $\delta_t$ and the trace vector $e_t$, both available immediately. The computational cost per step is $O(|\mathcal{S}|)$ for updating all traces and values, making the backward view suitable for online, incremental learning. Theorem~\ref{thm:forward_backward} guarantees that both views produce identical total updates in the offline case.
+\end{remark}
+
+\begin{proposition}[Variants of Eligibility Traces]
+\label{prop:trace_variants}
+Several variants of the accumulating trace~\eqref{eq:eligibility_trace} exist:
+\begin{enumerate}[nosep]
+    \item \textbf{Replacing traces:} $e_t(s) = \max\bigl(\gamma\lambda\, e_{t-1}(s),\; \indicator\{S_t = s\}\bigr)$. Caps the trace at 1 upon revisit, preventing unbounded accumulation.
+    \item \textbf{Dutch traces:} $e_t(s) = \gamma\lambda\, e_{t-1}(s) + \alpha\bigl(1 - \gamma\lambda\, e_{t-1}(s)\bigr)\indicator\{S_t = s\}$. Designed to produce exact equivalence with the online $\lambda$-return algorithm~\cite{sutton2018}.
+\end{enumerate}
+\end{proposition}
+
+%% ============================================================
+%% SECTION 5: TD CONTROL
+%% ============================================================
+\section{TD Control --- Tabular Case}
+\label{sec:td_control}
+
+\subsection{From Prediction to Control}
+\label{subsec:prediction_to_control}
+
+The TD prediction methods of Section~\ref{sec:td_prediction} estimate $V^\pi$ for a fixed policy $\pi$. To find an \emph{optimal} policy, we employ the \emph{Generalized Policy Iteration} (GPI) framework: alternate between \emph{policy evaluation} (estimating $Q^\pi$) and \emph{policy improvement} (making the policy greedy with respect to $Q$). For control, we estimate action-value functions $Q$ rather than $V$, because the greedy policy $\pi'(s) = \argmax_a Q(s,a)$ can be computed without a model.
+
+\begin{definition}[$\varepsilon$-Greedy Policy]
+\label{def:epsilon_greedy}
+Given an action-value function $Q$, the \emph{$\varepsilon$-greedy policy} selects
+\begin{equation}
+    \pi(a|s) = \begin{cases}
+    1 - \varepsilon + \frac{\varepsilon}{|\mathcal{A}|} & \text{if } a = \argmax_{a'} Q(s,a'), \\[4pt]
+    \frac{\varepsilon}{|\mathcal{A}|} & \text{otherwise,}
+    \end{cases}
+    \label{eq:epsilon_greedy}
+\end{equation}
+where $\varepsilon \in (0,1]$ is the exploration parameter.
+\end{definition}
+
+\subsection{SARSA: On-Policy TD Control}
+\label{subsec:sarsa}
+
+\begin{definition}[SARSA Update Rule]
+\label{def:sarsa}
+Given the quintuple $(S_t, A_t, R_{t+1}, S_{t+1}, A_{t+1})$ where $A_{t+1} \sim \pi(\cdot|S_{t+1})$, the \emph{SARSA update} is
+\begin{equation}
+    Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\bigl[R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)\bigr].
+    \label{eq:sarsa}
+\end{equation}
+\end{definition}
+
+\begin{assumption}[SARSA Convergence Conditions (GLIE)]
+\label{ass:sarsa}
+\begin{enumerate}[nosep]
+    \item \textbf{GLIE:} The policy sequence $\{\pi_t\}$ is \emph{Greedy in the Limit with Infinite Exploration}: (a) every state-action pair $(s,a)$ is visited infinitely often, and (b) $\pi_t$ converges to the greedy policy in the limit (i.e., $\varepsilon_t \to 0$).
+    \item Step sizes satisfy: $\sum_{n} \alpha_n(s,a) = \infty$ and $\sum_{n} \alpha_n^2(s,a) < \infty$ for each $(s,a)$.
+\end{enumerate}
+\end{assumption}
+
+\begin{theorem}[Convergence of SARSA]
+\label{thm:sarsa_convergence}
+Under Assumption~\ref{ass:sarsa}, SARSA converges to $Q^*$ almost surely:
+\begin{equation}
+    Q_n(s,a) \xrightarrow{a.s.} Q^*(s,a) \quad \text{for all } (s,a) \in \mathcal{S} \times \mathcal{A}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We follow the approach of Singh et al.~\cite{singh2000}.
+
+\textbf{Step 1: Decomposition into evaluation and improvement.} At any time, SARSA performs TD(0) on the action-value function under the current (time-varying) policy $\pi_t$. The update target has expected value $(\mathcal{T}^{\pi_t} Q)(s,a) = \sum_{s'} P(s'|s,a)[r(s,a,s') + \gamma \sum_{a'} \pi_t(a'|s') Q(s',a')]$.
+
+\textbf{Step 2: Policy evaluation for fixed policy.} If the policy were fixed at some $\pi$, the SARSA update would be TD(0) applied to $Q^\pi$. The Bellman operator $\mathcal{T}^\pi$ on the $Q$-function space, defined by
+\begin{equation}
+    (\mathcal{T}^\pi Q)(s,a) = \sum_{s'} P(s'|s,a)\!\left[r(s,a,s') + \gamma \sum_{a'} \pi(a'|s') Q(s',a')\right],
+\end{equation}
+is a $\gamma$-contraction in the infinity norm (the proof is identical to Lemma~\ref{lem:bellman_contraction}). Thus, for a fixed policy, convergence to $Q^\pi$ follows from the TD(0) convergence argument (Theorem~\ref{thm:td0_convergence}).
+
+\textbf{Step 3: Handling non-stationarity.} The key difficulty is that $\pi_t$ changes at each step. We decompose the SARSA update into a Q-learning-like component plus an exploration perturbation, following Singh et al.~\cite{singh2000}.
+
+Write the SARSA update as:
+\begin{equation}
+    Q_{t+1}(s,a) = Q_t(s,a) + \alpha_t(s,a)\bigl[R_{t+1} + \gamma Q_t(S_{t+1}, A_{t+1}) - Q_t(s,a)\bigr]\indicator\{S_t=s, A_t=a\}.
+\end{equation}
+Decompose the target by adding and subtracting $\gamma\max_{a'} Q_t(S_{t+1}, a')$:
+\begin{align}
+    R_{t+1} + \gamma Q_t(S_{t+1}, A_{t+1})
+    &= \underbrace{R_{t+1} + \gamma\max_{a'} Q_t(S_{t+1}, a')}_{\text{Q-learning target}} + \underbrace{\gamma\bigl[Q_t(S_{t+1}, A_{t+1}) - \max_{a'} Q_t(S_{t+1}, a')\bigr]}_{\text{exploration perturbation } \xi_t}. \label{eq:sarsa_decomp}
+\end{align}
+The perturbation $\xi_t = \gamma[Q_t(S_{t+1}, A_{t+1}) - \max_{a'} Q_t(S_{t+1}, a')]$ satisfies $\xi_t \leq 0$ always (since $Q_t(S_{t+1}, A_{t+1}) \leq \max_{a'} Q_t(S_{t+1}, a')$).
+
+Now we bound the expected perturbation. Under the $\varepsilon_t$-greedy policy $\pi_t$:
+\begin{align}
+    \E[\xi_t | \mathcal{F}_t, S_{t+1}]
+    &= \gamma\sum_{a'}\pi_t(a'|S_{t+1})Q_t(S_{t+1},a') - \gamma\max_{a'}Q_t(S_{t+1},a') \nonumber\\
+    &= \gamma\!\left[(1-\varepsilon_t)\max_{a'}Q_t(S_{t+1},a') + \frac{\varepsilon_t}{|\mathcal{A}|}\sum_{a'}Q_t(S_{t+1},a') - \max_{a'}Q_t(S_{t+1},a')\right] \nonumber\\
+    &= \gamma\varepsilon_t\!\left[\frac{1}{|\mathcal{A}|}\sum_{a'}Q_t(S_{t+1},a') - \max_{a'}Q_t(S_{t+1},a')\right]. \label{eq:xi_bound}
+\end{align}
+Since $Q_t$ is bounded (by $R_{\max}/(1-\gamma)$), we obtain $|\E[\xi_t | \mathcal{F}_t, S_{t+1}]| \leq \gamma\varepsilon_t \cdot \frac{2R_{\max}}{1-\gamma}$. Therefore the SARSA iteration can be written as:
+\begin{equation}
+    Q_{t+1}(s,a) = Q_t(s,a) + \alpha_t(s,a)\bigl[(\mathcal{T}^* Q_t)(s,a) - Q_t(s,a) + w_t(s,a) + \xi_t(s,a)\bigr],
+    \label{eq:sarsa_sa_decomposed}
+\end{equation}
+where $w_t$ is the zero-mean noise (as in Q-learning, Step~2 of Theorem~\ref{thm:qlearning_convergence}) and $\xi_t$ is the perturbation satisfying $|\E[\xi_t | \mathcal{F}_t]| \leq C_\xi \varepsilon_t$ for some constant $C_\xi$.
+
+\textbf{Step 4: Convergence via perturbed stochastic approximation.} The iteration~\eqref{eq:sarsa_sa_decomposed} is a \emph{perturbed} stochastic approximation of the form $x_{n+1} = x_n + \alpha_n[h(x_n) + w_n + \xi_n]$, where $h(Q) = \mathcal{T}^* Q - Q$ (identical to Q-learning). The perturbation $\xi_n$ satisfies $|\E[\xi_n | \mathcal{F}_n]| \leq C_\xi\varepsilon_n$ with $\varepsilon_n \to 0$.
+
+We apply the following extension of the Robbins-Monro theorem: if the unperturbed iteration converges (which it does---this is Q-learning, Theorem~\ref{thm:qlearning_convergence}), and the perturbation satisfies $\sum_n \alpha_n |\E[\xi_n|\mathcal{F}_n]| < \infty$ a.s., then the perturbed iteration converges to the same limit. To verify:
+\begin{equation}
+    \sum_n \alpha_n |\E[\xi_n|\mathcal{F}_n]| \leq C_\xi \sum_n \alpha_n \varepsilon_n.
+    \label{eq:perturbation_summable}
+\end{equation}
+Under the GLIE schedule, $\varepsilon_n \to 0$ and the step sizes $\alpha_n$ satisfy $\sum \alpha_n^2 < \infty$. Since $\varepsilon_n \to 0$, for any $\delta > 0$ there exists $N$ such that $\varepsilon_n \leq \delta$ for $n \geq N$. By choosing $\delta$ small enough, $\sum_{n \geq N} \alpha_n \varepsilon_n \leq \delta\sum_n \alpha_n$. While $\sum \alpha_n = \infty$, the rate condition on GLIE (specifically, the requirement that $\varepsilon_n$ decreases fast enough, e.g., $\varepsilon_n = 1/n$) ensures $\sum_n \alpha_n \varepsilon_n < \infty$. For the standard choice $\alpha_n = 1/n$ and $\varepsilon_n = 1/n$, we have $\sum \alpha_n\varepsilon_n = \sum 1/n^2 < \infty$.
+
+Since $\mathcal{T}^*$ is a $\gamma$-contraction with unique fixed point $Q^*$, and the perturbation is summable, the Lyapunov analysis of Appendix~\ref{app:stochastic_approx} extends: the error $\|Q_t - Q^*\|_\infty$ satisfies a supermartingale inequality with a summable perturbation term, yielding $Q_t \to Q^*$ a.s.\ by Theorem~\ref{thm:supermartingale}.
+\end{proof}
+
+\begin{remark}[On-Policy Nature of SARSA]
+\label{rem:sarsa_on_policy}
+SARSA is an \emph{on-policy} method: it evaluates and improves the policy it is actually following, including the exploration component. During learning with $\varepsilon > 0$, SARSA learns the value of the $\varepsilon$-greedy policy, which accounts for the cost of exploratory actions. In environments where exploratory actions are dangerous or costly, this can lead to safer learned behavior compared to off-policy methods like Q-learning.
+\end{remark}
+
+\subsection{Q-Learning: Off-Policy TD Control}
+\label{subsec:qlearning}
+
+\begin{definition}[Q-Learning Update Rule]
+\label{def:qlearning}
+Given the transition $(S_t, A_t, R_{t+1}, S_{t+1})$, the \emph{Q-learning update} is
+\begin{equation}
+    Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\bigl[R_{t+1} + \gamma \max_{a'} Q(S_{t+1}, a') - Q(S_t, A_t)\bigr].
+    \label{eq:qlearning}
+\end{equation}
+\end{definition}
+
+\begin{keyresult}[Convergence of Q-Learning]
+\begin{theorem}[Convergence of Q-Learning {\cite{watkins1992}}]
+\label{thm:qlearning_convergence}
+Under the following conditions:
+\begin{enumerate}[nosep]
+    \item Every state-action pair $(s,a)$ is visited infinitely often.
+    \item Step sizes satisfy: $\sum_{n} \alpha_n(s,a) = \infty$ and $\sum_{n} \alpha_n^2(s,a) < \infty$ for each $(s,a)$.
+    \item Rewards are bounded: $|r(s,a,s')| \leq R_{\max}$ for all $(s,a,s')$.
+\end{enumerate}
+Then Q-learning converges to $Q^*$ almost surely:
+\begin{equation}
+    Q_n(s,a) \xrightarrow{a.s.} Q^*(s,a) \quad \text{for all } (s,a) \in \mathcal{S} \times \mathcal{A}.
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We follow Watkins and Dayan~\cite{watkins1992} and Tsitsiklis~\cite{tsitsiklis1994}.
+
+\textbf{Step 1: Express as stochastic approximation.} The Q-learning update for state-action pair $(s,a)$ (at the $k$-th visit) can be written as:
+\begin{equation}
+    Q_{k+1}(s,a) = Q_k(s,a) + \alpha_k(s,a)\bigl[(\mathcal{T}^* Q_k)(s,a) - Q_k(s,a) + w_k(s,a)\bigr],
+    \label{eq:ql_sa_form}
+\end{equation}
+where $\mathcal{T}^*$ is the Bellman optimality operator on $Q$-values:
+\begin{equation}
+    (\mathcal{T}^* Q)(s,a) = \sum_{s'} P(s'|s,a)\!\left[r(s,a,s') + \gamma \max_{a'} Q(s',a')\right],
+    \label{eq:bellman_opt_q_op}
+\end{equation}
+and the noise is $w_k(s,a) = R_{t+1} + \gamma \max_{a'} Q_k(S_{t+1}, a') - (\mathcal{T}^* Q_k)(s,a)$.
+
+\textbf{Step 2: Verify $\mathcal{T}^*$ is a contraction on $Q$-space.} For any $Q_1, Q_2$:
+\begin{align}
+    |(\mathcal{T}^* Q_1)(s,a) - (\mathcal{T}^* Q_2)(s,a)|
+    &= \gamma\left|\sum_{s'} P(s'|s,a)\!\left[\max_{a'} Q_1(s',a') - \max_{a'} Q_2(s',a')\right]\right| \nonumber\\
+    &\leq \gamma \sum_{s'} P(s'|s,a) \max_{a'} |Q_1(s',a') - Q_2(s',a')| \nonumber\\
+    &\leq \gamma \|Q_1 - Q_2\|_\infty. \label{eq:ql_contraction}
+\end{align}
+Thus $\mathcal{T}^*$ is a $\gamma$-contraction with unique fixed point $Q^*$.
+
+\textbf{Step 3: Verify noise conditions.} Conditioned on $\mathcal{F}_k$ (including $Q_k$, $S_t = s$, $A_t = a$):
+\begin{align}
+    \E[w_k(s,a) | \mathcal{F}_k]
+    &= \E\!\left[R_{t+1} + \gamma \max_{a'} Q_k(S_{t+1}, a') \;\middle|\; S_t=s, A_t=a, Q_k\right] - (\mathcal{T}^* Q_k)(s,a) \nonumber\\
+    &= (\mathcal{T}^* Q_k)(s,a) - (\mathcal{T}^* Q_k)(s,a) = 0. \label{eq:ql_noise_mg}
+\end{align}
+For the variance bound: since $|R_{t+1}| \leq R_{\max}$ and $\max_{a'} |Q_k(s',a')| \leq R_{\max}/(1-\gamma)$ (by boundedness of the iterates, which can be established by induction),
+\begin{equation}
+    \E[w_k^2(s,a) | \mathcal{F}_k] \leq C \label{eq:ql_noise_var}
+\end{equation}
+for some constant $C$ depending on $R_{\max}$ and $\gamma$.
+
+\textbf{Step 4: Apply stochastic approximation.} The iteration~\eqref{eq:ql_sa_form} has the form of Theorem~\ref{thm:robbins_monro} with $h(Q)(s,a) = (\mathcal{T}^* Q)(s,a) - Q(s,a)$. The mapping $h$ has unique root $Q^*$, and the contraction property of $\mathcal{T}^*$ ensures stability (the eigenvalue condition is satisfied---see Appendix~\ref{app:supplementary} for the linear case; the nonlinear $\max$ operator is handled by the extension in~\cite{tsitsiklis1994}). All conditions are verified, yielding $Q_k(s,a) \to Q^*(s,a)$ a.s.
+\end{proof}
+
+\begin{remark}[Off-Policy Learning]
+\label{rem:qlearning_off_policy}
+Q-learning is \emph{off-policy}: the update target uses $\max_{a'}$ (the optimal action) regardless of which action was actually taken. The \emph{behavior policy} (which generates data) can be any policy with sufficient exploration, while the \emph{target policy} (which is being learned) is the optimal greedy policy. This decoupling is powerful but, as we shall see in Section~\ref{sec:function_approx}, creates challenges when combined with function approximation.
+\end{remark}
+
+\begin{proposition}[Q-Learning as Stochastic Value Iteration]
+\label{prop:ql_value_iteration}
+Q-learning can be viewed as a sample-based, asynchronous version of $Q$-value iteration: $Q \leftarrow \mathcal{T}^* Q$.
+\end{proposition}
+
+\begin{proof}
+The expected Q-learning update (conditioned on visiting $(s,a)$) is:
+\begin{equation}
+    \E[\Delta Q(s,a) | S_t=s, A_t=a] = \alpha\bigl[(\mathcal{T}^* Q)(s,a) - Q(s,a)\bigr].
+\end{equation}
+This is a step toward $\mathcal{T}^* Q$ from the current $Q$, scaled by $\alpha$. Value iteration applies $Q \leftarrow \mathcal{T}^* Q$ synchronously to all $(s,a)$ pairs; Q-learning applies it asynchronously to sampled pairs with a stochastic estimate.
+\end{proof}
+
+\subsection{Expected SARSA}
+\label{subsec:expected_sarsa}
+
+\begin{definition}[Expected SARSA Update Rule]
+\label{def:expected_sarsa}
+The \emph{Expected SARSA update} is
+\begin{equation}
+    Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\!\left[R_{t+1} + \gamma \sum_{a'} \pi(a'|S_{t+1}) Q(S_{t+1}, a') - Q(S_t, A_t)\right].
+    \label{eq:expected_sarsa}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Convergence of Expected SARSA]
+\label{thm:expected_sarsa_convergence}
+Under the same conditions as SARSA (Assumption~\ref{ass:sarsa}), Expected SARSA converges to $Q^\pi$ (the $Q$-function of the target policy $\pi$). If $\pi$ is the greedy policy (i.e., Expected SARSA reduces to Q-learning), then it converges to $Q^*$.
+\end{theorem}
+
+\begin{proof}
+The Expected SARSA update targets the Bellman expectation operator for $Q$: $(\mathcal{T}^\pi Q)(s,a) = \sum_{s'} P(s'|s,a)[r(s,a,s') + \gamma \sum_{a'} \pi(a'|s') Q(s',a')]$. This operator is a $\gamma$-contraction with fixed point $Q^\pi$. The update noise is:
+\begin{align}
+    w_t &= R_{t+1} + \gamma \sum_{a'} \pi(a'|S_{t+1}) Q(S_{t+1}, a') - (\mathcal{T}^\pi Q)(S_t, A_t) \nonumber\\
+    &= \bigl[R_{t+1} + \gamma \sum_{a'}\pi(a'|S_{t+1})Q(S_{t+1},a')\bigr] - \E\!\left[R_{t+1} + \gamma \sum_{a'}\pi(a'|S_{t+1})Q(S_{t+1},a') \;\middle|\; S_t,A_t\right]. \label{eq:esarsa_noise}
+\end{align}
+This is a martingale difference with bounded variance. The stochastic approximation framework (Theorem~\ref{thm:robbins_monro}) applies.
+\end{proof}
+
+\begin{proposition}[Variance Reduction in Expected SARSA]
+\label{prop:expected_sarsa_variance}
+Expected SARSA has lower variance than SARSA:
+\begin{equation}
+    \Var\!\left(R_{t+1} + \gamma \sum_{a'}\pi(a'|S_{t+1})Q(S_{t+1},a') \;\middle|\; S_t, A_t\right) \leq \Var\!\left(R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) \;\middle|\; S_t, A_t\right).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+By the law of total variance, conditioning on $S_{t+1}$:
+\begin{align}
+    &\Var\!\left(R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) \;\middle|\; S_t, A_t\right) \nonumber\\
+    &= \E\!\left[\Var\!\left(\gamma Q(S_{t+1}, A_{t+1}) \;\middle|\; S_{t+1}\right) \;\middle|\; S_t, A_t\right] + \Var\!\left(R_{t+1} + \gamma \E[Q(S_{t+1}, A_{t+1})|S_{t+1}] \;\middle|\; S_t, A_t\right) \nonumber\\
+    &= \underbrace{\gamma^2\E\!\left[\Var_{A_{t+1}\sim\pi}\!\left(Q(S_{t+1}, A_{t+1}) \;\middle|\; S_{t+1}\right) \;\middle|\; S_t, A_t\right]}_{\geq\, 0} + \Var\!\left(R_{t+1} + \gamma\textstyle\sum_{a'}\pi(a'|S_{t+1})Q(S_{t+1},a') \;\middle|\; S_t, A_t\right). \label{eq:esarsa_variance_proof}
+\end{align}
+The first term is non-negative, so SARSA's variance is at least as large as Expected SARSA's.
+\end{proof}
+
+\subsection{Unified View of TD Control Methods}
+\label{subsec:unified_control}
+
+\begin{theorem}[Unified TD Control Update]
+\label{thm:unified_control}
+All three TD control algorithms can be written in the unified form:
+\begin{equation}
+    Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\bigl[R_{t+1} + \gamma\, \text{Target}(S_{t+1}) - Q(S_t, A_t)\bigr],
+    \label{eq:unified_control}
+\end{equation}
+where the target function differs as follows:
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Algorithm} & \textbf{Target}$(S_{t+1})$ & \textbf{On/Off-Policy} & \textbf{Converges to} \\
+\midrule
+SARSA & $Q(S_{t+1}, A_{t+1})$, $A_{t+1} \sim \pi$ & On-policy & $Q^*$ (under GLIE) \\
+Q-Learning & $\max_{a'} Q(S_{t+1}, a')$ & Off-policy & $Q^*$ \\
+Expected SARSA & $\sum_{a'} \pi(a'|S_{t+1}) Q(S_{t+1}, a')$ & Either & $Q^\pi$ or $Q^*$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{theorem}
+
+\begin{proof}
+The unified form follows directly from the definitions (Definitions~\ref{def:sarsa},~\ref{def:qlearning},~\ref{def:expected_sarsa}). The convergence column follows from Theorems~\ref{thm:sarsa_convergence},~\ref{thm:qlearning_convergence}, and~\ref{thm:expected_sarsa_convergence}.
+\end{proof}
+
+\begin{remark}[Connections Between Methods]
+\label{rem:control_connections}
+When $\pi$ is the greedy policy with respect to $Q$, Expected SARSA reduces to Q-learning (since $\sum_{a'}\pi(a'|s')Q(s',a') = \max_{a'} Q(s',a')$ for a greedy $\pi$). When $\pi$ is the behavior policy, Expected SARSA is an on-policy method. Thus Expected SARSA unifies SARSA and Q-learning, with the relationship between the behavior and target policies as the distinguishing factor.
+\end{remark}
+
+%% ============================================================
+%% SECTION 6: FUNCTION APPROXIMATION
+%% ============================================================
+\section{TD Learning with Function Approximation}
+\label{sec:function_approx}
+
+\subsection{Motivation and Setup}
+\label{subsec:fa_motivation}
+
+The tabular methods of Sections~\ref{sec:td_prediction}--\ref{sec:td_control} store a separate value for each state (or state-action pair). For large or continuous state spaces, this is infeasible. \emph{Function approximation} replaces the lookup table with a parameterized function that generalizes across states.
+
+\begin{definition}[Linear Function Approximation]
+\label{def:linear_fa}
+Under \emph{linear function approximation}, the value function is represented as
+\begin{equation}
+    V_{\bm{w}}(s) = \bm{w}^\top \bm{\phi}(s) = \sum_{i=1}^d w_i \phi_i(s),
+    \label{eq:linear_fa}
+\end{equation}
+where $\bm{\phi}(s) = (\phi_1(s), \ldots, \phi_d(s))^\top \in \R^d$ is a fixed \emph{feature vector} for state $s$ and $\bm{w} \in \R^d$ is the learnable weight vector.
+\end{definition}
+
+\begin{definition}[Mean Squared Value Error]
+\label{def:msve}
+The \emph{Mean Squared Value Error} (MSVE) is
+\begin{equation}
+    \overline{\text{VE}}(\bm{w}) = \sum_{s \in \mathcal{S}} d^\pi(s) \bigl[V^\pi(s) - V_{\bm{w}}(s)\bigr]^2 = \|V^\pi - V_{\bm{w}}\|_{d^\pi}^2,
+    \label{eq:msve}
+\end{equation}
+where $d^\pi(s)$ is the on-policy state distribution (the stationary distribution of the Markov chain induced by $\pi$), and $\|\cdot\|_{d^\pi}$ denotes the weighted $L^2$ norm with weights $d^\pi$.
+\end{definition}
+
+\subsection{Semi-Gradient TD(0)}
+\label{subsec:semi_gradient_td}
+
+\begin{definition}[Semi-Gradient TD(0) Update]
+\label{def:semi_grad_td}
+The \emph{semi-gradient TD(0) update} for the weight vector is
+\begin{equation}
+    \bm{w} \leftarrow \bm{w} + \alpha\bigl[R_{t+1} + \gamma V_{\bm{w}}(S_{t+1}) - V_{\bm{w}}(S_t)\bigr]\nabla_{\bm{w}} V_{\bm{w}}(S_t)
+    = \bm{w} + \alpha\,\delta_t\,\nabla_{\bm{w}} V_{\bm{w}}(S_t).
+    \label{eq:semi_grad_td}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Why ``Semi-Gradient'']
+\label{rem:semi_gradient}
+The true gradient of the MSVE would require differentiating the target $R_{t+1} + \gamma V_{\bm{w}}(S_{t+1})$ with respect to $\bm{w}$, including the dependence of $V_{\bm{w}}(S_{t+1})$ on $\bm{w}$. The semi-gradient method ignores this dependence, treating the target as fixed. Formally, the semi-gradient is:
+\begin{equation}
+    \alpha\delta_t \nabla_{\bm{w}} V_{\bm{w}}(S_t) \neq -\frac{\alpha}{2}\nabla_{\bm{w}}\bigl[R_{t+1} + \gamma V_{\bm{w}}(S_{t+1}) - V_{\bm{w}}(S_t)\bigr]^2.
+\end{equation}
+The right-hand side would include the term $-\gamma\nabla_{\bm{w}} V_{\bm{w}}(S_{t+1})$, which is omitted. Despite this, convergence can still be established under appropriate conditions.
+\end{remark}
+
+\begin{proposition}[Semi-Gradient TD(0) with Linear FA]
+\label{prop:semi_grad_linear}
+Under linear function approximation $V_{\bm{w}}(s) = \bm{w}^\top \bm{\phi}(s)$, the semi-gradient TD(0) update becomes:
+\begin{equation}
+    \bm{w} \leftarrow \bm{w} + \alpha\bigl[R_{t+1} + \gamma \bm{w}^\top\bm{\phi}(S_{t+1}) - \bm{w}^\top\bm{\phi}(S_t)\bigr]\bm{\phi}(S_t).
+    \label{eq:semi_grad_linear}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Since $\nabla_{\bm{w}} V_{\bm{w}}(s) = \nabla_{\bm{w}}(\bm{w}^\top \bm{\phi}(s)) = \bm{\phi}(s)$, direct substitution into~\eqref{eq:semi_grad_td} yields~\eqref{eq:semi_grad_linear}.
+\end{proof}
+
+\subsection{Convergence Under Linear Function Approximation}
+\label{subsec:fa_convergence}
+
+\begin{assumption}[Linear FA Convergence Conditions]
+\label{ass:linear_fa}
+\begin{enumerate}[nosep]
+    \item Linear function approximation: $V_{\bm{w}}(s) = \bm{w}^\top \bm{\phi}(s)$.
+    \item The feature vectors $\{\bm{\phi}(s)\}_{s \in \mathcal{S}}$ are linearly independent (i.e., the feature matrix $\bm{\Phi} \in \R^{|\mathcal{S}| \times d}$ has full column rank $d$).
+    \item States are sampled from the on-policy stationary distribution $d^\pi$.
+    \item Step sizes satisfy: $\sum_n \alpha_n = \infty$ and $\sum_n \alpha_n^2 < \infty$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[Convergence of Linear Semi-Gradient TD(0)]
+\begin{theorem}[Convergence of Semi-Gradient TD(0) Under Linear FA {\cite{tsitsiklis1997}}]
+\label{thm:linear_td_convergence}
+Under Assumption~\ref{ass:linear_fa}, the semi-gradient TD(0) update~\eqref{eq:semi_grad_linear} converges almost surely to a weight vector $\bm{w}_{\text{TD}}$ satisfying:
+\begin{equation}
+    \overline{\text{VE}}(\bm{w}_{\text{TD}}) \leq \frac{1}{1-\gamma}\min_{\bm{w}} \overline{\text{VE}}(\bm{w}).
+    \label{eq:td_error_bound}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We follow Tsitsiklis and Van Roy~\cite{tsitsiklis1997}.
+
+\textbf{Step 1: Compute the expected update direction.} The expected update at weight vector $\bm{w}$, under the stationary distribution $d^\pi$, is:
+\begin{align}
+    \E[\delta_t \bm{\phi}(S_t)]
+    &= \E\!\left[\bigl(R_{t+1} + \gamma \bm{w}^\top\bm{\phi}(S_{t+1}) - \bm{w}^\top\bm{\phi}(S_t)\bigr)\bm{\phi}(S_t)\right] \nonumber\\
+    &= \E[R_{t+1}\bm{\phi}(S_t)] + \gamma\E[\bm{\phi}(S_t)\bm{\phi}(S_{t+1})^\top]\bm{w} - \E[\bm{\phi}(S_t)\bm{\phi}(S_t)^\top]\bm{w} \nonumber\\
+    &= \bm{b} + \bm{A}\bm{w}, \label{eq:expected_update}
+\end{align}
+where
+\begin{equation}
+    \bm{A} = \E\!\left[\bm{\phi}(S_t)\bigl(\gamma\bm{\phi}(S_{t+1}) - \bm{\phi}(S_t)\bigr)^\top\right], \qquad
+    \bm{b} = \E[R_{t+1}\bm{\phi}(S_t)].
+    \label{eq:A_and_b}
+\end{equation}
+
+\textbf{Step 2: Show $\bm{A}$ is negative definite.} Let $\bm{D} = \text{diag}(d^\pi(s_1), \ldots, d^\pi(s_{|\mathcal{S}|}))$ be the diagonal matrix of stationary probabilities and $\bm{P}_\pi$ be the transition matrix under $\pi$. Then:
+\begin{equation}
+    \bm{A} = \bm{\Phi}^\top \bm{D}(\gamma \bm{P}_\pi - \bm{I})\bm{\Phi}.
+    \label{eq:A_matrix_form}
+\end{equation}
+We need to show that $\bm{A}$ has eigenvalues with strictly negative real parts. Consider any $\bm{x} \in \R^d$, $\bm{x} \neq \bm{0}$, and let $\bm{v} = \bm{\Phi}\bm{x} \in \R^{|\mathcal{S}|}$. Then:
+\begin{align}
+    \bm{x}^\top \bm{A} \bm{x}
+    &= \bm{v}^\top \bm{D}(\gamma \bm{P}_\pi - \bm{I})\bm{v}
+    = \gamma \bm{v}^\top \bm{D}\bm{P}_\pi \bm{v} - \bm{v}^\top \bm{D}\bm{v}. \label{eq:quadratic_A}
+\end{align}
+Since $d^\pi$ is the stationary distribution, $\bm{D}\bm{P}_\pi$ has the property that $|\bm{v}^\top \bm{D}\bm{P}_\pi \bm{v}| \leq \|\bm{v}\|_{d^\pi}^2 = \bm{v}^\top \bm{D}\bm{v}$ (this follows from the Cauchy-Schwarz inequality in the $d^\pi$-weighted inner product, using that $\bm{P}_\pi$ is a contraction in this norm---see Appendix~\ref{app:supplementary} for the complete proof). Therefore:
+\begin{equation}
+    \bm{x}^\top \bm{A}\bm{x} \leq \gamma\|\bm{v}\|_{d^\pi}^2 - \|\bm{v}\|_{d^\pi}^2 = -(1-\gamma)\|\bm{v}\|_{d^\pi}^2 < 0,
+    \label{eq:A_neg_def}
+\end{equation}
+since $\bm{v} = \bm{\Phi}\bm{x} \neq \bm{0}$ by the full rank assumption on $\bm{\Phi}$.
+
+\textbf{Step 3: Identify the fixed point.} Since $\bm{A}$ is negative definite (hence invertible), the equation $\bm{A}\bm{w} + \bm{b} = \bm{0}$ has the unique solution:
+\begin{equation}
+    \bm{w}_{\text{TD}} = -\bm{A}^{-1}\bm{b}.
+    \label{eq:w_td}
+\end{equation}
+
+\textbf{Step 4: Apply the ODE method.} The semi-gradient TD(0) iteration has the form~\eqref{eq:robbins_monro} with $h(\bm{w}) = \bm{A}\bm{w} + \bm{b}$. Since $\bm{A}$ has eigenvalues with strictly negative real parts (Step 2), the associated ODE $\dot{\bm{w}} = \bm{A}\bm{w} + \bm{b}$ is globally asymptotically stable with equilibrium $\bm{w}_{\text{TD}}$. By the ODE method of stochastic approximation (Borkar and Meyn~\cite{borkar2000}---see Appendix~\ref{app:stochastic_approx}), the stochastic iteration converges: $\bm{w}_n \to \bm{w}_{\text{TD}}$ a.s.
+
+\textbf{Step 5: Bound the approximation error.} Let $\bm{w}^* = \argmin_{\bm{w}} \overline{\text{VE}}(\bm{w})$ be the best linear approximation, so that $\Pi V^\pi = V_{\bm{w}^*}$ is the $d^\pi$-weighted projection of $V^\pi$ onto the column space of $\bm{\Phi}$. The TD fixed point $\bm{w}_{\text{TD}}$ satisfies $V_{\bm{w}_{\text{TD}}} = \Pi \mathcal{T}^\pi V_{\bm{w}_{\text{TD}}}$, where $\Pi$ is this projection operator.
+
+Since $\Pi$ is a non-expansion in the $d^\pi$-norm ($\|\Pi \bm{v}\|_{d^\pi} \leq \|\bm{v}\|_{d^\pi}$) and $\mathcal{T}^\pi$ is a $\gamma$-contraction in the $d^\pi$-norm (as shown in Appendix~\ref{app:supplementary}), the composed operator $\Pi\mathcal{T}^\pi$ is a $\gamma$-contraction.
+
+We use the \emph{Pythagorean property} of orthogonal projections. Since $\Pi$ is the orthogonal projection in the $d^\pi$-inner product, for any $\bm{v} \in \R^{|\mathcal{S}|}$:
+\begin{equation}
+    \|\bm{v} - \Pi\bm{v}\|_{d^\pi}^2 + \|\Pi\bm{v} - \Pi\bm{u}\|_{d^\pi}^2 \leq \|\bm{v} - \Pi\bm{u}\|_{d^\pi}^2 \quad \text{for all } \bm{u}.
+    \label{eq:pythagorean}
+\end{equation}
+This is the Pythagorean inequality: the projection $\Pi\bm{v}$ is the closest point in the subspace to $\bm{v}$, so the ``hypotenuse'' $\|\bm{v} - \Pi\bm{u}\|_{d^\pi}^2$ is at least the sum of the ``legs.''
+
+Applying~\eqref{eq:pythagorean} with $\bm{v} = V^\pi$ and $\Pi\bm{u} = V_{\bm{w}_{\text{TD}}}$:
+\begin{equation}
+    \|V^\pi - \Pi V^\pi\|_{d^\pi}^2 + \|\Pi V^\pi - V_{\bm{w}_{\text{TD}}}\|_{d^\pi}^2 \leq \|V^\pi - V_{\bm{w}_{\text{TD}}}\|_{d^\pi}^2.
+    \label{eq:pythag_applied}
+\end{equation}
+This gives us $\|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}^2 \leq \|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2 - \|V^\pi - \Pi V^\pi\|_{d^\pi}^2$.
+
+Now we bound $\|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}$. Since $V_{\bm{w}_{\text{TD}}} = \Pi\mathcal{T}^\pi V_{\bm{w}_{\text{TD}}}$ and $V^\pi = \mathcal{T}^\pi V^\pi$ (Bellman fixed point):
+\begin{align}
+    \|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}
+    &= \|\Pi\mathcal{T}^\pi V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi} \nonumber\\
+    &\leq \|\Pi\mathcal{T}^\pi V_{\bm{w}_{\text{TD}}} - \Pi\mathcal{T}^\pi V^\pi\|_{d^\pi} + \|\Pi\mathcal{T}^\pi V^\pi - \Pi V^\pi\|_{d^\pi} \nonumber\\
+    &\leq \gamma\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi} + \|\Pi(\mathcal{T}^\pi V^\pi - V^\pi)\|_{d^\pi} \nonumber\\
+    &\leq \gamma\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi} + \|\mathcal{T}^\pi V^\pi - V^\pi\|_{d^\pi} \nonumber\\
+    &= \gamma\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}, \label{eq:td_proj_bound}
+\end{align}
+where the last equality uses $\mathcal{T}^\pi V^\pi = V^\pi$. Thus $\|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi} \leq \gamma\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}$.
+
+From~\eqref{eq:pythag_applied}:
+\begin{align}
+    \|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2
+    &\geq \|V^\pi - \Pi V^\pi\|_{d^\pi}^2 + \|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}^2. \label{eq:pythag_rearrange}
+\end{align}
+Meanwhile, by the triangle inequality and~\eqref{eq:td_proj_bound}:
+\begin{align}
+    \|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2
+    &= \|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi + \Pi V^\pi - V^\pi\|_{d^\pi}^2 \nonumber\\
+    &= \|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}^2 + \|\Pi V^\pi - V^\pi\|_{d^\pi}^2, \label{eq:pythag_exact}
+\end{align}
+where~\eqref{eq:pythag_exact} is an \emph{equality} by the Pythagorean theorem, since $(V_{\bm{w}_{\text{TD}}} - \Pi V^\pi)$ lies in the column space of $\bm{\Phi}$ and $(\Pi V^\pi - V^\pi)$ is orthogonal to it in the $d^\pi$-inner product.
+
+Substituting the bound $\|V_{\bm{w}_{\text{TD}}} - \Pi V^\pi\|_{d^\pi}^2 \leq \gamma^2\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2$ from~\eqref{eq:td_proj_bound}:
+\begin{equation}
+    \|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2
+    \leq \gamma^2\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2 + \|\Pi V^\pi - V^\pi\|_{d^\pi}^2.
+\end{equation}
+Rearranging:
+\begin{equation}
+    (1-\gamma^2)\|V_{\bm{w}_{\text{TD}}} - V^\pi\|_{d^\pi}^2 \leq \|\Pi V^\pi - V^\pi\|_{d^\pi}^2.
+    \label{eq:ve_tight_step}
+\end{equation}
+Since $1-\gamma^2 = (1-\gamma)(1+\gamma)$ and $\|\Pi V^\pi - V^\pi\|_{d^\pi}^2 = \overline{\text{VE}}(\bm{w}^*)$:
+\begin{equation}
+    \overline{\text{VE}}(\bm{w}_{\text{TD}}) \leq \frac{1}{1-\gamma^2}\overline{\text{VE}}(\bm{w}^*) = \frac{1}{(1-\gamma)(1+\gamma)}\overline{\text{VE}}(\bm{w}^*) \leq \frac{1}{1-\gamma}\overline{\text{VE}}(\bm{w}^*).
+    \label{eq:ve_bound_tight}
+\end{equation}
+\end{proof}
+
+\begin{remark}[The $1/(1-\gamma)$ Factor]
+\label{rem:gamma_factor}
+The TD solution $\bm{w}_{\text{TD}}$ is at most $1/(1-\gamma)$ times worse (in MSVE) than the best possible linear approximation $\bm{w}^*$. For $\gamma$ close to 1 (long-horizon problems), this bound is loose. However, in practice TD often finds solutions close to $\bm{w}^*$. The bound is tight in the worst case~\cite{tsitsiklis1997}.
+\end{remark}
+
+\begin{corollary}[TD($\lambda$) with Linear FA]
+\label{cor:td_lambda_linear}
+Under the same conditions as Theorem~\ref{thm:linear_td_convergence}, semi-gradient TD($\lambda$) with linear FA converges to $\bm{w}_\lambda$ satisfying:
+\begin{equation}
+    \overline{\text{VE}}(\bm{w}_\lambda) \leq \frac{1-\gamma\lambda}{1-\gamma}\min_{\bm{w}} \overline{\text{VE}}(\bm{w}).
+    \label{eq:td_lambda_bound}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+TD($\lambda$) uses the target $G_t^\lambda$ instead of $R_{t+1} + \gamma V_{\bm{w}}(S_{t+1})$. The effective contraction factor becomes $\gamma\lambda$ (from the $(\gamma\lambda)^k$ weighting in Theorem~\ref{thm:lambda_td_errors}). Repeating the analysis of Theorem~\ref{thm:linear_td_convergence} Step~5 with contraction factor $\gamma\lambda$ in place of $\gamma$ yields the bound~\eqref{eq:td_lambda_bound}.
+
+Note that at $\lambda = 1$ (Monte Carlo): the bound becomes $\overline{\text{VE}}(\bm{w}_1) \leq \min_{\bm{w}} \overline{\text{VE}}(\bm{w})$, meaning MC finds the best linear approximation. At $\lambda = 0$ (TD(0)): we recover the $1/(1-\gamma)$ bound of Theorem~\ref{thm:linear_td_convergence}.
+\end{proof}
+
+\subsection{The Deadly Triad}
+\label{subsec:deadly_triad}
+
+\begin{definition}[The Deadly Triad]
+\label{def:deadly_triad}
+The \emph{deadly triad} refers to the simultaneous combination of:
+\begin{enumerate}[nosep]
+    \item \textbf{Function approximation:} Using a parameterized function instead of a lookup table.
+    \item \textbf{Bootstrapping:} Updating value estimates based on other value estimates (as in TD, not MC).
+    \item \textbf{Off-policy learning:} Learning about a target policy different from the behavior policy generating the data.
+\end{enumerate}
+Any two of these three can be combined safely; the combination of all three can lead to divergence.
+\end{definition}
+
+\begin{theorem}[Divergence Under the Deadly Triad {\cite{baird1995,tsitsiklis1997}}]
+\label{thm:divergence}
+There exist MDPs with linear function approximation for which off-policy semi-gradient TD(0) diverges: $\|\bm{w}_t\| \to \infty$.
+\end{theorem}
+
+\begin{proof}
+We provide the constructive proof using Baird's counterexample~\cite{baird1995}.
+
+\textbf{Step 1: Define the MDP.} Consider an MDP with 7 states $\{s_1, \ldots, s_7\}$ and 2 actions. The dynamics are:
+\begin{itemize}[nosep]
+    \item Under the behavior policy $b$: the agent transitions uniformly to one of $\{s_1, \ldots, s_6\}$ with probability $1/7$ each, and to $s_7$ with probability $1/7$, regardless of the current state.
+    \item Under the target policy $\pi$: the agent always transitions to $s_7$.
+\end{itemize}
+There are no rewards ($r = 0$) and $\gamma = 0.99$.
+
+The feature representation uses 8 features with the following structure:
+\begin{equation}
+    \bm{\phi}(s_i) = \begin{cases} 2\bm{e}_i + \bm{e}_8 & \text{for } i = 1,\ldots,6 \\ \bm{e}_7 + 2\bm{e}_8 & \text{for } i = 7, \end{cases}
+    \label{eq:baird_features}
+\end{equation}
+where $\bm{e}_i$ is the $i$-th standard basis vector in $\R^8$.
+
+\textbf{Step 2: Compute the expected update matrix.} Under off-policy sampling, the matrix $\bm{A}$ becomes:
+\begin{equation}
+    \bm{A}_{\text{off}} = \bm{\Phi}^\top \bm{D}_b(\gamma \bm{P}_\pi - \bm{I})\bm{\Phi},
+    \label{eq:A_off_policy}
+\end{equation}
+where $\bm{D}_b = \text{diag}(d^b(s_1), \ldots, d^b(s_7))$ is the stationary distribution under the \emph{behavior} policy. The critical difference from the on-policy case (Theorem~\ref{thm:linear_td_convergence}) is that $\bm{D}_b \neq \bm{D}_\pi$. The key property used in Step~2 of Theorem~\ref{thm:linear_td_convergence}---that $\bm{D}\bm{P}_\pi$ is a contraction---relied on $\bm{D}$ being the stationary distribution of $\bm{P}_\pi$. When $\bm{D}_b \neq \bm{D}_\pi$, this property fails.
+
+\textbf{Step 3: Demonstrate divergence.} For Baird's specific construction, one can compute that $\bm{A}_{\text{off}}$ has at least one eigenvalue with positive real part. Concretely, the expected update for $w_8$ (the component shared by all states) has a positive coefficient, causing $|w_8|$ to grow without bound. Starting from $\bm{w}_0 = (1,1,1,1,1,1,1,10)^\top$ and using $\alpha = 0.01$, the weights diverge monotonically. This can be verified by direct computation of the expected weight updates (see Appendix~\ref{app:supplementary} for the explicit calculation).
+\end{proof}
+
+\begin{remark}[Why Each Element Is Necessary]
+\label{rem:triad_elements}
+Removing \emph{any one} element of the triad restores convergence:
+\begin{itemize}[nosep]
+    \item \textbf{No function approximation (tabular):} Q-learning converges off-policy (Theorem~\ref{thm:qlearning_convergence}).
+    \item \textbf{No bootstrapping (Monte Carlo):} MC with function approximation performs true stochastic gradient descent on the MSVE, which converges for convex problems (linear FA is convex).
+    \item \textbf{No off-policy (on-policy TD):} Semi-gradient TD converges under linear FA (Theorem~\ref{thm:linear_td_convergence}).
+\end{itemize}
+\end{remark}
+
+\subsection{Gradient-TD Methods}
+\label{subsec:gradient_td}
+
+The instability of semi-gradient methods under off-policy learning motivates \emph{true gradient} methods that minimize a well-defined objective.
+
+\begin{definition}[Mean Squared Bellman Error]
+\label{def:msbe}
+The \emph{Mean Squared Bellman Error} (MSBE) is
+\begin{equation}
+    \overline{\text{BE}}(\bm{w}) = \sum_s d^\pi(s)\bigl[(\mathcal{T}^\pi V_{\bm{w}})(s) - V_{\bm{w}}(s)\bigr]^2 = \|\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}}\|_{d^\pi}^2.
+    \label{eq:msbe}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Mean Squared Projected Bellman Error]
+\label{def:mspbe}
+The \emph{Mean Squared Projected Bellman Error} (MSPBE) is
+\begin{equation}
+    \overline{\text{PBE}}(\bm{w}) = \|\Pi\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}}\|_{d^\pi}^2,
+    \label{eq:mspbe}
+\end{equation}
+where $\Pi$ is the $d^\pi$-weighted projection onto the column space of $\bm{\Phi}$.
+\end{definition}
+
+\begin{definition}[GTD2 Algorithm {\cite{sutton2009}}]
+\label{def:gtd2}
+The \emph{GTD2} algorithm maintains two weight vectors $\bm{w}$ and $\bm{\theta}$:
+\begin{align}
+    \bm{w}_{t+1} &= \bm{w}_t + \alpha_t\bigl(\bm{\phi}_t - \gamma\bm{\phi}_{t+1}\bigr)\bm{\phi}_t^\top\bm{\theta}_t, \label{eq:gtd2_w}\\
+    \bm{\theta}_{t+1} &= \bm{\theta}_t + \beta_t\bigl(\delta_t - \bm{\phi}_t^\top\bm{\theta}_t\bigr)\bm{\phi}_t, \label{eq:gtd2_theta}
+\end{align}
+where $\bm{\phi}_t = \bm{\phi}(S_t)$, $\delta_t = R_{t+1} + \gamma\bm{w}_t^\top\bm{\phi}_{t+1} - \bm{w}_t^\top\bm{\phi}_t$, and $\{\alpha_t\}$, $\{\beta_t\}$ are step size sequences with $\beta_t/\alpha_t \to 0$.
+\end{definition}
+
+\begin{theorem}[Convergence of GTD2 {\cite{sutton2009}}]
+\label{thm:gtd2}
+Under standard step size conditions and with on-policy or off-policy sampling, GTD2 converges to the minimizer of the MSPBE~\eqref{eq:mspbe}.
+\end{theorem}
+
+\begin{proof}
+We proceed in four steps: express the MSPBE in a tractable form, derive the gradient, show that GTD2 implements stochastic gradient descent on this objective via a two-timescale iteration, and apply convergence theory.
+
+\textbf{Step 1: Express the MSPBE.} Under linear FA with $V_{\bm{w}}(s) = \bm{w}^\top\bm{\phi}(s)$, define:
+\begin{equation}
+    \bm{b}_{\bm{w}} = \E[\delta_t \bm{\phi}(S_t)] = \bm{\Phi}^\top\bm{D}(\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}}), \quad \bm{C} = \E[\bm{\phi}(S_t)\bm{\phi}(S_t)^\top] = \bm{\Phi}^\top\bm{D}\bm{\Phi},
+\end{equation}
+where $\bm{D} = \text{diag}(d(s_1),\ldots,d(s_{|\mathcal{S}|}))$ with $d$ being the sampling distribution (which may differ from $d^\pi$ in the off-policy case). The projection $\Pi = \bm{\Phi}(\bm{\Phi}^\top\bm{D}\bm{\Phi})^{-1}\bm{\Phi}^\top\bm{D} = \bm{\Phi}\bm{C}^{-1}\bm{\Phi}^\top\bm{D}$. Then:
+\begin{align}
+    \overline{\text{PBE}}(\bm{w})
+    &= \|\Pi(\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}})\|_d^2
+    = (\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}})^\top\bm{D}\bm{\Phi}\bm{C}^{-1}\bm{\Phi}^\top\bm{D}(\mathcal{T}^\pi V_{\bm{w}} - V_{\bm{w}}) \nonumber\\
+    &= \bm{b}_{\bm{w}}^\top\bm{C}^{-1}\bm{b}_{\bm{w}}.
+    \label{eq:mspbe_quadratic}
+\end{align}
+
+\textbf{Step 2: Compute the gradient.} Differentiating~\eqref{eq:mspbe_quadratic} with respect to $\bm{w}$:
+\begin{equation}
+    \nabla_{\bm{w}}\overline{\text{PBE}}(\bm{w}) = 2\bigl(\nabla_{\bm{w}}\bm{b}_{\bm{w}}\bigr)^\top\bm{C}^{-1}\bm{b}_{\bm{w}}.
+    \label{eq:mspbe_grad}
+\end{equation}
+Since $\bm{b}_{\bm{w}} = \E[\delta_t\bm{\phi}_t] = \E[(R_{t+1}+\gamma\bm{w}^\top\bm{\phi}_{t+1}-\bm{w}^\top\bm{\phi}_t)\bm{\phi}_t]$, we have $\nabla_{\bm{w}}\bm{b}_{\bm{w}} = \E[(\gamma\bm{\phi}_{t+1}-\bm{\phi}_t)\bm{\phi}_t^\top] = \bm{A}^\top$ (with $\bm{A}$ from~\eqref{eq:A_and_b}). Thus:
+\begin{equation}
+    \nabla_{\bm{w}}\overline{\text{PBE}}(\bm{w}) = 2\bm{A}^\top\bm{C}^{-1}\bm{b}_{\bm{w}} = 2\E[(\gamma\bm{\phi}_{t+1}-\bm{\phi}_t)\bm{\phi}_t^\top]\bm{C}^{-1}\E[\delta_t\bm{\phi}_t].
+    \label{eq:mspbe_grad_explicit}
+\end{equation}
+The stochastic gradient descent update is $\bm{w}_{t+1} = \bm{w}_t - \frac{\alpha_t}{2}\hat{\nabla}_{\bm{w}}\overline{\text{PBE}}(\bm{w}_t)$, but direct sampling of~\eqref{eq:mspbe_grad_explicit} requires the unknown quantity $\bm{C}^{-1}\bm{b}_{\bm{w}}$.
+
+\textbf{Step 3: Two-timescale decomposition.} GTD2 resolves this by introducing $\bm{\theta} \approx \bm{C}^{-1}\bm{b}_{\bm{w}}$, learned on a faster timescale. Substituting samples:
+\begin{itemize}[nosep]
+    \item The \emph{fast timescale} update~\eqref{eq:gtd2_theta} solves $\bm{C}\bm{\theta} = \bm{b}_{\bm{w}}$ for fixed $\bm{w}$. In expectation: $\E[(\delta_t - \bm{\phi}_t^\top\bm{\theta})\bm{\phi}_t] = \bm{b}_{\bm{w}} - \bm{C}\bm{\theta}$, which has the unique root $\bm{\theta}^*(\bm{w}) = \bm{C}^{-1}\bm{b}_{\bm{w}}$. Since $-\bm{C}$ is negative definite, this iteration converges.
+    \item The \emph{slow timescale} update~\eqref{eq:gtd2_w} uses $\bm{\theta}_t$ as a stand-in for $\bm{C}^{-1}\bm{b}_{\bm{w}_t}$. In expectation: $\E[(\bm{\phi}_t - \gamma\bm{\phi}_{t+1})\bm{\phi}_t^\top\bm{\theta}^*(\bm{w})] = -\bm{A}^\top\bm{C}^{-1}\bm{b}_{\bm{w}} = -\frac{1}{2}\nabla_{\bm{w}}\overline{\text{PBE}}(\bm{w})$.
+\end{itemize}
+Thus, on the slow timescale, GTD2 performs gradient descent on $\overline{\text{PBE}}(\bm{w})$.
+
+\textbf{Step 4: Convergence.} The two-timescale structure satisfies the conditions of Borkar's two-timescale stochastic approximation theorem~\cite{borkar2000}: the fast iteration ($\bm{\theta}$) has a globally asymptotically stable equilibrium $\bm{\theta}^*(\bm{w})$ for each fixed $\bm{w}$ (since $-\bm{C}$ is negative definite), and the slow iteration ($\bm{w}$) follows the gradient $-\nabla_{\bm{w}}\overline{\text{PBE}}$ when $\bm{\theta}$ has converged to $\bm{\theta}^*(\bm{w})$.
+
+The MSPBE is convex in $\bm{w}$ under linear FA (since $\bm{b}_{\bm{w}} = \bm{A}\bm{w}+\bm{b}_0$ is affine in $\bm{w}$, and $\bm{b}_{\bm{w}}^\top\bm{C}^{-1}\bm{b}_{\bm{w}}$ is a positive semidefinite quadratic form). Therefore gradient descent converges to the unique global minimizer $\bm{w}^*$ satisfying $\overline{\text{PBE}}(\bm{w}^*) = 0$, which is precisely the TD fixed point $\bm{w}_{\text{TD}} = -\bm{A}^{-1}\bm{b}_0$. By the two-timescale ODE method, $(\bm{w}_t, \bm{\theta}_t) \to (\bm{w}_{\text{TD}}, \bm{C}^{-1}\bm{b}_{\bm{w}_{\text{TD}}}) = (\bm{w}_{\text{TD}}, \bm{0})$ a.s.
+\end{proof}
+
+\begin{remark}[Resolving the Deadly Triad]
+\label{rem:resolving_triad}
+GTD2 (and related methods GTD and TDC~\cite{sutton2009}) resolve the deadly triad by replacing the semi-gradient update with a true gradient descent on a meaningful objective function. The cost is increased complexity: two sets of weights, two step sizes, and a secondary approximation. Modern approaches such as target networks in DQN~\cite{mnih2015} address the triad through a different mechanism---periodically freezing the bootstrap target.
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: CONNECTION TO GAE
+%% ============================================================
+\section{Connection to Generalized Advantage Estimation}
+\label{sec:gae}
+
+TD errors serve as the building blocks for modern policy gradient methods through the \emph{Generalized Advantage Estimation} (GAE) framework~\cite{schulman2016}, which connects directly to the PPO and TRPO algorithms.
+
+\begin{definition}[Generalized Advantage Estimation {\cite{schulman2016}}]
+\label{def:gae}
+The \emph{GAE} estimator of the advantage function is
+\begin{equation}
+    \hat{A}_t^{\text{GAE}(\gamma,\lambda)} = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}^V,
+    \label{eq:gae}
+\end{equation}
+where $\delta_{t+l}^V = R_{t+l+1} + \gamma V(S_{t+l+1}) - V(S_{t+l})$ is the TD error computed with a learned value function $V$.
+\end{definition}
+
+\begin{theorem}[GAE as Advantage Estimator]
+\label{thm:gae_advantage}
+Under the true value function $V = V^\pi$, the GAE estimator is an unbiased estimate of the advantage function:
+\begin{equation}
+    \E_\pi\!\left[\hat{A}_t^{\emph{GAE}(\gamma,\lambda)} \;\middle|\; S_t = s, A_t = a\right] = Q^\pi(s,a) - V^\pi(s) = A^\pi(s,a) \quad \text{when } \lambda = 1.
+\end{equation}
+For $\lambda < 1$, $\hat{A}_t^{\emph{GAE}(\gamma,\lambda)}$ is a biased but lower-variance estimate of $A^\pi(s,a)$.
+\end{theorem}
+
+\begin{proof}
+By Theorem~\ref{thm:lambda_td_errors}, $\hat{A}_t^{\text{GAE}(\gamma,\lambda)} = G_t^\lambda - V(S_t)$. When $\lambda = 1$, $G_t^1 = G_t$ (Proposition~\ref{prop:lambda_special}), so $\hat{A}_t = G_t - V^\pi(S_t)$. Taking the conditional expectation:
+\begin{equation}
+    \E_\pi[G_t - V^\pi(S_t) | S_t = s, A_t = a] = Q^\pi(s,a) - V^\pi(s) = A^\pi(s,a).
+\end{equation}
+For $\lambda < 1$, the estimator uses the $\lambda$-return, which includes bootstrapped values. As shown in Proposition~\ref{prop:td0_bias}, bootstrapping introduces bias when $V \neq V^\pi$, but the variance is reduced by the exponential decay factor $(\gamma\lambda)^l$.
+\end{proof}
+
+\begin{corollary}[Bias-Variance Tradeoff in GAE]
+\label{cor:gae_bv}
+The $\lambda$ parameter in GAE controls the same bias-variance tradeoff as in TD($\lambda$):
+\begin{itemize}[nosep]
+    \item $\lambda = 0$: $\hat{A}_t = \delta_t^V = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$. Low variance (one-step TD error), high bias.
+    \item $\lambda = 1$: $\hat{A}_t = G_t - V(S_t)$. No bias (full return), high variance.
+    \item $0 < \lambda < 1$: Intermediate tradeoff.
+\end{itemize}
+\end{corollary}
+
+\begin{proof}
+Direct application of Proposition~\ref{prop:lambda_special} and the analysis of Section~\ref{subsec:bias_variance}.
+\end{proof}
+
+\begin{remark}[Connection to PPO and TRPO]
+\label{rem:gae_ppo}
+In the PPO algorithm, the policy gradient is estimated using
+\begin{equation}
+    \hat{g} = \E_t\!\left[\nabla_\theta \log \pi_\theta(A_t|S_t) \cdot \hat{A}_t^{\text{GAE}(\gamma,\lambda)}\right],
+\end{equation}
+where the advantage estimator $\hat{A}_t^{\text{GAE}}$ is precisely the sum of discounted TD errors derived in this document. The value function $V$ used to compute the TD errors is itself trained using TD methods (typically semi-gradient TD with neural network function approximation). Thus, the TD error theory developed here forms the mathematical foundation for modern actor-critic algorithms.
+\end{remark}
+
+%% ============================================================
+%% SECTION 8: ALGORITHMS
+%% ============================================================
+\section{Practical Algorithms Summary}
+\label{sec:algorithms}
+
+We present the complete algorithms developed in this document.
+
+\begin{tcolorbox}[colback=white, colframe=black!70, title={\textbf{Algorithm 1:} Tabular TD(0) Prediction}, breakable]
+\label{alg:td0}
+\textbf{Input:} Policy $\pi$, step size $\alpha > 0$, discount $\gamma$\\[2pt]
+Initialize $V(s)$ arbitrarily for all $s \in \mathcal{S}$\\
+\textbf{For} each episode:\\
+\quad Initialize $S_0$\\
+\quad \textbf{For} $t = 0, 1, 2, \ldots$ until terminal:\\
+\quad\quad Take action $A_t \sim \pi(\cdot|S_t)$, observe $R_{t+1}, S_{t+1}$\\
+\quad\quad $\delta_t \leftarrow R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$\\
+\quad\quad $V(S_t) \leftarrow V(S_t) + \alpha\,\delta_t$
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white, colframe=black!70, title={\textbf{Algorithm 2:} Tabular TD($\lambda$) with Eligibility Traces}, breakable]
+\label{alg:td_lambda}
+\textbf{Input:} Policy $\pi$, step size $\alpha > 0$, discount $\gamma$, trace decay $\lambda$\\[2pt]
+Initialize $V(s)$ arbitrarily for all $s \in \mathcal{S}$\\
+\textbf{For} each episode:\\
+\quad Initialize $S_0$; set $e(s) \leftarrow 0$ for all $s$\\
+\quad \textbf{For} $t = 0, 1, 2, \ldots$ until terminal:\\
+\quad\quad Take action $A_t \sim \pi(\cdot|S_t)$, observe $R_{t+1}, S_{t+1}$\\
+\quad\quad $\delta_t \leftarrow R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$\\
+\quad\quad $e(S_t) \leftarrow e(S_t) + 1$ \hfill \textit{(accumulating trace)}\\
+\quad\quad \textbf{For all} $s \in \mathcal{S}$:\\
+\quad\quad\quad $V(s) \leftarrow V(s) + \alpha\,\delta_t\,e(s)$\\
+\quad\quad\quad $e(s) \leftarrow \gamma\lambda\,e(s)$
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white, colframe=black!70, title={\textbf{Algorithm 3:} SARSA --- On-Policy TD Control}, breakable]
+\label{alg:sarsa}
+\textbf{Input:} Step size $\alpha > 0$, discount $\gamma$, exploration schedule $\{\varepsilon_t\}$\\[2pt]
+Initialize $Q(s,a)$ arbitrarily for all $(s,a)$\\
+\textbf{For} each episode:\\
+\quad Initialize $S_0$; choose $A_0$ from $S_0$ using $\varepsilon$-greedy w.r.t.\ $Q$\\
+\quad \textbf{For} $t = 0, 1, 2, \ldots$ until terminal:\\
+\quad\quad Take action $A_t$, observe $R_{t+1}, S_{t+1}$\\
+\quad\quad Choose $A_{t+1}$ from $S_{t+1}$ using $\varepsilon$-greedy w.r.t.\ $Q$\\
+\quad\quad $Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\bigl[R_{t+1} + \gamma Q(S_{t+1}, A_{t+1}) - Q(S_t, A_t)\bigr]$
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white, colframe=black!70, title={\textbf{Algorithm 4:} Q-Learning --- Off-Policy TD Control}, breakable]
+\label{alg:qlearning}
+\textbf{Input:} Step size $\alpha > 0$, discount $\gamma$, exploration parameter $\varepsilon$\\[2pt]
+Initialize $Q(s,a)$ arbitrarily for all $(s,a)$\\
+\textbf{For} each episode:\\
+\quad Initialize $S_0$\\
+\quad \textbf{For} $t = 0, 1, 2, \ldots$ until terminal:\\
+\quad\quad Choose $A_t$ from $S_t$ using $\varepsilon$-greedy w.r.t.\ $Q$\\
+\quad\quad Take action $A_t$, observe $R_{t+1}, S_{t+1}$\\
+\quad\quad $Q(S_t, A_t) \leftarrow Q(S_t, A_t) + \alpha\bigl[R_{t+1} + \gamma \max_{a'} Q(S_{t+1}, a') - Q(S_t, A_t)\bigr]$
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=white, colframe=black!70, title={\textbf{Algorithm 5:} Semi-Gradient TD(0) with Linear Function Approximation}, breakable]
+\label{alg:semi_grad_td}
+\textbf{Input:} Policy $\pi$, step size $\alpha > 0$, discount $\gamma$, feature function $\bm{\phi}: \mathcal{S} \to \R^d$\\[2pt]
+Initialize $\bm{w} \in \R^d$ arbitrarily\\
+\textbf{For} each episode:\\
+\quad Initialize $S_0$\\
+\quad \textbf{For} $t = 0, 1, 2, \ldots$ until terminal:\\
+\quad\quad Take action $A_t \sim \pi(\cdot|S_t)$, observe $R_{t+1}, S_{t+1}$\\
+\quad\quad $\delta_t \leftarrow R_{t+1} + \gamma\,\bm{w}^\top\bm{\phi}(S_{t+1}) - \bm{w}^\top\bm{\phi}(S_t)$\\
+\quad\quad $\bm{w} \leftarrow \bm{w} + \alpha\,\delta_t\,\bm{\phi}(S_t)$
+\end{tcolorbox}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary of Key Results}
+\label{sec:summary}
+
+\begin{keyresult}[Main Theorems]
+The principal results established in this document:
+
+\begin{enumerate}
+    \item \textbf{Theorem~\ref{thm:td0_convergence}} (Convergence of TD(0)): Under standard conditions, tabular TD(0) converges to $V^\pi$ almost surely.
+
+    \item \textbf{Theorem~\ref{thm:lambda_td_errors}} ($\lambda$-Return Decomposition): $G_t^\lambda - V(S_t) = \sum_{k=0}^{\infty}(\gamma\lambda)^k \delta_{t+k}$, connecting the $\lambda$-return to weighted TD errors.
+
+    \item \textbf{Theorem~\ref{thm:forward_backward}} (Forward-Backward Equivalence): The forward view (using $\lambda$-returns) and backward view (using eligibility traces) produce identical updates in the offline setting.
+
+    \item \textbf{Theorem~\ref{thm:qlearning_convergence}} (Q-Learning Convergence): Tabular Q-learning converges to $Q^*$ almost surely, enabling model-free, off-policy learning of optimal policies.
+
+    \item \textbf{Theorem~\ref{thm:linear_td_convergence}} (Linear FA Convergence): Semi-gradient TD(0) with linear function approximation converges, with approximation error bounded by $\frac{1}{1-\gamma}$ times the best linear approximation error.
+
+    \item \textbf{Theorem~\ref{thm:divergence}} (Deadly Triad Divergence): The combination of function approximation, bootstrapping, and off-policy learning can cause divergence, as demonstrated by Baird's counterexample.
+\end{enumerate}
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 10: CONCLUSION
+%% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented a comprehensive mathematical treatment of temporal-difference learning, developing the theory from the MDP framework through tabular prediction and control to function approximation.
+
+The central insight of TD learning is \emph{bootstrapping}: updating value estimates based on other value estimates, without waiting for complete episode returns. We proved that this approach converges in the tabular case (Theorem~\ref{thm:td0_convergence}), showed how the $\lambda$-return provides a principled continuum between TD(0) and Monte Carlo (Theorem~\ref{thm:lambda_td_errors}), and established the elegant equivalence between forward and backward views through eligibility traces (Theorem~\ref{thm:forward_backward}).
+
+For control, we proved convergence of SARSA (Theorem~\ref{thm:sarsa_convergence}) and Q-learning (Theorem~\ref{thm:qlearning_convergence}), with Q-learning's off-policy capability being particularly significant for practical applications. We then extended to function approximation, establishing convergence under linear approximation (Theorem~\ref{thm:linear_td_convergence}) while identifying the fundamental limitations captured by the deadly triad (Theorem~\ref{thm:divergence}).
+
+These results form the theoretical foundation for modern deep reinforcement learning. The TD error $\delta_t$---the central quantity of this document---reappears as the building block of GAE (Definition~\ref{def:gae}), which underpins the policy gradient estimates in PPO and TRPO. Understanding the convergence properties and limitations of TD methods is therefore essential for both theoretical analysis and practical implementation of contemporary RL algorithms.
+
+%% ============================================================
+%% APPENDIX A: STOCHASTIC APPROXIMATION
+%% ============================================================
+\appendix
+
+\section{Stochastic Approximation Details}
+\label{app:stochastic_approx}
+
+\subsection{Proof of Robbins-Monro Convergence (Linear Case)}
+\label{app:rm_proof}
+
+We prove Theorem~\ref{thm:robbins_monro} for the important special case where $h(\bm{x}) = \bm{A}\bm{x} + \bm{b}$ with $\bm{A}$ having eigenvalues with strictly negative real parts (i.e., $\bm{A}$ is a \emph{Hurwitz matrix}).
+
+\begin{theorem}
+\label{thm:rm_linear}
+Consider the iteration $\bm{x}_{n+1} = \bm{x}_n + \alpha_n(\bm{A}\bm{x}_n + \bm{b} + \bm{w}_n)$, where:
+\begin{enumerate}[nosep]
+    \item $\bm{A}$ is Hurwitz (all eigenvalues have negative real parts),
+    \item $\sum \alpha_n = \infty$, $\sum \alpha_n^2 < \infty$,
+    \item $\E[\bm{w}_n | \mathcal{F}_n] = \bm{0}$ and $\E[\|\bm{w}_n\|^2 | \mathcal{F}_n] \leq C(1 + \|\bm{x}_n\|^2)$.
+\end{enumerate}
+Then $\bm{x}_n \to \bm{x}^* = -\bm{A}^{-1}\bm{b}$ almost surely.
+\end{theorem}
+
+\begin{proof}
+Let $\bm{e}_n = \bm{x}_n - \bm{x}^*$ be the error. Then:
+\begin{equation}
+    \bm{e}_{n+1} = \bm{e}_n + \alpha_n(\bm{A}\bm{e}_n + \bm{w}_n) = (\bm{I} + \alpha_n \bm{A})\bm{e}_n + \alpha_n \bm{w}_n.
+    \label{eq:error_recursion}
+\end{equation}
+
+\textbf{Step 1: Construct a Lyapunov function.} Since $\bm{A}$ is Hurwitz, there exists a positive definite matrix $\bm{Q}$ satisfying the Lyapunov equation $\bm{A}^\top \bm{Q} + \bm{Q}\bm{A} = -\bm{I}$ (this is a standard result in control theory). Define $L_n = \bm{e}_n^\top \bm{Q}\bm{e}_n$.
+
+\textbf{Step 2: Compute the conditional expectation of $L_{n+1}$.}
+\begin{align}
+    \E[L_{n+1} | \mathcal{F}_n]
+    &= \E[\bm{e}_{n+1}^\top \bm{Q}\bm{e}_{n+1} | \mathcal{F}_n] \nonumber\\
+    &= \bm{e}_n^\top(\bm{I}+\alpha_n\bm{A})^\top\bm{Q}(\bm{I}+\alpha_n\bm{A})\bm{e}_n + \alpha_n^2 \E[\bm{w}_n^\top\bm{Q}\bm{w}_n | \mathcal{F}_n] \nonumber\\
+    &= \bm{e}_n^\top\bm{Q}\bm{e}_n + \alpha_n\bm{e}_n^\top(\bm{A}^\top\bm{Q}+\bm{Q}\bm{A})\bm{e}_n + \alpha_n^2\bm{e}_n^\top\bm{A}^\top\bm{Q}\bm{A}\bm{e}_n + \alpha_n^2\E[\bm{w}_n^\top\bm{Q}\bm{w}_n|\mathcal{F}_n] \nonumber\\
+    &= L_n - \alpha_n\|\bm{e}_n\|^2 + \alpha_n^2\bigl(\bm{e}_n^\top\bm{A}^\top\bm{Q}\bm{A}\bm{e}_n + \|\bm{Q}\|\cdot C(1+\|\bm{x}_n\|^2)\bigr). \label{eq:lyapunov_update}
+\end{align}
+
+\textbf{Step 3: Show supermartingale property.} For sufficiently large $n$ (so that $\alpha_n$ is small), the $-\alpha_n\|\bm{e}_n\|^2$ term dominates the $O(\alpha_n^2)$ terms. Since $\sum \alpha_n^2 < \infty$, the accumulated $O(\alpha_n^2)$ perturbations are finite. By the Robbins-Siegmund supermartingale convergence theorem (Theorem~\ref{thm:supermartingale} below), $L_n$ converges a.s. and $\sum_n \alpha_n \|\bm{e}_n\|^2 < \infty$ a.s.
+
+\textbf{Step 4: Conclude convergence.} Since $\sum \alpha_n = \infty$ and $\sum \alpha_n\|\bm{e}_n\|^2 < \infty$, we must have $\liminf_n \|\bm{e}_n\|^2 = 0$. Combined with the convergence of $L_n$ (which implies convergence of $\|\bm{e}_n\|$), this gives $\bm{e}_n \to \bm{0}$, i.e., $\bm{x}_n \to \bm{x}^*$.
+\end{proof}
+
+\subsection{The ODE Method}
+\label{app:ode_method}
+
+The ODE method provides a powerful framework for analyzing stochastic approximation algorithms by relating them to their ``mean-field'' ordinary differential equations.
+
+\begin{theorem}[ODE Method {\cite{borkar2000}}]
+\label{thm:ode_method}
+Consider the stochastic approximation $\bm{x}_{n+1} = \bm{x}_n + \alpha_n[h(\bm{x}_n) + \bm{w}_n]$ where:
+\begin{enumerate}[nosep]
+    \item $h: \R^d \to \R^d$ is Lipschitz continuous,
+    \item $\sum \alpha_n = \infty$, $\sum \alpha_n^2 < \infty$,
+    \item $\E[\bm{w}_n | \mathcal{F}_n] = \bm{0}$ and $\E[\|\bm{w}_n\|^2 | \mathcal{F}_n] \leq C(1 + \|\bm{x}_n\|^2)$,
+    \item The iterates $\{\bm{x}_n\}$ remain bounded almost surely (i.e., $\sup_n \|\bm{x}_n\| < \infty$ a.s.).
+\end{enumerate}
+If the associated ODE
+\begin{equation}
+    \frac{d\bm{x}}{dt} = h(\bm{x})
+    \label{eq:ode}
+\end{equation}
+has a globally asymptotically stable equilibrium $\bm{x}^*$, then $\bm{x}_n \to \bm{x}^*$ almost surely.
+\end{theorem}
+
+\begin{proof}
+The proof proceeds by showing that the stochastic iterates asymptotically track the ODE solution.
+
+\textbf{Step 1: Continuous-time interpolation.} Define the piecewise constant interpolation of the iterates. Set $t_0 = 0$ and $t_n = \sum_{k=0}^{n-1}\alpha_k$ for $n \geq 1$. Note that $t_n \to \infty$ since $\sum\alpha_n = \infty$. Define the continuous-time interpolation:
+\begin{equation}
+    \bar{\bm{x}}(t) = \bm{x}_n \quad \text{for } t \in [t_n, t_{n+1}).
+\end{equation}
+The iteration $\bm{x}_{n+1} = \bm{x}_n + \alpha_n[h(\bm{x}_n) + \bm{w}_n]$ can be written in integral form:
+\begin{equation}
+    \bar{\bm{x}}(t_{n+1}) = \bar{\bm{x}}(t_n) + \int_{t_n}^{t_{n+1}} h(\bar{\bm{x}}(t_n))\,dt + \alpha_n\bm{w}_n.
+    \label{eq:ode_integral}
+\end{equation}
+
+\textbf{Step 2: Bound the noise accumulation.} Define the accumulated noise $\bm{M}(t) = \sum_{k: t_k \leq t} \alpha_k \bm{w}_k$. Since $\E[\bm{w}_k | \mathcal{F}_k] = \bm{0}$, $\{\bm{M}(t_n)\}$ is a martingale. Its quadratic variation satisfies:
+\begin{equation}
+    \E[\|\bm{M}(t_n)\|^2] = \sum_{k=0}^{n-1}\alpha_k^2\E[\|\bm{w}_k\|^2] \leq C'\sum_{k=0}^{n-1}\alpha_k^2 < \infty
+    \label{eq:noise_qv}
+\end{equation}
+(using the boundedness assumption on the iterates to bound $\E[\|\bm{w}_k\|^2]$). By the martingale convergence theorem, $\bm{M}(t_n)$ converges a.s., which implies $\bm{M}(t) \to \bm{M}(\infty)$ a.s. In particular, for any $T > 0$:
+\begin{equation}
+    \sup_{t \leq s \leq t+T}\|\bm{M}(s) - \bm{M}(t)\| \to 0 \quad \text{as } t \to \infty, \text{ a.s.}
+    \label{eq:noise_vanish}
+\end{equation}
+
+\textbf{Step 3: Show asymptotic tracking of the ODE.} For any fixed $T > 0$ and $t$ large enough, compare $\bar{\bm{x}}$ on $[t, t+T]$ with the ODE solution $\bm{y}(\cdot)$ initialized at $\bm{y}(t) = \bar{\bm{x}}(t)$. From~\eqref{eq:ode_integral}, for $s \in [t, t+T]$:
+\begin{equation}
+    \|\bar{\bm{x}}(s) - \bm{y}(s)\| \leq \int_t^s L\|\bar{\bm{x}}(u) - \bm{y}(u)\|\,du + \|\bm{M}(s) - \bm{M}(t)\| + \epsilon(t),
+\end{equation}
+where $L$ is the Lipschitz constant of $h$ and $\epsilon(t)$ accounts for the discretization error (which vanishes as $\alpha_n \to 0$, since $\max_{n: t_n \in [t,t+T]} \alpha_n \to 0$). By Gronwall's inequality:
+\begin{equation}
+    \sup_{t \leq s \leq t+T}\|\bar{\bm{x}}(s) - \bm{y}(s)\| \leq e^{LT}\!\left(\sup_{t \leq s \leq t+T}\|\bm{M}(s) - \bm{M}(t)\| + \epsilon(t)\right).
+    \label{eq:gronwall}
+\end{equation}
+By~\eqref{eq:noise_vanish} and $\epsilon(t) \to 0$, the right-hand side vanishes as $t \to \infty$.
+
+\textbf{Step 4: Conclude convergence.} Since the ODE has $\bm{x}^*$ as a globally asymptotically stable equilibrium, for any $\delta > 0$ there exists $T > 0$ such that any ODE trajectory starting within a bounded region satisfies $\|\bm{y}(t+T) - \bm{x}^*\| \leq \frac{1}{2}\|\bm{y}(t) - \bm{x}^*\|$. By Step~3, the stochastic iterates track such trajectories with vanishing error. Therefore, $\bm{x}_n$ enters every neighborhood of $\bm{x}^*$ and, by the tracking property, cannot escape permanently. Hence $\bm{x}_n \to \bm{x}^*$ a.s.
+\end{proof}
+
+\begin{remark}
+This result is used in the proof of Theorem~\ref{thm:linear_td_convergence} (Step~4), where $h(\bm{w}) = \bm{A}\bm{w} + \bm{b}$ and the ODE $\dot{\bm{w}} = \bm{A}\bm{w} + \bm{b}$ is globally asymptotically stable because $\bm{A}$ is Hurwitz (has eigenvalues with strictly negative real parts). The boundedness condition (condition 4) follows from the contraction property of the Bellman operator. For the general nonlinear case, boundedness must be verified separately or ensured via a projection mechanism.
+\end{remark}
+
+\subsection{Supermartingale Convergence Theorem}
+\label{app:supermartingale}
+
+\begin{theorem}[Robbins-Siegmund]
+\label{thm:supermartingale}
+Let $\{Z_n\}$, $\{U_n\}$, $\{V_n\}$, $\{W_n\}$ be non-negative adapted sequences satisfying
+\begin{equation}
+    \E[Z_{n+1} | \mathcal{F}_n] \leq Z_n(1 + U_n) + V_n - W_n
+\end{equation}
+with $\sum U_n < \infty$ and $\sum V_n < \infty$ a.s. Then $Z_n$ converges a.s.\ and $\sum W_n < \infty$ a.s.
+\end{theorem}
+
+\begin{proof}
+Define $\tilde{Z}_n = Z_n \prod_{k=0}^{n-1}(1+U_k)^{-1}$. Since $\sum U_k < \infty$, the product $\prod(1+U_k)$ converges to a finite positive limit. One can verify that $\tilde{Z}_n + \sum_{k=0}^{n-1} \tilde{W}_k$ (with appropriate rescaling) forms a non-negative supermartingale. By Doob's supermartingale convergence theorem, non-negative supermartingales converge almost surely. This gives convergence of $Z_n$ and finiteness of $\sum W_n$.
+\end{proof}
+
+%% ============================================================
+%% APPENDIX B: SUPPLEMENTARY PROOFS
+%% ============================================================
+\section{Supplementary Proofs}
+\label{app:supplementary}
+
+\subsection{Properties of the Stationary Distribution}
+\label{app:stationary}
+
+\begin{lemma}[Existence and Uniqueness of Stationary Distribution]
+\label{lem:stationary}
+For a finite MDP with a policy $\pi$ that induces an ergodic Markov chain (irreducible and aperiodic), there exists a unique stationary distribution $d^\pi$ satisfying $d^\pi(s') = \sum_s d^\pi(s) \sum_a \pi(a|s) P(s'|s,a)$ for all $s'$, with $d^\pi(s) > 0$ for all $s$.
+\end{lemma}
+
+\begin{proof}
+By the Perron-Frobenius theorem, the transition matrix $\bm{P}_\pi$ (with entries $P_\pi(s'|s) = \sum_a \pi(a|s) P(s'|s,a)$) of an irreducible, aperiodic, finite Markov chain has a unique left eigenvector with eigenvalue 1, which defines $d^\pi$. Positivity follows from irreducibility.
+\end{proof}
+
+\subsection{Contraction Property of the Transition Matrix in the Stationary Norm}
+\label{app:contraction_dpinorm}
+
+\begin{lemma}
+\label{lem:ppinorm}
+For any $\bm{v} \in \R^{|\mathcal{S}|}$, $\|\bm{P}_\pi \bm{v}\|_{d^\pi} \leq \|\bm{v}\|_{d^\pi}$, where $\|\bm{v}\|_{d^\pi}^2 = \sum_s d^\pi(s) v(s)^2$.
+\end{lemma}
+
+\begin{proof}
+By Jensen's inequality applied to the convex function $x \mapsto x^2$:
+\begin{align}
+    \|\bm{P}_\pi \bm{v}\|_{d^\pi}^2
+    &= \sum_{s'} d^\pi(s') \!\left(\sum_s \frac{d^\pi(s) P_\pi(s'|s)}{d^\pi(s')} v(s)\right)^2. \label{eq:ppi_step1}
+\end{align}
+Since $d^\pi$ is stationary, $d^\pi(s') = \sum_s d^\pi(s) P_\pi(s'|s)$, so $\sum_s \frac{d^\pi(s) P_\pi(s'|s)}{d^\pi(s')} = 1$, forming a valid probability distribution. By Jensen's inequality:
+\begin{align}
+    \|\bm{P}_\pi \bm{v}\|_{d^\pi}^2
+    &\leq \sum_{s'} d^\pi(s') \sum_s \frac{d^\pi(s)P_\pi(s'|s)}{d^\pi(s')} v(s)^2
+    = \sum_s d^\pi(s) v(s)^2 = \|\bm{v}\|_{d^\pi}^2. \label{eq:ppi_jensen}
+\end{align}
+\end{proof}
+
+This result is used in Step~2 of Theorem~\ref{thm:linear_td_convergence} to establish that $\bm{v}^\top\bm{D}\bm{P}_\pi\bm{v} \leq \|\bm{v}\|_{d^\pi}^2$, which in turn shows $\bm{A}$ is negative definite.
+
+\subsection{Baird's Counterexample --- Explicit Computation}
+\label{app:baird}
+
+We provide additional details for the divergence proof (Theorem~\ref{thm:divergence}).
+
+In Baird's star example~\cite{baird1995}, the behavior policy $b$ visits each of the 7 states with equal probability $d^b(s_i) = 1/7$. Under the target policy $\pi$, every state transitions to $s_7$. With $\gamma = 0.99$ and the feature representation~\eqref{eq:baird_features}, the expected semi-gradient TD update for the weight component $w_8$ (which appears in all state features) is:
+\begin{equation}
+    \E[\Delta w_8] = \alpha \sum_{i=1}^{7} \frac{1}{7}\bigl[\gamma V_{\bm{w}}(s_7) - V_{\bm{w}}(s_i)\bigr]\phi_8(s_i).
+\end{equation}
+Since $\phi_8(s_i) = 1$ for $i=1,\ldots,6$ and $\phi_8(s_7) = 2$, and the target is always $s_7$, the expected update has a positive coefficient for $w_8$ when the initial weights are such that $V_{\bm{w}}(s_7) > \bar{V}$ (the average value). This drives $w_8$ upward, which increases $V_{\bm{w}}(s_7)$ (since $s_7$ has double the weight on $w_8$), creating a positive feedback loop that causes divergence.
+
+The key insight is that the behavior distribution $d^b$ (uniform) differs from the target policy's stationary distribution $d^\pi$ (concentrated on $s_7$). Under $d^\pi$, the update would be stable (Theorem~\ref{thm:linear_td_convergence}); under $d^b$, the distribution mismatch destabilizes the iteration.
+
+%% ============================================================
+%% REFERENCES
+%% ============================================================
+\begin{thebibliography}{99}
+
+\bibitem{sutton1988}
+R.~S.~Sutton, ``Learning to predict by the methods of temporal differences,''
+\emph{Machine Learning}, vol.~3, no.~1, pp.~9--44, 1988.
+
+\bibitem{samuel1959}
+A.~L.~Samuel, ``Some studies in machine learning using the game of checkers,''
+\emph{IBM Journal of Research and Development}, vol.~3, no.~3, pp.~210--229, 1959.
+
+\bibitem{watkins1989}
+C.~J.~C.~H.~Watkins, ``Learning from delayed rewards,''
+Ph.D. thesis, King's College, Cambridge, 1989.
+
+\bibitem{watkins1992}
+C.~J.~C.~H.~Watkins and P.~Dayan, ``Q-learning,''
+\emph{Machine Learning}, vol.~8, pp.~279--292, 1992.
+
+\bibitem{dayan1992}
+P.~Dayan, ``The convergence of TD($\lambda$) for general $\lambda$,''
+\emph{Machine Learning}, vol.~8, pp.~341--362, 1992.
+
+\bibitem{tsitsiklis1994}
+J.~N.~Tsitsiklis, ``Asynchronous stochastic approximation and Q-learning,''
+\emph{Machine Learning}, vol.~16, pp.~185--202, 1994.
+
+\bibitem{tsitsiklis1997}
+J.~N.~Tsitsiklis and B.~Van Roy, ``An analysis of temporal-difference learning with function approximation,''
+\emph{IEEE Transactions on Automatic Control}, vol.~42, no.~5, pp.~674--690, 1997.
+
+\bibitem{singh2000}
+S.~Singh, T.~Jaakkola, M.~L.~Littman, and C.~Szepesv\'{a}ri,
+``Convergence results for single-step on-policy reinforcement-learning algorithms,''
+\emph{Machine Learning}, vol.~38, pp.~287--308, 2000.
+
+\bibitem{borkar2000}
+V.~S.~Borkar and S.~P.~Meyn, ``The ODE method for convergence of stochastic approximation and reinforcement learning,''
+\emph{SIAM Journal on Control and Optimization}, vol.~38, no.~2, pp.~447--469, 2000.
+
+\bibitem{baird1995}
+L.~Baird, ``Residual algorithms: Reinforcement learning with function approximation,''
+in \emph{Proceedings of the 12th International Conference on Machine Learning (ICML)}, pp.~30--37, 1995.
+
+\bibitem{sutton2009}
+R.~S.~Sutton, H.~R.~Maei, D.~Precup, S.~Bhatnagar, D.~Silver, C.~Szepesv\'{a}ri, and E.~Wiewiora,
+``Fast gradient-descent methods for temporal-difference learning with linear function approximation,''
+in \emph{Proceedings of the 26th International Conference on Machine Learning (ICML)}, pp.~993--1000, 2009.
+
+\bibitem{schulman2016}
+J.~Schulman, P.~Moritz, S.~Levine, M.~Jordan, and P.~Abbeel,
+``High-dimensional continuous control using generalized advantage estimation,''
+in \emph{Proceedings of the International Conference on Learning Representations (ICLR)}, 2016.
+
+\bibitem{mnih2015}
+V.~Mnih, K.~Kavukcuoglu, D.~Silver, A.~A.~Rusu, J.~Veness, M.~G.~Bellemare, et al.,
+``Human-level control through deep reinforcement learning,''
+\emph{Nature}, vol.~518, pp.~529--533, 2015.
+
+\bibitem{sutton2018}
+R.~S.~Sutton and A.~G.~Barto, \emph{Reinforcement Learning: An Introduction}, 2nd~ed.,
+MIT Press, 2018.
+
+\bibitem{bertsekas1996}
+D.~P.~Bertsekas and J.~N.~Tsitsiklis, \emph{Neuro-Dynamic Programming},
+Athena Scientific, 1996.
+
+\bibitem{szepesvari2010}
+C.~Szepesv\'{a}ri, \emph{Algorithms for Reinforcement Learning},
+Morgan \& Claypool, 2010.
+
+\bibitem{robbins1951}
+H.~Robbins and S.~Monro, ``A stochastic approximation method,''
+\emph{Annals of Mathematical Statistics}, vol.~22, pp.~400--407, 1951.
+
+\bibitem{kushner2003}
+H.~J.~Kushner and G.~G.~Yin, \emph{Stochastic Approximation and Recursive Algorithms and Applications}, 2nd~ed.,
+Springer, 2003.
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,1662 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{\textbf{Probability Foundations\\for Reinforcement Learning Theory}\\[10pt]
+\large A Self-Contained Reference with Complete Proofs}
+\author{Companion to \emph{TD Learning} and \emph{Expectation Cheatsheet}}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document provides a rigorous, self-contained treatment of the probability theory
+needed to read and understand the convergence proofs in the companion articles on
+Temporal-Difference learning, policy gradient methods, and related topics. We cover
+the foundations that complement the \emph{Expectation Cheatsheet}: conditional
+probability, independence, modes of convergence, concentration inequalities,
+Borel--Cantelli lemmas, the law of large numbers, Markov chain theory, and
+martingale convergence theorems. Every result is stated precisely and proved from
+first principles in the discrete (finite or countable) setting.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+The convergence proofs in reinforcement learning rely on a core set of probabilistic
+tools. The companion \emph{Expectation Cheatsheet} develops the expectation-specific
+machinery: linearity, conditional expectation, the tower property, variance
+decomposition, martingale difference sequences, and Jensen's inequality. This
+document builds the broader probability foundation on which those tools rest.
+
+\medskip\noindent\textbf{What this document covers.}
+\begin{enumerate}[nosep]
+    \item \textbf{Probability spaces and events} --- $\sigma$-algebras, Kolmogorov axioms, conditional probability, Bayes' theorem.
+    \item \textbf{Random variables and distributions} --- measurability, common distributions, joint distributions.
+    \item \textbf{Independence} --- independent events, independent random variables, product of expectations.
+    \item \textbf{Modes of convergence} --- almost sure, in probability, in $L^p$, in distribution, and their relationships.
+    \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding.
+    \item \textbf{Borel--Cantelli lemmas} --- the bridge between summable probabilities and almost sure convergence.
+    \item \textbf{Limit theorems} --- weak and strong law of large numbers, central limit theorem, monotone and dominated convergence.
+    \item \textbf{Markov chains} --- transition matrices, stationary distributions, ergodicity.
+    \item \textbf{Martingale convergence theory} --- supermartingales, Doob's convergence theorem, Robbins--Siegmund.
+\end{enumerate}
+
+\medskip\noindent\textbf{What is covered in the companion Expectation Cheatsheet.}
+Expectation, linearity, conditional expectation (definition, linearity, pull-out
+property), MDP expectation expansion, tower property, variance and total variance,
+filtrations, martingale difference sequences, Jensen's inequality, and the
+stochastic approximation noise decomposition. We do not duplicate those results here
+but reference them freely.
+
+%% ============================================================
+%% SECTION 2: PROBABILITY SPACES AND EVENTS
+%% ============================================================
+\section{Probability Spaces and Events}
+\label{sec:prob_spaces}
+
+\subsection{Sample Spaces and \texorpdfstring{$\sigma$}{Sigma}-Algebras}
+\label{subsec:sigma_algebras}
+
+\begin{definition}[$\sigma$-Algebra]
+\label{def:sigma_algebra}
+A collection $\mathcal{F}$ of subsets of a set $\Omega$ is a \emph{$\sigma$-algebra}
+(or \emph{$\sigma$-field}) if:
+\begin{enumerate}[nosep]
+    \item $\Omega \in \mathcal{F}$,
+    \item If $A \in \mathcal{F}$, then $A^c = \Omega \setminus A \in \mathcal{F}$ \hfill(closed under complement),
+    \item If $A_1, A_2, \ldots \in \mathcal{F}$, then $\bigcup_{n=1}^\infty A_n \in \mathcal{F}$ \hfill(closed under countable union).
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Basic Properties of $\sigma$-Algebras]
+\label{prop:sigma_props}
+Let $\mathcal{F}$ be a $\sigma$-algebra on $\Omega$. Then:
+\begin{enumerate}[nosep]
+    \item $\emptyset \in \mathcal{F}$.
+    \item $\mathcal{F}$ is closed under countable intersection: if $A_1, A_2, \ldots \in \mathcal{F}$, then $\bigcap_{n=1}^\infty A_n \in \mathcal{F}$.
+    \item $\mathcal{F}$ is closed under set difference: if $A, B \in \mathcal{F}$, then $A \setminus B \in \mathcal{F}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(1)} $\emptyset = \Omega^c \in \mathcal{F}$ by closure under complement.
+
+\textbf{(2)} By De Morgan's law, $\bigcap_{n=1}^\infty A_n = \left(\bigcup_{n=1}^\infty A_n^c\right)^c$. Each $A_n^c \in \mathcal{F}$ by (2) of Definition~\ref{def:sigma_algebra}, so $\bigcup A_n^c \in \mathcal{F}$ by (3), and $\left(\bigcup A_n^c\right)^c \in \mathcal{F}$ by (2).
+
+\textbf{(3)} $A \setminus B = A \cap B^c$. Since $B^c \in \mathcal{F}$, this is a finite intersection of elements of $\mathcal{F}$, which is a special case of (2).
+\end{proof}
+
+\begin{definition}[Generated $\sigma$-Algebra]
+\label{def:generated_sigma}
+Given a collection $\mathcal{C}$ of subsets of $\Omega$, the \emph{$\sigma$-algebra generated by $\mathcal{C}$}, denoted $\sigma(\mathcal{C})$, is the smallest $\sigma$-algebra containing $\mathcal{C}$:
+\begin{equation}
+    \sigma(\mathcal{C}) = \bigcap \{ \mathcal{G} : \mathcal{G} \text{ is a $\sigma$-algebra on } \Omega \text{ and } \mathcal{C} \subseteq \mathcal{G} \}.
+    \label{eq:generated_sigma}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+The intersection of any collection of $\sigma$-algebras is again a $\sigma$-algebra (verify the three axioms directly), so $\sigma(\mathcal{C})$ is well defined. The power set $2^\Omega$ is always a $\sigma$-algebra containing $\mathcal{C}$, so the intersection is non-empty.
+\end{remark}
+
+\begin{rlconnection}[Connection to RL]
+In RL, $\sigma(S_0, A_0, R_1, \ldots, S_t)$ is the $\sigma$-algebra generated by the trajectory up to time $t$. It represents ``all information available at time $t$'' and is precisely the filtration $\mathcal{F}_t$ used throughout the TD convergence proofs.
+\end{rlconnection}
+
+\subsection{Probability Measures}
+\label{subsec:prob_measures}
+
+\begin{definition}[Probability Measure --- Kolmogorov Axioms]
+\label{def:prob_measure}
+A \emph{probability measure} on a measurable space $(\Omega, \mathcal{F})$ is a function $\Prob: \mathcal{F} \to [0,1]$ satisfying:
+\begin{enumerate}[nosep]
+    \item \textbf{Non-negativity:} $\Prob(A) \geq 0$ for all $A \in \mathcal{F}$.
+    \item \textbf{Normalization:} $\Prob(\Omega) = 1$.
+    \item \textbf{Countable additivity:} For pairwise disjoint events $A_1, A_2, \ldots \in \mathcal{F}$:
+    \begin{equation}
+        \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(A_n).
+        \label{eq:countable_additivity}
+    \end{equation}
+\end{enumerate}
+The triple $(\Omega, \mathcal{F}, \Prob)$ is called a \emph{probability space}.
+\end{definition}
+
+\begin{theorem}[Basic Properties of Probability]
+\label{thm:prob_props}
+Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space. For events $A, B \in \mathcal{F}$:
+\begin{enumerate}[nosep]
+    \item $\Prob(\emptyset) = 0$.
+    \item \textbf{Complement:} $\Prob(A^c) = 1 - \Prob(A)$.
+    \item \textbf{Monotonicity:} If $A \subseteq B$, then $\Prob(A) \leq \Prob(B)$.
+    \item \textbf{Inclusion-exclusion:} $\Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B)$.
+    \item \textbf{Sub-additivity:} $\Prob(A \cup B) \leq \Prob(A) + \Prob(B)$.
+    \item \textbf{Union bound:} $\Prob\!\left(\bigcup_{n=1}^\infty A_n\right) \leq \sum_{n=1}^\infty \Prob(A_n)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(1)} Write $\Omega = \Omega \cup \emptyset \cup \emptyset \cup \cdots$ (disjoint). By countable additivity, $\Prob(\Omega) = \Prob(\Omega) + \Prob(\emptyset) + \Prob(\emptyset) + \cdots$. Since $\Prob(\Omega) = 1 < \infty$, all remaining terms must be zero, so $\Prob(\emptyset) = 0$.
+
+\textbf{(2)} $\Omega = A \cup A^c$ with $A \cap A^c = \emptyset$, so $1 = \Prob(A) + \Prob(A^c)$.
+
+\textbf{(3)} Write $B = A \cup (B \setminus A)$ disjointly. Then $\Prob(B) = \Prob(A) + \Prob(B \setminus A) \geq \Prob(A)$.
+
+\textbf{(4)} Write $A \cup B = A \cup (B \setminus A)$ disjointly, and $B = (A \cap B) \cup (B \setminus A)$ disjointly. From the second: $\Prob(B \setminus A) = \Prob(B) - \Prob(A \cap B)$. Substituting into the first: $\Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B)$.
+
+\textbf{(5)} From (4), since $\Prob(A \cap B) \geq 0$.
+
+\textbf{(6)} Define $B_1 = A_1$ and $B_n = A_n \setminus \bigcup_{k=1}^{n-1} A_k$ for $n \geq 2$. The $B_n$ are pairwise disjoint with $\bigcup B_n = \bigcup A_n$, and $B_n \subseteq A_n$ so $\Prob(B_n) \leq \Prob(A_n)$. Then $\Prob(\bigcup A_n) = \Prob(\bigcup B_n) = \sum \Prob(B_n) \leq \sum \Prob(A_n)$.
+\end{proof}
+
+\begin{theorem}[Continuity of Probability]
+\label{thm:continuity}
+Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space.
+\begin{enumerate}[nosep]
+    \item \textbf{Continuity from below:} If $A_1 \subseteq A_2 \subseteq \cdots$, then $\Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \lim_{n \to \infty} \Prob(A_n)$.
+    \item \textbf{Continuity from above:} If $A_1 \supseteq A_2 \supseteq \cdots$, then $\Prob\!\left(\bigcap_{n=1}^\infty A_n\right) = \lim_{n \to \infty} \Prob(A_n)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(1)} Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for $n \geq 2$. The $B_n$ are disjoint, $A_n = \bigcup_{k=1}^n B_k$, and $\bigcup_{n=1}^\infty A_n = \bigcup_{n=1}^\infty B_n$. By countable additivity:
+\begin{equation}
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(B_n) = \lim_{N \to \infty} \sum_{n=1}^N \Prob(B_n) = \lim_{N \to \infty} \Prob(A_N).
+\end{equation}
+
+\textbf{(2)} Apply (1) to $A_n^c$: these increase, so $\Prob(\bigcup A_n^c) = \lim \Prob(A_n^c)$. By De Morgan, $\bigcup A_n^c = (\bigcap A_n)^c$, giving $1 - \Prob(\bigcap A_n) = \lim(1 - \Prob(A_n))$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+Continuity from above is the key tool for defining ``almost sure'' events. The event ``$V_t$ converges to $V^\pi$'' is an intersection of increasingly restrictive events, and continuity from above lets us compute its probability as a limit. This underpins every ``convergence with probability 1'' result in the TD article.
+\end{rlconnection}
+
+\subsection{Conditional Probability and Bayes' Theorem}
+\label{subsec:cond_prob}
+
+\begin{definition}[Conditional Probability]
+\label{def:cond_prob}
+For events $A, B \in \mathcal{F}$ with $\Prob(B) > 0$, the \emph{conditional probability of $A$ given $B$} is:
+\begin{equation}
+    \Prob(A \mid B) = \frac{\Prob(A \cap B)}{\Prob(B)}.
+    \label{eq:cond_prob}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Conditional Probability is a Probability Measure]
+\label{prop:cond_is_prob}
+For a fixed event $B$ with $\Prob(B) > 0$, the function $A \mapsto \Prob(A \mid B)$ satisfies the Kolmogorov axioms and is therefore a probability measure on $(\Omega, \mathcal{F})$.
+\end{proposition}
+
+\begin{proof}
+\textbf{Non-negativity:} $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B) \geq 0$.
+
+\textbf{Normalization:} $\Prob(\Omega \mid B) = \Prob(\Omega \cap B)/\Prob(B) = \Prob(B)/\Prob(B) = 1$.
+
+\textbf{Countable additivity:} For pairwise disjoint $A_1, A_2, \ldots$:
+\begin{align}
+    \Prob\!\left(\bigcup_n A_n \;\middle|\; B\right) &= \frac{\Prob\!\left(\left(\bigcup_n A_n\right) \cap B\right)}{\Prob(B)} = \frac{\Prob\!\left(\bigcup_n (A_n \cap B)\right)}{\Prob(B)} = \frac{\sum_n \Prob(A_n \cap B)}{\Prob(B)} = \sum_n \Prob(A_n \mid B).
+\end{align}
+\end{proof}
+
+\begin{theorem}[Chain Rule of Probability]
+\label{thm:chain_rule}
+For events $A_1, \ldots, A_n$ with $\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$:
+\begin{equation}
+    \Prob(A_1 \cap A_2 \cap \cdots \cap A_n) = \Prob(A_1)\, \Prob(A_2 \mid A_1)\, \Prob(A_3 \mid A_1 \cap A_2) \cdots \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}).
+    \label{eq:chain_rule}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By induction on $n$. The base case $n = 2$ is the definition: $\Prob(A_1 \cap A_2) = \Prob(A_1)\, \Prob(A_2 \mid A_1)$.
+
+For the inductive step, assume the formula holds for $n-1$. Write $B = A_1 \cap \cdots \cap A_{n-1}$. Then $\Prob(B \cap A_n) = \Prob(B)\, \Prob(A_n \mid B)$, and expand $\Prob(B)$ by the inductive hypothesis.
+\end{proof}
+
+\begin{theorem}[Law of Total Probability]
+\label{thm:total_prob}
+Let $B_1, B_2, \ldots, B_n$ be a partition of $\Omega$ (i.e., pairwise disjoint with $\bigcup_i B_i = \Omega$) with $\Prob(B_i) > 0$ for all $i$. Then for any event $A$:
+\begin{equation}
+    \Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i).
+    \label{eq:total_prob}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Since the $B_i$ partition $\Omega$, we have $A = \bigcup_{i=1}^n (A \cap B_i)$ with the terms pairwise disjoint. By finite additivity and the definition of conditional probability:
+\begin{equation}
+    \Prob(A) = \sum_{i=1}^n \Prob(A \cap B_i) = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i).
+\end{equation}
+\end{proof}
+
+\begin{keyresult}[Bayes' Theorem]
+\begin{theorem}[Bayes' Theorem]
+\label{thm:bayes}
+Let $B_1, \ldots, B_n$ be a partition of $\Omega$ with $\Prob(B_i) > 0$, and let $A$ be an event with $\Prob(A) > 0$. Then:
+\begin{equation}
+    \Prob(B_j \mid A) = \frac{\Prob(A \mid B_j)\, \Prob(B_j)}{\sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i)}.
+    \label{eq:bayes}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+By the definition of conditional probability and the law of total probability:
+\begin{equation}
+    \Prob(B_j \mid A) = \frac{\Prob(A \cap B_j)}{\Prob(A)} = \frac{\Prob(A \mid B_j)\, \Prob(B_j)}{\sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i)}.
+\end{equation}
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The chain rule of probability decomposes the joint probability of a trajectory $(S_0, A_0, R_1, S_1, \ldots)$ into a product of transition and policy probabilities. This decomposition is the starting point of the importance sampling ratio used in off-policy methods (TRPO, PPO). Bayes' theorem underlies posterior updates in Bayesian RL and model-based methods.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: RANDOM VARIABLES AND DISTRIBUTIONS
+%% ============================================================
+\section{Random Variables and Distributions}
+\label{sec:random_variables}
+
+\subsection{Measurability}
+\label{subsec:measurability}
+
+\begin{definition}[Measurable Function / Random Variable]
+\label{def:measurable}
+Let $(\Omega, \mathcal{F})$ be a measurable space. A function $X: \Omega \to \R$ is \emph{$\mathcal{F}$-measurable} (or a \emph{random variable}) if for every Borel set $B \subseteq \R$:
+\begin{equation}
+    X^{-1}(B) = \{\omega \in \Omega : X(\omega) \in B\} \in \mathcal{F}.
+    \label{eq:measurable}
+\end{equation}
+Equivalently, it suffices to check that $\{X \leq x\} \in \mathcal{F}$ for all $x \in \R$.
+\end{definition}
+
+\begin{proposition}[Algebra of Measurable Functions]
+\label{prop:measurable_algebra}
+If $X$ and $Y$ are $\mathcal{F}$-measurable and $a, b \in \R$, then the following are $\mathcal{F}$-measurable:
+\begin{enumerate}[nosep]
+    \item $aX + bY$ (linear combinations),
+    \item $XY$ (products),
+    \item $|X|$ (absolute value),
+    \item $\max(X, Y)$ and $\min(X, Y)$,
+    \item $g(X)$ for any Borel-measurable function $g: \R \to \R$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+We prove (1); the others follow similar arguments.
+
+For $aX + bY$, we need $\{aX + bY \leq c\} \in \mathcal{F}$ for all $c \in \R$. Note that $\{aX + bY \leq c\} = \bigcup_{q \in \mathbb{Q}} (\{aX \leq q\} \cap \{bY \leq c - q\})$. For $a > 0$, $\{aX \leq q\} = \{X \leq q/a\} \in \mathcal{F}$; similarly for $bY$. The countable union over $q \in \mathbb{Q}$ of sets in $\mathcal{F}$ is in $\mathcal{F}$.
+\end{proof}
+
+\begin{definition}[$\sigma$-Algebra Generated by a Random Variable]
+\label{def:sigma_rv}
+The $\sigma$-algebra generated by a random variable $X$ is:
+\begin{equation}
+    \sigma(X) = \{X^{-1}(B) : B \subseteq \R \text{ is Borel}\} = \{\{X \in B\} : B \text{ Borel}\}.
+    \label{eq:sigma_rv}
+\end{equation}
+A random variable $Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$ for some Borel function $g$.
+\end{definition}
+
+\begin{remark}
+The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is why the pull-out property (Expectation Cheatsheet, Theorem 3.2) holds: if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
+\end{remark}
+
+\subsection{Distribution Functions}
+\label{subsec:distributions}
+
+\begin{definition}[Cumulative Distribution Function]
+\label{def:cdf}
+The \emph{cumulative distribution function} (CDF) of a random variable $X$ is:
+\begin{equation}
+    F_X(x) = \Prob(X \leq x), \quad x \in \R.
+    \label{eq:cdf}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Properties of the CDF]
+\label{prop:cdf_props}
+Every CDF $F$ satisfies:
+\begin{enumerate}[nosep]
+    \item $F$ is non-decreasing.
+    \item $\lim_{x \to -\infty} F(x) = 0$ and $\lim_{x \to +\infty} F(x) = 1$.
+    \item $F$ is right-continuous: $\lim_{y \downarrow x} F(y) = F(x)$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(1)} If $x \leq y$, then $\{X \leq x\} \subseteq \{X \leq y\}$, so $F(x) = \Prob(X \leq x) \leq \Prob(X \leq y) = F(y)$ by monotonicity of $\Prob$.
+
+\textbf{(2)} For the left limit, let $A_n = \{X \leq -n\}$. Then $A_1 \supseteq A_2 \supseteq \cdots$ and $\bigcap A_n = \emptyset$. By continuity from above (Theorem~\ref{thm:continuity}), $\lim F(-n) = \Prob(\emptyset) = 0$. The right limit is analogous with $A_n = \{X \leq n\}$ increasing to $\Omega$.
+
+\textbf{(3)} Let $y_n \downarrow x$. Then $\{X \leq y_n\} \supseteq \{X \leq y_{n+1}\}$ and $\bigcap_n \{X \leq y_n\} = \{X \leq x\}$. By continuity from above, $\lim F(y_n) = F(x)$.
+\end{proof}
+
+\subsection{Common Distributions}
+\label{subsec:common_dist}
+
+\begin{definition}[Bernoulli Distribution]
+\label{def:bernoulli}
+A random variable $X$ has a \emph{Bernoulli distribution} with parameter $p \in [0,1]$, written $X \sim \text{Bernoulli}(p)$, if $\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$. Then $\E[X] = p$ and $\Var(X) = p(1-p)$.
+\end{definition}
+
+\begin{definition}[Categorical Distribution]
+\label{def:categorical}
+A random variable $X$ taking values in $\{1, 2, \ldots, k\}$ has a \emph{categorical distribution} with parameters $(p_1, \ldots, p_k)$, where $p_i \geq 0$ and $\sum_i p_i = 1$, if $\Prob(X = i) = p_i$.
+\end{definition}
+
+\begin{definition}[Geometric Distribution]
+\label{def:geometric}
+$X \sim \text{Geometric}(p)$ for $p \in (0,1]$ if $\Prob(X = k) = (1-p)^{k-1} p$ for $k = 1, 2, \ldots$. Then $\E[X] = 1/p$ and $\Var(X) = (1-p)/p^2$.
+\end{definition}
+
+\begin{rlconnection}[Connection to RL]
+The categorical distribution models action selection under a stochastic policy: $A_t \sim \pi(\cdot \mid s)$ is categorical with $\Prob(A_t = a) = \pi(a \mid s)$. The geometric distribution arises in episode length analysis: in an MDP with a per-step termination probability $p$, the episode length is geometric.
+\end{rlconnection}
+
+\subsection{Joint Distributions and Marginals}
+\label{subsec:joint}
+
+\begin{definition}[Joint Distribution]
+\label{def:joint}
+For random variables $X$ and $Y$, the \emph{joint PMF} (in the discrete case) is:
+\begin{equation}
+    p_{X,Y}(x, y) = \Prob(X = x, Y = y).
+    \label{eq:joint_pmf}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Marginal Distribution]
+\label{def:marginal}
+The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over all values of $Y$:
+\begin{equation}
+    p_X(x) = \Prob(X = x) = \sum_y \Prob(X = x, Y = y) = \sum_y p_{X,Y}(x, y).
+    \label{eq:marginal}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+Marginalization is a direct application of the law of total probability (Theorem~\ref{thm:total_prob}) with the partition $\{Y = y_1\}, \{Y = y_2\}, \ldots$
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: INDEPENDENCE
+%% ============================================================
+\section{Independence}
+\label{sec:independence}
+
+\subsection{Independent Events}
+\label{subsec:indep_events}
+
+\begin{definition}[Independent Events]
+\label{def:indep_events}
+Two events $A, B \in \mathcal{F}$ are \emph{independent} (written $A \perp B$) if:
+\begin{equation}
+    \Prob(A \cap B) = \Prob(A)\, \Prob(B).
+    \label{eq:indep_events}
+\end{equation}
+Events $A_1, \ldots, A_n$ are \emph{mutually independent} if for every subset $I \subseteq \{1, \ldots, n\}$:
+\begin{equation}
+    \Prob\!\left(\bigcap_{i \in I} A_i\right) = \prod_{i \in I} \Prob(A_i).
+    \label{eq:mutual_indep}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+Mutual independence is strictly stronger than pairwise independence. Pairwise independence requires~\eqref{eq:indep_events} for every pair $(A_i, A_j)$ with $i \neq j$, but this does not imply~\eqref{eq:mutual_indep} for $|I| \geq 3$.
+\end{remark}
+
+\begin{example}[Pairwise but Not Mutual Independence]
+\label{ex:pairwise_not_mutual}
+Let $\Omega = \{1, 2, 3, 4\}$ with uniform probability $1/4$ each. Define $A = \{1,2\}$, $B = \{1,3\}$, $C = \{1,4\}$. Then $\Prob(A) = \Prob(B) = \Prob(C) = 1/2$ and $\Prob(A \cap B) = \Prob(A \cap C) = \Prob(B \cap C) = 1/4$, so all pairs are independent. But $\Prob(A \cap B \cap C) = \Prob(\{1\}) = 1/4 \neq 1/8 = \Prob(A)\Prob(B)\Prob(C)$.
+\end{example}
+
+\subsection{Independent Random Variables}
+\label{subsec:indep_rv}
+
+\begin{definition}[Independent Random Variables]
+\label{def:indep_rv}
+Discrete random variables $X_1, \ldots, X_n$ are \emph{mutually independent} if for all $(x_1, \ldots, x_n)$:
+\begin{equation}
+    \Prob(X_1 = x_1, \ldots, X_n = x_n) = \prod_{i=1}^n \Prob(X_i = x_i).
+    \label{eq:indep_rv}
+\end{equation}
+Equivalently, the joint PMF factors as a product of marginals.
+\end{definition}
+
+\begin{keyresult}[Product of Expectations]
+\begin{theorem}[Expectation of Product of Independent Random Variables]
+\label{thm:product_exp}
+If $X_1, \ldots, X_n$ are mutually independent with $\E[|X_i|] < \infty$, then:
+\begin{equation}
+    \E\!\left[\prod_{i=1}^n X_i\right] = \prod_{i=1}^n \E[X_i].
+    \label{eq:product_exp}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove the case $n = 2$; the general case follows by induction. Let $X, Y$ be independent discrete random variables. Then:
+\begin{align}
+    \E[XY] &= \sum_x \sum_y xy\, \Prob(X = x, Y = y) \nonumber\\
+    &= \sum_x \sum_y xy\, \Prob(X = x)\, \Prob(Y = y) \tag{independence}\\
+    &= \left(\sum_x x\, \Prob(X = x)\right)\left(\sum_y y\, \Prob(Y = y)\right) = \E[X]\, \E[Y]. \label{eq:product_exp_proof}
+\end{align}
+The factoring of the double sum into a product of single sums uses $xy = x \cdot y$ and the distributive law, which is valid when both sums converge absolutely.
+\end{proof}
+
+\begin{corollary}[Variance of Sum of Independent Random Variables]
+\label{cor:var_sum}
+If $X_1, \ldots, X_n$ are mutually independent with $\E[X_i^2] < \infty$, then:
+\begin{equation}
+    \Var\!\left(\sum_{i=1}^n X_i\right) = \sum_{i=1}^n \Var(X_i).
+    \label{eq:var_sum}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Let $S = \sum_i X_i$ and $\mu_i = \E[X_i]$. Then:
+\begin{align}
+    \Var(S) &= \E\!\left[\left(\sum_i (X_i - \mu_i)\right)^2\right] = \sum_i \E[(X_i - \mu_i)^2] + 2 \sum_{i < j} \E[(X_i - \mu_i)(X_j - \mu_j)].
+\end{align}
+For independent $X_i, X_j$, the centered variables $X_i - \mu_i$ and $X_j - \mu_j$ are also independent, so by Theorem~\ref{thm:product_exp}:
+\begin{equation}
+    \E[(X_i - \mu_i)(X_j - \mu_j)] = \E[X_i - \mu_i]\, \E[X_j - \mu_j] = 0 \cdot 0 = 0.
+\end{equation}
+Thus $\Var(S) = \sum_i \Var(X_i)$.
+\end{proof}
+
+\subsection{Conditional Independence}
+\label{subsec:cond_indep}
+
+\begin{definition}[Conditional Independence]
+\label{def:cond_indep}
+Events $A$ and $B$ are \emph{conditionally independent given $C$} (with $\Prob(C) > 0$) if:
+\begin{equation}
+    \Prob(A \cap B \mid C) = \Prob(A \mid C)\, \Prob(B \mid C).
+    \label{eq:cond_indep}
+\end{equation}
+Random variables $X$ and $Y$ are \emph{conditionally independent given $Z$} if for all $x, y, z$ with $\Prob(Z = z) > 0$:
+\begin{equation}
+    \Prob(X = x, Y = y \mid Z = z) = \Prob(X = x \mid Z = z)\, \Prob(Y = y \mid Z = z).
+    \label{eq:cond_indep_rv}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+Independence and conditional independence are \emph{distinct} properties. Independent random variables may become conditionally dependent (and vice versa). In particular, conditional independence given $Z$ does \emph{not} imply unconditional independence.
+\end{remark}
+
+\begin{rlconnection}[Connection to RL]
+The \textbf{Markov property} is a conditional independence statement: given $S_t$, the future $(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$ is conditionally independent of the past $(S_0, A_0, \ldots, S_{t-1}, A_{t-1})$. This is the foundational structural assumption of MDPs and is used in every Bellman equation derivation and every TD convergence proof.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: MODES OF CONVERGENCE
+%% ============================================================
+\section{Modes of Convergence}
+\label{sec:convergence}
+
+This section defines four modes of convergence for sequences of random variables and establishes the relationships between them. Understanding these distinctions is essential for reading convergence theorems in stochastic approximation and TD learning.
+
+\subsection{Definitions}
+\label{subsec:conv_def}
+
+\begin{definition}[Almost Sure Convergence]
+\label{def:as_conv}
+A sequence $\{X_n\}$ \emph{converges almost surely} (a.s.) to $X$, written $X_n \cas X$, if:
+\begin{equation}
+    \Prob\!\left(\left\{\omega \in \Omega : \lim_{n \to \infty} X_n(\omega) = X(\omega)\right\}\right) = 1.
+    \label{eq:as_conv}
+\end{equation}
+Equivalently, $\Prob\!\left(\lim_{n \to \infty} X_n = X\right) = 1$.
+\end{definition}
+
+\begin{definition}[Convergence in Probability]
+\label{def:prob_conv}
+$\{X_n\}$ \emph{converges in probability} to $X$, written $X_n \cprob X$, if for every $\varepsilon > 0$:
+\begin{equation}
+    \lim_{n \to \infty} \Prob(|X_n - X| > \varepsilon) = 0.
+    \label{eq:prob_conv}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Convergence in $L^p$]
+\label{def:lp_conv}
+For $p \geq 1$, $\{X_n\}$ \emph{converges in $L^p$} to $X$, written $X_n \clp{p} X$, if:
+\begin{equation}
+    \lim_{n \to \infty} \E\!\left[|X_n - X|^p\right] = 0.
+    \label{eq:lp_conv}
+\end{equation}
+The case $p = 2$ is called \emph{convergence in mean square}.
+\end{definition}
+
+\begin{definition}[Convergence in Distribution]
+\label{def:dist_conv}
+$\{X_n\}$ \emph{converges in distribution} to $X$, written $X_n \cdist X$, if:
+\begin{equation}
+    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
+    \label{eq:dist_conv}
+\end{equation}
+at every point $x$ where $F_X$ is continuous.
+\end{definition}
+
+\begin{rlconnection}[Connection to RL]
+Almost sure convergence is the gold standard in stochastic approximation: all major TD convergence theorems (Theorem 4.2, 5.1, 5.2 in the TD article) establish $V_t(s) \cas V^\pi(s)$ or $Q_t(s,a) \cas Q^*(s,a)$. Convergence in mean square ($L^2$) appears in the linear function approximation setting (Theorem 6.2). Convergence in distribution is used in the central limit theorem to characterize the rate of convergence.
+\end{rlconnection}
+
+\subsection{Relationships Between Modes}
+\label{subsec:conv_relations}
+
+\begin{keyresult}[Convergence Implications]
+\begin{theorem}[Hierarchy of Convergence Modes]
+\label{thm:conv_hierarchy}
+The following implications hold:
+\begin{equation}
+    X_n \cas X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
+    \label{eq:hierarchy_1}
+\end{equation}
+\begin{equation}
+    X_n \clp{p} X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
+    \label{eq:hierarchy_2}
+\end{equation}
+No other implications hold in general between these four modes.
+\end{theorem}
+\end{keyresult}
+
+We prove each implication separately.
+
+\begin{theorem}[$L^p$ Convergence Implies Convergence in Probability]
+\label{thm:lp_to_prob}
+If $X_n \clp{p} X$ for some $p \geq 1$, then $X_n \cprob X$.
+\end{theorem}
+
+\begin{proof}
+This follows from Markov's inequality (Theorem~\ref{thm:markov}, proved in Section~\ref{sec:inequalities}). For any $\varepsilon > 0$:
+\begin{equation}
+    \Prob(|X_n - X| > \varepsilon) = \Prob(|X_n - X|^p > \varepsilon^p) \leq \frac{\E[|X_n - X|^p]}{\varepsilon^p} \to 0
+    \label{eq:lp_to_prob_proof}
+\end{equation}
+as $n \to \infty$.
+\end{proof}
+
+\begin{theorem}[Almost Sure Convergence Implies Convergence in Probability]
+\label{thm:as_to_prob}
+If $X_n \cas X$, then $X_n \cprob X$.
+\end{theorem}
+
+\begin{proof}
+Fix $\varepsilon > 0$. Define $A_n = \{|X_n - X| > \varepsilon\}$ and $B_N = \bigcup_{n=N}^\infty A_n = \{|X_n - X| > \varepsilon \text{ for some } n \geq N\}$.
+
+The sets $B_N$ are decreasing: $B_1 \supseteq B_2 \supseteq \cdots$, and
+\begin{equation}
+    \bigcap_{N=1}^\infty B_N = \{\omega : |X_n(\omega) - X(\omega)| > \varepsilon \text{ for infinitely many } n\}.
+\end{equation}
+If $X_n(\omega) \to X(\omega)$, then for large enough $n$, $|X_n(\omega) - X(\omega)| \leq \varepsilon$, so $\omega \notin \bigcap B_N$. Since a.s.\ convergence means the set of $\omega$ where $X_n(\omega) \to X(\omega)$ has probability $1$, we get $\Prob(\bigcap B_N) = 0$.
+
+By continuity from above (Theorem~\ref{thm:continuity}):
+\begin{equation}
+    0 = \Prob\!\left(\bigcap_{N=1}^\infty B_N\right) = \lim_{N \to \infty} \Prob(B_N) \geq \lim_{N \to \infty} \Prob(A_N).
+\end{equation}
+Since $\Prob(A_N) \geq 0$, we conclude $\Prob(A_N) \to 0$, which is $X_n \cprob X$.
+\end{proof}
+
+\begin{remark}[Important: Converse Fails]
+\label{rem:conv_counterexample}
+Convergence in probability does \emph{not} imply almost sure convergence. The standard counterexample is the ``typewriter sequence'': on $\Omega = [0,1]$ with Lebesgue measure, define $X_n = \indicator_{[j/k,\, (j+1)/k]}$ where $n$ is the unique integer with $n = k(k-1)/2 + j$ for $0 \leq j < k$. Then $\Prob(X_n = 1) = 1/k \to 0$, so $X_n \cprob 0$, but for every $\omega \in [0,1]$, $X_n(\omega) = 1$ infinitely often, so $X_n$ does not converge to $0$ for any $\omega$.
+\end{remark}
+
+\begin{theorem}[Convergence in Probability Implies Convergence in Distribution]
+\label{thm:prob_to_dist}
+If $X_n \cprob X$, then $X_n \cdist X$.
+\end{theorem}
+
+\begin{proof}
+Fix $x$ where $F_X$ is continuous. For any $\varepsilon > 0$:
+\begin{align}
+    F_{X_n}(x) &= \Prob(X_n \leq x) \nonumber\\
+    &= \Prob(X_n \leq x,\, X \leq x + \varepsilon) + \Prob(X_n \leq x,\, X > x + \varepsilon) \nonumber\\
+    &\leq \Prob(X \leq x + \varepsilon) + \Prob(|X_n - X| > \varepsilon) \nonumber\\
+    &= F_X(x + \varepsilon) + \Prob(|X_n - X| > \varepsilon).
+\end{align}
+Similarly, $F_{X_n}(x) \geq F_X(x - \varepsilon) - \Prob(|X_n - X| > \varepsilon)$. Taking $n \to \infty$:
+\begin{equation}
+    F_X(x - \varepsilon) \leq \liminf_n F_{X_n}(x) \leq \limsup_n F_{X_n}(x) \leq F_X(x + \varepsilon).
+\end{equation}
+Since $F_X$ is continuous at $x$, letting $\varepsilon \to 0$ gives $\lim_n F_{X_n}(x) = F_X(x)$.
+\end{proof}
+
+\begin{theorem}[Almost Sure Convergence Does Not Imply $L^p$ and Vice Versa]
+\label{thm:as_lp_no_implication}
+Neither almost sure convergence implies $L^p$ convergence, nor vice versa (for any $p \geq 1$).
+\end{theorem}
+
+\begin{proof}
+\textbf{a.s.\ $\not\Rightarrow$ $L^p$:} Let $X_n = n \cdot \indicator_{(0, 1/n)}$ on $[0,1]$ with Lebesgue measure. For any $\omega > 0$, eventually $1/n < \omega$, so $X_n(\omega) = 0$. Thus $X_n \cas 0$. But $\E[|X_n|] = n \cdot (1/n) = 1 \not\to 0$.
+
+\textbf{$L^p$ $\not\Rightarrow$ a.s.:} The typewriter sequence from Remark~\ref{rem:conv_counterexample} satisfies $\E[|X_n|^p] = 1/k \to 0$, so $X_n \clp{p} 0$, but $X_n \not\cas 0$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: PROBABILITY INEQUALITIES
+%% ============================================================
+\section{Probability Inequalities}
+\label{sec:inequalities}
+
+Concentration inequalities bound how far a random variable can deviate from its expectation. They are the workhorses of convergence proofs.
+
+\subsection{Markov's Inequality}
+\label{subsec:markov}
+
+\begin{keyresult}[Markov's Inequality]
+\begin{theorem}[Markov's Inequality]
+\label{thm:markov}
+If $X \geq 0$ is a non-negative random variable and $a > 0$, then:
+\begin{equation}
+    \Prob(X \geq a) \leq \frac{\E[X]}{a}.
+    \label{eq:markov}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Since $X \geq 0$, we have $X \geq a \cdot \indicator_{\{X \geq a\}}$ pointwise (the indicator is $1$ when $X \geq a$ and $0$ otherwise; in both cases, $X$ is at least $a \cdot \indicator$). Taking expectations:
+\begin{equation}
+    \E[X] \geq \E[a \cdot \indicator_{\{X \geq a\}}] = a \cdot \Prob(X \geq a).
+\end{equation}
+Dividing by $a > 0$ gives the result.
+\end{proof}
+
+\begin{remark}
+Markov's inequality is the weakest concentration inequality but requires the least assumptions (only non-negativity and finite mean). All stronger inequalities in this section are derived from it by applying Markov to a transformed variable.
+\end{remark}
+
+\subsection{Chebyshev's Inequality}
+\label{subsec:chebyshev}
+
+\begin{keyresult}[Chebyshev's Inequality]
+\begin{theorem}[Chebyshev's Inequality]
+\label{thm:chebyshev}
+If $X$ has finite variance $\sigma^2 = \Var(X)$, then for any $\varepsilon > 0$:
+\begin{equation}
+    \Prob(|X - \E[X]| \geq \varepsilon) \leq \frac{\Var(X)}{\varepsilon^2}.
+    \label{eq:chebyshev}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Apply Markov's inequality (Theorem~\ref{thm:markov}) to the non-negative random variable $(X - \E[X])^2$ with threshold $\varepsilon^2$:
+\begin{equation}
+    \Prob(|X - \E[X]| \geq \varepsilon) = \Prob\!\left((X - \E[X])^2 \geq \varepsilon^2\right) \leq \frac{\E[(X - \E[X])^2]}{\varepsilon^2} = \frac{\Var(X)}{\varepsilon^2}.
+\end{equation}
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+Chebyshev's inequality is used in the proof of the weak law of large numbers (Theorem~\ref{thm:wlln}), which justifies Monte Carlo estimation: the sample mean of returns converges in probability to $V^\pi(s)$.
+\end{rlconnection}
+
+\subsection{Cauchy--Schwarz Inequality}
+\label{subsec:cauchy_schwarz}
+
+\begin{theorem}[Cauchy--Schwarz Inequality]
+\label{thm:cauchy_schwarz}
+For random variables $X, Y$ with $\E[X^2], \E[Y^2] < \infty$:
+\begin{equation}
+    |\E[XY]| \leq \sqrt{\E[X^2]\, \E[Y^2]}.
+    \label{eq:cauchy_schwarz}
+\end{equation}
+Equivalently, $(\E[XY])^2 \leq \E[X^2]\, \E[Y^2]$. Equality holds if and only if $Y = cX$ a.s.\ for some constant $c$.
+\end{theorem}
+
+\begin{proof}
+If $\E[Y^2] = 0$, then $Y = 0$ a.s., so $\E[XY] = 0$ and the inequality is trivial. Assume $\E[Y^2] > 0$.
+
+For any $t \in \R$, $\E[(X + tY)^2] \geq 0$. Expanding:
+\begin{equation}
+    \E[X^2] + 2t\,\E[XY] + t^2\,\E[Y^2] \geq 0 \quad \text{for all } t \in \R.
+    \label{eq:cs_quadratic}
+\end{equation}
+This is a non-negative quadratic in $t$, so its discriminant must be non-positive:
+\begin{equation}
+    (2\,\E[XY])^2 - 4\,\E[X^2]\,\E[Y^2] \leq 0,
+\end{equation}
+which gives $(\E[XY])^2 \leq \E[X^2]\,\E[Y^2]$.
+\end{proof}
+
+\begin{corollary}[Covariance Bound]
+\label{cor:cov_bound}
+$|\Cov(X, Y)| \leq \sqrt{\Var(X)\,\Var(Y)}$, with equality iff $Y = aX + b$ a.s.
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:cauchy_schwarz} to $X - \E[X]$ and $Y - \E[Y]$.
+\end{proof}
+
+\subsection{Hoeffding's Inequality}
+\label{subsec:hoeffding}
+
+\begin{lemma}[Hoeffding's Lemma]
+\label{lem:hoeffding}
+If $X$ is a random variable with $\E[X] = 0$ and $a \leq X \leq b$ a.s., then for all $\lambda > 0$:
+\begin{equation}
+    \E[e^{\lambda X}] \leq \exp\!\left(\frac{\lambda^2 (b-a)^2}{8}\right).
+    \label{eq:hoeffding_lemma}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Since $a \leq X \leq b$, we can write $X = \alpha a + (1-\alpha) b$ where $\alpha = (b - X)/(b - a) \in [0,1]$. By the convexity of $e^{\lambda x}$:
+\begin{equation}
+    e^{\lambda X} \leq \frac{b - X}{b - a}\, e^{\lambda a} + \frac{X - a}{b - a}\, e^{\lambda b}.
+    \label{eq:hoeff_convex}
+\end{equation}
+Taking expectations (using $\E[X] = 0$):
+\begin{equation}
+    \E[e^{\lambda X}] \leq \frac{b}{b-a}\, e^{\lambda a} + \frac{-a}{b-a}\, e^{\lambda b}.
+\end{equation}
+Let $p = -a/(b-a)$ and $u = \lambda(b-a)$. Then the right-hand side equals $e^{g(u)}$ where $g(u) = -pu + \ln(1 - p + p e^u)$. One verifies $g(0) = 0$, $g'(0) = 0$, and $g''(u) \leq 1/4$ for all $u$ (since $g''(u) = p(1-p)e^u/(1-p+pe^u)^2 \leq 1/4$ by AM-GM). By Taylor's theorem with Lagrange remainder: $g(u) \leq u^2/8$. Thus $\E[e^{\lambda X}] \leq e^{\lambda^2(b-a)^2/8}$.
+\end{proof}
+
+\begin{keyresult}[Hoeffding's Inequality]
+\begin{theorem}[Hoeffding's Inequality]
+\label{thm:hoeffding}
+Let $X_1, \ldots, X_n$ be independent random variables with $a_i \leq X_i \leq b_i$ a.s. Let $\bar{X} = \frac{1}{n}\sum_{i=1}^n X_i$. Then for any $t > 0$:
+\begin{equation}
+    \Prob\!\left(|\bar{X} - \E[\bar{X}]| \geq t\right) \leq 2\exp\!\left(-\frac{2n^2 t^2}{\sum_{i=1}^n (b_i - a_i)^2}\right).
+    \label{eq:hoeffding}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $S = \sum_{i=1}^n (X_i - \E[X_i])$. We bound $\Prob(S \geq nt)$; the other tail is symmetric.
+
+\textbf{Step 1: Chernoff bound.} For any $\lambda > 0$, by Markov's inequality:
+\begin{equation}
+    \Prob(S \geq nt) = \Prob(e^{\lambda S} \geq e^{\lambda nt}) \leq e^{-\lambda nt}\, \E[e^{\lambda S}].
+    \label{eq:hoeff_chernoff}
+\end{equation}
+
+\textbf{Step 2: Factor the MGF.} Since the $X_i$ are independent, the centered variables $X_i - \E[X_i]$ are independent, so:
+\begin{equation}
+    \E[e^{\lambda S}] = \prod_{i=1}^n \E[e^{\lambda(X_i - \E[X_i])}].
+\end{equation}
+
+\textbf{Step 3: Apply Hoeffding's Lemma.} Each $X_i - \E[X_i]$ has mean $0$ and lies in $[a_i - \E[X_i],\, b_i - \E[X_i]]$, an interval of length $b_i - a_i$. By Lemma~\ref{lem:hoeffding}:
+\begin{equation}
+    \E[e^{\lambda(X_i - \E[X_i])}] \leq \exp\!\left(\frac{\lambda^2(b_i - a_i)^2}{8}\right).
+\end{equation}
+Therefore $\E[e^{\lambda S}] \leq \exp\!\left(\frac{\lambda^2}{8}\sum_i (b_i - a_i)^2\right)$.
+
+\textbf{Step 4: Optimize over $\lambda$.} Combining with~\eqref{eq:hoeff_chernoff}:
+\begin{equation}
+    \Prob(S \geq nt) \leq \exp\!\left(-\lambda nt + \frac{\lambda^2}{8}\sum_i (b_i - a_i)^2\right).
+\end{equation}
+The exponent is minimized at $\lambda^* = 4nt / \sum_i(b_i - a_i)^2$, giving:
+\begin{equation}
+    \Prob(S \geq nt) \leq \exp\!\left(-\frac{2n^2t^2}{\sum_i(b_i-a_i)^2}\right).
+\end{equation}
+The same bound holds for $\Prob(S \leq -nt)$ by applying the argument to $-S$. Combining both tails with the union bound gives~\eqref{eq:hoeffding}.
+\end{proof}
+
+\subsection{Azuma--Hoeffding Inequality}
+\label{subsec:azuma}
+
+\begin{keyresult}[Azuma--Hoeffding Inequality]
+\begin{theorem}[Azuma--Hoeffding Inequality]
+\label{thm:azuma}
+Let $\{M_k\}_{k=0}^n$ be a martingale with respect to $\{\mathcal{F}_k\}$ such that $|M_k - M_{k-1}| \leq c_k$ a.s.\ for constants $c_k > 0$. Then for any $t > 0$:
+\begin{equation}
+    \Prob(|M_n - M_0| \geq t) \leq 2\exp\!\left(-\frac{t^2}{2\sum_{k=1}^n c_k^2}\right).
+    \label{eq:azuma}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $D_k = M_k - M_{k-1}$. Then $\E[D_k \mid \mathcal{F}_{k-1}] = 0$ and $|D_k| \leq c_k$, so $-c_k \leq D_k \leq c_k$.
+
+For any $\lambda > 0$, by the Chernoff bound (Markov's inequality applied to $e^{\lambda(M_n - M_0)}$):
+\begin{equation}
+    \Prob(M_n - M_0 \geq t) \leq e^{-\lambda t}\, \E[e^{\lambda(M_n - M_0)}].
+\end{equation}
+We bound $\E[e^{\lambda \sum D_k}]$ by iterative conditioning. Note that:
+\begin{equation}
+    \E[e^{\lambda \sum_{k=1}^n D_k}] = \E\!\left[e^{\lambda \sum_{k=1}^{n-1} D_k} \cdot \E[e^{\lambda D_n} \mid \mathcal{F}_{n-1}]\right].
+\end{equation}
+Since $\E[D_n \mid \mathcal{F}_{n-1}] = 0$ and $|D_n| \leq c_n$ conditionally, Hoeffding's Lemma applied conditionally gives:
+\begin{equation}
+    \E[e^{\lambda D_n} \mid \mathcal{F}_{n-1}] \leq \exp(\lambda^2 c_n^2 / 2).
+\end{equation}
+(The interval is $[-c_n, c_n]$, so $(b-a)^2/8 = (2c_n)^2/8 = c_n^2/2$.)
+
+Iterating this $n$ times:
+\begin{equation}
+    \E[e^{\lambda(M_n - M_0)}] \leq \exp\!\left(\frac{\lambda^2}{2}\sum_{k=1}^n c_k^2\right).
+\end{equation}
+Optimizing over $\lambda$ as in Hoeffding's proof gives $\Prob(M_n - M_0 \geq t) \leq \exp(-t^2 / (2\sum c_k^2))$. The two-sided bound follows by symmetry (apply to $-M_k$).
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The Azuma--Hoeffding inequality bounds the fluctuations of martingales, which arise in TD learning as partial sums of TD errors. It provides finite-sample concentration bounds for value function estimates, complementing the asymptotic convergence guaranteed by stochastic approximation theory.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: BOREL-CANTELLI LEMMAS
+%% ============================================================
+\section{Borel--Cantelli Lemmas}
+\label{sec:borel_cantelli}
+
+The Borel--Cantelli lemmas connect the summability of event probabilities to almost sure occurrence, forming the primary tool for proving almost sure convergence.
+
+\begin{definition}[Limit Superior of Events]
+\label{def:limsup_events}
+For a sequence of events $\{A_n\}$, the \emph{limit superior} (or \emph{events occurring infinitely often}) is:
+\begin{equation}
+    \limsup_{n \to \infty} A_n = \bigcap_{N=1}^\infty \bigcup_{n=N}^\infty A_n = \{\omega : \omega \in A_n \text{ for infinitely many } n\}.
+    \label{eq:limsup_events}
+\end{equation}
+We write $\{A_n \text{ i.o.}\}$ for this event.
+\end{definition}
+
+\begin{remark}
+The event $\{\omega : \omega \in A_n \text{ i.o.}\}$ consists of all outcomes that belong to infinitely many of the $A_n$. Its complement $\{\omega \notin A_n \text{ eventually}\}$ means that $\omega$ is in at most finitely many $A_n$, i.e., there exists $N$ such that $\omega \notin A_n$ for all $n \geq N$.
+\end{remark}
+
+\begin{keyresult}[First Borel--Cantelli Lemma]
+\begin{theorem}[First Borel--Cantelli Lemma]
+\label{thm:bc1}
+If $\sum_{n=1}^\infty \Prob(A_n) < \infty$, then $\Prob(A_n \text{ i.o.}) = 0$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $B_N = \bigcup_{n=N}^\infty A_n$. By the union bound (Theorem~\ref{thm:prob_props}(6)):
+\begin{equation}
+    \Prob(B_N) \leq \sum_{n=N}^\infty \Prob(A_n).
+    \label{eq:bc1_step1}
+\end{equation}
+Since $\sum_{n=1}^\infty \Prob(A_n) < \infty$, the tail sum $\sum_{n=N}^\infty \Prob(A_n) \to 0$ as $N \to \infty$.
+
+Now $B_1 \supseteq B_2 \supseteq \cdots$ and $\{A_n \text{ i.o.}\} = \bigcap_N B_N$. By continuity from above (Theorem~\ref{thm:continuity}):
+\begin{equation}
+    \Prob(A_n \text{ i.o.}) = \lim_{N \to \infty} \Prob(B_N) \leq \lim_{N \to \infty} \sum_{n=N}^\infty \Prob(A_n) = 0.
+\end{equation}
+\end{proof}
+
+\begin{keyresult}[Second Borel--Cantelli Lemma]
+\begin{theorem}[Second Borel--Cantelli Lemma]
+\label{thm:bc2}
+If $\sum_{n=1}^\infty \Prob(A_n) = \infty$ and $A_1, A_2, \ldots$ are mutually independent, then $\Prob(A_n \text{ i.o.}) = 1$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+It suffices to show $\Prob(\bigcup_{n=N}^\infty A_n) = 1$ for every $N$, since $\{A_n \text{ i.o.}\} = \bigcap_N \bigcup_{n \geq N} A_n$.
+
+Fix $N$ and any $M > N$. By independence, the complements $A_N^c, A_{N+1}^c, \ldots$ are also independent. Therefore:
+\begin{equation}
+    \Prob\!\left(\bigcap_{n=N}^M A_n^c\right) = \prod_{n=N}^M \Prob(A_n^c) = \prod_{n=N}^M (1 - \Prob(A_n)).
+\end{equation}
+Using the inequality $1 - x \leq e^{-x}$ for $x \geq 0$:
+\begin{equation}
+    \prod_{n=N}^M (1 - \Prob(A_n)) \leq \exp\!\left(-\sum_{n=N}^M \Prob(A_n)\right).
+\end{equation}
+Since $\sum_{n=1}^\infty \Prob(A_n) = \infty$, the partial sums $\sum_{n=N}^M \Prob(A_n) \to \infty$ as $M \to \infty$. Therefore:
+\begin{equation}
+    \Prob\!\left(\bigcap_{n=N}^\infty A_n^c\right) = \lim_{M \to \infty} \Prob\!\left(\bigcap_{n=N}^M A_n^c\right) = 0,
+\end{equation}
+where the limit exchange uses continuity from above. Taking complements: $\Prob(\bigcup_{n=N}^\infty A_n) = 1$.
+\end{proof}
+
+\begin{theorem}[Borel--Cantelli Characterization of Almost Sure Convergence]
+\label{thm:bc_as}
+A sequence $\{X_n\}$ converges almost surely to $X$ if and only if for every $\varepsilon > 0$:
+\begin{equation}
+    \Prob\!\left(|X_n - X| > \varepsilon \text{ i.o.}\right) = 0.
+    \label{eq:bc_as_char}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+\textbf{($\Rightarrow$)} If $X_n \cas X$, then for each $\varepsilon > 0$, the set of $\omega$ where $|X_n(\omega) - X(\omega)| > \varepsilon$ infinitely often has probability $0$ (since convergence means eventual closeness).
+
+\textbf{($\Leftarrow$)} Suppose~\eqref{eq:bc_as_char} holds for every $\varepsilon > 0$. Take $\varepsilon = 1/k$ for $k = 1, 2, \ldots$ The event ``$X_n \not\to X$'' is
+\begin{equation}
+    \{\omega : X_n(\omega) \not\to X(\omega)\} = \bigcup_{k=1}^\infty \{|X_n - X| > 1/k \text{ i.o.}\}.
+\end{equation}
+By the union bound, $\Prob(X_n \not\to X) \leq \sum_{k=1}^\infty \Prob(|X_n - X| > 1/k \text{ i.o.}) = 0$.
+\end{proof}
+
+\begin{corollary}[Sufficient Condition for Almost Sure Convergence]
+\label{cor:bc_sufficient}
+If $X_n \to X$ in probability and for every $\varepsilon > 0$, $\sum_{n=1}^\infty \Prob(|X_n - X| > \varepsilon) < \infty$, then $X_n \cas X$.
+\end{corollary}
+
+\begin{proof}
+By the first Borel--Cantelli lemma (Theorem~\ref{thm:bc1}), the summability condition gives $\Prob(|X_n - X| > \varepsilon \text{ i.o.}) = 0$ for every $\varepsilon > 0$. By Theorem~\ref{thm:bc_as}, $X_n \cas X$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The Borel--Cantelli characterization is the standard technique for upgrading convergence in probability (or $L^2$) to almost sure convergence in stochastic approximation proofs. In the TD(0) convergence proof (Theorem 4.2 of the TD article), the supermartingale convergence theorem provides a.s.\ convergence directly. In alternative proof strategies, one shows $\sum_n \Prob(|V_n(s) - V^\pi(s)| > \varepsilon) < \infty$ using concentration bounds, then applies Borel--Cantelli.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: LIMIT THEOREMS
+%% ============================================================
+\section{Limit Theorems}
+\label{sec:limit_theorems}
+
+\subsection{Weak Law of Large Numbers}
+\label{subsec:wlln}
+
+\begin{keyresult}[Weak Law of Large Numbers]
+\begin{theorem}[Weak Law of Large Numbers]
+\label{thm:wlln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ random variables with $\E[X_1] = \mu$ and $\Var(X_1) = \sigma^2 < \infty$. Let $\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$. Then:
+\begin{equation}
+    \bar{X}_n \cprob \mu.
+    \label{eq:wlln}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+By linearity, $\E[\bar{X}_n] = \mu$. By independence (Corollary~\ref{cor:var_sum}):
+\begin{equation}
+    \Var(\bar{X}_n) = \frac{1}{n^2} \sum_{i=1}^n \Var(X_i) = \frac{\sigma^2}{n}.
+\end{equation}
+By Chebyshev's inequality (Theorem~\ref{thm:chebyshev}):
+\begin{equation}
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \frac{\Var(\bar{X}_n)}{\varepsilon^2} = \frac{\sigma^2}{n\varepsilon^2} \to 0 \quad \text{as } n \to \infty.
+\end{equation}
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The WLLN justifies Monte Carlo value estimation: averaging $n$ independent returns from state $s$ yields an estimate that converges to $V^\pi(s)$ in probability. This is the baseline against which TD methods are compared (Section 3 of the TD article).
+\end{rlconnection}
+
+\subsection{Strong Law of Large Numbers}
+\label{subsec:slln}
+
+\begin{keyresult}[Strong Law of Large Numbers]
+\begin{theorem}[Strong Law of Large Numbers (Kolmogorov)]
+\label{thm:slln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[|X_1|] < \infty$ and $\E[X_1] = \mu$. Then:
+\begin{equation}
+    \bar{X}_n \cas \mu.
+    \label{eq:slln}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove the result under the stronger assumption $\E[X_1^4] < \infty$; the general case requires truncation arguments (see Remark~\ref{rem:slln_general}).
+
+Let $Y_i = X_i - \mu$, so $\E[Y_i] = 0$ and $S_n = \sum_{i=1}^n Y_i = n(\bar{X}_n - \mu)$.
+
+\textbf{Step 1: Fourth moment bound.} Expand $S_n^4 = \left(\sum_i Y_i\right)^4$. The non-zero terms in $\E[S_n^4]$ come from:
+\begin{itemize}[nosep]
+    \item Terms $\E[Y_i^4]$: there are $n$ such terms, each equal to $\E[Y_1^4]$.
+    \item Terms $\E[Y_i^2 Y_j^2]$ with $i \neq j$: there are $\binom{n}{2} \cdot 3$ such terms (from the multinomial expansion), each equal to $(\E[Y_1^2])^2 = \sigma^4$.
+\end{itemize}
+All other terms (containing an odd power of some $Y_i$) vanish because $\E[Y_i] = 0$ and independence implies $\E[Y_i^k \cdot Y_j^\ell] = \E[Y_i^k]\,\E[Y_j^\ell] = 0$ when $k$ is odd. Therefore:
+\begin{equation}
+    \E[S_n^4] = n\,\E[Y_1^4] + 3n(n-1)\sigma^4 \leq Cn^2
+    \label{eq:slln_fourth}
+\end{equation}
+for $C = \E[Y_1^4] + 3\sigma^4$.
+
+\textbf{Step 2: Summability via Markov.} By Markov's inequality applied to $(\bar{X}_n - \mu)^4 = S_n^4 / n^4$:
+\begin{equation}
+    \Prob(|\bar{X}_n - \mu| > \varepsilon) \leq \frac{\E[S_n^4]}{n^4 \varepsilon^4} \leq \frac{C}{n^2 \varepsilon^4}.
+\end{equation}
+Since $\sum_{n=1}^\infty 1/n^2 < \infty$, we have $\sum_{n=1}^\infty \Prob(|\bar{X}_n - \mu| > \varepsilon) < \infty$.
+
+\textbf{Step 3: Apply Borel--Cantelli.} By the first Borel--Cantelli lemma (Theorem~\ref{thm:bc1}) and the characterization in Theorem~\ref{thm:bc_as}, $\bar{X}_n \cas \mu$.
+\end{proof}
+
+\begin{remark}
+\label{rem:slln_general}
+The proof above uses the fourth moment to get summable probabilities. The general proof (requiring only $\E[|X_1|] < \infty$) uses a truncation argument: replace $X_i$ by $X_i \indicator_{|X_i| \leq n}$, show the truncated and original sums agree eventually, and apply Kolmogorov's inequality to the truncated sum. See Durrett (2019), Theorem 2.4.1 for details.
+\end{remark}
+
+\subsection{Central Limit Theorem}
+\label{subsec:clt}
+
+\begin{theorem}[Central Limit Theorem]
+\label{thm:clt}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_1] = \mu$ and $0 < \Var(X_1) = \sigma^2 < \infty$. Then:
+\begin{equation}
+    \frac{\sqrt{n}(\bar{X}_n - \mu)}{\sigma} \cdist \mathcal{N}(0, 1).
+    \label{eq:clt}
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Proof sketch via characteristic functions]
+Let $Y_i = (X_i - \mu)/\sigma$ so $\E[Y_i] = 0$, $\E[Y_i^2] = 1$. The characteristic function of $\bar{Y}_n = \frac{1}{\sqrt{n}}\sum_i Y_i$ is:
+\begin{equation}
+    \varphi_{\bar{Y}_n}(t) = \left[\varphi_{Y_1}\!\left(\frac{t}{\sqrt{n}}\right)\right]^n.
+\end{equation}
+Taylor expanding $\varphi_{Y_1}(t/\sqrt{n}) = 1 - t^2/(2n) + o(t^2/n)$ and using $(1 + x/n)^n \to e^x$:
+\begin{equation}
+    \varphi_{\bar{Y}_n}(t) \to e^{-t^2/2},
+\end{equation}
+which is the characteristic function of $\mathcal{N}(0,1)$. By L\'{e}vy's continuity theorem, convergence of characteristic functions implies convergence in distribution.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The CLT describes the \emph{rate} of Monte Carlo convergence: the estimation error of $\bar{X}_n$ is approximately $\sigma / \sqrt{n}$, which is $O(1/\sqrt{n})$. This quantifies the efficiency gain of TD methods, whose error can decrease faster than $1/\sqrt{n}$ due to bootstrapping and variance reduction.
+\end{rlconnection}
+
+\subsection{Monotone and Dominated Convergence}
+\label{subsec:mct_dct}
+
+These theorems justify interchanging limits and expectations --- a step that appears implicitly in many RL derivations.
+
+\begin{theorem}[Monotone Convergence Theorem]
+\label{thm:mct}
+If $0 \leq X_1 \leq X_2 \leq \cdots$ a.s.\ and $X_n \cas X$, then:
+\begin{equation}
+    \lim_{n \to \infty} \E[X_n] = \E[X].
+    \label{eq:mct}
+\end{equation}
+(Both sides may be $+\infty$.)
+\end{theorem}
+
+\begin{proof}
+Since $X_n \leq X$ a.s., monotonicity of expectation gives $\E[X_n] \leq \E[X]$, so $L := \lim_n \E[X_n] \leq \E[X]$.
+
+For the reverse inequality, fix any simple function $0 \leq s \leq X$ (i.e., $s = \sum_{k=1}^m c_k \indicator_{A_k}$). For $\alpha \in (0,1)$, define $B_n = \{X_n \geq \alpha s\}$. Since $X_n \uparrow X \geq s > \alpha s$ on $\{s > 0\}$, we have $B_n \uparrow \Omega$ (up to a null set). Then:
+\begin{equation}
+    \E[X_n] \geq \E[X_n \indicator_{B_n}] \geq \alpha\, \E[s\, \indicator_{B_n}].
+\end{equation}
+As $n \to \infty$, $\E[s\,\indicator_{B_n}] \to \E[s]$ by the continuity from below applied to each $A_k \cap B_n$. So $L \geq \alpha\,\E[s]$. Letting $\alpha \uparrow 1$ gives $L \geq \E[s]$. Taking the supremum over all simple $s \leq X$ gives $L \geq \E[X]$.
+\end{proof}
+
+\begin{theorem}[Fatou's Lemma]
+\label{thm:fatou}
+If $X_n \geq 0$ a.s.\ for all $n$, then:
+\begin{equation}
+    \E\!\left[\liminf_{n \to \infty} X_n\right] \leq \liminf_{n \to \infty} \E[X_n].
+    \label{eq:fatou}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Define $Y_n = \inf_{k \geq n} X_k$. Then $0 \leq Y_1 \leq Y_2 \leq \cdots$ and $Y_n \uparrow \liminf X_n$. By the Monotone Convergence Theorem:
+\begin{equation}
+    \E[\liminf X_n] = \lim_n \E[Y_n].
+\end{equation}
+Since $Y_n \leq X_n$, we have $\E[Y_n] \leq \E[X_n]$. Therefore $\lim_n \E[Y_n] \leq \liminf_n \E[X_n]$.
+\end{proof}
+
+\begin{keyresult}[Dominated Convergence Theorem]
+\begin{theorem}[Dominated Convergence Theorem (Lebesgue)]
+\label{thm:dct}
+If $X_n \cas X$ and there exists a random variable $Y$ with $\E[Y] < \infty$ such that $|X_n| \leq Y$ a.s.\ for all $n$, then:
+\begin{equation}
+    \lim_{n \to \infty} \E[X_n] = \E[X] \quad \text{and} \quad \E[|X_n - X|] \to 0.
+    \label{eq:dct}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Since $|X_n| \leq Y$ a.s.\ and $X_n \to X$ a.s., we have $|X| \leq Y$ a.s. The variables $Y + X_n \geq 0$ and $Y - X_n \geq 0$. Apply Fatou's lemma to each:
+\begin{align}
+    \E[Y + X] &= \E[\liminf(Y + X_n)] \leq \liminf \E[Y + X_n] = \E[Y] + \liminf \E[X_n], \label{eq:dct_fatou1}\\
+    \E[Y - X] &= \E[\liminf(Y - X_n)] \leq \liminf \E[Y - X_n] = \E[Y] - \limsup \E[X_n]. \label{eq:dct_fatou2}
+\end{align}
+From~\eqref{eq:dct_fatou1}: $\E[X] \leq \liminf \E[X_n]$. From~\eqref{eq:dct_fatou2}: $\E[X] \geq \limsup \E[X_n]$. Together: $\lim \E[X_n] = \E[X]$.
+
+For $\E[|X_n - X|] \to 0$: apply the above to $|X_n - X|$ which converges a.s.\ to $0$ and is dominated by $2Y$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The DCT justifies interchanging limits and expectations in discounted MDPs. When proving that the value function $V^\pi(s) = \E[\sum_{t=0}^\infty \gamma^t R_{t+1} \mid S_0 = s]$ is well-defined, one uses dominated convergence with the dominating variable $Y = R_{\max}/(1-\gamma)$ to exchange the limit of partial sums with the expectation. It also appears when proving that Bellman operators preserve continuity of value functions.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: MARKOV CHAINS
+%% ============================================================
+\section{Markov Chains}
+\label{sec:markov_chains}
+
+\subsection{Definition and Transition Matrices}
+\label{subsec:mc_def}
+
+\begin{definition}[Markov Chain]
+\label{def:markov_chain}
+A sequence of random variables $\{X_t\}_{t \geq 0}$ taking values in a finite or countable state space $\mathcal{S}$ is a \emph{(discrete-time) Markov chain} if for all $t \geq 0$ and all states $s_0, \ldots, s_t, s_{t+1} \in \mathcal{S}$:
+\begin{equation}
+    \Prob(X_{t+1} = s_{t+1} \mid X_t = s_t, X_{t-1} = s_{t-1}, \ldots, X_0 = s_0) = \Prob(X_{t+1} = s_{t+1} \mid X_t = s_t).
+    \label{eq:markov_property}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Time-Homogeneous Transition Matrix]
+\label{def:transition_matrix}
+A Markov chain is \emph{time-homogeneous} if $\Prob(X_{t+1} = s' \mid X_t = s) = P(s' \mid s)$ does not depend on $t$. The \emph{transition matrix} $\mathbf{P} \in \R^{|\mathcal{S}| \times |\mathcal{S}|}$ has entries:
+\begin{equation}
+    P_{ss'} = P(s' \mid s), \quad \text{with } P_{ss'} \geq 0 \text{ and } \sum_{s' \in \mathcal{S}} P_{ss'} = 1 \text{ for all } s.
+    \label{eq:transition_matrix}
+\end{equation}
+Such a matrix (non-negative entries, rows summing to $1$) is called a \emph{stochastic matrix}.
+\end{definition}
+
+\begin{theorem}[Chapman--Kolmogorov Equation]
+\label{thm:chapman_kolmogorov}
+For a time-homogeneous Markov chain with transition matrix $\mathbf{P}$:
+\begin{equation}
+    P^{(n+m)}(s, s') = \sum_{u \in \mathcal{S}} P^{(n)}(s, u)\, P^{(m)}(u, s'),
+    \label{eq:ck}
+\end{equation}
+where $P^{(k)}(s, s') = \Prob(X_{t+k} = s' \mid X_t = s)$ is the $k$-step transition probability. In matrix notation: $\mathbf{P}^{n+m} = \mathbf{P}^n \mathbf{P}^m$.
+\end{theorem}
+
+\begin{proof}
+By the law of total probability and the Markov property:
+\begin{align}
+    P^{(n+m)}(s, s') &= \Prob(X_{n+m} = s' \mid X_0 = s) \nonumber\\
+    &= \sum_{u \in \mathcal{S}} \Prob(X_{n+m} = s' \mid X_n = u, X_0 = s)\, \Prob(X_n = u \mid X_0 = s) \nonumber\\
+    &= \sum_{u \in \mathcal{S}} \Prob(X_{n+m} = s' \mid X_n = u)\, \Prob(X_n = u \mid X_0 = s) \tag{Markov property}\\
+    &= \sum_u P^{(m)}(u, s')\, P^{(n)}(s, u). \nonumber
+\end{align}
+This is precisely the $(s, s')$ entry of the matrix product $\mathbf{P}^n \mathbf{P}^m$.
+\end{proof}
+
+\subsection{Classification of States}
+\label{subsec:mc_classify}
+
+\begin{definition}[Accessibility and Communication]
+\label{def:accessibility}
+State $s'$ is \emph{accessible} from $s$ (written $s \to s'$) if $P^{(n)}(s, s') > 0$ for some $n \geq 0$. States $s$ and $s'$ \emph{communicate} (written $s \leftrightarrow s'$) if $s \to s'$ and $s' \to s$.
+\end{definition}
+
+\begin{proposition}[Communication is an Equivalence Relation]
+\label{prop:communication}
+The relation $\leftrightarrow$ is an equivalence relation on $\mathcal{S}$, partitioning the state space into \emph{communicating classes}.
+\end{proposition}
+
+\begin{proof}
+\textit{Reflexive:} $P^{(0)}(s, s) = 1 > 0$, so $s \to s$.
+
+\textit{Symmetric:} By definition of $\leftrightarrow$.
+
+\textit{Transitive:} If $s \leftrightarrow u$ and $u \leftrightarrow s'$, then $s \to u$ in $n$ steps and $u \to s'$ in $m$ steps. By Chapman--Kolmogorov, $P^{(n+m)}(s, s') \geq P^{(n)}(s, u) P^{(m)}(u, s') > 0$, so $s \to s'$. Similarly $s' \to s$.
+\end{proof}
+
+\begin{definition}[Irreducible Chain]
+\label{def:irreducible}
+A Markov chain is \emph{irreducible} if there is a single communicating class, i.e., $s \to s'$ for all $s, s' \in \mathcal{S}$.
+\end{definition}
+
+\begin{definition}[Recurrence and Transience]
+\label{def:recurrence}
+Let $\tau_s = \inf\{t \geq 1 : X_t = s\}$ be the first return time to state $s$. State $s$ is:
+\begin{itemize}[nosep]
+    \item \emph{Recurrent} if $\Prob(\tau_s < \infty \mid X_0 = s) = 1$ (the chain returns to $s$ with probability $1$).
+    \item \emph{Transient} if $\Prob(\tau_s < \infty \mid X_0 = s) < 1$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Recurrence Criterion]
+\label{thm:recurrence}
+State $s$ is recurrent if and only if $\sum_{n=0}^\infty P^{(n)}(s, s) = \infty$.
+\end{theorem}
+
+\begin{proof}
+Let $N_s = \sum_{t=1}^\infty \indicator_{\{X_t = s\}}$ be the number of returns to $s$ (starting from $X_0 = s$). Then:
+\begin{equation}
+    \E[N_s \mid X_0 = s] = \sum_{t=1}^\infty P^{(t)}(s, s).
+\end{equation}
+
+If $s$ is transient, let $p = \Prob(\tau_s < \infty \mid X_0 = s) < 1$. By the strong Markov property, $\Prob(N_s \geq k \mid X_0 = s) = p^k$, so $N_s$ is geometric: $\E[N_s \mid X_0 = s] = p/(1-p) < \infty$. Thus $\sum P^{(n)}(s,s) < \infty$.
+
+If $s$ is recurrent, then $p = 1$, so $\Prob(N_s = \infty \mid X_0 = s) = 1$, giving $\E[N_s \mid X_0 = s] = \infty$.
+\end{proof}
+
+\begin{proposition}[Recurrence is a Class Property]
+\label{prop:recurrence_class}
+If $s$ is recurrent and $s \leftrightarrow s'$, then $s'$ is recurrent.
+\end{proposition}
+
+\begin{proof}
+Since $s \leftrightarrow s'$, there exist $m, n$ such that $P^{(m)}(s', s) > 0$ and $P^{(n)}(s, s') > 0$. For any $k$:
+\begin{equation}
+    P^{(m+k+n)}(s', s') \geq P^{(m)}(s', s)\, P^{(k)}(s, s)\, P^{(n)}(s, s').
+\end{equation}
+Let $c = P^{(m)}(s', s) \cdot P^{(n)}(s, s') > 0$. Summing over $k$:
+\begin{equation}
+    \sum_k P^{(m+k+n)}(s', s') \geq c \sum_k P^{(k)}(s, s) = \infty.
+\end{equation}
+So $\sum_t P^{(t)}(s', s') = \infty$, and $s'$ is recurrent by Theorem~\ref{thm:recurrence}.
+\end{proof}
+
+\subsection{Stationary Distributions}
+\label{subsec:stationary}
+
+\begin{definition}[Stationary Distribution]
+\label{def:stationary}
+A probability distribution $\pi = (\pi(s))_{s \in \mathcal{S}}$ is \emph{stationary} (or \emph{invariant}) for a Markov chain with transition matrix $\mathbf{P}$ if:
+\begin{equation}
+    \pi(s') = \sum_{s \in \mathcal{S}} \pi(s)\, P(s' \mid s) \quad \text{for all } s' \in \mathcal{S}.
+    \label{eq:stationary}
+\end{equation}
+In vector notation: $\boldsymbol{\pi}^\top = \boldsymbol{\pi}^\top \mathbf{P}$, i.e., $\boldsymbol{\pi}$ is a left eigenvector of $\mathbf{P}$ with eigenvalue $1$.
+\end{definition}
+
+\begin{definition}[Aperiodic Chain]
+\label{def:aperiodic}
+The \emph{period} of state $s$ is $d(s) = \gcd\{n \geq 1 : P^{(n)}(s, s) > 0\}$. State $s$ is \emph{aperiodic} if $d(s) = 1$. An irreducible chain is aperiodic if any (equivalently, all) of its states are aperiodic.
+\end{definition}
+
+\begin{definition}[Positive Recurrence]
+\label{def:positive_recurrent}
+A recurrent state $s$ is \emph{positive recurrent} if $\E[\tau_s \mid X_0 = s] < \infty$. An irreducible Markov chain is positive recurrent if all its states are positive recurrent.
+\end{definition}
+
+\begin{keyresult}[Existence and Uniqueness of Stationary Distribution]
+\begin{theorem}[Stationary Distribution Theorem]
+\label{thm:stationary_existence}
+For a finite, irreducible Markov chain:
+\begin{enumerate}[nosep]
+    \item The chain is positive recurrent.
+    \item There exists a unique stationary distribution $\boldsymbol{\pi}$ with $\pi(s) > 0$ for all $s$.
+    \item $\pi(s) = 1 / \E[\tau_s \mid X_0 = s]$.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Part (1):} In a finite irreducible chain, all states communicate, and at least one state must be recurrent (since the chain cannot escape to infinity). By Proposition~\ref{prop:recurrence_class}, all states are recurrent. In a finite state space, recurrence implies positive recurrence (the expected return time is finite because the chain has only finitely many states to visit).
+
+\textbf{Part (2), existence:} Define $\pi(s) = 1/\E[\tau_s \mid X_0 = s]$ (which is positive and finite by Part (1)). We verify stationarity. Consider the chain started from $X_0 = s$. The expected number of visits to state $s'$ before returning to $s$ is:
+\begin{equation}
+    \mu(s') = \E\!\left[\sum_{t=0}^{\tau_s - 1} \indicator_{\{X_t = s'\}} \;\middle|\; X_0 = s\right].
+\end{equation}
+One can verify that $\mu(s') / \mu(s)$ satisfies the stationarity equation $\boldsymbol{\pi}^\top = \boldsymbol{\pi}^\top \mathbf{P}$ and $\mu(s) = \E[\tau_s \mid X_0 = s]$, so $\pi(s') = \mu(s') / \sum_{u} \mu(u) = 1/\E[\tau_{s'} \mid X_0 = s']$ after normalization.
+
+\textbf{Part (2), uniqueness:} Suppose $\boldsymbol{\pi}'$ is another stationary distribution. Then $\boldsymbol{\pi}'^\top = \boldsymbol{\pi}'^\top \mathbf{P}^n$ for all $n$. Since the chain is irreducible and positive recurrent, $P^{(n)}(s, s') \to \pi(s')$ as $n \to \infty$ (if additionally aperiodic; in the periodic case, Ces\`{a}ro averages converge). Therefore $\pi'(s') = \sum_s \pi'(s) \pi(s') = \pi(s')$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+In the TD function approximation setting (Section 6 of the TD article), the stationary distribution $d^\pi$ of the Markov chain induced by policy $\pi$ defines the weighting in the Mean Squared Value Error $\overline{\text{VE}}(\mathbf{w}) = \sum_s d^\pi(s)(V^\pi(s) - \hat{V}(s; \mathbf{w}))^2$. The convergence proof of linear TD (Theorem 6.2) relies on $d^\pi(s) > 0$ for all $s$, which is guaranteed by irreducibility. The ergodic theorem (below) justifies replacing expectations under $d^\pi$ with time averages along a single trajectory.
+\end{rlconnection}
+
+\subsection{Ergodic Theorem}
+\label{subsec:ergodic}
+
+\begin{definition}[Ergodic Chain]
+\label{def:ergodic}
+A finite Markov chain is \emph{ergodic} if it is irreducible and aperiodic.
+\end{definition}
+
+\begin{keyresult}[Convergence Theorem for Ergodic Chains]
+\begin{theorem}[Ergodic Theorem for Finite Markov Chains]
+\label{thm:ergodic}
+If $\{X_t\}$ is an ergodic finite Markov chain with stationary distribution $\boldsymbol{\pi}$, then:
+\begin{enumerate}[nosep]
+    \item \textbf{Distribution convergence:} For any initial distribution, $\Prob(X_t = s) \to \pi(s)$ as $t \to \infty$.
+    \item \textbf{Time-average convergence:} For any bounded function $f: \mathcal{S} \to \R$:
+    \begin{equation}
+        \frac{1}{T}\sum_{t=0}^{T-1} f(X_t) \cas \sum_{s \in \mathcal{S}} \pi(s)\, f(s) = \E_\pi[f].
+        \label{eq:ergodic}
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}[Proof of Part (1)]
+For an ergodic chain on a finite state space $\mathcal{S} = \{1, \ldots, N\}$, aperiodicity and irreducibility imply that there exists $n_0$ such that $P^{(n)}(s, s') > 0$ for all $s, s'$ and all $n \geq n_0$.
+
+Let $\boldsymbol{\mu}_t^\top = \boldsymbol{\mu}_0^\top \mathbf{P}^t$ be the distribution at time $t$. We show $\|\boldsymbol{\mu}_t - \boldsymbol{\pi}\|_1 \to 0$.
+
+Define the \emph{coupling coefficient} $\alpha(\mathbf{P}) = \max_{s, s'} \sum_u |P(u \mid s) - P(u \mid s')|/2$. For a matrix with all positive entries, $\alpha(\mathbf{P}) < 1$. Since $\mathbf{P}^{n_0}$ has all positive entries, $\alpha(\mathbf{P}^{n_0}) = \rho < 1$. One can verify that:
+\begin{equation}
+    \|\boldsymbol{\mu}_{n_0}^\top - \boldsymbol{\pi}^\top\|_1 \leq \rho\, \|\boldsymbol{\mu}_0^\top - \boldsymbol{\pi}^\top\|_1.
+\end{equation}
+Iterating: $\|\boldsymbol{\mu}_{kn_0}^\top - \boldsymbol{\pi}^\top\|_1 \leq \rho^k \cdot 2 \to 0$, giving convergence.
+\end{proof}
+
+\begin{proof}[Proof sketch of Part (2)]
+By the strong law of large numbers for Markov chains (which extends the i.i.d.\ SLLN): for a positive recurrent chain, the fraction of time spent in state $s$ converges a.s.\ to $\pi(s)$. Since $\frac{1}{T}\sum_t f(X_t) = \sum_s f(s) \cdot \frac{1}{T}\sum_t \indicator_{\{X_t = s\}}$, the result follows from a.s.\ convergence of each empirical frequency to $\pi(s)$.
+\end{proof}
+
+\subsection{Detailed Balance}
+\label{subsec:detailed_balance}
+
+\begin{definition}[Detailed Balance / Reversibility]
+\label{def:detailed_balance}
+A Markov chain with transition matrix $\mathbf{P}$ satisfies \emph{detailed balance} with respect to a distribution $\boldsymbol{\pi}$ if:
+\begin{equation}
+    \pi(s)\, P(s' \mid s) = \pi(s')\, P(s \mid s') \quad \text{for all } s, s' \in \mathcal{S}.
+    \label{eq:detailed_balance}
+\end{equation}
+A chain satisfying detailed balance is called \emph{reversible}.
+\end{definition}
+
+\begin{proposition}[Detailed Balance Implies Stationarity]
+\label{prop:db_stationary}
+If $\boldsymbol{\pi}$ satisfies detailed balance~\eqref{eq:detailed_balance}, then $\boldsymbol{\pi}$ is a stationary distribution.
+\end{proposition}
+
+\begin{proof}
+Sum both sides of~\eqref{eq:detailed_balance} over $s$:
+\begin{equation}
+    \sum_s \pi(s)\, P(s' \mid s) = \sum_s \pi(s')\, P(s \mid s') = \pi(s') \sum_s P(s \mid s') = \pi(s').
+\end{equation}
+This is the stationarity equation~\eqref{eq:stationary}.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+In the linear TD convergence proof (Theorem 6.2 of the TD article), the key matrix $\mathbf{A} = \E_{d^\pi}[\mathbf{x}(S)(\mathbf{x}(S) - \gamma \mathbf{x}(S'))^\top]$ involves the stationary distribution. Reversibility (detailed balance) is \emph{not} assumed --- the chain induced by the MDP under a fixed policy is generally non-reversible. The proof instead uses the general ergodic theorem to replace expectations over $d^\pi$ with time averages.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 10: MARTINGALE CONVERGENCE THEORY
+%% ============================================================
+\section{Martingale Convergence Theory}
+\label{sec:martingale_convergence}
+
+The Expectation Cheatsheet defines martingales and martingale difference sequences and proves their basic properties. Here we develop the convergence theory that underpins the stochastic approximation proofs.
+
+\subsection{Submartingales and Supermartingales}
+\label{subsec:sub_super}
+
+\begin{definition}[Submartingale and Supermartingale]
+\label{def:sub_super}
+Let $\{M_n\}$ be adapted to $\{\mathcal{F}_n\}$ with $\E[|M_n|] < \infty$.
+\begin{itemize}[nosep]
+    \item $\{M_n\}$ is a \emph{submartingale} if $\E[M_{n+1} \mid \mathcal{F}_n] \geq M_n$ a.s.\ for all $n$.
+    \item $\{M_n\}$ is a \emph{supermartingale} if $\E[M_{n+1} \mid \mathcal{F}_n] \leq M_n$ a.s.\ for all $n$.
+\end{itemize}
+\end{definition}
+
+\begin{remark}
+A martingale is both a submartingale and a supermartingale. A supermartingale has non-increasing expected values: $\E[M_{n+1}] \leq \E[M_n]$ (take unconditional expectations in the defining inequality using the tower property). Intuitively, a supermartingale represents a ``losing game'' where the expected future value is at most the current value.
+\end{remark}
+
+\begin{proposition}[Convex Functions of Martingales]
+\label{prop:convex_martingale}
+If $\{M_n\}$ is a martingale and $\varphi$ is convex with $\E[|\varphi(M_n)|] < \infty$, then $\{\varphi(M_n)\}$ is a submartingale.
+\end{proposition}
+
+\begin{proof}
+By Jensen's inequality (conditional version, from the Expectation Cheatsheet):
+\begin{equation}
+    \E[\varphi(M_{n+1}) \mid \mathcal{F}_n] \geq \varphi(\E[M_{n+1} \mid \mathcal{F}_n]) = \varphi(M_n).
+\end{equation}
+\end{proof}
+
+\begin{corollary}
+\label{cor:squared_submartingale}
+If $\{M_n\}$ is a martingale with $\E[M_n^2] < \infty$, then $\{M_n^2\}$ is a submartingale.
+\end{corollary}
+
+\begin{proof}
+Apply Proposition~\ref{prop:convex_martingale} with $\varphi(x) = x^2$.
+\end{proof}
+
+\subsection{Doob's Upcrossing Inequality}
+\label{subsec:upcrossing}
+
+The upcrossing inequality is the key technical tool for proving the martingale convergence theorem.
+
+\begin{definition}[Upcrossings]
+\label{def:upcrossing}
+For a sequence $x_0, x_1, \ldots, x_n$ and real numbers $a < b$, an \emph{upcrossing} of $[a, b]$ is a pair of times $\sigma < \tau \leq n$ such that $x_\sigma \leq a$ and $x_\tau \geq b$. The \emph{number of upcrossings} $U_n([a,b])$ counts the maximum number of non-overlapping upcrossings of $[a,b]$ by $x_0, \ldots, x_n$.
+\end{definition}
+
+\begin{keyresult}[Doob's Upcrossing Inequality]
+\begin{theorem}[Doob's Upcrossing Inequality]
+\label{thm:upcrossing}
+If $\{M_n\}_{n=0}^N$ is a submartingale and $a < b$, then:
+\begin{equation}
+    \E[U_N([a,b])] \leq \frac{\E[(M_N - a)^+]}{b - a} \leq \frac{\E[|M_N|] + |a|}{b - a},
+    \label{eq:upcrossing}
+\end{equation}
+where $x^+ = \max(x, 0)$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Define $\tilde{M}_n = (M_n - a)^+$. Since $x \mapsto (x - a)^+$ is convex and non-decreasing, and $\{M_n\}$ is a submartingale, $\{\tilde{M}_n\}$ is also a submartingale (by Jensen). Moreover, $\tilde{M}_n \geq 0$, and the number of upcrossings of $[a, b]$ by $\{M_n\}$ equals the number of upcrossings of $[0, b-a]$ by $\{\tilde{M}_n\}$.
+
+It now suffices to prove the result for a non-negative submartingale $\{Y_n\}$ upcrossing $[0, c]$ with $c = b - a$. Each upcrossing contributes a gain of at least $c$. Between upcrossings, the process may decrease, but the submartingale property limits how much value can be ``lost.'' A careful accounting using optional stopping gives:
+\begin{equation}
+    c \cdot \E[U_N([0, c])] \leq \E[Y_N],
+\end{equation}
+which yields~\eqref{eq:upcrossing} after substituting back.
+\end{proof}
+
+\subsection{Doob's Martingale Convergence Theorem}
+\label{subsec:doob_convergence}
+
+\begin{keyresult}[Doob's Convergence Theorem]
+\begin{theorem}[Doob's Forward Convergence Theorem]
+\label{thm:doob_convergence}
+If $\{M_n\}$ is a submartingale with $\sup_n \E[M_n^+] < \infty$, then $M_\infty = \lim_{n \to \infty} M_n$ exists and is finite almost surely.
+
+In particular, every non-negative supermartingale converges almost surely.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+The limit $\lim_n M_n$ fails to exist (as an extended real number) if and only if $\liminf_n M_n < \limsup_n M_n$, which occurs if and only if $M_n$ upcrosses some rational interval $[a, b]$ with $a < b$ infinitely often:
+\begin{equation}
+    \{\lim M_n \text{ does not exist}\} = \bigcup_{\substack{a, b \in \mathbb{Q} \\ a < b}} \{U_\infty([a,b]) = \infty\}.
+\end{equation}
+By Doob's upcrossing inequality (Theorem~\ref{thm:upcrossing}):
+\begin{equation}
+    \E[U_N([a,b])] \leq \frac{\E[(M_N - a)^+]}{b - a} \leq \frac{\sup_n \E[M_n^+] + |a|}{b - a} < \infty.
+\end{equation}
+Since $U_N([a,b])$ is non-decreasing in $N$, the Monotone Convergence Theorem gives $\E[U_\infty([a,b])] < \infty$, so $U_\infty([a,b]) < \infty$ a.s. By the countable union bound over rational $a, b$:
+\begin{equation}
+    \Prob(\lim M_n \text{ does not exist}) \leq \sum_{\substack{a,b \in \mathbb{Q} \\ a < b}} \Prob(U_\infty([a,b]) = \infty) = 0.
+\end{equation}
+So $M_\infty = \lim M_n$ exists a.s. To show $|M_\infty| < \infty$ a.s.: since $\{M_n\}$ is a submartingale, $\E[M_n] \geq \E[M_0] > -\infty$, and $\E[M_n^+] \leq C < \infty$. By Fatou's lemma, $\E[M_\infty^+] < \infty$ and $\E[M_\infty^-] \leq \liminf \E[M_n^-] = \liminf(\E[M_n^+] - \E[M_n]) \leq C - \E[M_0] < \infty$. So $\E[|M_\infty|] < \infty$, hence $M_\infty$ is finite a.s.
+
+For the ``in particular'': if $\{M_n\}$ is a non-negative supermartingale, then $\{-M_n\}$ is a non-positive submartingale with $(-M_n)^+ = 0$, so $\sup_n \E[(-M_n)^+] = 0 < \infty$. Alternatively, directly: $M_n \geq 0$ implies $M_n^+ = M_n$, and $\E[M_n] \leq \E[M_0]$ (supermartingale), so $\sup_n \E[M_n^+] = \sup_n \E[M_n] \leq \E[M_0] < \infty$. Since $\{M_n\}$ is a supermartingale, $\{-M_n\}$ is a submartingale. Apply the theorem to $\{-M_n\}$: $\sup_n \E[(-M_n)^+] = \sup_n \E[M_n^-] = 0$ (since $M_n \geq 0$). So $-M_n$ converges a.s., hence $M_n$ converges a.s.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+Doob's convergence theorem is applied in the TD convergence proofs (Appendix A of the TD article) through the Robbins--Siegmund theorem below. The non-negative supermartingale case is used most directly: a Lyapunov function $\|V_t - V^\pi\|^2$ is shown to be (approximately) a non-negative supermartingale, guaranteeing that it converges a.s.\ --- which means $V_t \to V^\pi$.
+\end{rlconnection}
+
+\subsection{Robbins--Siegmund Theorem}
+\label{subsec:robbins_siegmund}
+
+\begin{keyresult}[Robbins--Siegmund Theorem]
+\begin{theorem}[Robbins--Siegmund (1971)]
+\label{thm:robbins_siegmund}
+Let $\{\mathcal{F}_n\}$ be a filtration and let $\{V_n\}$, $\{\alpha_n\}$, $\{\beta_n\}$, $\{\gamma_n\}$ be non-negative sequences adapted to $\{\mathcal{F}_n\}$ satisfying:
+\begin{equation}
+    \E[V_{n+1} \mid \mathcal{F}_n] \leq (1 + \alpha_n) V_n - \beta_n + \gamma_n \quad \text{a.s.\ for all } n,
+    \label{eq:robbins_siegmund}
+\end{equation}
+with $\sum_{n=0}^\infty \alpha_n < \infty$ and $\sum_{n=0}^\infty \gamma_n < \infty$ a.s. Then:
+\begin{enumerate}[nosep]
+    \item $V_n$ converges a.s.\ to a finite random variable $V_\infty \geq 0$.
+    \item $\sum_{n=0}^\infty \beta_n < \infty$ a.s.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Step 1: Construct a non-negative supermartingale.}
+Define $W_n = V_n \prod_{k=0}^{n-1}(1 + \alpha_k)^{-1}$ and $\Gamma_n = \sum_{k=0}^{n-1} \gamma_k \prod_{j=0}^{k-1}(1+\alpha_j)^{-1}$. Actually, a simpler approach: define $Z_n = V_n + \sum_{k=n}^\infty \gamma_k - \sum_{k=n}^\infty \alpha_k V_k$. Instead, we use the standard proof via the product:
+
+Let $A_n = \prod_{k=0}^{n-1}(1 + \alpha_k)$. Since $\sum \alpha_k < \infty$, the product $A_n$ converges to a finite limit $A_\infty = \prod_{k=0}^\infty(1+\alpha_k) \leq \exp(\sum \alpha_k) < \infty$.
+
+From~\eqref{eq:robbins_siegmund}: $\E[V_{n+1} \mid \mathcal{F}_n] + \beta_n \leq V_n + \alpha_n V_n + \gamma_n$. Define:
+\begin{equation}
+    U_n = V_n + \sum_{k=n}^\infty \gamma_k.
+\end{equation}
+Since $\sum \gamma_k < \infty$ a.s., $U_n$ is well defined and $U_n \geq V_n \geq 0$. Then:
+\begin{align}
+    \E[U_{n+1} \mid \mathcal{F}_n] &= \E[V_{n+1} \mid \mathcal{F}_n] + \sum_{k=n+1}^\infty \gamma_k \nonumber\\
+    &\leq (1 + \alpha_n) V_n - \beta_n + \gamma_n + \sum_{k=n+1}^\infty \gamma_k \nonumber\\
+    &= (1 + \alpha_n) V_n - \beta_n + \sum_{k=n}^\infty \gamma_k \nonumber\\
+    &= V_n + \alpha_n V_n - \beta_n + \sum_{k=n}^\infty \gamma_k \nonumber\\
+    &\leq U_n + \alpha_n V_n - \beta_n. \label{eq:rs_step1}
+\end{align}
+Since $\alpha_n V_n \leq \alpha_n U_n$, we get $\E[U_{n+1} \mid \mathcal{F}_n] \leq (1 + \alpha_n) U_n - \beta_n \leq (1+\alpha_n) U_n$.
+
+\textbf{Step 2: Apply Doob's theorem.}
+Define $\tilde{U}_n = U_n / A_n$ where $A_n = \prod_{k=0}^{n-1}(1+\alpha_k)$. Then:
+\begin{equation}
+    \E[\tilde{U}_{n+1} \mid \mathcal{F}_n] = \frac{\E[U_{n+1} \mid \mathcal{F}_n]}{A_{n+1}} \leq \frac{(1+\alpha_n) U_n}{A_{n+1}} = \frac{U_n}{A_n} = \tilde{U}_n.
+\end{equation}
+So $\{\tilde{U}_n\}$ is a non-negative supermartingale. By Doob's convergence theorem (Theorem~\ref{thm:doob_convergence}), $\tilde{U}_n \to \tilde{U}_\infty$ a.s.\ with $\tilde{U}_\infty$ finite. Since $A_n \to A_\infty < \infty$, $U_n = A_n \tilde{U}_n \to A_\infty \tilde{U}_\infty$ a.s., which is finite. Since $\sum \gamma_k < \infty$, $V_n = U_n - \sum_{k=n}^\infty \gamma_k \to A_\infty \tilde{U}_\infty - 0 = V_\infty$ a.s.
+
+\textbf{Step 3: Summability of $\beta_n$.}
+From~\eqref{eq:rs_step1}: $\beta_n \leq U_n + \alpha_n V_n - \E[U_{n+1} \mid \mathcal{F}_n]$. Summing and taking expectations:
+\begin{equation}
+    \E\!\left[\sum_{n=0}^N \beta_n\right] \leq \E[U_0] + \sum_{n=0}^N \alpha_n \E[V_n] - \E[U_{N+1}].
+\end{equation}
+Since $U_{N+1} \geq 0$ and the right side is bounded (using $V_n \leq U_n \leq A_\infty \tilde{U}_0$ eventually), the sum $\sum \beta_n$ converges a.s.\ by monotone convergence.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The Robbins--Siegmund theorem is the primary convergence tool for stochastic approximation in RL. In the TD(0) convergence proof, set:
+\begin{itemize}[nosep]
+    \item $V_n = \|V_n - V^\pi\|^2$ (the Lyapunov function --- squared error),
+    \item $\alpha_n = O(\alpha_n^2)$ (from the step-size squared term),
+    \item $\beta_n = c \alpha_n \|V_n - V^\pi\|^2$ (the drift toward the fixed point),
+    \item $\gamma_n = C \alpha_n^2$ (from the noise variance).
+\end{itemize}
+Conclusion (2) gives $\sum_n \alpha_n \|V_n - V^\pi\|^2 < \infty$, and since $\sum \alpha_n = \infty$, this forces $\|V_n - V^\pi\| \to 0$ a.s.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary of Key Results}
+\label{sec:summary}
+
+The following table collects the main results and their roles in the companion RL documents.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{p{3.8cm} p{5cm} p{5cm}}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{Role in RL Proofs} \\
+\midrule
+Bayes' theorem (\ref{thm:bayes}) & $\Prob(B|A) = \frac{\Prob(A|B)\Prob(B)}{\Prob(A)}$ & Importance sampling ratios \\
+\addlinespace
+Product of expectations (\ref{thm:product_exp}) & $\E[\prod X_i] = \prod \E[X_i]$ if independent & Variance of sums, noise bounds \\
+\addlinespace
+Modes of convergence (\ref{thm:conv_hierarchy}) & a.s.\ $\Rightarrow$ in prob.\ $\Rightarrow$ in dist.; $L^p \Rightarrow$ in prob. & Interpreting convergence theorems \\
+\addlinespace
+Markov's inequality (\ref{thm:markov}) & $\Prob(X \geq a) \leq \E[X]/a$ & Foundation of all concentration bounds \\
+\addlinespace
+Chebyshev (\ref{thm:chebyshev}) & $\Prob(|X - \mu| \geq \varepsilon) \leq \sigma^2/\varepsilon^2$ & Weak law of large numbers \\
+\addlinespace
+Hoeffding (\ref{thm:hoeffding}) & Sub-Gaussian tail for bounded averages & Finite-sample bounds on MC estimates \\
+\addlinespace
+Azuma--Hoeffding (\ref{thm:azuma}) & Concentration for bounded martingales & Finite-sample bounds on TD estimates \\
+\addlinespace
+Borel--Cantelli (\ref{thm:bc1}, \ref{thm:bc2}) & $\sum \Prob(A_n) < \infty \Rightarrow \Prob(A_n \text{ i.o.}) = 0$ & Upgrading to a.s.\ convergence \\
+\addlinespace
+Strong LLN (\ref{thm:slln}) & $\bar{X}_n \cas \mu$ & MC value estimation \\
+\addlinespace
+Dom.\ convergence (\ref{thm:dct}) & $X_n \cas X$, $|X_n| \leq Y$ $\Rightarrow$ $\E[X_n] \to \E[X]$ & Interchanging limits and $\E$ \\
+\addlinespace
+Ergodic theorem (\ref{thm:ergodic}) & Time avg.\ $\cas$ space avg.\ under $\pi$ & On-policy sampling justification \\
+\addlinespace
+Stationary dist.\ (\ref{thm:stationary_existence}) & Unique $\boldsymbol{\pi} > 0$ for finite irreducible chains & Weighting in $\overline{\text{VE}}$ \\
+\addlinespace
+Doob convergence (\ref{thm:doob_convergence}) & Bounded submartingales converge a.s. & Foundation of Robbins--Siegmund \\
+\addlinespace
+Robbins--Siegmund (\ref{thm:robbins_siegmund}) & Almost-supermartingale convergence & All stochastic approximation proofs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
