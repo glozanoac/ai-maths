@@ -241,12 +241,43 @@ Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space.
 \end{theorem}
 
 \begin{proof}
-\textbf{(1)} Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for $n \geq 2$. The $B_n$ are disjoint, $A_n = \bigcup_{k=1}^n B_k$, and $\bigcup_{n=1}^\infty A_n = \bigcup_{n=1}^\infty B_n$. By countable additivity:
+\textbf{(1)} Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for $n \geq 2$. We establish three claims.
+
+\medskip
+\textit{Claim 1: The $B_n$ are pairwise disjoint.}
+Let $i < j$. We must show $B_i \cap B_j = \emptyset$.
+Since $A_1 \subseteq A_2 \subseteq \cdots$, we have $A_i \subseteq A_{j-1}$. By definition $B_i \subseteq A_i$ (either $B_1 = A_1$ or $B_i = A_i \setminus A_{i-1} \subseteq A_i$), so $B_i \subseteq A_{j-1}$.
+But $B_j = A_j \setminus A_{j-1}$, meaning $B_j \cap A_{j-1} = \emptyset$. Since $B_i \subseteq A_{j-1}$, we conclude $B_i \cap B_j = \emptyset$.
+
+\medskip
+\textit{Claim 2: $A_N = \bigcup_{k=1}^N B_k$ for every $N \geq 1$.}
+We prove this by induction on $N$.
+
+\emph{Base case} ($N = 1$): $\bigcup_{k=1}^1 B_k = B_1 = A_1$. \checkmark
+
+\emph{Inductive step}: Assume $A_{N-1} = \bigcup_{k=1}^{N-1} B_k$. Then:
 \begin{equation}
-    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(B_n) = \lim_{N \to \infty} \sum_{n=1}^N \Prob(B_n) = \lim_{N \to \infty} \Prob(A_N).
+    \bigcup_{k=1}^N B_k = \underbrace{\bigcup_{k=1}^{N-1} B_k}_{= A_{N-1}} \cup\; B_N
+    = A_{N-1} \cup (A_N \setminus A_{N-1}).
+    \label{eq:disjointification_induction}
+\end{equation}
+For any sets $C \subseteq D$, we have $C \cup (D \setminus C) = D$ (every element of $D$ is either in $C$ or in $D \setminus C$). Since $A_{N-1} \subseteq A_N$, equation~\eqref{eq:disjointification_induction} gives $\bigcup_{k=1}^N B_k = A_N$. \checkmark
+
+\medskip
+\textit{Claim 3: $\sum_{n=1}^N \Prob(B_n) = \Prob(A_N)$.}
+By Claim~1, $B_1, \ldots, B_N$ are pairwise disjoint. By finite additivity (which follows from countable additivity applied with $A_{N+1} = A_{N+2} = \cdots = \emptyset$):
+\begin{equation}
+    \sum_{n=1}^N \Prob(B_n) = \Prob\!\left(\bigcup_{k=1}^N B_k\right) \overset{\text{Claim 2}}{=} \Prob(A_N).
+    \label{eq:finite_additivity_step}
 \end{equation}
 
-\textbf{(2)} Apply (1) to $A_n^c$: these increase, so $\Prob(\bigcup A_n^c) = \lim \Prob(A_n^c)$. By De Morgan, $\bigcup A_n^c = (\bigcap A_n)^c$, giving $1 - \Prob(\bigcap A_n) = \lim(1 - \Prob(A_n))$.
+\medskip
+Now, since $\bigcup_{n=1}^\infty A_n = \bigcup_{n=1}^\infty B_n$ (Claim~2 gives $\subseteq$; $B_n \subseteq A_n$ gives $\supseteq$), countable additivity applies to the disjoint union (Claim~1):
+\begin{equation}
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \Prob\!\left(\bigcup_{n=1}^\infty B_n\right) = \sum_{n=1}^\infty \Prob(B_n) = \lim_{N \to \infty} \sum_{n=1}^N \Prob(B_n) \overset{\eqref{eq:finite_additivity_step}}{=} \lim_{N \to \infty} \Prob(A_N).
+\end{equation}
+
+\textbf{(2)} Apply (1) to $A_n^c$: since $A_1 \supseteq A_2 \supseteq \cdots$, the complements satisfy $A_1^c \subseteq A_2^c \subseteq \cdots$, so by (1): $\Prob(\bigcup_{n=1}^\infty A_n^c) = \lim_{n \to \infty} \Prob(A_n^c)$. By De Morgan, $\bigcup A_n^c = (\bigcap A_n)^c$, giving $1 - \Prob(\bigcap A_n) = \lim(1 - \Prob(A_n))$, hence $\Prob(\bigcap A_n) = \lim \Prob(A_n)$.
 \end{proof}
 
 \begin{rlconnection}[Connection to RL]
