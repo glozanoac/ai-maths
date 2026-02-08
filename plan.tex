@@ -1,0 +1,251 @@
+\documentclass[a3paper,landscape]{article}
+\usepackage[margin=1cm]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shadows.blur,fit,backgrounds}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black}
+
+\pagestyle{empty}
+
+% ---- Phase Colors ----
+\definecolor{ph1}{HTML}{E8F5E9}  % green - math foundations
+\definecolor{ph1b}{HTML}{388E3C}
+\definecolor{ph2}{HTML}{E3F2FD}  % blue - core RL
+\definecolor{ph2b}{HTML}{1976D2}
+\definecolor{ph3}{HTML}{FFF3E0}  % orange - DL foundations
+\definecolor{ph3b}{HTML}{E65100}
+\definecolor{ph4}{HTML}{F3E5F5}  % purple - deep RL
+\definecolor{ph4b}{HTML}{7B1FA2}
+\definecolor{ph5}{HTML}{FFEBEE}  % red - MARL
+\definecolor{ph5b}{HTML}{C62828}
+\definecolor{ph6}{HTML}{E0F7FA}  % teal - aerospace
+\definecolor{ph6b}{HTML}{00695C}
+
+\begin{document}
+
+\begin{center}
+{\Huge\bfseries Curriculum Dependency Graph}\\[4pt]
+{\large A Rigorous Learning Path to Multi-Agent Deep Reinforcement Learning}
+\end{center}
+
+\vspace{0.3cm}
+
+\begin{center}
+\begin{tikzpicture}[
+    >={Stealth[length=5pt,width=4pt]},
+    node distance=1.2cm and 1.6cm,
+    every node/.style={align=center, font=\small},
+    phase1/.style={
+        rectangle, rounded corners=4pt, draw=ph1b, fill=ph1,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    phase2/.style={
+        rectangle, rounded corners=4pt, draw=ph2b, fill=ph2,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    phase3/.style={
+        rectangle, rounded corners=4pt, draw=ph3b, fill=ph3,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    phase4/.style={
+        rectangle, rounded corners=4pt, draw=ph4b, fill=ph4,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    phase5/.style={
+        rectangle, rounded corners=4pt, draw=ph5b, fill=ph5,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    phase6/.style={
+        rectangle, rounded corners=4pt, draw=ph6b, fill=ph6,
+        text width=3.2cm, minimum height=1.1cm,
+        blur shadow={shadow blur steps=3, shadow xshift=0.5pt, shadow yshift=-0.5pt}
+    },
+    depedge/.style={->, thick, color=#1!70!black},
+    depedge/.default={gray},
+    critical/.style={->, very thick, color=red!70!black},
+]
+
+% ================================================================
+% PHASE I: MATHEMATICAL FOUNDATIONS (top row)
+% ================================================================
+\node[phase1] (prob) {\textbf{1.1} Measure Theory\\[-1pt] \& Probability\\[-1pt] {\scriptsize Durrett Ch.\,1--6}\\[-1pt] {\scriptsize\bfseries 80\,h}};
+
+\node[phase1, right=1.8cm of prob] (func) {\textbf{1.2} Functional\\[-1pt] Analysis\\[-1pt] {\scriptsize Kreyszig Ch.\,1--5}\\[-1pt] {\scriptsize\bfseries 34\,h}};
+
+\node[phase1, right=1.8cm of func] (optim) {\textbf{1.3} Optimization\\[-1pt] Theory\\[-1pt] {\scriptsize Boyd; Nesterov; Borkar}\\[-1pt] {\scriptsize\bfseries 92\,h}};
+
+\node[phase1, right=1.8cm of optim] (game) {\textbf{1.4} Game\\[-1pt] Theory\\[-1pt] {\scriptsize Fudenberg \& Tirole}\\[-1pt] {\scriptsize\bfseries 34\,h}};
+
+% Phase I label
+\begin{scope}[on background layer]
+\node[draw=ph1b, fill=ph1!30, rounded corners=6pt, dashed,
+      fit=(prob)(func)(optim)(game),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph1b}]above left:Phase I --- Mathematical Foundations (240\,h)}] {};
+\end{scope}
+
+% ================================================================
+% PHASE II: CORE RL (second row)
+% ================================================================
+\node[phase2, below=2.2cm of prob] (mdp) {\textbf{2.1} Markov Decision\\[-1pt] Processes\\[-1pt] {\scriptsize Puterman Ch.\,2--8}\\[-1pt] {\scriptsize\bfseries 46\,h}};
+
+\node[phase2, right=1.8cm of mdp] (rlalg) {\textbf{2.2} RL Algorithms\\[-1pt] {\scriptsize S\&B + B\&T}\\[-1pt] {\scriptsize\bfseries 82\,h}};
+
+\node[phase2, right=1.8cm of rlalg] (pg) {\textbf{2.3} Policy Gradient\\[-1pt] Theory\\[-1pt] {\scriptsize Papers: PGT$\to$PPO}\\[-1pt] {\scriptsize\bfseries 28\,h}};
+
+\begin{scope}[on background layer]
+\node[draw=ph2b, fill=ph2!30, rounded corners=6pt, dashed,
+      fit=(mdp)(rlalg)(pg),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph2b}]above left:Phase II --- Core RL Theory (156\,h)}] {};
+\end{scope}
+
+% ================================================================
+% PHASE III: DEEP LEARNING FOUNDATIONS (second row, right)
+% ================================================================
+\node[phase3, right=1.8cm of pg] (nn) {\textbf{3.1} Neural Network\\[-1pt] Theory\\[-1pt] {\scriptsize Bach Ch.\,1--8}\\[-1pt] {\scriptsize\bfseries 42\,h}};
+
+\node[phase3, below=1.6cm of nn] (dlopt) {\textbf{3.2} Optimization\\[-1pt] for Deep Learning\\[-1pt] {\scriptsize SGD, Adam papers}\\[-1pt] {\scriptsize\bfseries 24\,h}};
+
+\begin{scope}[on background layer]
+\node[draw=ph3b, fill=ph3!30, rounded corners=6pt, dashed,
+      fit=(nn)(dlopt),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph3b}]above left:Phase III --- DL Foundations (66\,h)}] {};
+\end{scope}
+
+% ================================================================
+% PHASE IV: DEEP RL (third row)
+% ================================================================
+\node[phase4, below=2.2cm of mdp] (vdrl) {\textbf{4.1} Value-Based\\[-1pt] Deep RL\\[-1pt] {\scriptsize DQN, C51}\\[-1pt] {\scriptsize\bfseries 24\,h}};
+
+\node[phase4, right=1.8cm of vdrl] (pdrl) {\textbf{4.2} Policy-Based\\[-1pt] Deep RL\\[-1pt] {\scriptsize DDPG, TD3, SAC}\\[-1pt] {\scriptsize\bfseries 26\,h}};
+
+\node[phase4, right=1.8cm of pdrl] (mbrl) {\textbf{4.3} Model-Based\\[-1pt] RL\\[-1pt] {\scriptsize Dyna, MuZero, Dreamer}\\[-1pt] {\scriptsize\bfseries 18\,h}};
+
+\begin{scope}[on background layer]
+\node[draw=ph4b, fill=ph4!30, rounded corners=6pt, dashed,
+      fit=(vdrl)(pdrl)(mbrl),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph4b}]above left:Phase IV --- Deep RL (68\,h)}] {};
+\end{scope}
+
+% ================================================================
+% PHASE V: MULTI-AGENT RL (fourth row)
+% ================================================================
+\node[phase5, below=2.2cm of vdrl] (sgames) {\textbf{5.1} Stochastic\\[-1pt] Games\\[-1pt] {\scriptsize Shoham; Filar \& Vrieze}\\[-1pt] {\scriptsize\bfseries 42\,h}};
+
+\node[phase5, right=1.8cm of sgames] (coop) {\textbf{5.2} Cooperative\\[-1pt] MARL\\[-1pt] {\scriptsize VDN, QMIX, MAPPO}\\[-1pt] {\scriptsize\bfseries 28\,h}};
+
+\node[phase5, right=1.8cm of coop] (comp) {\textbf{5.3} Competitive \&\\[-1pt] Mixed MARL\\[-1pt] {\scriptsize MADDPG, LOLA, PSRO}\\[-1pt] {\scriptsize\bfseries 30\,h}};
+
+\node[phase5, right=1.8cm of comp] (mfg) {\textbf{5.4} Mean-Field\\[-1pt] Games\\[-1pt] {\scriptsize Carmona \& Delarue}\\[-1pt] {\scriptsize\bfseries 28\,h}};
+
+\node[phase5, below=1.5cm of $(coop)!0.5!(comp)$] (comm) {\textbf{5.5} Communication\\[-1pt] in MARL\\[-1pt] {\scriptsize CommNet, DIAL}\\[-1pt] {\scriptsize\bfseries 14\,h}};
+
+\begin{scope}[on background layer]
+\node[draw=ph5b, fill=ph5!30, rounded corners=6pt, dashed,
+      fit=(sgames)(coop)(comp)(mfg)(comm),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph5b}]above left:Phase V --- Multi-Agent RL (142\,h)}] {};
+\end{scope}
+
+% ================================================================
+% PHASE VI: AEROSPACE (bottom row)
+% ================================================================
+\node[phase6, below=2.5cm of sgames] (safe) {\textbf{6.1} Safety \&\\[-1pt] Constraints\\[-1pt] {\scriptsize Altman; CPO}\\[-1pt] {\scriptsize\bfseries 26\,h}};
+
+\node[phase6, right=1.8cm of safe] (pomdp) {\textbf{6.2} Partial\\[-1pt] Observability\\[-1pt] {\scriptsize Krishnamurthy}\\[-1pt] {\scriptsize\bfseries 20\,h}};
+
+\node[phase6, right=1.8cm of pomdp] (sim2r) {\textbf{6.3} Sim-to-Real\\[-1pt] Transfer\\[-1pt] {\scriptsize Domain randomization}\\[-1pt] {\scriptsize\bfseries 6\,h}};
+
+\node[phase6, right=1.8cm of sim2r] (multi) {\textbf{6.4} Multi-Vehicle\\[-1pt] Coordination\\[-1pt] {\scriptsize Formation, collision}\\[-1pt] {\scriptsize\bfseries 24\,h}};
+
+\begin{scope}[on background layer]
+\node[draw=ph6b, fill=ph6!30, rounded corners=6pt, dashed,
+      fit=(safe)(pomdp)(sim2r)(multi),
+      inner sep=8pt, label={[font=\footnotesize\bfseries\color{ph6b}]above left:Phase VI --- Aerospace Applications (76\,h)}] {};
+\end{scope}
+
+% ================================================================
+% DEPENDENCY ARROWS
+% ================================================================
+
+% --- Phase I → Phase II (critical path in bold red) ---
+\draw[critical] (prob) -- (mdp);
+\draw[critical] (func) -- (mdp);
+\draw[critical] (optim) -- (rlalg);
+
+% Phase I internal
+\draw[depedge=ph1b] (prob) -- (optim);
+
+% MDP → RL Algorithms → Policy Gradient
+\draw[critical] (mdp) -- (rlalg);
+\draw[critical] (rlalg) -- (pg);
+
+% --- Phase I → Phase III ---
+\draw[depedge=ph3b] (prob.south) -- ++(0,-0.4) -| (nn.north);
+\draw[depedge=ph3b] (optim) -- (nn);
+
+% Phase III internal
+\draw[depedge=ph3b] (nn) -- (dlopt);
+
+% --- Phase I/II/III → Phase IV ---
+\draw[critical] (rlalg) -- (vdrl);
+\draw[critical] (pg) -- (pdrl);
+\draw[depedge=ph4b] (dlopt) -- (pdrl);
+\draw[depedge=ph4b] (nn.south) -- ++(0,-0.5) -| (vdrl.north east);
+\draw[depedge=ph4b] (rlalg.south) -- ++(0,-0.4) -| (mbrl.north);
+
+% Phase IV internal
+\draw[depedge=ph4b] (vdrl) -- (pdrl);
+
+% --- Phase I → Phase V ---
+\draw[critical] (game.south) -- ++(0,-0.6) -| (sgames.north);
+
+% --- Phase IV → Phase V ---
+\draw[critical] (vdrl) -- (sgames);
+\draw[depedge=ph5b] (vdrl.south) -- ++(0,-0.4) -| (coop.north);
+\draw[depedge=ph5b] (pdrl.south) -- ++(0,-0.5) -| (comp.north);
+
+% Phase V internal
+\draw[critical] (sgames) -- (coop);
+\draw[critical] (sgames) -- (comp);
+\draw[depedge=ph5b] (prob.south) -- ++(0,-0.3) -| ([xshift=5pt]mfg.north);
+\draw[depedge=ph5b] (game.south) -- ++(0,-0.5) -| ([xshift=-5pt]mfg.north);
+\draw[depedge=ph5b] (coop) -- (comm);
+\draw[depedge=ph5b] (comp) -- (comm);
+
+% --- Phase IV/V → Phase VI ---
+\draw[depedge=ph6b] (pdrl.south) -- ++(0,-0.5) -| (safe.north);
+\draw[depedge=ph6b] (optim.south) -- ++(0,-0.3) -| ([xshift=5pt]safe.north);
+\draw[depedge=ph6b] (mdp.south) -- ++(0,-0.35) -| (pomdp.north);
+\draw[depedge=ph6b] (pdrl.south) -- ++(0,-0.5) -| (sim2r.north);
+\draw[depedge=ph6b] (mbrl.south) -- ++(0,-0.4) -| ([xshift=-5pt]sim2r.north);
+\draw[depedge=ph6b] (coop.south) -- ++(0,-0.35) -| (multi.north);
+\draw[depedge=ph6b] (safe.east) -- (pomdp.west);
+\draw[depedge=ph6b] (comm.south) -- ++(0,-0.35) -| ([xshift=5pt]multi.north);
+
+% ================================================================
+% LEGEND
+% ================================================================
+\node[anchor=north west, font=\small] at ([xshift=-0.5cm,yshift=-0.5cm]safe.south west) {
+\begin{tikzpicture}[every node/.style={font=\small}]
+    \draw[critical] (0,0) -- (1.2,0) node[right] {Critical path};
+    \draw[depedge] (0,-0.5) -- (1.2,-0.5) node[right] {Dependency};
+    \node[phase1, text width=1.2cm, minimum height=0.5cm] at (5.5,0) {\scriptsize Ph.\,I};
+    \node[phase2, text width=1.2cm, minimum height=0.5cm] at (7,0) {\scriptsize Ph.\,II};
+    \node[phase3, text width=1.2cm, minimum height=0.5cm] at (8.5,0) {\scriptsize Ph.\,III};
+    \node[phase4, text width=1.2cm, minimum height=0.5cm] at (5.5,-0.55) {\scriptsize Ph.\,IV};
+    \node[phase5, text width=1.2cm, minimum height=0.5cm] at (7,-0.55) {\scriptsize Ph.\,V};
+    \node[phase6, text width=1.2cm, minimum height=0.5cm] at (8.5,-0.55) {\scriptsize Ph.\,VI};
+    \node[anchor=west, font=\bfseries] at (10,0) {Total: 748\,h};
+    \node[anchor=west] at (10,-0.55) {102 sessions};
+\end{tikzpicture}
+};
+
+\end{tikzpicture}
+\end{center}
+
+\end{document}
