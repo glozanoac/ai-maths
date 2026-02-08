@@ -452,7 +452,15 @@ Every CDF $F$ satisfies:
 \begin{proof}
 \textbf{(1)} If $x \leq y$, then $\{X \leq x\} \subseteq \{X \leq y\}$, so $F(x) = \Prob(X \leq x) \leq \Prob(X \leq y) = F(y)$ by monotonicity of $\Prob$.
 
-\textbf{(2)} For the left limit, let $A_n = \{X \leq -n\}$. Then $A_1 \supseteq A_2 \supseteq \cdots$ and $\bigcap A_n = \emptyset$. By continuity from above (Theorem~\ref{thm:continuity}), $\lim F(-n) = \Prob(\emptyset) = 0$. The right limit is analogous with $A_n = \{X \leq n\}$ increasing to $\Omega$.
+\textbf{(2)} For the left limit, let $A_n = \{X \leq -n\} = \{\omega \in \Omega : X(\omega) \leq -n\}$.
+
+\emph{The $A_n$ are decreasing:} If $\omega \in A_{n+1}$, then $X(\omega) \leq -(n+1) < -n$, so $\omega \in A_n$. Hence $A_{n+1} \subseteq A_n$, giving $A_1 \supseteq A_2 \supseteq \cdots$.
+
+\emph{$\bigcap_{n=1}^\infty A_n = \emptyset$:} Suppose for contradiction that $\omega \in \bigcap_{n=1}^\infty A_n$. Then $\omega \in A_n$ for every $n \geq 1$, meaning $X(\omega) \leq -n$ for every $n \geq 1$. Since $X : \Omega \to \mathbb{R}$, the value $X(\omega)$ is a real number. But for any $x \in \mathbb{R}$, the Archimedean property of $\mathbb{R}$ guarantees the existence of $n_0 \in \mathbb{N}$ with $n_0 > -x$, i.e., $x > -n_0$. Taking $x = X(\omega)$, we get $X(\omega) > -n_0$, contradicting $X(\omega) \leq -n_0$. Therefore no such $\omega$ exists and $\bigcap_{n=1}^\infty A_n = \emptyset$.
+
+By continuity from above (Theorem~\ref{thm:continuity}), $\lim_{n \to \infty} F(-n) = \lim_{n \to \infty} \Prob(A_n) = \Prob(\bigcap A_n) = \Prob(\emptyset) = 0$.
+
+The right limit is analogous with $A_n = \{X \leq n\}$ increasing to $\Omega$ (every $\omega$ satisfies $X(\omega) \leq n$ for large enough $n$, again by the Archimedean property).
 
 \textbf{(3)} Let $y_n \downarrow x$. Then $\{X \leq y_n\} \supseteq \{X \leq y_{n+1}\}$ and $\bigcap_n \{X \leq y_n\} = \{X \leq x\}$. By continuity from above, $\lim F(y_n) = F(x)$.
 \end{proof}
