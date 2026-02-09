@@ -131,8 +131,8 @@ policy gradient methods, and stochastic approximation.
     \item \textbf{Independence} --- independent events, independent random variables, product of expectations.
     \item \textbf{Filtrations} --- natural filtration of an MDP, the Markov property and conditioning equivalence.
     \item \textbf{Martingale difference sequences} --- definitions, zero mean, partial sums form martingales, uncorrelated increments.
-    \item \textbf{Modes of convergence} --- almost sure, in probability, in $L^p$, in distribution, and their relationships.
     \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding, Jensen.
+    \item \textbf{Modes of convergence} --- almost sure, in probability, in $L^p$, in distribution, and their relationships.
     \item \textbf{Borel--Cantelli lemmas} --- the bridge between summable probabilities and almost sure convergence.
     \item \textbf{Limit theorems} --- weak and strong law of large numbers, central limit theorem, monotone and dominated convergence.
     \item \textbf{Markov chains} --- transition matrices, stationary distributions, ergodicity.
@@ -433,7 +433,7 @@ A random variable $Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$ for so
 \end{definition}
 
 \begin{remark}
-The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is why the pull-out property (Theorem~\ref{thm:pull_out}) holds: if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
+The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is the foundation of the pull-out property (Theorem~\ref{thm:pull_out} below): if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
 \end{remark}
 
 \subsection{Distribution Functions}
@@ -897,6 +897,25 @@ Let $\mu = \E[X]$. Expanding the square:
 \end{align}
 \end{proof}
 
+\begin{definition}[Covariance]
+\label{def:covariance}
+The \emph{covariance} of random variables $X$ and $Y$ with $\E[X^2], \E[Y^2] < \infty$ is
+\begin{equation}
+    \Cov(X, Y) = \E\!\left[(X - \E[X])(Y - \E[Y])\right] = \E[XY] - \E[X]\,\E[Y].
+    \label{eq:covariance_def}
+\end{equation}
+\end{definition}
+
+\begin{proof}[Proof of the computational formula]
+Expand the product $(X - \E[X])(Y - \E[Y]) = XY - X\,\E[Y] - \E[X]\,Y + \E[X]\,\E[Y]$.
+Taking expectations and using linearity:
+$\E[XY] - \E[X]\,\E[Y] - \E[X]\,\E[Y] + \E[X]\,\E[Y] = \E[XY] - \E[X]\,\E[Y]$.
+\end{proof}
+
+\begin{remark}
+$\Var(X) = \Cov(X, X)$, and $\Cov(X, Y) = 0$ when $X$ and $Y$ are independent (by Theorem~\ref{thm:product_exp} below, $\E[XY] = \E[X]\,\E[Y]$).
+\end{remark}
+
 \begin{definition}[Conditional Variance]
 \label{def:cond_var}
 The \emph{conditional variance} of $X$ given $Y$ is the random variable
@@ -1233,152 +1252,6 @@ This is \emph{the} central fact enabling all convergence proofs. In the stochast
 \end{tdconnection}
 
 %% ============================================================
-%% SECTION 10: MODES OF CONVERGENCE
-%% ============================================================
-\section{Modes of Convergence}
-\label{sec:convergence}
-
-This section defines four modes of convergence for sequences of random variables and establishes the relationships between them. Understanding these distinctions is essential for reading convergence theorems in stochastic approximation and TD learning.
-
-\subsection{Definitions}
-\label{subsec:conv_def}
-
-\begin{definition}[Almost Sure Convergence]
-\label{def:as_conv}
-A sequence $\{X_n\}$ \emph{converges almost surely} (a.s.) to $X$, written $X_n \cas X$, if:
-\begin{equation}
-    \Prob\!\left(\left\{\omega \in \Omega : \lim_{n \to \infty} X_n(\omega) = X(\omega)\right\}\right) = 1.
-    \label{eq:as_conv}
-\end{equation}
-Equivalently, $\Prob\!\left(\lim_{n \to \infty} X_n = X\right) = 1$.
-\end{definition}
-
-\begin{definition}[Convergence in Probability]
-\label{def:prob_conv}
-$\{X_n\}$ \emph{converges in probability} to $X$, written $X_n \cprob X$, if for every $\varepsilon > 0$:
-\begin{equation}
-    \lim_{n \to \infty} \Prob(|X_n - X| > \varepsilon) = 0.
-    \label{eq:prob_conv}
-\end{equation}
-\end{definition}
-
-\begin{definition}[Convergence in $L^p$]
-\label{def:lp_conv}
-For $p \geq 1$, $\{X_n\}$ \emph{converges in $L^p$} to $X$, written $X_n \clp{p} X$, if:
-\begin{equation}
-    \lim_{n \to \infty} \E\!\left[|X_n - X|^p\right] = 0.
-    \label{eq:lp_conv}
-\end{equation}
-The case $p = 2$ is called \emph{convergence in mean square}.
-\end{definition}
-
-\begin{definition}[Convergence in Distribution]
-\label{def:dist_conv}
-$\{X_n\}$ \emph{converges in distribution} to $X$, written $X_n \cdist X$, if:
-\begin{equation}
-    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
-    \label{eq:dist_conv}
-\end{equation}
-at every point $x$ where $F_X$ is continuous.
-\end{definition}
-
-\begin{rlconnection}[Connection to RL]
-Almost sure convergence is the gold standard in stochastic approximation: all major TD convergence theorems (Theorem 4.2, 5.1, 5.2 in the TD article) establish $V_t(s) \cas V^\pi(s)$ or $Q_t(s,a) \cas Q^*(s,a)$. Convergence in mean square ($L^2$) appears in the linear function approximation setting (Theorem 6.2). Convergence in distribution is used in the central limit theorem to characterize the rate of convergence.
-\end{rlconnection}
-
-\subsection{Relationships Between Modes}
-\label{subsec:conv_relations}
-
-\begin{keyresult}[Convergence Implications]
-\begin{theorem}[Hierarchy of Convergence Modes]
-\label{thm:conv_hierarchy}
-The following implications hold:
-\begin{equation}
-    X_n \cas X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
-    \label{eq:hierarchy_1}
-\end{equation}
-\begin{equation}
-    X_n \clp{p} X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
-    \label{eq:hierarchy_2}
-\end{equation}
-No other implications hold in general between these four modes.
-\end{theorem}
-\end{keyresult}
-
-We prove each implication separately.
-
-\begin{theorem}[$L^p$ Convergence Implies Convergence in Probability]
-\label{thm:lp_to_prob}
-If $X_n \clp{p} X$ for some $p \geq 1$, then $X_n \cprob X$.
-\end{theorem}
-
-\begin{proof}
-This follows from Markov's inequality (Theorem~\ref{thm:markov}, proved in Section~\ref{sec:inequalities}). For any $\varepsilon > 0$:
-\begin{equation}
-    \Prob(|X_n - X| > \varepsilon) = \Prob(|X_n - X|^p > \varepsilon^p) \leq \frac{\E[|X_n - X|^p]}{\varepsilon^p} \to 0
-    \label{eq:lp_to_prob_proof}
-\end{equation}
-as $n \to \infty$.
-\end{proof}
-
-\begin{theorem}[Almost Sure Convergence Implies Convergence in Probability]
-\label{thm:as_to_prob}
-If $X_n \cas X$, then $X_n \cprob X$.
-\end{theorem}
-
-\begin{proof}
-Fix $\varepsilon > 0$. Define $A_n = \{|X_n - X| > \varepsilon\}$ and $B_N = \bigcup_{n=N}^\infty A_n = \{|X_n - X| > \varepsilon \text{ for some } n \geq N\}$.
-
-The sets $B_N$ are decreasing: $B_1 \supseteq B_2 \supseteq \cdots$, and
-\begin{equation}
-    \bigcap_{N=1}^\infty B_N = \{\omega : |X_n(\omega) - X(\omega)| > \varepsilon \text{ for infinitely many } n\}.
-\end{equation}
-If $X_n(\omega) \to X(\omega)$, then for large enough $n$, $|X_n(\omega) - X(\omega)| \leq \varepsilon$, so $\omega \notin \bigcap B_N$. Since a.s.\ convergence means the set of $\omega$ where $X_n(\omega) \to X(\omega)$ has probability $1$, we get $\Prob(\bigcap B_N) = 0$.
-
-By continuity from above (Theorem~\ref{thm:continuity}):
-\begin{equation}
-    0 = \Prob\!\left(\bigcap_{N=1}^\infty B_N\right) = \lim_{N \to \infty} \Prob(B_N) \geq \lim_{N \to \infty} \Prob(A_N).
-\end{equation}
-Since $\Prob(A_N) \geq 0$, we conclude $\Prob(A_N) \to 0$, which is $X_n \cprob X$.
-\end{proof}
-
-\begin{remark}[Important: Converse Fails]
-\label{rem:conv_counterexample}
-Convergence in probability does \emph{not} imply almost sure convergence. The standard counterexample is the ``typewriter sequence'': on $\Omega = [0,1]$ with Lebesgue measure, define $X_n = \indicator_{[j/k,\, (j+1)/k]}$ where $n$ is the unique integer with $n = k(k-1)/2 + j$ for $0 \leq j < k$. Then $\Prob(X_n = 1) = 1/k \to 0$, so $X_n \cprob 0$, but for every $\omega \in [0,1]$, $X_n(\omega) = 1$ infinitely often, so $X_n$ does not converge to $0$ for any $\omega$.
-\end{remark}
-
-\begin{theorem}[Convergence in Probability Implies Convergence in Distribution]
-\label{thm:prob_to_dist}
-If $X_n \cprob X$, then $X_n \cdist X$.
-\end{theorem}
-
-\begin{proof}
-Fix $x$ where $F_X$ is continuous. For any $\varepsilon > 0$:
-\begin{align}
-    F_{X_n}(x) &= \Prob(X_n \leq x) \nonumber\\
-    &= \Prob(X_n \leq x,\, X \leq x + \varepsilon) + \Prob(X_n \leq x,\, X > x + \varepsilon) \nonumber\\
-    &\leq \Prob(X \leq x + \varepsilon) + \Prob(|X_n - X| > \varepsilon) \nonumber\\
-    &= F_X(x + \varepsilon) + \Prob(|X_n - X| > \varepsilon).
-\end{align}
-Similarly, $F_{X_n}(x) \geq F_X(x - \varepsilon) - \Prob(|X_n - X| > \varepsilon)$. Taking $n \to \infty$:
-\begin{equation}
-    F_X(x - \varepsilon) \leq \liminf_n F_{X_n}(x) \leq \limsup_n F_{X_n}(x) \leq F_X(x + \varepsilon).
-\end{equation}
-Since $F_X$ is continuous at $x$, letting $\varepsilon \to 0$ gives $\lim_n F_{X_n}(x) = F_X(x)$.
-\end{proof}
-
-\begin{theorem}[Almost Sure Convergence Does Not Imply $L^p$ and Vice Versa]
-\label{thm:as_lp_no_implication}
-Neither almost sure convergence implies $L^p$ convergence, nor vice versa (for any $p \geq 1$).
-\end{theorem}
-
-\begin{proof}
-\textbf{a.s.\ $\not\Rightarrow$ $L^p$:} Let $X_n = n \cdot \indicator_{(0, 1/n)}$ on $[0,1]$ with Lebesgue measure. For any $\omega > 0$, eventually $1/n < \omega$, so $X_n(\omega) = 0$. Thus $X_n \cas 0$. But $\E[|X_n|] = n \cdot (1/n) = 1 \not\to 0$.
-
-\textbf{$L^p$ $\not\Rightarrow$ a.s.:} The typewriter sequence from Remark~\ref{rem:conv_counterexample} satisfies $\E[|X_n|^p] = 1/k \to 0$, so $X_n \clp{p} 0$, but $X_n \not\cas 0$.
-\end{proof}
-
-%% ============================================================
 %% SECTION 6: PROBABILITY INEQUALITIES
 %% ============================================================
 \section{Probability Inequalities}
@@ -1647,6 +1520,152 @@ Jensen's inequality is used in Appendix B of the article to prove the contractio
 \]
 This proves $\mathbf{P}_\pi$ is non-expansive in the $d^\pi$-weighted norm, which in turn shows the matrix $\mathbf{A}$ in the linear TD fixed-point equation is negative definite.
 \end{tdconnection}
+
+%% ============================================================
+%% SECTION 10: MODES OF CONVERGENCE
+%% ============================================================
+\section{Modes of Convergence}
+\label{sec:convergence}
+
+This section defines four modes of convergence for sequences of random variables and establishes the relationships between them. Understanding these distinctions is essential for reading convergence theorems in stochastic approximation and TD learning.
+
+\subsection{Definitions}
+\label{subsec:conv_def}
+
+\begin{definition}[Almost Sure Convergence]
+\label{def:as_conv}
+A sequence $\{X_n\}$ \emph{converges almost surely} (a.s.) to $X$, written $X_n \cas X$, if:
+\begin{equation}
+    \Prob\!\left(\left\{\omega \in \Omega : \lim_{n \to \infty} X_n(\omega) = X(\omega)\right\}\right) = 1.
+    \label{eq:as_conv}
+\end{equation}
+Equivalently, $\Prob\!\left(\lim_{n \to \infty} X_n = X\right) = 1$.
+\end{definition}
+
+\begin{definition}[Convergence in Probability]
+\label{def:prob_conv}
+$\{X_n\}$ \emph{converges in probability} to $X$, written $X_n \cprob X$, if for every $\varepsilon > 0$:
+\begin{equation}
+    \lim_{n \to \infty} \Prob(|X_n - X| > \varepsilon) = 0.
+    \label{eq:prob_conv}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Convergence in $L^p$]
+\label{def:lp_conv}
+For $p \geq 1$, $\{X_n\}$ \emph{converges in $L^p$} to $X$, written $X_n \clp{p} X$, if:
+\begin{equation}
+    \lim_{n \to \infty} \E\!\left[|X_n - X|^p\right] = 0.
+    \label{eq:lp_conv}
+\end{equation}
+The case $p = 2$ is called \emph{convergence in mean square}.
+\end{definition}
+
+\begin{definition}[Convergence in Distribution]
+\label{def:dist_conv}
+$\{X_n\}$ \emph{converges in distribution} to $X$, written $X_n \cdist X$, if:
+\begin{equation}
+    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
+    \label{eq:dist_conv}
+\end{equation}
+at every point $x$ where $F_X$ is continuous.
+\end{definition}
+
+\begin{rlconnection}[Connection to RL]
+Almost sure convergence is the gold standard in stochastic approximation: all major TD convergence theorems (Theorem 4.2, 5.1, 5.2 in the TD article) establish $V_t(s) \cas V^\pi(s)$ or $Q_t(s,a) \cas Q^*(s,a)$. Convergence in mean square ($L^2$) appears in the linear function approximation setting (Theorem 6.2). Convergence in distribution is used in the central limit theorem to characterize the rate of convergence.
+\end{rlconnection}
+
+\subsection{Relationships Between Modes}
+\label{subsec:conv_relations}
+
+\begin{keyresult}[Convergence Implications]
+\begin{theorem}[Hierarchy of Convergence Modes]
+\label{thm:conv_hierarchy}
+The following implications hold:
+\begin{equation}
+    X_n \cas X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
+    \label{eq:hierarchy_1}
+\end{equation}
+\begin{equation}
+    X_n \clp{p} X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
+    \label{eq:hierarchy_2}
+\end{equation}
+No other implications hold in general between these four modes.
+\end{theorem}
+\end{keyresult}
+
+We prove each implication separately.
+
+\begin{theorem}[$L^p$ Convergence Implies Convergence in Probability]
+\label{thm:lp_to_prob}
+If $X_n \clp{p} X$ for some $p \geq 1$, then $X_n \cprob X$.
+\end{theorem}
+
+\begin{proof}
+This follows from Markov's inequality (Theorem~\ref{thm:markov}). For any $\varepsilon > 0$:
+\begin{equation}
+    \Prob(|X_n - X| > \varepsilon) = \Prob(|X_n - X|^p > \varepsilon^p) \leq \frac{\E[|X_n - X|^p]}{\varepsilon^p} \to 0
+    \label{eq:lp_to_prob_proof}
+\end{equation}
+as $n \to \infty$.
+\end{proof}
+
+\begin{theorem}[Almost Sure Convergence Implies Convergence in Probability]
+\label{thm:as_to_prob}
+If $X_n \cas X$, then $X_n \cprob X$.
+\end{theorem}
+
+\begin{proof}
+Fix $\varepsilon > 0$. Define $A_n = \{|X_n - X| > \varepsilon\}$ and $B_N = \bigcup_{n=N}^\infty A_n = \{|X_n - X| > \varepsilon \text{ for some } n \geq N\}$.
+
+The sets $B_N$ are decreasing: $B_1 \supseteq B_2 \supseteq \cdots$, and
+\begin{equation}
+    \bigcap_{N=1}^\infty B_N = \{\omega : |X_n(\omega) - X(\omega)| > \varepsilon \text{ for infinitely many } n\}.
+\end{equation}
+If $X_n(\omega) \to X(\omega)$, then for large enough $n$, $|X_n(\omega) - X(\omega)| \leq \varepsilon$, so $\omega \notin \bigcap B_N$. Since a.s.\ convergence means the set of $\omega$ where $X_n(\omega) \to X(\omega)$ has probability $1$, we get $\Prob(\bigcap B_N) = 0$.
+
+By continuity from above (Theorem~\ref{thm:continuity}):
+\begin{equation}
+    0 = \Prob\!\left(\bigcap_{N=1}^\infty B_N\right) = \lim_{N \to \infty} \Prob(B_N) \geq \lim_{N \to \infty} \Prob(A_N).
+\end{equation}
+Since $\Prob(A_N) \geq 0$, we conclude $\Prob(A_N) \to 0$, which is $X_n \cprob X$.
+\end{proof}
+
+\begin{remark}[Important: Converse Fails]
+\label{rem:conv_counterexample}
+Convergence in probability does \emph{not} imply almost sure convergence. The standard counterexample is the ``typewriter sequence'': on $\Omega = [0,1]$ with Lebesgue measure, define $X_n = \indicator_{[j/k,\, (j+1)/k]}$ where $n$ is the unique integer with $n = k(k-1)/2 + j$ for $0 \leq j < k$. Then $\Prob(X_n = 1) = 1/k \to 0$, so $X_n \cprob 0$, but for every $\omega \in [0,1]$, $X_n(\omega) = 1$ infinitely often, so $X_n$ does not converge to $0$ for any $\omega$.
+\end{remark}
+
+\begin{theorem}[Convergence in Probability Implies Convergence in Distribution]
+\label{thm:prob_to_dist}
+If $X_n \cprob X$, then $X_n \cdist X$.
+\end{theorem}
+
+\begin{proof}
+Fix $x$ where $F_X$ is continuous. For any $\varepsilon > 0$:
+\begin{align}
+    F_{X_n}(x) &= \Prob(X_n \leq x) \nonumber\\
+    &= \Prob(X_n \leq x,\, X \leq x + \varepsilon) + \Prob(X_n \leq x,\, X > x + \varepsilon) \nonumber\\
+    &\leq \Prob(X \leq x + \varepsilon) + \Prob(|X_n - X| > \varepsilon) \nonumber\\
+    &= F_X(x + \varepsilon) + \Prob(|X_n - X| > \varepsilon).
+\end{align}
+Similarly, $F_{X_n}(x) \geq F_X(x - \varepsilon) - \Prob(|X_n - X| > \varepsilon)$. Taking $n \to \infty$:
+\begin{equation}
+    F_X(x - \varepsilon) \leq \liminf_n F_{X_n}(x) \leq \limsup_n F_{X_n}(x) \leq F_X(x + \varepsilon).
+\end{equation}
+Since $F_X$ is continuous at $x$, letting $\varepsilon \to 0$ gives $\lim_n F_{X_n}(x) = F_X(x)$.
+\end{proof}
+
+\begin{theorem}[Almost Sure Convergence Does Not Imply $L^p$ and Vice Versa]
+\label{thm:as_lp_no_implication}
+Neither almost sure convergence implies $L^p$ convergence, nor vice versa (for any $p \geq 1$).
+\end{theorem}
+
+\begin{proof}
+\textbf{a.s.\ $\not\Rightarrow$ $L^p$:} Let $X_n = n \cdot \indicator_{(0, 1/n)}$ on $[0,1]$ with Lebesgue measure. For any $\omega > 0$, eventually $1/n < \omega$, so $X_n(\omega) = 0$. Thus $X_n \cas 0$. But $\E[|X_n|] = n \cdot (1/n) = 1 \not\to 0$.
+
+\textbf{$L^p$ $\not\Rightarrow$ a.s.:} The typewriter sequence from Remark~\ref{rem:conv_counterexample} satisfies $\E[|X_n|^p] = 1/k \to 0$, so $X_n \clp{p} 0$, but $X_n \not\cas 0$.
+\end{proof}
 
 %% ============================================================
 %% SECTION 12: BOREL-CANTELLI LEMMAS
