@@ -8,6 +8,8 @@ Most AI/ML resources fall into one of two categories: applied tutorials that ski
 
 The goal is not to replace textbooks but to distill, unify, and extend their key results into a single coherent reference — one where every theorem has a proof, every algorithm has a convergence analysis, and every approximation has explicit error bounds.
 
+The ultimate intent is to implement every algorithm from scratch — not to call opaque library functions, but to write each update rule, each gradient computation, and each optimization loop ourselves, grounded in the theory developed here. Understanding the mathematics is what makes that possible: when you know *exactly* what an algorithm does and *why* it converges, you can build it yourself, debug it yourself, and extend it yourself, without depending on frameworks that hide the details.
+
 ## Approach
 
 Each document follows a strict methodology:
