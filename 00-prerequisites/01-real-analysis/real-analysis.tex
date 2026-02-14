@@ -1,0 +1,1625 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Real Analysis Review}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+
+% ---- Title ----
+\title{\textbf{Real Analysis Review}\\[10pt]
+\large Sequences, Continuity, and Convergence\\[5pt]
+\normalsize Phase 0: Prerequisites Review $\mid$ Document 1 of 3\\
+\normalsize Primary texts: Rudin, \emph{Principles of Mathematical Analysis}; Abbott, \emph{Understanding Analysis}}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document is a self-contained refresher of undergraduate real analysis, aimed at
+readers who have seen this material before but need the key results recalled with full
+formal statements and complete proofs. The selection of topics is driven entirely by
+what is needed for measure theory, probability, and functional analysis in Phase~01
+and beyond: the completeness of~$\R$, convergence of sequences and series, topology
+of the real line, continuity, differentiation, Riemann integration, sequences of
+functions, and metric spaces. Every theorem is proved. The reader who works through
+this review will be fully prepared for the construction of $\sigma$-algebras, measures,
+and the Lebesgue integral.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Introduction}
+\label{sec:introduction}
+
+This document is not a first course in real analysis. It is a focused refresher for
+readers who have taken undergraduate analysis but find the details ``dusty.'' Our goal
+is to recall --- with full proofs --- exactly the results that will be needed when we
+move to measure theory and beyond.
+
+Here is what we cover and why each topic matters:
+
+\begin{enumerate}[nosep]
+    \item \textbf{The real number system} (Section~\ref{sec:real_numbers}). The
+    completeness axiom (least upper bound property) is the single most important
+    property of~$\R$. It drives the construction of Lebesgue measure, ensures the
+    existence of suprema needed to define outer measures, and underlies every
+    convergence theorem in the curriculum.
+
+    \item \textbf{Sequences and series} (Section~\ref{sec:sequences_series}). The
+    monotone convergence theorem for sequences, Bolzano--Weierstrass, Cauchy
+    completeness, and $\limsup/\liminf$ are the workhorses of measure-theoretic
+    arguments. The $\limsup$ of a sequence of sets, for instance, is built directly
+    from the $\limsup$ concept reviewed here.
+
+    \item \textbf{Topology of the real line} (Section~\ref{sec:topology}). Open sets,
+    closed sets, and compactness are the language in which $\sigma$-algebras and Borel
+    sets are defined. The Heine--Borel theorem characterizes compact subsets of~$\R^n$.
+
+    \item \textbf{Continuity} (Section~\ref{sec:continuity}). Continuous functions
+    on compact sets attain their bounds and are uniformly continuous --- facts used
+    repeatedly in measure theory and functional analysis.
+
+    \item \textbf{Differentiation} (Section~\ref{sec:differentiation}). The mean value
+    theorem and Taylor's theorem are essential for optimization theory and appear in
+    many $\varepsilon$-$\delta$ arguments throughout the curriculum.
+
+    \item \textbf{Riemann integration} (Section~\ref{sec:riemann}). Understanding the
+    Riemann integral --- and its limitations --- motivates the passage to the Lebesgue
+    integral in Phase~01.
+
+    \item \textbf{Sequences and series of functions}
+    (Section~\ref{sec:function_sequences}). Uniform convergence and its interchange
+    theorems are the starting point; the dominated and monotone convergence theorems
+    of measure theory vastly generalize these results.
+
+    \item \textbf{Metric spaces} (Section~\ref{sec:metric_spaces}). The abstract
+    setting of metric spaces is where functional analysis begins. The contraction
+    mapping theorem proved here is directly used to establish convergence of value
+    iteration in reinforcement learning.
+\end{enumerate}
+
+\begin{rlconnection}[From Real Analysis to Measure Theory]
+Measure theory generalizes Riemann integration to handle limits of functions that
+Riemann cannot. The concepts in this review --- $\sup/\inf$, sequences, limits,
+open/closed sets, compactness --- are the raw material from which $\sigma$-algebras,
+measures, and Lebesgue integration are built.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 2: THE REAL NUMBER SYSTEM
+%% ============================================================
+\section{The Real Number System}
+\label{sec:real_numbers}
+
+\subsection{Ordered Field Axioms}
+\label{subsec:ordered_field}
+
+We take the real numbers $\R$ as given, satisfying the following axioms.
+
+\begin{definition}[Ordered Field]
+\label{def:ordered_field}
+The real numbers $\R$ form an \emph{ordered field}: a set equipped with
+operations $+$ and $\cdot$ and a total order $\le$ satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item \textbf{Field axioms.} $(\R, +, \cdot)$ is a field: addition and
+    multiplication are commutative, associative, and distributive, with identity
+    elements $0$ and $1$ respectively, additive inverses for all elements, and
+    multiplicative inverses for all nonzero elements.
+    \item \textbf{Order axioms.} $\le$ is a total order compatible with the field
+    operations: if $a \le b$ then $a + c \le b + c$ for all $c$; if $0 \le a$ and
+    $0 \le b$ then $0 \le ab$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:rational_field}
+The rationals $\Q$ also form an ordered field. What distinguishes $\R$ from $\Q$
+is the completeness axiom below.
+\end{remark}
+
+\subsection{The Completeness Axiom}
+\label{subsec:completeness}
+
+\begin{definition}[Upper Bound, Supremum]
+\label{def:supremum}
+Let $S \subseteq \R$ be nonempty.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item An element $u \in \R$ is an \emph{upper bound} for $S$ if $s \le u$
+    for every $s \in S$. We say $S$ is \emph{bounded above} if such a $u$ exists.
+    \item An element $\alpha \in \R$ is the \emph{supremum} (or \emph{least upper
+    bound}) of $S$, written $\alpha = \sup S$, if:
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item $\alpha$ is an upper bound for $S$, and
+        \item if $u$ is any upper bound for $S$, then $\alpha \le u$.
+    \end{enumerate}
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Lower Bound, Infimum]
+\label{def:infimum}
+Dually, $\ell \in \R$ is a \emph{lower bound} for $S$ if $\ell \le s$ for every
+$s \in S$. The \emph{infimum} $\inf S$ is the greatest lower bound.
+\end{definition}
+
+\begin{remark}
+\label{rem:sup_characterization}
+The supremum $\alpha = \sup S$ is characterized by: $\alpha$ is an upper bound
+for $S$, and for every $\varepsilon > 0$ there exists $s \in S$ with
+$s > \alpha - \varepsilon$. This characterization is used constantly.
+\end{remark}
+
+\begin{theorem}[Completeness Axiom / Least Upper Bound Property]
+\label{thm:completeness}
+Every nonempty subset of\/ $\R$ that is bounded above has a supremum in~$\R$.
+\end{theorem}
+
+This is an \emph{axiom}: it is not proved from more basic principles, but rather
+is the defining property that distinguishes $\R$ from $\Q$.
+
+\begin{corollary}[Greatest Lower Bound Property]
+\label{cor:glb}
+Every nonempty subset of\/ $\R$ that is bounded below has an infimum in~$\R$.
+\end{corollary}
+
+\begin{proof}
+Let $S \subseteq \R$ be nonempty and bounded below. Define
+$-S = \{-s : s \in S\}$. Then $-S$ is nonempty and bounded above
+(if $\ell$ is a lower bound for $S$, then $-\ell$ is an upper bound for $-S$).
+By the completeness axiom, $\alpha = \sup(-S)$ exists. We claim $\inf S = -\alpha$.
+
+Since $\alpha$ is an upper bound for $-S$, we have $-s \le \alpha$ for all $s \in S$,
+hence $s \ge -\alpha$ for all $s \in S$, so $-\alpha$ is a lower bound for $S$.
+If $\ell$ is any lower bound for $S$, then $-\ell$ is an upper bound for $-S$,
+so $\alpha \le -\ell$, hence $\ell \le -\alpha$. Thus $-\alpha$ is the greatest
+lower bound.
+\end{proof}
+
+\subsection{Archimedean Property and Density of Rationals}
+\label{subsec:archimedean}
+
+\begin{theorem}[Archimedean Property]
+\label{thm:archimedean}
+For every $x \in \R$, there exists $n \in \N$ with $n > x$.
+Equivalently, for every $\varepsilon > 0$ and every $M > 0$, there exists
+$n \in \N$ with $n\varepsilon > M$.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that $\N$ is bounded above in $\R$. By the completeness
+axiom, $\alpha = \sup \N$ exists. Then $\alpha - 1$ is not an upper bound for $\N$
+(since $\alpha$ is the \emph{least} upper bound), so there exists $m \in \N$ with
+$m > \alpha - 1$. But then $m + 1 > \alpha$ with $m + 1 \in \N$, contradicting the
+fact that $\alpha$ is an upper bound for $\N$.
+
+The second formulation follows by applying the first to $x = M/\varepsilon$.
+\end{proof}
+
+\begin{theorem}[Density of Rationals]
+\label{thm:density_Q}
+For every $a, b \in \R$ with $a < b$, there exists $q \in \Q$ with $a < q < b$.
+\end{theorem}
+
+\begin{proof}
+By the Archimedean property, choose $n \in \N$ with $n(b - a) > 1$, i.e.,
+$nb - na > 1$. Again by the Archimedean property, the sets
+$\{k \in \Z : k > na\}$ and $\{k \in \Z : k < na\}$ are both nonempty, so we may
+define $m = \min\{k \in \Z : k > na\}$ (this minimum exists because the positive
+integers exceeding $na$ form a nonempty subset of $\N$, which has a least element
+by the well-ordering principle). Then $m > na$ and $m - 1 \le na$, so
+$m \le na + 1 < nb$ (since $nb - na > 1$). Setting $q = m/n$ gives
+$a < q < b$ with $q \in \Q$.
+\end{proof}
+
+\begin{theorem}[Nested Intervals Property]
+\label{thm:nested_intervals}
+Let $I_n = [a_n, b_n]$ be a sequence of closed bounded intervals with
+$I_1 \supseteq I_2 \supseteq I_3 \supseteq \cdots$. Then
+$\bigcap_{n=1}^\infty I_n \neq \emptyset$.
+\end{theorem}
+
+\begin{proof}
+The nesting condition gives $a_1 \le a_2 \le \cdots$ and
+$b_1 \ge b_2 \ge \cdots$ with $a_n \le b_n$ for all $n$. In particular,
+$a_n \le b_1$ for all $n$, so the set $\{a_n : n \in \N\}$ is bounded above.
+By the completeness axiom, $\alpha = \sup\{a_n : n \in \N\}$ exists.
+
+For every $n$, we have $a_n \le \alpha$ (since $\alpha$ is an upper bound) and
+$\alpha \le b_n$ (since $b_n$ is an upper bound for $\{a_k\}$: for $k \le n$,
+$a_k \le a_n \le b_n$; for $k > n$, $a_k \le b_k \le b_n$). Therefore
+$\alpha \in [a_n, b_n]$ for every $n$, giving
+$\alpha \in \bigcap_{n=1}^\infty I_n$.
+\end{proof}
+
+\begin{remark}
+\label{rem:nested_open}
+The conclusion fails for open intervals: $\bigcap_{n=1}^\infty (0, 1/n) = \emptyset$.
+It also fails for unbounded closed sets: $\bigcap_{n=1}^\infty [n, \infty) = \emptyset$.
+Both closure and boundedness are essential.
+\end{remark}
+
+%% ============================================================
+%% SECTION 3: SEQUENCES AND SERIES
+%% ============================================================
+\section{Sequences and Series}
+\label{sec:sequences_series}
+
+\subsection{Convergence of Sequences}
+\label{subsec:seq_convergence}
+
+\begin{definition}[Convergence]
+\label{def:convergence}
+A sequence $(a_n)_{n=1}^\infty$ in $\R$ \emph{converges} to $L \in \R$, written
+$\lim_{n \to \infty} a_n = L$ or $a_n \to L$, if for every $\varepsilon > 0$
+there exists $N \in \N$ such that $|a_n - L| < \varepsilon$ for all $n \ge N$.
+A sequence that does not converge is \emph{divergent}.
+\end{definition}
+
+\begin{theorem}[Uniqueness of Limits]
+\label{thm:unique_limit}
+If $a_n \to L$ and $a_n \to M$, then $L = M$.
+\end{theorem}
+
+\begin{proof}
+Let $\varepsilon > 0$. There exist $N_1, N_2 \in \N$ such that
+$|a_n - L| < \varepsilon/2$ for $n \ge N_1$ and $|a_n - M| < \varepsilon/2$
+for $n \ge N_2$. For $n \ge \max(N_1, N_2)$:
+\[
+|L - M| \le |L - a_n| + |a_n - M| < \frac{\varepsilon}{2} + \frac{\varepsilon}{2}
+= \varepsilon.
+\]
+Since $|L - M| < \varepsilon$ for every $\varepsilon > 0$, we conclude $L = M$.
+\end{proof}
+
+\begin{theorem}[Algebraic Limit Theorems]
+\label{thm:alg_limit}
+Suppose $a_n \to a$ and $b_n \to b$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $a_n + b_n \to a + b$.
+    \item $a_n \cdot b_n \to a \cdot b$.
+    \item If $b \neq 0$, then $a_n / b_n \to a / b$ (for $n$ large enough that
+    $b_n \neq 0$).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+We prove~(ii); the proofs of~(i) and~(iii) are similar.
+
+Since $(a_n)$ converges, it is bounded: there exists $M > 0$ with $|a_n| \le M$
+for all $n$. Let $\varepsilon > 0$. Choose $N_1$ so that
+$|a_n - a| < \varepsilon/(2(|b| + 1))$ for $n \ge N_1$, and $N_2$ so that
+$|b_n - b| < \varepsilon/(2M)$ for $n \ge N_2$. For $n \ge \max(N_1, N_2)$:
+\begin{align*}
+|a_n b_n - ab|
+&= |a_n b_n - a_n b + a_n b - ab| \\
+&\le |a_n||b_n - b| + |b||a_n - a| \\
+&\le M \cdot \frac{\varepsilon}{2M} + |b| \cdot \frac{\varepsilon}{2(|b|+1)} \\
+&< \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon. \qedhere
+\end{align*}
+\end{proof}
+
+\subsection{Monotone Convergence and Bolzano--Weierstrass}
+\label{subsec:monotone_bw}
+
+\begin{theorem}[Monotone Convergence Theorem for Sequences]
+\label{thm:mct_seq}
+Every bounded monotone sequence converges. Specifically:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item If $(a_n)$ is increasing and bounded above, then
+    $a_n \to \sup\{a_n : n \in \N\}$.
+    \item If $(a_n)$ is decreasing and bounded below, then
+    $a_n \to \inf\{a_n : n \in \N\}$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+We prove~(i). Let $\alpha = \sup\{a_n : n \in \N\}$, which exists by the
+completeness axiom. Let $\varepsilon > 0$. Since $\alpha - \varepsilon$ is not
+an upper bound for $\{a_n\}$, there exists $N$ with $a_N > \alpha - \varepsilon$.
+Since $(a_n)$ is increasing, for $n \ge N$:
+\[
+\alpha - \varepsilon < a_N \le a_n \le \alpha,
+\]
+so $|a_n - \alpha| < \varepsilon$. Part~(ii) follows by applying~(i) to $(-a_n)$.
+\end{proof}
+
+\begin{theorem}[Bolzano--Weierstrass]
+\label{thm:bolzano_weierstrass}
+Every bounded sequence in $\R$ has a convergent subsequence.
+\end{theorem}
+
+\begin{proof}
+Let $(a_n)$ be bounded. We construct a monotone subsequence, which converges by
+Theorem~\ref{thm:mct_seq}.
+
+Call index $n$ a \emph{peak} if $a_n \ge a_m$ for all $m > n$. There are two cases:
+
+\textbf{Case 1:} There are infinitely many peaks $n_1 < n_2 < n_3 < \cdots$.
+Then $a_{n_1} \ge a_{n_2} \ge a_{n_3} \ge \cdots$ is a decreasing subsequence.
+It is bounded (since $(a_n)$ is bounded), hence convergent by
+Theorem~\ref{thm:mct_seq}.
+
+\textbf{Case 2:} There are only finitely many peaks. Let $N$ be larger than
+all peak indices. Then no index $n \ge N$ is a peak, meaning for every $n \ge N$
+there exists $m > n$ with $a_m > a_n$. Starting with $n_1 = N$, inductively choose
+$n_{k+1} > n_k$ with $a_{n_{k+1}} > a_{n_k}$. This gives a strictly increasing
+subsequence. It is bounded above (since $(a_n)$ is bounded), hence convergent by
+Theorem~\ref{thm:mct_seq}.
+\end{proof}
+
+\subsection{Cauchy Sequences and Completeness}
+\label{subsec:cauchy}
+
+\begin{definition}[Cauchy Sequence]
+\label{def:cauchy}
+A sequence $(a_n)$ in $\R$ is \emph{Cauchy} if for every $\varepsilon > 0$ there
+exists $N \in \N$ such that $|a_n - a_m| < \varepsilon$ for all $n, m \ge N$.
+\end{definition}
+
+\begin{theorem}[Completeness of $\R$]
+\label{thm:cauchy_complete}
+A sequence in $\R$ converges if and only if it is Cauchy.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $a_n \to L$. Given $\varepsilon > 0$, choose $N$ so that
+$|a_n - L| < \varepsilon/2$ for $n \ge N$. For $n, m \ge N$:
+\[
+|a_n - a_m| \le |a_n - L| + |L - a_m| < \varepsilon.
+\]
+
+$(\Leftarrow)$ Suppose $(a_n)$ is Cauchy. First, $(a_n)$ is bounded: choose $N$
+so that $|a_n - a_m| < 1$ for $n, m \ge N$; then $|a_n| \le \max(|a_1|, \ldots,
+|a_{N-1}|, |a_N| + 1)$ for all $n$.
+
+By Bolzano--Weierstrass (Theorem~\ref{thm:bolzano_weierstrass}), $(a_n)$ has a
+convergent subsequence $a_{n_k} \to L$. We show $a_n \to L$. Given
+$\varepsilon > 0$, choose $N_1$ so that $|a_n - a_m| < \varepsilon/2$ for
+$n, m \ge N_1$, and choose $K$ so that $|a_{n_k} - L| < \varepsilon/2$ for
+$k \ge K$. Pick $k \ge K$ with $n_k \ge N_1$. Then for $n \ge N_1$:
+\[
+|a_n - L| \le |a_n - a_{n_k}| + |a_{n_k} - L|
+< \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon. \qedhere
+\]
+\end{proof}
+
+\subsection{Limit Superior and Limit Inferior}
+\label{subsec:limsup_liminf}
+
+\begin{definition}[$\limsup$ and $\liminf$]
+\label{def:limsup_liminf}
+For a bounded sequence $(a_n)$, define:
+\[
+\limsup_{n \to \infty} a_n = \lim_{n \to \infty}
+\Bigl(\sup_{k \ge n} a_k\Bigr), \qquad
+\liminf_{n \to \infty} a_n = \lim_{n \to \infty}
+\Bigl(\inf_{k \ge n} a_k\Bigr).
+\]
+The sequences $\sup_{k \ge n} a_k$ (decreasing) and $\inf_{k \ge n} a_k$
+(increasing) are monotone and bounded, so both limits exist by
+Theorem~\ref{thm:mct_seq}.
+\end{definition}
+
+\begin{proposition}[Properties of $\limsup$ and $\liminf$]
+\label{prop:limsup_props}
+Let $(a_n)$ be a bounded sequence. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\liminf_{n\to\infty} a_n \le \limsup_{n\to\infty} a_n$.
+    \item $(a_n)$ converges if and only if
+    $\liminf_{n\to\infty} a_n = \limsup_{n\to\infty} a_n$, and in that case
+    the limit equals this common value.
+    \item $\limsup_{n\to\infty} a_n = L$ if and only if: for every
+    $\varepsilon > 0$, (a)~$a_n < L + \varepsilon$ for all sufficiently
+    large $n$, and (b)~$a_n > L - \varepsilon$ for infinitely many $n$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) For each $n$, $\inf_{k \ge n} a_k \le \sup_{k \ge n} a_k$. Taking limits
+preserves the inequality.
+
+(ii) $(\Rightarrow)$ Suppose $a_n \to L$. Given $\varepsilon > 0$, for large $n$
+we have $L - \varepsilon < a_k < L + \varepsilon$ for all $k \ge n$, so
+$L - \varepsilon \le \inf_{k \ge n} a_k \le \sup_{k \ge n} a_k \le L + \varepsilon$.
+Taking the limit gives $L - \varepsilon \le \liminf a_n \le \limsup a_n
+\le L + \varepsilon$ for all $\varepsilon > 0$, so both equal $L$.
+
+$(\Leftarrow)$ Suppose $\liminf a_n = \limsup a_n = L$. For any $\varepsilon > 0$,
+choose $N$ so that $|\sup_{k \ge n} a_k - L| < \varepsilon$ and
+$|\inf_{k \ge n} a_k - L| < \varepsilon$ for $n \ge N$. Then for $n \ge N$:
+\[
+L - \varepsilon < \inf_{k \ge n} a_k \le a_n \le \sup_{k \ge n} a_k < L + \varepsilon,
+\]
+so $|a_n - L| < \varepsilon$.
+
+(iii) Let $s_n = \sup_{k \ge n} a_k$ and $L = \lim s_n$. For~(a): given
+$\varepsilon > 0$, choose $N$ with $s_N < L + \varepsilon$. Then $a_n \le s_N <
+L + \varepsilon$ for all $n \ge N$. For~(b): given $\varepsilon > 0$, for every $n$
+we have $s_n \ge L$ (since $s_n$ is decreasing to $L$), so there exists $k \ge n$
+with $a_k > s_n - \varepsilon \ge L - \varepsilon$. Since $n$ is arbitrary, this
+gives infinitely many such $k$.
+
+Conversely, suppose (a) and (b) hold for some value $L'$. From~(a), $s_n \le
+L' + \varepsilon$ for large $n$, so $\limsup a_n \le L' + \varepsilon$.
+From~(b), for each $n$ there exists $k \ge n$ with $a_k > L' - \varepsilon$,
+so $s_n \ge L' - \varepsilon$, giving $\limsup a_n \ge L' - \varepsilon$.
+Since $\varepsilon$ is arbitrary, $\limsup a_n = L'$.
+\end{proof}
+
+\subsection{Series}
+\label{subsec:series}
+
+\begin{definition}[Convergence of Series]
+\label{def:series}
+Let $(a_n)_{n=1}^\infty$ be a sequence. The series $\sum_{n=1}^\infty a_n$
+\emph{converges} if the sequence of partial sums $S_N = \sum_{n=1}^N a_n$
+converges. The series \emph{converges absolutely} if $\sum_{n=1}^\infty |a_n|$
+converges.
+\end{definition}
+
+\begin{theorem}[Comparison Test]
+\label{thm:comparison}
+If $0 \le a_n \le b_n$ for all $n$ and $\sum b_n$ converges, then $\sum a_n$
+converges.
+\end{theorem}
+
+\begin{proof}
+The partial sums $S_N = \sum_{n=1}^N a_n$ form an increasing sequence (since
+$a_n \ge 0$) bounded above by $\sum_{n=1}^\infty b_n$. By the monotone
+convergence theorem (Theorem~\ref{thm:mct_seq}), $(S_N)$ converges.
+\end{proof}
+
+\begin{theorem}[Absolute Convergence Implies Convergence]
+\label{thm:abs_conv}
+If $\sum_{n=1}^\infty |a_n|$ converges, then $\sum_{n=1}^\infty a_n$ converges.
+\end{theorem}
+
+\begin{proof}
+Absolute convergence means the partial sums of $|a_n|$ form a Cauchy sequence.
+For $m > n$:
+\[
+\Bigl|\sum_{k=n+1}^{m} a_k\Bigr| \le \sum_{k=n+1}^{m} |a_k|,
+\]
+so the partial sums of $a_n$ are also Cauchy, hence convergent by
+Theorem~\ref{thm:cauchy_complete}.
+\end{proof}
+
+\begin{theorem}[Ratio Test]
+\label{thm:ratio}
+Let $(a_n)$ be a sequence with $a_n \neq 0$ for all $n$. If
+$\limsup_{n\to\infty} |a_{n+1}/a_n| < 1$, then $\sum a_n$ converges absolutely.
+If $\liminf_{n\to\infty} |a_{n+1}/a_n| > 1$, then $\sum a_n$ diverges.
+\end{theorem}
+
+\begin{proof}
+Suppose $\limsup |a_{n+1}/a_n| = L < 1$. Choose $r$ with $L < r < 1$.
+By Proposition~\ref{prop:limsup_props}(iii), there exists $N$ with
+$|a_{n+1}/a_n| < r$ for all $n \ge N$. Then $|a_n| \le |a_N| r^{n-N}$ for
+$n \ge N$, and $\sum |a_N| r^{n-N}$ converges (geometric series with ratio
+$r < 1$). By the comparison test, $\sum |a_n|$ converges.
+
+If $\liminf |a_{n+1}/a_n| > 1$, then $|a_{n+1}| > |a_n|$ for large $n$, so
+$a_n \not\to 0$ and the series diverges.
+\end{proof}
+
+\begin{theorem}[Root Test]
+\label{thm:root}
+Let $\alpha = \limsup_{n\to\infty} |a_n|^{1/n}$. If $\alpha < 1$, then
+$\sum a_n$ converges absolutely. If $\alpha > 1$, then $\sum a_n$ diverges.
+\end{theorem}
+
+\begin{proof}
+If $\alpha < 1$, choose $r$ with $\alpha < r < 1$. By
+Proposition~\ref{prop:limsup_props}(iii), $|a_n|^{1/n} < r$ for all
+sufficiently large $n$, so $|a_n| < r^n$. The comparison test with the geometric
+series $\sum r^n$ gives absolute convergence.
+
+If $\alpha > 1$, then $|a_n|^{1/n} > 1$ for infinitely many $n$
+(Proposition~\ref{prop:limsup_props}(iii)), so $|a_n| > 1$ infinitely often,
+meaning $a_n \not\to 0$ and the series diverges.
+\end{proof}
+
+\begin{remark}[Conditional Convergence]
+\label{rem:conditional}
+A series that converges but does not converge absolutely is called
+\emph{conditionally convergent}. The classic example is the alternating harmonic
+series $\sum (-1)^{n+1}/n$. By the Riemann rearrangement theorem, any
+conditionally convergent series can be rearranged to converge to any prescribed
+value (or to diverge). This pathology motivates the focus on absolute convergence
+and non-negative series in measure theory.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: TOPOLOGY OF THE REAL LINE
+%% ============================================================
+\section{Topology of the Real Line}
+\label{sec:topology}
+
+\subsection{Open and Closed Sets}
+\label{subsec:open_closed}
+
+\begin{definition}[Open and Closed Sets]
+\label{def:open_closed}
+A set $U \subseteq \R$ is \emph{open} if for every $x \in U$ there exists
+$\varepsilon > 0$ such that $(x - \varepsilon, x + \varepsilon) \subseteq U$.
+A set $F \subseteq \R$ is \emph{closed} if its complement $\R \setminus F$ is
+open.
+\end{definition}
+
+\begin{proposition}
+\label{prop:open_closed_basics}
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The empty set $\emptyset$ and $\R$ are both open and closed.
+    \item An arbitrary union of open sets is open.
+    \item A finite intersection of open sets is open.
+    \item An arbitrary intersection of closed sets is closed.
+    \item A finite union of closed sets is closed.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) $\emptyset$ is vacuously open; $\R$ is open since every $\varepsilon$-neighborhood
+is contained in $\R$. Their complements give the closed assertions.
+
+(ii) If $x \in \bigcup_\alpha U_\alpha$ with each $U_\alpha$ open, then $x \in U_\beta$
+for some $\beta$, so some $\varepsilon$-neighborhood of $x$ is contained in $U_\beta
+\subseteq \bigcup_\alpha U_\alpha$.
+
+(iii) If $x \in \bigcap_{i=1}^n U_i$ with each $U_i$ open, choose $\varepsilon_i > 0$
+with $(x - \varepsilon_i, x + \varepsilon_i) \subseteq U_i$. Then
+$\varepsilon = \min(\varepsilon_1, \ldots, \varepsilon_n) > 0$ and
+$(x - \varepsilon, x + \varepsilon) \subseteq \bigcap_{i=1}^n U_i$.
+
+(iv) and (v) follow from (ii) and (iii) by taking complements via De~Morgan's laws.
+\end{proof}
+
+\begin{proposition}[Sequential Characterization of Closed Sets]
+\label{prop:closed_seq}
+A set $F \subseteq \R$ is closed if and only if it contains all its limit points:
+whenever $(x_n)$ is a sequence in $F$ with $x_n \to L$, we have $L \in F$.
+\end{proposition}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $F$ is closed, $(x_n) \subseteq F$, and $x_n \to L$.
+If $L \notin F$, then $L \in \R \setminus F$ which is open, so there exists
+$\varepsilon > 0$ with $(L - \varepsilon, L + \varepsilon) \subseteq \R \setminus F$.
+But $x_n \to L$ gives $x_n \in (L - \varepsilon, L + \varepsilon)$ for large $n$,
+contradicting $x_n \in F$.
+
+$(\Leftarrow)$ Suppose $F$ contains all its limit points. We show $\R \setminus F$
+is open. Let $x \in \R \setminus F$. If no $\varepsilon$-neighborhood of $x$ is
+contained in $\R \setminus F$, then for each $n$ there exists $x_n \in F$ with
+$|x_n - x| < 1/n$, giving $x_n \to x$ with $(x_n) \subseteq F$, so $x \in F$,
+a contradiction.
+\end{proof}
+
+\begin{definition}[Closure, Interior, Boundary]
+\label{def:closure_interior}
+Let $S \subseteq \R$.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{closure} $\overline{S}$ is the smallest closed set containing
+    $S$: $\overline{S} = \bigcap\{F : F \text{ closed}, S \subseteq F\}$.
+    Equivalently, $x \in \overline{S}$ iff every neighborhood of $x$ intersects $S$.
+    \item The \emph{interior} $S^\circ$ is the largest open set contained in $S$:
+    $S^\circ = \bigcup\{U : U \text{ open}, U \subseteq S\}$.
+    \item The \emph{boundary} $\partial S = \overline{S} \setminus S^\circ$.
+\end{enumerate}
+\end{definition}
+
+\begin{example}
+\label{ex:closure}
+$\overline{\Q} = \R$ and $\Q^\circ = \emptyset$ (by density of both rationals and
+irrationals). Thus $\partial \Q = \R$.
+\end{example}
+
+\subsection{Compactness and the Heine--Borel Theorem}
+\label{subsec:compactness}
+
+\begin{definition}[Open Cover, Compactness]
+\label{def:compact}
+An \emph{open cover} of $S \subseteq \R$ is a collection $\{U_\alpha\}$ of open
+sets with $S \subseteq \bigcup_\alpha U_\alpha$. A set $K \subseteq \R$ is
+\emph{compact} if every open cover of $K$ has a finite subcover.
+\end{definition}
+
+\begin{theorem}[Heine--Borel]
+\label{thm:heine_borel}
+A subset $K \subseteq \R$ is compact if and only if it is closed and bounded.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $K$ is compact.
+
+\emph{$K$ is bounded:} The collection $\{(-n, n) : n \in \N\}$ is an open cover
+of $K$. By compactness, finitely many of these cover $K$, say
+$K \subseteq (-N, N)$. So $K$ is bounded.
+
+\emph{$K$ is closed:} Let $x \notin K$. For each $y \in K$, let
+$r_y = |x - y|/2 > 0$. The open sets $U_y = (y - r_y, y + r_y)$ cover $K$.
+By compactness, $K \subseteq U_{y_1} \cup \cdots \cup U_{y_m}$ for some finite
+collection. Let $\delta = \min(r_{y_1}, \ldots, r_{y_m}) > 0$. Then
+$(x - \delta, x + \delta) \cap K = \emptyset$ (since any $z$ in this
+neighborhood satisfies $|z - x| < \delta \le r_{y_i}$, hence
+$|z - y_i| \ge |x - y_i| - |x - z| > 2r_{y_i} - r_{y_i} = r_{y_i}$,
+so $z \notin U_{y_i}$ for each $i$). Thus $\R \setminus K$ is open, so $K$ is
+closed.
+
+$(\Leftarrow)$ Suppose $K$ is closed and bounded, say $K \subseteq [a, b]$. Let
+$\{U_\alpha\}$ be an open cover of $K$. We show it has a finite subcover by
+contradiction.
+
+Bisect $[a, b]$ into $[a, (a+b)/2]$ and $[(a+b)/2, b]$. At least one half, call
+it $[a_1, b_1]$, has the property that $K \cap [a_1, b_1]$ is not covered by any
+finite subcollection of $\{U_\alpha\}$. Continue bisecting: at step $n$, we have
+$[a_n, b_n]$ with $b_n - a_n = (b-a)/2^n$ such that $K \cap [a_n, b_n]$ cannot
+be finitely covered.
+
+By the nested intervals property (Theorem~\ref{thm:nested_intervals}), there
+exists $x \in \bigcap_{n=1}^\infty [a_n, b_n]$. Since each $[a_n, b_n]$ intersects
+$K$ nontrivially (otherwise a finite --- in fact, empty --- subcover would exist),
+choose $x_n \in K \cap [a_n, b_n]$. Then $|x_n - x| \le b_n - a_n = (b-a)/2^n
+\to 0$, so $x_n \to x$. Since $K$ is closed, $x \in K$.
+
+Since $\{U_\alpha\}$ covers $K$, there exists $U_\beta$ with $x \in U_\beta$.
+Since $U_\beta$ is open, there exists $\varepsilon > 0$ with
+$(x - \varepsilon, x + \varepsilon) \subseteq U_\beta$. For $n$ large enough that
+$(b-a)/2^n < \varepsilon$, we have $[a_n, b_n] \subseteq (x - \varepsilon,
+x + \varepsilon) \subseteq U_\beta$. Then $\{U_\beta\}$ is a finite subcover
+of $K \cap [a_n, b_n]$, a contradiction.
+\end{proof}
+
+\begin{proposition}[Properties of Compact Sets]
+\label{prop:compact_props}
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item A closed subset of a compact set is compact.
+    \item A compact set is sequentially compact: every sequence in $K$ has a
+    subsequence converging to a point in $K$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) Let $F \subseteq K$ be closed with $K$ compact. If $\{U_\alpha\}$ is an open
+cover of $F$, then $\{U_\alpha\} \cup \{\R \setminus F\}$ is an open cover of $K$
+(since $\R \setminus F$ is open). By compactness of $K$, a finite subcover exists.
+Removing $\R \setminus F$ (if present) leaves a finite subcover of $F$.
+
+(ii) If $(x_n)$ is a sequence in $K$, then $(x_n)$ is bounded (since $K$ is bounded
+by Heine--Borel). By Bolzano--Weierstrass, a subsequence converges to some $L$.
+Since $K$ is closed, $L \in K$.
+\end{proof}
+
+\begin{rlconnection}[Compactness Beyond $\R^n$]
+Compactness is used throughout measure theory and functional analysis. The
+Heine--Borel theorem characterizes compact subsets of $\R^n$. In functional
+analysis (Phase~01), compactness in infinite-dimensional spaces is more subtle
+and requires the Arzel\`{a}--Ascoli theorem.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: CONTINUITY
+%% ============================================================
+\section{Continuity}
+\label{sec:continuity}
+
+\subsection{Definition and Sequential Characterization}
+\label{subsec:cont_def}
+
+\begin{definition}[Continuity]
+\label{def:continuity}
+Let $f : A \to \R$ with $A \subseteq \R$ and let $c \in A$. We say $f$ is
+\emph{continuous at $c$} if for every $\varepsilon > 0$ there exists $\delta > 0$
+such that $|f(x) - f(c)| < \varepsilon$ whenever $x \in A$ and $|x - c| < \delta$.
+We say $f$ is \emph{continuous on $A$} if it is continuous at every $c \in A$.
+\end{definition}
+
+\begin{theorem}[Sequential Characterization of Continuity]
+\label{thm:seq_continuity}
+Let $f : A \to \R$ and $c \in A$. Then $f$ is continuous at $c$ if and only if
+for every sequence $(x_n)$ in $A$ with $x_n \to c$, we have $f(x_n) \to f(c)$.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $f$ is continuous at $c$ and $x_n \to c$. Given
+$\varepsilon > 0$, choose $\delta > 0$ from the definition of continuity, then
+choose $N$ with $|x_n - c| < \delta$ for $n \ge N$. Then
+$|f(x_n) - f(c)| < \varepsilon$ for $n \ge N$.
+
+$(\Leftarrow)$ We prove the contrapositive. Suppose $f$ is not continuous at $c$.
+Then there exists $\varepsilon_0 > 0$ such that for every $\delta > 0$ there exists
+$x \in A$ with $|x - c| < \delta$ but $|f(x) - f(c)| \ge \varepsilon_0$. Taking
+$\delta = 1/n$, we obtain a sequence $x_n \in A$ with $|x_n - c| < 1/n$ (so
+$x_n \to c$) but $|f(x_n) - f(c)| \ge \varepsilon_0$ (so $f(x_n) \not\to f(c)$).
+\end{proof}
+
+\begin{proposition}[Algebraic Properties of Continuous Functions]
+\label{prop:cont_algebra}
+If $f, g : A \to \R$ are continuous at $c \in A$, then so are $f + g$, $fg$,
+and $f/g$ (the last provided $g(c) \neq 0$). If $g : A \to \R$ is continuous
+at $c$ and $h : B \to \R$ is continuous at $g(c)$ with $g(A) \subseteq B$,
+then $h \circ g$ is continuous at $c$.
+\end{proposition}
+
+\begin{proof}
+The first three assertions follow immediately from Theorem~\ref{thm:seq_continuity}
+and the algebraic limit theorems (Theorem~\ref{thm:alg_limit}). For composition:
+if $x_n \to c$, then $g(x_n) \to g(c)$ by continuity of $g$, then
+$h(g(x_n)) \to h(g(c))$ by continuity of $h$.
+\end{proof}
+
+\subsection{Extreme Value Theorem and Intermediate Value Theorem}
+\label{subsec:evt_ivt}
+
+\begin{theorem}[Extreme Value Theorem]
+\label{thm:evt}
+If $f : K \to \R$ is continuous and $K$ is compact, then $f$ attains its maximum
+and minimum: there exist $x_*, x^* \in K$ with $f(x_*) \le f(x) \le f(x^*)$ for
+all $x \in K$.
+\end{theorem}
+
+\begin{proof}
+We show $f$ attains its maximum; the minimum argument is analogous (apply the
+result to $-f$).
+
+\emph{Step 1: $f$ is bounded above.} Suppose not. Then for each $n$ there exists
+$x_n \in K$ with $f(x_n) > n$. By sequential compactness
+(Proposition~\ref{prop:compact_props}(ii)), $(x_n)$ has a subsequence
+$x_{n_k} \to c \in K$. By continuity, $f(x_{n_k}) \to f(c)$, but
+$f(x_{n_k}) > n_k \to \infty$, a contradiction.
+
+\emph{Step 2: The supremum is attained.} Let $M = \sup\{f(x) : x \in K\}$, which
+is finite by Step~1. By the characterization of supremum, for each $n$ there
+exists $x_n \in K$ with $f(x_n) > M - 1/n$. By sequential compactness,
+$x_{n_k} \to x^* \in K$ for some subsequence. By continuity,
+$f(x^*) = \lim f(x_{n_k}) = M$.
+\end{proof}
+
+\begin{theorem}[Intermediate Value Theorem]
+\label{thm:ivt}
+If $f : [a, b] \to \R$ is continuous and $f(a) < v < f(b)$ (or $f(a) > v > f(b)$),
+then there exists $c \in (a, b)$ with $f(c) = v$.
+\end{theorem}
+
+\begin{proof}
+Assume $f(a) < v < f(b)$. Let $S = \{x \in [a, b] : f(x) < v\}$. Then $S$ is
+nonempty (since $a \in S$) and bounded above (by $b$), so
+$c = \sup S$ exists with $a \le c \le b$.
+
+\emph{Claim: $f(c) = v$.} Choose a sequence $(s_n)$ in $S$ with $s_n \to c$.
+By continuity, $f(c) = \lim f(s_n) \le v$ (since $f(s_n) < v$). Now if $f(c) < v$,
+then by continuity there exists $\delta > 0$ with $f(x) < v$ for
+$x \in (c - \delta, c + \delta) \cap [a, b]$. Since $c < b$ (because $f(c) < v < f(b)$),
+there exists $x \in (c, c + \delta) \cap [a, b]$ with $f(x) < v$, contradicting
+$c = \sup S$. Therefore $f(c) = v$.
+\end{proof}
+
+\subsection{Uniform Continuity}
+\label{subsec:uniform_cont}
+
+\begin{definition}[Uniform Continuity]
+\label{def:uniform_cont}
+A function $f : A \to \R$ is \emph{uniformly continuous} on $A$ if for every
+$\varepsilon > 0$ there exists $\delta > 0$ such that $|f(x) - f(y)| < \varepsilon$
+whenever $x, y \in A$ with $|x - y| < \delta$.
+\end{definition}
+
+\begin{remark}
+\label{rem:unif_vs_cont}
+The distinction from ordinary continuity: in uniform continuity, $\delta$ depends
+only on $\varepsilon$, not on the point. Ordinary continuity allows $\delta$ to vary
+with the point $c$.
+\end{remark}
+
+\begin{theorem}[Continuous on Compact $\Rightarrow$ Uniformly Continuous]
+\label{thm:compact_unif_cont}
+If $K \subseteq \R$ is compact and $f : K \to \R$ is continuous, then $f$ is
+uniformly continuous on $K$.
+\end{theorem}
+
+\begin{proof}
+Suppose $f$ is not uniformly continuous on $K$. Then there exists
+$\varepsilon_0 > 0$ such that for every $n \in \N$ there exist $x_n, y_n \in K$
+with $|x_n - y_n| < 1/n$ but $|f(x_n) - f(y_n)| \ge \varepsilon_0$.
+
+By sequential compactness, $(x_n)$ has a subsequence $x_{n_k} \to c \in K$.
+Since $|y_{n_k} - c| \le |y_{n_k} - x_{n_k}| + |x_{n_k} - c| < 1/n_k +
+|x_{n_k} - c| \to 0$, we also have $y_{n_k} \to c$. By continuity of $f$ at $c$:
+\[
+|f(x_{n_k}) - f(y_{n_k})| \le |f(x_{n_k}) - f(c)| + |f(c) - f(y_{n_k})| \to 0,
+\]
+contradicting $|f(x_{n_k}) - f(y_{n_k})| \ge \varepsilon_0$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: DIFFERENTIATION
+%% ============================================================
+\section{Differentiation}
+\label{sec:differentiation}
+
+\subsection{Definition and Basic Properties}
+\label{subsec:diff_def}
+
+\begin{definition}[Derivative]
+\label{def:derivative}
+Let $f : (a, b) \to \R$ and $c \in (a, b)$. The \emph{derivative of $f$ at $c$}
+is
+\[
+f'(c) = \lim_{h \to 0} \frac{f(c + h) - f(c)}{h},
+\]
+provided this limit exists. If $f'(c)$ exists, we say $f$ is \emph{differentiable
+at $c$}.
+\end{definition}
+
+\begin{theorem}[Differentiable Implies Continuous]
+\label{thm:diff_cont}
+If $f$ is differentiable at $c$, then $f$ is continuous at $c$.
+\end{theorem}
+
+\begin{proof}
+We have
+\[
+f(c + h) - f(c) = \frac{f(c+h) - f(c)}{h} \cdot h \to f'(c) \cdot 0 = 0
+\]
+as $h \to 0$, so $f(c+h) \to f(c)$.
+\end{proof}
+
+\begin{proposition}[Algebraic Differentiation Rules]
+\label{prop:diff_rules}
+If $f$ and $g$ are differentiable at $c$, then:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $(f + g)'(c) = f'(c) + g'(c)$.
+    \item (Product rule) $(fg)'(c) = f'(c)g(c) + f(c)g'(c)$.
+    \item (Quotient rule) If $g(c) \neq 0$, then
+    $(f/g)'(c) = \bigl(f'(c)g(c) - f(c)g'(c)\bigr)/g(c)^2$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+We prove~(ii). Write
+\begin{align*}
+f(c+h)g(c+h) - f(c)g(c)
+&= f(c+h)g(c+h) - f(c)g(c+h) + f(c)g(c+h) - f(c)g(c) \\
+&= \bigl(f(c+h) - f(c)\bigr)g(c+h) + f(c)\bigl(g(c+h) - g(c)\bigr).
+\end{align*}
+Dividing by $h$ and taking $h \to 0$, using $g(c+h) \to g(c)$ (since $g$ is
+continuous at $c$ by Theorem~\ref{thm:diff_cont}), gives
+$f'(c)g(c) + f(c)g'(c)$.
+\end{proof}
+
+\begin{theorem}[Chain Rule]
+\label{thm:chain_rule}
+Let $g$ be differentiable at $c$ and $f$ be differentiable at $g(c)$. Then
+$f \circ g$ is differentiable at $c$ and $(f \circ g)'(c) = f'(g(c)) \cdot g'(c)$.
+\end{theorem}
+
+\begin{proof}
+Define the auxiliary function
+\[
+\varphi(y) =
+\begin{cases}
+\dfrac{f(y) - f(g(c))}{y - g(c)} & \text{if } y \neq g(c), \\[6pt]
+f'(g(c)) & \text{if } y = g(c).
+\end{cases}
+\]
+Since $f$ is differentiable at $g(c)$, $\varphi$ is continuous at $g(c)$.
+For $h \neq 0$ with $g(c+h) \neq g(c)$:
+\[
+\frac{f(g(c+h)) - f(g(c))}{h}
+= \varphi(g(c+h)) \cdot \frac{g(c+h) - g(c)}{h}.
+\]
+This identity also holds when $g(c+h) = g(c)$ (both sides are zero, using the
+convention that $\varphi(g(c)) = f'(g(c))$ and $g(c+h) - g(c) = 0$).
+Taking $h \to 0$: $\varphi(g(c+h)) \to \varphi(g(c)) = f'(g(c))$ (by continuity
+of $\varphi$ at $g(c)$ and continuity of $g$ at $c$), and
+$(g(c+h) - g(c))/h \to g'(c)$. Therefore
+$(f \circ g)'(c) = f'(g(c)) \cdot g'(c)$.
+\end{proof}
+
+\subsection{Mean Value Theorem and Consequences}
+\label{subsec:mvt}
+
+\begin{theorem}[Fermat's Theorem on Local Extrema]
+\label{thm:fermat}
+If $f : (a, b) \to \R$ is differentiable at $c \in (a, b)$ and $f$ has a local
+extremum at $c$, then $f'(c) = 0$.
+\end{theorem}
+
+\begin{proof}
+Suppose $f$ has a local maximum at $c$ (the minimum case is analogous). There
+exists $\delta > 0$ with $f(x) \le f(c)$ for $|x - c| < \delta$. For
+$0 < h < \delta$:
+\[
+\frac{f(c+h) - f(c)}{h} \le 0,
+\]
+so $f'(c) = \lim_{h \to 0^+} \frac{f(c+h)-f(c)}{h} \le 0$. For
+$-\delta < h < 0$:
+\[
+\frac{f(c+h) - f(c)}{h} \ge 0,
+\]
+so $f'(c) = \lim_{h \to 0^-} \frac{f(c+h)-f(c)}{h} \ge 0$. Together, $f'(c) = 0$.
+\end{proof}
+
+\begin{theorem}[Rolle's Theorem]
+\label{thm:rolle}
+If $f : [a, b] \to \R$ is continuous on $[a, b]$, differentiable on $(a, b)$,
+and $f(a) = f(b)$, then there exists $c \in (a, b)$ with $f'(c) = 0$.
+\end{theorem}
+
+\begin{proof}
+If $f$ is constant on $[a, b]$, then $f'(c) = 0$ for all $c \in (a, b)$.
+Otherwise, $f$ is not identically $f(a)$, so $f$ attains a maximum or minimum
+value different from $f(a) = f(b)$. By the extreme value theorem
+(Theorem~\ref{thm:evt}), this extremum is attained at some $c \in [a, b]$.
+Since the extreme value differs from $f(a) = f(b)$, the point $c$ cannot be
+an endpoint, so $c \in (a, b)$. By Fermat's theorem (Theorem~\ref{thm:fermat}),
+$f'(c) = 0$.
+\end{proof}
+
+\begin{theorem}[Mean Value Theorem]
+\label{thm:mvt}
+If $f : [a, b] \to \R$ is continuous on $[a, b]$ and differentiable on $(a, b)$,
+then there exists $c \in (a, b)$ with
+\[
+f'(c) = \frac{f(b) - f(a)}{b - a}.
+\]
+\end{theorem}
+
+\begin{proof}
+Define $g(x) = f(x) - \frac{f(b) - f(a)}{b - a}(x - a)$. Then $g$ is continuous
+on $[a, b]$, differentiable on $(a, b)$, and $g(a) = f(a) = g(b)$ (verify:
+$g(b) = f(b) - (f(b) - f(a)) = f(a)$). By Rolle's theorem, there exists
+$c \in (a, b)$ with $0 = g'(c) = f'(c) - \frac{f(b) - f(a)}{b - a}$.
+\end{proof}
+
+\subsection{Taylor's Theorem}
+\label{subsec:taylor}
+
+\begin{theorem}[Taylor's Theorem with Lagrange Remainder]
+\label{thm:taylor}
+Let $f : [a, b] \to \R$ have continuous derivatives $f', f'', \ldots, f^{(n)}$
+on $[a, b]$ and let $f^{(n+1)}$ exist on $(a, b)$. Then for any $x \in [a, b]$
+and $c \in [a, b]$:
+\[
+f(x) = \sum_{k=0}^{n} \frac{f^{(k)}(c)}{k!}(x - c)^k
++ \frac{f^{(n+1)}(\xi)}{(n+1)!}(x - c)^{n+1}
+\]
+for some $\xi$ between $c$ and $x$.
+\end{theorem}
+
+\begin{proof}
+We may assume $x \neq c$; the result is trivial otherwise. Define the remainder
+$R = f(x) - \sum_{k=0}^{n} \frac{f^{(k)}(c)}{k!}(x-c)^k$ and choose $M$ so that
+\[
+R = \frac{M}{(n+1)!}(x - c)^{n+1}.
+\]
+We need to show $M = f^{(n+1)}(\xi)$ for some $\xi$ between $c$ and $x$. Define
+\[
+g(t) = f(x) - \sum_{k=0}^{n} \frac{f^{(k)}(t)}{k!}(x - t)^k
+- \frac{M}{(n+1)!}(x - t)^{n+1}.
+\]
+Then $g(c) = f(x) - \sum_{k=0}^n \frac{f^{(k)}(c)}{k!}(x-c)^k -
+\frac{M}{(n+1)!}(x-c)^{n+1} = R - R = 0$, and $g(x) = f(x) - f(x) = 0$.
+By Rolle's theorem, there exists $\xi$ between $c$ and $x$ with $g'(\xi) = 0$.
+
+Computing $g'(t)$ by differentiating each term and using telescoping cancellation:
+\begin{align*}
+g'(t) &= -\sum_{k=0}^{n} \left[\frac{f^{(k+1)}(t)}{k!}(x-t)^k
+- \frac{f^{(k)}(t)}{(k-1)!}(x-t)^{k-1}\right]
++ \frac{M}{n!}(x-t)^n,
+\end{align*}
+where the sum telescopes (the second part of the $k$-th term cancels the first
+part of the $(k-1)$-th term), leaving
+\[
+g'(t) = -\frac{f^{(n+1)}(t)}{n!}(x - t)^n + \frac{M}{n!}(x-t)^n
+= \frac{(x-t)^n}{n!}\bigl(M - f^{(n+1)}(t)\bigr).
+\]
+Setting $g'(\xi) = 0$ and noting $(x - \xi)^n \neq 0$ (since $\xi$ is between
+$c$ and $x$, and $c \neq x$) gives $M = f^{(n+1)}(\xi)$.
+\end{proof}
+
+\begin{rlconnection}[Taylor's Theorem in Optimization and Measure Theory]
+Taylor's theorem is essential for optimization theory (Phase~01). Gradient descent
+convergence proofs use the first-order Taylor expansion with remainder to bound
+function value changes. The mean value theorem appears in many
+$\varepsilon$-$\delta$ arguments throughout measure theory.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: RIEMANN INTEGRATION
+%% ============================================================
+\section{Riemann Integration}
+\label{sec:riemann}
+
+\subsection{Partitions and Riemann Sums}
+\label{subsec:partitions}
+
+\begin{definition}[Partition]
+\label{def:partition}
+A \emph{partition} of $[a, b]$ is a finite set $P = \{x_0, x_1, \ldots, x_n\}$
+with $a = x_0 < x_1 < \cdots < x_n = b$.
+\end{definition}
+
+\begin{definition}[Upper and Lower Sums]
+\label{def:upper_lower_sums}
+Let $f : [a, b] \to \R$ be bounded and $P = \{x_0, \ldots, x_n\}$ a partition.
+Define
+\[
+M_k = \sup_{x \in [x_{k-1}, x_k]} f(x), \qquad
+m_k = \inf_{x \in [x_{k-1}, x_k]} f(x), \qquad
+\Delta x_k = x_k - x_{k-1}.
+\]
+The \emph{upper sum} and \emph{lower sum} are
+\[
+U(f, P) = \sum_{k=1}^n M_k \,\Delta x_k, \qquad
+L(f, P) = \sum_{k=1}^n m_k \,\Delta x_k.
+\]
+\end{definition}
+
+\begin{lemma}[Refinement Lemma]
+\label{lem:refinement}
+If $Q$ is a refinement of $P$ (i.e., $P \subseteq Q$), then
+$L(f, P) \le L(f, Q) \le U(f, Q) \le U(f, P)$.
+\end{lemma}
+
+\begin{proof}
+It suffices to show this when $Q$ has one more point than $P$. Say
+$Q = P \cup \{x^*\}$ with $x_{k-1} < x^* < x_k$. On $[x_{k-1}, x_k]$,
+the lower sum contribution changes from $m_k(x_k - x_{k-1})$ to
+$m'(x^* - x_{k-1}) + m''(x_k - x^*)$ where
+$m' = \inf_{[x_{k-1}, x^*]} f \ge m_k$ and
+$m'' = \inf_{[x^*, x_k]} f \ge m_k$. Thus the lower sum does not decrease.
+The upper sum argument is analogous (infima become suprema, inequality reverses).
+The middle inequality $L(f, Q) \le U(f, Q)$ is immediate from $m_k \le M_k$.
+\end{proof}
+
+\begin{corollary}
+\label{cor:lower_le_upper}
+For any two partitions $P, Q$: $L(f, P) \le U(f, Q)$.
+\end{corollary}
+
+\begin{proof}
+$L(f, P) \le L(f, P \cup Q) \le U(f, P \cup Q) \le U(f, Q)$.
+\end{proof}
+
+\begin{definition}[Riemann Integrability]
+\label{def:riemann_int}
+A bounded function $f : [a, b] \to \R$ is \emph{Riemann integrable} if
+\[
+\sup_P L(f, P) = \inf_P U(f, P),
+\]
+where the supremum and infimum are over all partitions $P$ of $[a, b]$.
+This common value is the \emph{Riemann integral} $\int_a^b f(x)\,dx$.
+By Corollary~\ref{cor:lower_le_upper}, the sup and inf exist and satisfy
+$\sup_P L(f,P) \le \inf_P U(f,P)$.
+\end{definition}
+
+\begin{remark}[Riemann Criterion]
+\label{rem:riemann_criterion}
+Equivalently, $f$ is Riemann integrable if and only if for every $\varepsilon > 0$
+there exists a partition $P$ with $U(f, P) - L(f, P) < \varepsilon$.
+\end{remark}
+
+\subsection{Continuous Functions Are Riemann Integrable}
+\label{subsec:cont_integrable}
+
+\begin{theorem}
+\label{thm:cont_integrable}
+If $f : [a, b] \to \R$ is continuous, then $f$ is Riemann integrable.
+\end{theorem}
+
+\begin{proof}
+Since $[a, b]$ is compact, $f$ is uniformly continuous
+(Theorem~\ref{thm:compact_unif_cont}). Given $\varepsilon > 0$, choose $\delta > 0$
+with $|f(x) - f(y)| < \varepsilon/(b - a)$ whenever $|x - y| < \delta$. Let $P$
+be any partition with mesh $\|P\| = \max_k \Delta x_k < \delta$. On each subinterval
+$[x_{k-1}, x_k]$, continuity on the compact interval gives
+$M_k - m_k = f(u_k) - f(v_k)$ for some $u_k, v_k \in [x_{k-1}, x_k]$
+(extreme value theorem), and $|u_k - v_k| \le \Delta x_k < \delta$, so
+$M_k - m_k < \varepsilon/(b-a)$. Therefore:
+\[
+U(f, P) - L(f, P) = \sum_{k=1}^n (M_k - m_k)\Delta x_k
+< \frac{\varepsilon}{b - a} \sum_{k=1}^n \Delta x_k = \varepsilon.
+\]
+By the Riemann criterion (Remark~\ref{rem:riemann_criterion}), $f$ is integrable.
+\end{proof}
+
+\subsection{Properties of the Riemann Integral}
+\label{subsec:riemann_props}
+
+\begin{proposition}[Properties]
+\label{prop:riemann_props}
+Let $f, g : [a, b] \to \R$ be Riemann integrable. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item \textbf{Linearity:} $\int_a^b (\alpha f + \beta g) = \alpha \int_a^b f
+    + \beta \int_a^b g$ for all $\alpha, \beta \in \R$.
+    \item \textbf{Monotonicity:} If $f(x) \le g(x)$ for all $x \in [a, b]$, then
+    $\int_a^b f \le \int_a^b g$.
+    \item \textbf{Additivity:} For $a < c < b$, $f$ is integrable on $[a, c]$ and
+    $[c, b]$, and $\int_a^b f = \int_a^c f + \int_c^b f$.
+    \item \textbf{Triangle inequality:} $|f|$ is integrable and
+    $|\int_a^b f| \le \int_a^b |f|$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+We prove~(ii). For any partition $P$,
+$\inf_{[x_{k-1}, x_k]} f \le \inf_{[x_{k-1}, x_k]} g$ is \emph{not} generally
+true; rather we use: $\sup_P L(f, P) \le \sup_P L(g, P)$ since for each partition,
+$m_k^f \le m_k^g$ implies $L(f, P) \le L(g, P)$. Wait --- this is incorrect since
+$m_k^f \le m_k^g$ does \emph{not} follow from $f \le g$. Actually it does: if
+$f(x) \le g(x)$ for all $x$, then $\inf_{[x_{k-1},x_k]} f(x) \le
+\inf_{[x_{k-1},x_k]} g(x)$. Therefore $L(f,P) \le L(g,P)$ for all $P$, and
+$\int_a^b f = \sup_P L(f,P) \le \sup_P L(g,P) = \int_a^b g$.
+
+We prove (i) for the case $\alpha = 1, \beta = 1$ (the general case follows
+similarly). Given $\varepsilon > 0$, choose partitions $P_1, P_2$ with
+$U(f, P_1) - L(f, P_1) < \varepsilon/2$ and $U(g, P_2) - L(g, P_2) < \varepsilon/2$.
+Let $P = P_1 \cup P_2$. On each subinterval of $P$,
+$\sup(f + g) \le \sup f + \sup g$ and $\inf(f + g) \ge \inf f + \inf g$. Therefore
+$U(f+g, P) \le U(f, P) + U(g, P)$ and $L(f+g, P) \ge L(f, P) + L(g, P)$.
+Thus:
+\[
+U(f+g, P) - L(f+g, P) \le \bigl(U(f,P) - L(f,P)\bigr) + \bigl(U(g,P) - L(g,P)\bigr)
+< \varepsilon,
+\]
+so $f + g$ is integrable. Moreover, $L(f,P) + L(g,P) \le L(f+g,P) \le
+\int_a^b(f+g) \le U(f+g,P) \le U(f,P) + U(g,P)$. Since
+$\int_a^b f + \int_a^b g$ also lies between $L(f,P) + L(g,P)$ and
+$U(f,P) + U(g,P)$, the two values differ by at most $\varepsilon$.
+As $\varepsilon$ is arbitrary, equality holds.
+\end{proof}
+
+\subsection{Fundamental Theorem of Calculus}
+\label{subsec:ftc}
+
+\begin{theorem}[Fundamental Theorem of Calculus, Part I]
+\label{thm:ftc1}
+Let $f : [a, b] \to \R$ be Riemann integrable. Define
+$F(x) = \int_a^x f(t)\,dt$ for $x \in [a, b]$. Then $F$ is continuous on $[a, b]$.
+If $f$ is continuous at $c \in (a, b)$, then $F$ is differentiable at $c$ and
+$F'(c) = f(c)$.
+\end{theorem}
+
+\begin{proof}
+\emph{Continuity:} Since $f$ is bounded, say $|f(t)| \le M$, for $x, y \in [a, b]$
+with $x < y$:
+\[
+|F(y) - F(x)| = \Bigl|\int_x^y f(t)\,dt\Bigr| \le M(y - x).
+\]
+So $|F(y) - F(x)| \le M|y - x|$, and $F$ is (Lipschitz) continuous.
+
+\emph{Differentiability:} Suppose $f$ is continuous at $c$. Given
+$\varepsilon > 0$, choose $\delta > 0$ with $|f(t) - f(c)| < \varepsilon$ for
+$|t - c| < \delta$. For $0 < |h| < \delta$:
+\[
+\frac{F(c+h) - F(c)}{h} - f(c)
+= \frac{1}{h}\int_c^{c+h} f(t)\,dt - f(c)
+= \frac{1}{h}\int_c^{c+h} \bigl(f(t) - f(c)\bigr)\,dt.
+\]
+Therefore
+\[
+\Bigl|\frac{F(c+h) - F(c)}{h} - f(c)\Bigr|
+\le \frac{1}{|h|}\int_{\min(c,c+h)}^{\max(c,c+h)} |f(t) - f(c)|\,dt
+< \frac{1}{|h|} \cdot \varepsilon \cdot |h| = \varepsilon. \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Fundamental Theorem of Calculus, Part II]
+\label{thm:ftc2}
+If $f : [a, b] \to \R$ is Riemann integrable and $F : [a, b] \to \R$ is continuous
+on $[a, b]$, differentiable on $(a, b)$, with $F'(x) = f(x)$ for all
+$x \in (a, b)$, then
+\[
+\int_a^b f(x)\,dx = F(b) - F(a).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $P = \{x_0, x_1, \ldots, x_n\}$ be any partition of $[a, b]$. By the mean
+value theorem (Theorem~\ref{thm:mvt}), on each subinterval there exists
+$c_k \in (x_{k-1}, x_k)$ with $F(x_k) - F(x_{k-1}) = F'(c_k)\Delta x_k =
+f(c_k)\Delta x_k$. Therefore:
+\[
+F(b) - F(a) = \sum_{k=1}^n \bigl(F(x_k) - F(x_{k-1})\bigr)
+= \sum_{k=1}^n f(c_k)\Delta x_k.
+\]
+Since $m_k \le f(c_k) \le M_k$, we get
+$L(f, P) \le F(b) - F(a) \le U(f, P)$ for every partition $P$. Since $f$ is
+integrable, the common value $\int_a^b f$ is the unique number between all lower
+and upper sums, so $\int_a^b f = F(b) - F(a)$.
+\end{proof}
+
+\begin{warning}[Limitations of the Riemann Integral]
+The Riemann integral cannot handle many natural limits. For example, let
+$q_1, q_2, q_3, \ldots$ be an enumeration of the rationals in $[0,1]$ and define
+$f_n = \mathbf{1}_{\{q_1, \ldots, q_n\}}$ (the indicator of the first $n$
+rationals). Each $f_n$ is Riemann integrable with $\int_0^1 f_n = 0$, but the
+pointwise limit is the Dirichlet function $\mathbf{1}_\Q$, which is \textbf{not}
+Riemann integrable. This failure motivates the Lebesgue integral in Phase~01.
+\end{warning}
+
+%% ============================================================
+%% SECTION 8: SEQUENCES AND SERIES OF FUNCTIONS
+%% ============================================================
+\section{Sequences and Series of Functions}
+\label{sec:function_sequences}
+
+\subsection{Pointwise and Uniform Convergence}
+\label{subsec:pointwise_uniform}
+
+\begin{definition}[Pointwise Convergence]
+\label{def:pointwise}
+A sequence of functions $f_n : A \to \R$ \emph{converges pointwise} to
+$f : A \to \R$ if for every $x \in A$, $\lim_{n \to \infty} f_n(x) = f(x)$.
+That is, for every $x \in A$ and every $\varepsilon > 0$, there exists
+$N = N(x, \varepsilon) \in \N$ such that $|f_n(x) - f(x)| < \varepsilon$
+for all $n \ge N$.
+\end{definition}
+
+\begin{definition}[Uniform Convergence]
+\label{def:uniform}
+A sequence $f_n : A \to \R$ \emph{converges uniformly} to $f : A \to \R$ if
+for every $\varepsilon > 0$ there exists $N = N(\varepsilon) \in \N$ such that
+$|f_n(x) - f(x)| < \varepsilon$ for all $n \ge N$ and all $x \in A$.
+\end{definition}
+
+\begin{remark}
+\label{rem:uniform_sup}
+Uniform convergence is equivalent to
+$\sup_{x \in A} |f_n(x) - f(x)| \to 0$
+as $n \to \infty$. The key difference from pointwise convergence is that $N$
+does not depend on $x$.
+\end{remark}
+
+\begin{example}[Pointwise but Not Uniform Convergence]
+\label{ex:pointwise_not_uniform}
+Let $f_n : [0, 1] \to \R$ be defined by $f_n(x) = x^n$. For $x \in [0, 1)$,
+$f_n(x) = x^n \to 0$; and $f_n(1) = 1$ for all $n$. So $f_n \to f$ pointwise,
+where $f(x) = 0$ for $x \in [0, 1)$ and $f(1) = 1$. Each $f_n$ is continuous, but
+the limit $f$ is discontinuous at $x = 1$. The convergence is not uniform:
+$\sup_{x \in [0,1]} |f_n(x) - f(x)| \ge f_n(1 - 1/n) = (1 - 1/n)^n \to 1/e
+\neq 0$.
+\end{example}
+
+\subsection{Interchange Theorems}
+\label{subsec:interchange}
+
+\begin{theorem}[Uniform Limit of Continuous Functions Is Continuous]
+\label{thm:uniform_limit_cont}
+Let $f_n : A \to \R$ be continuous for each $n$, and suppose $f_n \to f$
+uniformly on $A$. Then $f$ is continuous on $A$.
+\end{theorem}
+
+\begin{proof}
+Fix $c \in A$ and $\varepsilon > 0$. By uniform convergence, choose $N$ with
+$|f_N(x) - f(x)| < \varepsilon/3$ for all $x \in A$. By continuity of $f_N$
+at $c$, choose $\delta > 0$ with $|f_N(x) - f_N(c)| < \varepsilon/3$ for
+$|x - c| < \delta$. Then for $|x - c| < \delta$:
+\begin{align*}
+|f(x) - f(c)|
+&\le |f(x) - f_N(x)| + |f_N(x) - f_N(c)| + |f_N(c) - f(c)| \\
+&< \frac{\varepsilon}{3} + \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+= \varepsilon. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{theorem}[Interchange of Limit and Integral Under Uniform Convergence]
+\label{thm:uniform_integral}
+Let $f_n : [a, b] \to \R$ be Riemann integrable for each $n$, and suppose
+$f_n \to f$ uniformly on $[a, b]$. Then $f$ is Riemann integrable and
+\[
+\int_a^b f(x)\,dx = \lim_{n \to \infty} \int_a^b f_n(x)\,dx.
+\]
+\end{theorem}
+
+\begin{proof}
+\emph{$f$ is integrable:} Given $\varepsilon > 0$, choose $N$ with
+$|f_N(x) - f(x)| < \varepsilon/(4(b-a))$ for all $x$. Since $f_N$ is integrable,
+choose a partition $P$ with $U(f_N, P) - L(f_N, P) < \varepsilon/2$. On each
+subinterval, $\sup f \le \sup f_N + \varepsilon/(4(b-a))$ and
+$\inf f \ge \inf f_N - \varepsilon/(4(b-a))$, so
+\begin{align*}
+U(f, P) - L(f, P)
+&\le U(f_N, P) - L(f_N, P) + \frac{2\varepsilon}{4(b-a)} \cdot (b - a) \\
+&< \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon.
+\end{align*}
+
+\emph{Interchange:} For $n \ge N$ with $|f_n(x) - f(x)| < \varepsilon/(b-a)$:
+\[
+\Bigl|\int_a^b f_n - \int_a^b f\Bigr|
+= \Bigl|\int_a^b (f_n - f)\Bigr|
+\le \int_a^b |f_n - f|
+< \frac{\varepsilon}{b - a} \cdot (b - a) = \varepsilon. \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Weierstrass $M$-Test]
+\label{thm:weierstrass_m}
+Let $f_n : A \to \R$ be functions and suppose there exist constants $M_n \ge 0$
+with $|f_n(x)| \le M_n$ for all $x \in A$ and $\sum_{n=1}^\infty M_n < \infty$.
+Then $\sum_{n=1}^\infty f_n$ converges uniformly (and absolutely) on $A$.
+\end{theorem}
+
+\begin{proof}
+For each $x$, $\sum |f_n(x)| \le \sum M_n < \infty$, so $\sum f_n(x)$ converges
+absolutely. Let $S(x) = \sum_{n=1}^\infty f_n(x)$ and
+$S_N(x) = \sum_{n=1}^N f_n(x)$. Then for all $x$:
+\[
+|S(x) - S_N(x)| = \Bigl|\sum_{n=N+1}^\infty f_n(x)\Bigr|
+\le \sum_{n=N+1}^\infty |f_n(x)|
+\le \sum_{n=N+1}^\infty M_n.
+\]
+The tail $\sum_{n=N+1}^\infty M_n \to 0$ as $N \to \infty$ (since $\sum M_n$
+converges), and the bound is independent of $x$, so the convergence is uniform.
+\end{proof}
+
+\begin{keyresult}[From Uniform to Dominated Convergence]
+The interchange theorems for uniform convergence are the starting point.
+Measure theory (Phase~01) develops the far more powerful Monotone Convergence
+Theorem and Dominated Convergence Theorem, which allow interchange of limit
+and integral under much weaker conditions --- pointwise convergence suffices
+when combined with a dominating function.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 9: METRIC SPACES
+%% ============================================================
+\section{Metric Spaces}
+\label{sec:metric_spaces}
+
+\subsection{Definitions and Examples}
+\label{subsec:metric_def}
+
+\begin{definition}[Metric Space]
+\label{def:metric_space}
+A \emph{metric space} is a pair $(X, d)$ where $X$ is a nonempty set and
+$d : X \times X \to [0, \infty)$ satisfies:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $d(x, y) = 0$ if and only if $x = y$ \hfill (identity of indiscernibles),
+    \item $d(x, y) = d(y, x)$ for all $x, y \in X$ \hfill (symmetry),
+    \item $d(x, z) \le d(x, y) + d(y, z)$ for all $x, y, z \in X$
+    \hfill (triangle inequality).
+\end{enumerate}
+\end{definition}
+
+\begin{example}[Standard Examples]
+\label{ex:metric_spaces}
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item $(\R^n, d_2)$ where $d_2(x, y) = \bigl(\sum_{i=1}^n (x_i - y_i)^2
+    \bigr)^{1/2}$ is the Euclidean metric.
+    \item $(X, d_{\mathrm{disc}})$ where $d_{\mathrm{disc}}(x, y) = 0$ if $x = y$
+    and $1$ if $x \neq y$ is the \emph{discrete metric} on any set $X$.
+    \item $\bigl(C[a,b],\, d_\infty\bigr)$ where $C[a,b]$ is the set of
+    continuous functions $f : [a, b] \to \R$ and $d_\infty(f, g) =
+    \sup_{x \in [a,b]} |f(x) - g(x)|$ is the \emph{sup metric}
+    (or uniform metric). This is well-defined because continuous functions on
+    a compact set are bounded (Theorem~\ref{thm:evt}).
+\end{enumerate}
+\end{example}
+
+\subsection{Topology, Convergence, and Completeness}
+\label{subsec:metric_topology}
+
+\begin{definition}[Open Ball, Open Set, Closed Set]
+\label{def:metric_open}
+In a metric space $(X, d)$:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{open ball} of radius $r > 0$ centered at $x$ is
+    $B(x, r) = \{y \in X : d(x, y) < r\}$.
+    \item A set $U \subseteq X$ is \emph{open} if for every $x \in U$ there exists
+    $r > 0$ with $B(x, r) \subseteq U$.
+    \item A set $F \subseteq X$ is \emph{closed} if $X \setminus F$ is open.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Convergence in a Metric Space]
+\label{def:metric_convergence}
+A sequence $(x_n)$ in $(X, d)$ \emph{converges} to $x \in X$ if
+$d(x_n, x) \to 0$, i.e., for every $\varepsilon > 0$ there exists $N$ with
+$d(x_n, x) < \varepsilon$ for all $n \ge N$.
+\end{definition}
+
+\begin{definition}[Cauchy Sequence and Completeness]
+\label{def:metric_complete}
+A sequence $(x_n)$ in $(X, d)$ is \emph{Cauchy} if for every $\varepsilon > 0$
+there exists $N$ with $d(x_n, x_m) < \varepsilon$ for all $n, m \ge N$.
+A metric space is \emph{complete} if every Cauchy sequence converges (to an element
+of $X$).
+\end{definition}
+
+\begin{example}
+\label{ex:complete_spaces}
+$\R$ is complete (Theorem~\ref{thm:cauchy_complete}). $\Q$ with the usual metric
+is not complete: the sequence of decimal approximations to $\sqrt{2}$ is Cauchy
+in $\Q$ but does not converge in $\Q$. The space $\bigl(C[a,b], d_\infty\bigr)$
+is complete: this is a consequence of Theorem~\ref{thm:uniform_limit_cont}, since a
+Cauchy sequence in the sup metric converges uniformly, and the uniform limit of
+continuous functions is continuous.
+\end{example}
+
+\subsection{Compactness in Metric Spaces}
+\label{subsec:metric_compact}
+
+\begin{definition}[Sequential Compactness]
+\label{def:seq_compact}
+A metric space $(X, d)$ (or a subset $K \subseteq X$) is \emph{sequentially
+compact} if every sequence in $K$ has a subsequence converging to a point in $K$.
+\end{definition}
+
+\begin{remark}
+\label{rem:compact_equiv}
+In a metric space, sequential compactness is equivalent to compactness (every open
+cover has a finite subcover). The Heine--Borel theorem is a special case for $\R^n$:
+a subset of $\R^n$ is (sequentially) compact if and only if it is closed and bounded.
+\end{remark}
+
+\subsection{The Contraction Mapping Theorem}
+\label{subsec:contraction}
+
+\begin{definition}[Contraction]
+\label{def:contraction}
+Let $(X, d)$ be a metric space. A map $T : X \to X$ is a \emph{contraction}
+(or \emph{contraction mapping}) if there exists a constant $\gamma \in [0, 1)$
+such that
+\[
+d(T(x), T(y)) \le \gamma \, d(x, y) \qquad \text{for all } x, y \in X.
+\]
+The constant $\gamma$ is called the \emph{contraction factor}.
+\end{definition}
+
+\begin{theorem}[Banach Fixed Point Theorem / Contraction Mapping Theorem]
+\label{thm:banach_fixed_point}
+Let $(X, d)$ be a complete metric space and $T : X \to X$ a contraction with
+factor $\gamma \in [0, 1)$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $T$ has a unique fixed point $x^* \in X$ (i.e., $T(x^*) = x^*$).
+    \item For any $x_0 \in X$, the iterates $x_{n+1} = T(x_n)$ satisfy
+    $x_n \to x^*$.
+    \item The rate of convergence satisfies
+    $d(x_n, x^*) \le \frac{\gamma^n}{1 - \gamma} d(x_0, x_1)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\emph{Existence.}
+Fix any $x_0 \in X$ and define $x_{n+1} = T(x_n)$. We show $(x_n)$ is Cauchy.
+By the contraction property, $d(x_{n+1}, x_n) \le \gamma \, d(x_n, x_{n-1})$,
+so by induction $d(x_{n+1}, x_n) \le \gamma^n d(x_1, x_0)$. For $m > n$:
+\begin{align*}
+d(x_m, x_n)
+&\le \sum_{k=n}^{m-1} d(x_{k+1}, x_k)
+\le \sum_{k=n}^{m-1} \gamma^k d(x_1, x_0)
+\le \frac{\gamma^n}{1 - \gamma} d(x_1, x_0).
+\end{align*}
+Since $\gamma^n \to 0$, for any $\varepsilon > 0$ we can choose $N$ so that
+$\gamma^N d(x_1, x_0)/(1 - \gamma) < \varepsilon$. Then $d(x_m, x_n) < \varepsilon$
+for $m > n \ge N$, so $(x_n)$ is Cauchy. Since $X$ is complete, $x_n \to x^*$
+for some $x^* \in X$.
+
+We verify $T(x^*) = x^*$. By the triangle inequality and contraction:
+\[
+d(x^*, T(x^*)) \le d(x^*, x_{n+1}) + d(T(x_n), T(x^*))
+\le d(x^*, x_{n+1}) + \gamma \, d(x_n, x^*) \to 0.
+\]
+So $d(x^*, T(x^*)) = 0$, giving $T(x^*) = x^*$.
+
+\emph{Uniqueness.}
+If $T(y^*) = y^*$ as well, then
+$d(x^*, y^*) = d(T(x^*), T(y^*)) \le \gamma \, d(x^*, y^*)$.
+Since $\gamma < 1$, this forces $d(x^*, y^*) = 0$, i.e., $x^* = y^*$.
+
+\emph{Rate of convergence.}
+Taking $m \to \infty$ in the estimate
+$d(x_m, x_n) \le \gamma^n d(x_1, x_0)/(1 - \gamma)$ gives
+$d(x^*, x_n) \le \gamma^n d(x_1, x_0)/(1 - \gamma)$.
+\end{proof}
+
+\begin{keyresult}[The Contraction Mapping Theorem in Reinforcement Learning]
+This theorem is fundamental to reinforcement learning. The Bellman optimality
+operator $T$ defined by
+\[
+(TV)(s) = \max_a \Bigl[R(s,a) + \gamma \sum_{s'} P(s' \mid s, a)\, V(s')\Bigr]
+\]
+is a $\gamma$-contraction in the sup-norm on the space of bounded value functions.
+Value iteration --- the algorithm that repeatedly applies $T$ starting from any
+initial $V_0$ --- converges to the unique fixed point $V^*$ (the optimal value
+function) precisely because of the Banach fixed point theorem. The convergence
+rate $\gamma^n/(1-\gamma)$ gives the iteration complexity of value iteration.
+\end{keyresult}
+
+%% ============================================================
+%% REFERENCES
+%% ============================================================
+\section*{References}
+
+\begin{enumerate}[label={[\arabic*]}]
+    \item W.~Rudin, \emph{Principles of Mathematical Analysis}, 3rd ed.,
+    McGraw-Hill, 1976.
+
+    \item S.~Abbott, \emph{Understanding Analysis}, 2nd ed.,
+    Springer, 2015.
+
+    \item G.~B.~Folland, \emph{Real Analysis: Modern Techniques and Their
+    Applications}, 2nd ed., Wiley, 1999.
+
+    \item R.~G.~Bartle and D.~R.~Sherbert, \emph{Introduction to Real Analysis},
+    4th ed., Wiley, 2011.
+\end{enumerate}
+
+\end{document}

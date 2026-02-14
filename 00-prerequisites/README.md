@@ -14,9 +14,9 @@ A rigorous but concise refresher of the three pillars assumed by Phase 01: real 
 
 | File | Directory | Topic | Status |
 |------|-----------|-------|--------|
-| — | `01-real-analysis/` | Ordered fields, supremum/infimum, sequences and series, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence, interchange of limits | planned |
-| — | `02-linear-algebra/` | Vector spaces, linear maps, matrices, determinants, eigenvalues, diagonalization, inner product spaces, orthogonality, spectral theorem, SVD | planned |
-| — | `03-probability/` | Sample spaces, axioms, conditional probability, independence, random variables, common distributions, expectation, variance, joint distributions, moment-generating functions, law of large numbers, central limit theorem | planned |
+| `real-analysis.tex` | `01-real-analysis/` | Ordered fields, supremum/infimum, sequences and series, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence, interchange of limits | **exists** |
+| `linear-algebra.tex` | `02-linear-algebra/` | Vector spaces, linear maps, matrices, determinants, eigenvalues, diagonalization, inner product spaces, orthogonality, spectral theorem, SVD | **exists** |
+| `probability.tex` | `03-probability/` | Sample spaces, axioms, conditional probability, independence, random variables, common distributions, expectation, variance, joint distributions, moment-generating functions, law of large numbers, central limit theorem | **exists** |
 
 ## Prerequisites
 

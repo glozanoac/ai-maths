@@ -12,9 +12,9 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 1 | `00-prerequisites/01-real-analysis/` | Ordered fields, supremum/infimum, sequences, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence | planned |
-| 2 | `00-prerequisites/02-linear-algebra/` | Vector spaces, linear maps, eigenvalues, diagonalization, inner product spaces, spectral theorem, SVD | planned |
-| 3 | `00-prerequisites/03-probability/` | Axioms, conditional probability, independence, random variables, distributions, expectation, variance, LLN, CLT | planned |
+| 1 | `00-prerequisites/01-real-analysis/` | Ordered fields, supremum/infimum, sequences, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence | **exists** |
+| 2 | `00-prerequisites/02-linear-algebra/` | Vector spaces, linear maps, eigenvalues, diagonalization, inner product spaces, spectral theorem, SVD | **exists** |
+| 3 | `00-prerequisites/03-probability/` | Axioms, conditional probability, independence, random variables, distributions, expectation, variance, LLN, CLT | **exists** |
 | 4 | `01-math-foundations/01-measure-theory/01-measure-spaces` | σ-algebras, measures, Carathéodory extension, measurable functions, π-λ theorem | **exists** |
 | 5 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales | **exists** |
 | 6 | `01-math-foundations/02-functional-analysis/` | Normed spaces, Banach spaces, Hilbert spaces, bounded operators, spectral theory | planned |
@@ -48,11 +48,11 @@ The dependency tree shows prerequisites for each document. Arrows (→) indicate
 
 ```
 Phase 00 — Prerequisites Review  (optional refresher)
-  real-analysis (planned)
+  real-analysis
     → linear-algebra
-  linear-algebra (planned)
+  linear-algebra
     → probability
-  probability (planned)
+  probability
     → [Phase 01]
 
 Phase 01 — Mathematical Foundations  (requires: Phase 00 or equivalent background)
@@ -116,3 +116,4 @@ Phase 06 — Aerospace Applications  (requires: Phase 04 + Phase 05)
 - After any modification compile and commit the changes with a meaningful commit message.
 - When creating a new document, add it to the Document Catalog in this file and update the corresponding phase `README.md`.
 - Only use ASCII characters to write documents.
+- After creating the PDF document from tex file, clean the temporal files that were generated.

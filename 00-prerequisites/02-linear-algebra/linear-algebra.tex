@@ -1,0 +1,876 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Linear Algebra Review}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\F}{\mathbb{F}}
+\newcommand{\N}{\mathbb{N}}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\nullity}{nullity}
+\DeclareMathOperator{\range}{range}
+\DeclareMathOperator{\nullspace}{null}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\Span}{span}
+
+% ---- Title ----
+\title{\textbf{Linear Algebra Review}\\[10pt]
+\large Vector Spaces, Linear Maps, and the Spectral Theorem\\[5pt]
+\normalsize Phase 0: Prerequisites Review $\mid$ Document 2 of 3\\
+\normalsize Primary texts: Axler, \emph{Linear Algebra Done Right}; Hoffman \& Kunze, \emph{Linear Algebra}}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document provides a rigorous refresher of finite-dimensional linear algebra,
+focused on the results needed for functional analysis, optimization theory, and
+machine learning. We develop vector spaces, linear maps, determinants, eigenvalue
+theory, inner product spaces, the spectral theorem for real symmetric matrices, the
+singular value decomposition, and matrix norms. Every theorem is stated precisely
+and proved in full. The reader who completes this review will have the algebraic
+foundations required for Phase~01 (functional analysis, optimization) and beyond.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+This document is a refresher, not a first course. We assume the reader has seen
+linear algebra before but needs to recall the key definitions, theorems, and proof
+techniques. We are selective: only results that the rest of the curriculum depends
+on are included.
+
+\medskip\noindent\textbf{What this document covers.}
+\begin{enumerate}[nosep]
+    \item \textbf{Vector spaces} --- axioms, subspaces, span, linear independence, basis, dimension.
+    \item \textbf{Linear maps} --- null space, range, rank-nullity theorem, matrix representation.
+    \item \textbf{Determinants} --- properties, multiplicativity, invertibility criterion.
+    \item \textbf{Eigenvalues and eigenvectors} --- characteristic polynomial, diagonalizability.
+    \item \textbf{Inner product spaces} --- Cauchy--Schwarz, Gram--Schmidt, orthogonal projection.
+    \item \textbf{The spectral theorem} --- real symmetric matrices are orthogonally diagonalizable.
+    \item \textbf{Singular value decomposition} --- existence, geometric interpretation, low-rank approximation.
+    \item \textbf{Matrix norms and the matrix exponential} --- operator norm, Frobenius norm, $e^A$.
+\end{enumerate}
+
+\begin{rlconnection}[Why Linear Algebra Matters for AI/ML]
+Linear algebra is the computational backbone of machine learning. Functional analysis
+(Phase~01) generalizes vector spaces to infinite dimensions. Optimization theory uses
+eigenvalues and positive definiteness to characterize convex functions. Neural networks
+are compositions of linear maps with pointwise nonlinearities. The spectral theorem
+underlies PCA, covariance analysis, and the Fisher information matrix in natural policy
+gradient methods.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 2: VECTOR SPACES
+%% ============================================================
+\section{Vector Spaces}
+\label{sec:vector_spaces}
+
+Throughout, $\F$ denotes either $\R$ or $\C$.
+
+\begin{definition}[Vector Space]
+\label{def:vector_space}
+A \emph{vector space} over a field $\F$ is a set $V$ together with operations
+of addition $+: V \times V \to V$ and scalar multiplication $\cdot: \F \times V \to V$
+satisfying:
+\begin{enumerate}[nosep]
+    \item \textbf{Commutativity:} $u + v = v + u$ for all $u, v \in V$.
+    \item \textbf{Associativity of addition:} $(u + v) + w = u + (v + w)$ for all $u, v, w \in V$.
+    \item \textbf{Additive identity:} There exists $0 \in V$ such that $v + 0 = v$ for all $v \in V$.
+    \item \textbf{Additive inverse:} For each $v \in V$, there exists $w \in V$ with $v + w = 0$.
+    \item \textbf{Multiplicative identity:} $1 \cdot v = v$ for all $v \in V$.
+    \item \textbf{Associativity of scalar multiplication:} $a(bv) = (ab)v$ for all $a, b \in \F$, $v \in V$.
+    \item \textbf{Distributive laws:} $a(u + v) = au + av$ and $(a + b)v = av + bv$.
+\end{enumerate}
+\end{definition}
+
+\begin{example}
+\label{ex:vector_spaces}
+Standard examples:
+\begin{enumerate}[nosep]
+    \item $\F^n = \{(x_1, \ldots, x_n) : x_i \in \F\}$ with componentwise operations.
+    \item $\F[x]_{\le n}$, the polynomials of degree at most $n$, with the usual operations.
+    \item $C[a,b]$, the continuous functions $f: [a,b] \to \R$, with pointwise operations.
+    \item $\R^{m \times n}$, the $m \times n$ matrices with real entries.
+\end{enumerate}
+\end{example}
+
+\subsection{Subspaces}
+\label{subsec:subspaces}
+
+\begin{definition}[Subspace]
+\label{def:subspace}
+A subset $U \subseteq V$ is a \emph{subspace} if $U$ is itself a vector space under
+the same operations. Equivalently, $U$ is a subspace if and only if:
+\begin{enumerate}[nosep]
+    \item $0 \in U$,
+    \item $u + v \in U$ for all $u, v \in U$ (closed under addition),
+    \item $\lambda u \in U$ for all $\lambda \in \F$, $u \in U$ (closed under scalar multiplication).
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Intersection of Subspaces]
+\label{prop:intersection_subspaces}
+If $U_1, U_2$ are subspaces of $V$, then $U_1 \cap U_2$ is a subspace of $V$.
+\end{proposition}
+
+\begin{proof}
+We verify the three conditions. (1) $0 \in U_1$ and $0 \in U_2$, so $0 \in U_1 \cap U_2$.
+(2) If $u, v \in U_1 \cap U_2$, then $u, v \in U_1$ so $u + v \in U_1$, and similarly
+$u + v \in U_2$, so $u + v \in U_1 \cap U_2$. (3) If $u \in U_1 \cap U_2$ and $\lambda \in \F$,
+then $\lambda u \in U_1$ and $\lambda u \in U_2$, so $\lambda u \in U_1 \cap U_2$.
+\end{proof}
+
+\subsection{Span and Linear Independence}
+\label{subsec:span_independence}
+
+\begin{definition}[Span]
+\label{def:span}
+The \emph{span} of a list of vectors $v_1, \ldots, v_m \in V$ is
+\[
+    \Span(v_1, \ldots, v_m) = \{\lambda_1 v_1 + \cdots + \lambda_m v_m : \lambda_1, \ldots, \lambda_m \in \F\}.
+\]
+\end{definition}
+
+\begin{definition}[Linear Independence]
+\label{def:linear_independence}
+Vectors $v_1, \ldots, v_m \in V$ are \emph{linearly independent} if the only solution to
+$\lambda_1 v_1 + \cdots + \lambda_m v_m = 0$ is $\lambda_1 = \cdots = \lambda_m = 0$.
+They are \emph{linearly dependent} otherwise.
+\end{definition}
+
+\begin{lemma}[Linear Dependence Lemma]
+\label{lem:lin_dep}
+If $v_1, \ldots, v_m$ are linearly dependent and $v_1 \neq 0$, then there exists
+$j \in \{2, \ldots, m\}$ such that $v_j \in \Span(v_1, \ldots, v_{j-1})$ and
+\[
+    \Span(v_1, \ldots, v_{j-1}, v_{j+1}, \ldots, v_m) = \Span(v_1, \ldots, v_m).
+\]
+\end{lemma}
+
+\begin{proof}
+Since the vectors are linearly dependent, there exist $\lambda_1, \ldots, \lambda_m$,
+not all zero, with $\sum_{i=1}^m \lambda_i v_i = 0$. Let $j$ be the largest index with
+$\lambda_j \neq 0$. Then $j \geq 2$ (since $v_1 \neq 0$ means $\lambda_1 = 0$ would
+force all $\lambda_i = 0$ if $j = 1$). We have
+$v_j = -\lambda_j^{-1} \sum_{i=1}^{j-1} \lambda_i v_i \in \Span(v_1, \ldots, v_{j-1})$.
+Any vector in $\Span(v_1, \ldots, v_m)$ can replace its $v_j$-component using this
+expression, so removing $v_j$ does not change the span.
+\end{proof}
+
+\subsection{Basis and Dimension}
+\label{subsec:basis_dimension}
+
+\begin{definition}[Basis]
+\label{def:basis}
+A \emph{basis} of $V$ is a list of vectors in $V$ that is linearly independent and spans $V$.
+\end{definition}
+
+\begin{theorem}[Bases Have the Same Length]
+\label{thm:dimension}
+If $V$ is finite-dimensional, then any two bases of $V$ have the same number of elements.
+\end{theorem}
+
+\begin{proof}
+Let $\{u_1, \ldots, u_m\}$ and $\{w_1, \ldots, w_n\}$ be two bases. We show $m \leq n$.
+Since the $w$'s span $V$, the list $w_1, \ldots, w_n, u_1$ is linearly dependent. By the
+linear dependence lemma, we can remove some $w_j$ while preserving the span. Repeating this
+process, each time we add a $u_i$ and remove a $w_j$, after $m$ steps we have a spanning list
+consisting of all $m$ vectors $u_i$ and $n - m$ remaining $w$'s. This requires $n - m \geq 0$,
+so $m \leq n$. By symmetry, $n \leq m$, hence $m = n$.
+\end{proof}
+
+\begin{definition}[Dimension]
+\label{def:dimension}
+The \emph{dimension} of a finite-dimensional vector space $V$, denoted $\dim V$, is the
+number of elements in any basis of $V$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:basis_extension}
+Every linearly independent list in a finite-dimensional vector space can be extended to a basis.
+\end{proposition}
+
+\begin{proof}
+Let $v_1, \ldots, v_m$ be linearly independent in $V$ with $\dim V = n$. If $m = n$, we
+are done (a linearly independent list of length $n$ in an $n$-dimensional space must span).
+If $m < n$, the list does not span $V$, so there exists $v_{m+1} \notin \Span(v_1, \ldots, v_m)$.
+Then $v_1, \ldots, v_{m+1}$ is linearly independent. Repeat until the list has length $n$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 3: LINEAR MAPS
+%% ============================================================
+\section{Linear Maps}
+\label{sec:linear_maps}
+
+\begin{definition}[Linear Map]
+\label{def:linear_map}
+A function $T: V \to W$ between vector spaces over $\F$ is a \emph{linear map} if
+$T(u + v) = Tu + Tv$ and $T(\lambda v) = \lambda Tv$ for all $u, v \in V$ and $\lambda \in \F$.
+\end{definition}
+
+\begin{definition}[Null Space and Range]
+\label{def:null_range}
+For a linear map $T: V \to W$:
+\begin{itemize}[nosep]
+    \item The \emph{null space} (kernel) is $\nullspace T = \{v \in V : Tv = 0\}$.
+    \item The \emph{range} (image) is $\range T = \{Tv : v \in V\}$.
+\end{itemize}
+\end{definition}
+
+\begin{proposition}
+\label{prop:injectivity}
+A linear map $T$ is injective if and only if $\nullspace T = \{0\}$.
+\end{proposition}
+
+\begin{proof}
+($\Rightarrow$) If $T$ is injective and $Tv = 0 = T0$, then $v = 0$.
+($\Leftarrow$) If $\nullspace T = \{0\}$ and $Tu = Tv$, then $T(u - v) = 0$,
+so $u - v = 0$, hence $u = v$.
+\end{proof}
+
+\begin{theorem}[Rank-Nullity Theorem]
+\label{thm:rank_nullity}
+If $V$ is finite-dimensional and $T: V \to W$ is linear, then
+\[
+    \dim V = \dim(\nullspace T) + \dim(\range T).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $u_1, \ldots, u_m$ be a basis of $\nullspace T$ and extend it to a basis
+$u_1, \ldots, u_m, v_1, \ldots, v_k$ of $V$. We claim $Tv_1, \ldots, Tv_k$ is a basis of
+$\range T$.
+
+\textbf{Spanning:} Any $w \in \range T$ has $w = T(\lambda_1 u_1 + \cdots + \lambda_m u_m
++ \mu_1 v_1 + \cdots + \mu_k v_k) = \mu_1 Tv_1 + \cdots + \mu_k Tv_k$ (since $Tu_i = 0$).
+
+\textbf{Independence:} If $\mu_1 Tv_1 + \cdots + \mu_k Tv_k = 0$, then
+$T(\mu_1 v_1 + \cdots + \mu_k v_k) = 0$, so $\mu_1 v_1 + \cdots + \mu_k v_k \in \nullspace T$.
+Thus $\mu_1 v_1 + \cdots + \mu_k v_k = \alpha_1 u_1 + \cdots + \alpha_m u_m$ for some scalars.
+Since the full list is a basis, all coefficients are zero, so $\mu_i = 0$ for all $i$.
+
+Therefore $\dim(\range T) = k$ and $\dim V = m + k = \dim(\nullspace T) + \dim(\range T)$.
+\end{proof}
+
+\subsection{Matrix Representation}
+\label{subsec:matrix_rep}
+
+Fix bases $\{v_1, \ldots, v_n\}$ of $V$ and $\{w_1, \ldots, w_m\}$ of $W$. Any linear map
+$T: V \to W$ is uniquely determined by its values on the basis:
+$Tv_j = \sum_{i=1}^m A_{ij} w_i$. The $m \times n$ matrix $A = (A_{ij})$ is the
+\emph{matrix of $T$} with respect to the chosen bases.
+
+\begin{proposition}[Isomorphism of Finite-Dimensional Spaces]
+\label{prop:isomorphism}
+Two finite-dimensional vector spaces over $\F$ are isomorphic if and only if they have the
+same dimension.
+\end{proposition}
+
+\begin{proof}
+($\Rightarrow$) If $T: V \to W$ is an isomorphism and $\{v_1, \ldots, v_n\}$ is a basis
+of $V$, then $\{Tv_1, \ldots, Tv_n\}$ is a basis of $W$ (injectivity gives independence,
+surjectivity gives spanning), so $\dim W = n = \dim V$.
+
+($\Leftarrow$) If $\dim V = \dim W = n$, pick bases $\{v_i\}$ of $V$ and $\{w_i\}$ of $W$.
+Define $T: V \to W$ by $Tv_i = w_i$ and extend linearly. This is well-defined, linear,
+and bijective (it maps a basis to a basis).
+\end{proof}
+
+\begin{rlconnection}[Bellman Equation as a Linear System]
+For a fixed policy $\pi$ in a finite MDP, the Bellman equation $V^\pi = r^\pi + \gamma P^\pi V^\pi$
+is a linear system $(I - \gamma P^\pi) V^\pi = r^\pi$. It has a unique solution because
+$I - \gamma P^\pi$ is invertible (its eigenvalues are $1 - \gamma \lambda_i$ where $|\lambda_i| \leq 1$
+and $\gamma < 1$, so all eigenvalues are nonzero).
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 4: DETERMINANTS
+%% ============================================================
+\section{Determinants}
+\label{sec:determinants}
+
+We define the determinant for $n \times n$ matrices over $\F$ and establish the key properties.
+
+\begin{definition}[Determinant]
+\label{def:determinant}
+For $A \in \F^{n \times n}$, the \emph{determinant} is defined recursively by cofactor
+expansion along the first row:
+\[
+    \det A = \sum_{j=1}^n (-1)^{1+j} A_{1j} \det A_{1j}',
+\]
+where $A_{1j}'$ is the $(n-1) \times (n-1)$ matrix obtained by deleting row~1 and column~$j$.
+The base case is $\det(a) = a$ for $1 \times 1$ matrices.
+\end{definition}
+
+\begin{theorem}[Properties of the Determinant]
+\label{thm:det_properties}
+For $A, B \in \F^{n \times n}$:
+\begin{enumerate}[nosep]
+    \item $\det I = 1$.
+    \item The determinant is multilinear and alternating in the rows of $A$.
+    \item If $A$ has two equal rows, then $\det A = 0$.
+    \item $\det A^T = \det A$.
+    \item Row operations: swapping two rows multiplies $\det$ by $-1$; adding a scalar multiple
+          of one row to another leaves $\det$ unchanged.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+These follow from the recursive definition and induction on $n$. We prove (3) and (5).
+
+\textbf{(3)} If rows $p$ and $q$ (with $p \neq q$) are equal, swapping them leaves $A$
+unchanged. By the alternating property (from multilinearity applied to the sum of two
+equal rows), $\det A = -\det A$, so $\det A = 0$.
+
+\textbf{(5)} Adding $c$ times row $p$ to row $q$ ($p \neq q$): by multilinearity in row $q$,
+$\det A' = \det A + c \cdot \det B$ where $B$ is the matrix with row $q$ replaced by row $p$.
+Since $B$ has two equal rows, $\det B = 0$ by (3).
+\end{proof}
+
+\begin{theorem}[Multiplicativity]
+\label{thm:det_multiplicativity}
+For $A, B \in \F^{n \times n}$, $\det(AB) = \det A \cdot \det B$.
+\end{theorem}
+
+\begin{proof}
+If $A$ is not invertible, then $\rank(AB) \leq \rank(A) < n$, so $AB$ is not invertible and
+both sides are zero. If $A$ is invertible, it is a product of elementary matrices (row operations).
+For elementary matrices $E$, one verifies directly that $\det(EB) = \det(E) \det(B)$: a row
+swap gives $\det(E) = -1$, a row scaling by $c$ gives $\det(E) = c$, and a row addition gives
+$\det(E) = 1$. The result follows by induction on the number of elementary factors.
+\end{proof}
+
+\begin{corollary}
+\label{cor:det_invertibility}
+$A$ is invertible if and only if $\det A \neq 0$.
+\end{corollary}
+
+\begin{proof}
+($\Rightarrow$) If $A$ is invertible, $1 = \det I = \det(A A^{-1}) = \det A \cdot \det A^{-1}$,
+so $\det A \neq 0$.
+($\Leftarrow$) If $A$ is not invertible, row reduction produces a row of zeros, giving $\det A = 0$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 5: EIGENVALUES AND EIGENVECTORS
+%% ============================================================
+\section{Eigenvalues and Eigenvectors}
+\label{sec:eigenvalues}
+
+\begin{definition}[Eigenvalue, Eigenvector]
+\label{def:eigenvalue}
+Let $T: V \to V$ be a linear operator on a finite-dimensional space $V$. A scalar
+$\lambda \in \F$ is an \emph{eigenvalue} of $T$ if there exists a nonzero $v \in V$ with
+$Tv = \lambda v$. Such a $v$ is an \emph{eigenvector} corresponding to $\lambda$.
+\end{definition}
+
+\begin{definition}[Characteristic Polynomial]
+\label{def:char_poly}
+For $A \in \F^{n \times n}$, the \emph{characteristic polynomial} is
+$p(\lambda) = \det(\lambda I - A)$.
+\end{definition}
+
+\begin{theorem}
+\label{thm:eigenvalues_are_roots}
+$\lambda$ is an eigenvalue of $A$ if and only if $\det(\lambda I - A) = 0$.
+\end{theorem}
+
+\begin{proof}
+$\lambda$ is an eigenvalue $\iff$ there exists $v \neq 0$ with $Av = \lambda v$ $\iff$
+$(\lambda I - A)v = 0$ has a nontrivial solution $\iff$ $\lambda I - A$ is not invertible
+$\iff$ $\det(\lambda I - A) = 0$.
+\end{proof}
+
+\begin{theorem}[Eigenvectors for Distinct Eigenvalues]
+\label{thm:distinct_eigenvalues}
+If $\lambda_1, \ldots, \lambda_m$ are distinct eigenvalues of $T$ with corresponding
+eigenvectors $v_1, \ldots, v_m$, then $v_1, \ldots, v_m$ are linearly independent.
+\end{theorem}
+
+\begin{proof}
+By induction on $m$. The case $m = 1$ is clear ($v_1 \neq 0$). Suppose the result holds for
+$m - 1$ eigenvectors and assume $\sum_{i=1}^m c_i v_i = 0$. Apply $T$ to get
+$\sum_{i=1}^m c_i \lambda_i v_i = 0$. Subtract $\lambda_m$ times the original equation:
+$\sum_{i=1}^{m-1} c_i (\lambda_i - \lambda_m) v_i = 0$. By the inductive hypothesis,
+$v_1, \ldots, v_{m-1}$ are linearly independent, so $c_i(\lambda_i - \lambda_m) = 0$ for
+$i = 1, \ldots, m-1$. Since the eigenvalues are distinct, $\lambda_i - \lambda_m \neq 0$,
+so $c_i = 0$ for $i < m$. The original equation then gives $c_m v_m = 0$, so $c_m = 0$.
+\end{proof}
+
+\begin{corollary}[Sufficient Condition for Diagonalizability]
+\label{cor:diag_distinct}
+If $A \in \F^{n \times n}$ has $n$ distinct eigenvalues, then $A$ is diagonalizable.
+\end{corollary}
+
+\begin{proof}
+By Theorem~\ref{thm:distinct_eigenvalues}, the $n$ eigenvectors are linearly independent and
+thus form a basis. If $P$ is the matrix whose columns are these eigenvectors, then
+$P^{-1}AP = \diag(\lambda_1, \ldots, \lambda_n)$.
+\end{proof}
+
+\begin{rlconnection}[Eigenvalues and Convergence Rates]
+Eigenvalue analysis is central to understanding convergence rates. The spectral radius of
+a transition matrix $P$ determines the mixing time of a Markov chain. The condition number
+$\kappa = \lambda_{\max}/\lambda_{\min}$ of the Hessian determines gradient descent convergence
+speed: gradient descent on a quadratic with condition number $\kappa$ requires
+$O(\kappa \log(1/\varepsilon))$ iterations.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: INNER PRODUCT SPACES
+%% ============================================================
+\section{Inner Product Spaces}
+\label{sec:inner_product}
+
+\begin{definition}[Inner Product]
+\label{def:inner_product}
+An \emph{inner product} on a real vector space $V$ is a function
+$\langle \cdot, \cdot \rangle: V \times V \to \R$ satisfying:
+\begin{enumerate}[nosep]
+    \item \textbf{Symmetry:} $\langle u, v \rangle = \langle v, u \rangle$.
+    \item \textbf{Linearity in the first argument:} $\langle \alpha u + \beta v, w \rangle
+          = \alpha \langle u, w \rangle + \beta \langle v, w \rangle$.
+    \item \textbf{Positive definiteness:} $\langle v, v \rangle \geq 0$ with equality iff $v = 0$.
+\end{enumerate}
+The pair $(V, \langle \cdot, \cdot \rangle)$ is an \emph{inner product space}.
+\end{definition}
+
+\begin{remark}
+The standard inner product on $\R^n$ is $\langle x, y \rangle = \sum_{i=1}^n x_i y_i = x^T y$.
+\end{remark}
+
+\begin{theorem}[Cauchy--Schwarz Inequality]
+\label{thm:cauchy_schwarz}
+For all $u, v$ in an inner product space,
+\[
+    |\langle u, v \rangle| \leq \|u\| \cdot \|v\|,
+\]
+where $\|w\| = \sqrt{\langle w, w \rangle}$. Equality holds if and only if $u$ and $v$
+are linearly dependent.
+\end{theorem}
+
+\begin{proof}
+If $v = 0$, both sides are zero. Assume $v \neq 0$ and let $t \in \R$. Then
+\[
+    0 \leq \|u - tv\|^2 = \langle u - tv, u - tv \rangle = \|u\|^2 - 2t\langle u, v\rangle + t^2\|v\|^2.
+\]
+This is a nonnegative quadratic in $t$, so its discriminant is non-positive:
+$4\langle u, v \rangle^2 - 4\|u\|^2\|v\|^2 \leq 0$, giving
+$|\langle u, v \rangle| \leq \|u\| \|v\|$.
+
+Equality holds iff the discriminant is zero, i.e., the minimum of the quadratic is zero,
+meaning $u - tv = 0$ for some $t$, i.e., $u$ and $v$ are linearly dependent.
+\end{proof}
+
+\subsection{Orthogonality and Gram--Schmidt}
+\label{subsec:gram_schmidt}
+
+\begin{definition}[Orthogonal, Orthonormal]
+\label{def:orthogonal}
+Vectors $u, v$ are \emph{orthogonal} if $\langle u, v \rangle = 0$. A list
+$e_1, \ldots, e_m$ is \emph{orthonormal} if $\langle e_i, e_j \rangle = \delta_{ij}$
+(the Kronecker delta).
+\end{definition}
+
+\begin{proposition}
+\label{prop:orthonormal_independent}
+An orthonormal list is linearly independent.
+\end{proposition}
+
+\begin{proof}
+If $\sum c_i e_i = 0$, take the inner product with $e_j$:
+$0 = \langle \sum c_i e_i, e_j \rangle = \sum c_i \langle e_i, e_j \rangle = c_j$.
+\end{proof}
+
+\begin{theorem}[Gram--Schmidt Process]
+\label{thm:gram_schmidt}
+Given a linearly independent list $v_1, \ldots, v_m$ in an inner product space, there exists
+an orthonormal list $e_1, \ldots, e_m$ such that
+$\Span(e_1, \ldots, e_k) = \Span(v_1, \ldots, v_k)$ for each $k = 1, \ldots, m$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Algorithm:} Set $e_1 = v_1 / \|v_1\|$. For $k = 2, \ldots, m$, define
+\[
+    w_k = v_k - \sum_{j=1}^{k-1} \langle v_k, e_j \rangle e_j, \qquad e_k = \frac{w_k}{\|w_k\|}.
+\]
+
+\textbf{Well-defined:} $w_k \neq 0$ because $v_k \notin \Span(v_1, \ldots, v_{k-1})
+= \Span(e_1, \ldots, e_{k-1})$ by linear independence.
+
+\textbf{Orthogonality:} For $j < k$,
+$\langle w_k, e_j \rangle = \langle v_k, e_j \rangle - \langle v_k, e_j \rangle = 0$.
+
+\textbf{Span preservation:} By construction, $e_k \in \Span(v_1, \ldots, v_k)$ and
+$v_k = w_k + \sum \langle v_k, e_j \rangle e_j \in \Span(e_1, \ldots, e_k)$, so the
+spans agree at each step.
+\end{proof}
+
+\subsection{Orthogonal Projection}
+\label{subsec:projection}
+
+\begin{theorem}[Best Approximation]
+\label{thm:best_approx}
+Let $U$ be a finite-dimensional subspace of an inner product space $V$ and let $v \in V$.
+There exists a unique $u_0 \in U$ minimizing $\|v - u\|$ over $u \in U$, given by the
+\emph{orthogonal projection}:
+\[
+    u_0 = \text{proj}_U(v) = \sum_{i=1}^m \langle v, e_i \rangle e_i,
+\]
+where $e_1, \ldots, e_m$ is any orthonormal basis of $U$. Moreover, $v - u_0 \perp U$.
+\end{theorem}
+
+\begin{proof}
+Define $u_0 = \sum \langle v, e_i \rangle e_i$. For any $e_j$,
+$\langle v - u_0, e_j \rangle = \langle v, e_j \rangle - \langle v, e_j \rangle = 0$,
+so $v - u_0 \perp U$.
+
+For any $u \in U$, write $u - u_0 \in U$ and note $(v - u_0) \perp (u_0 - u)$:
+\[
+    \|v - u\|^2 = \|(v - u_0) + (u_0 - u)\|^2 = \|v - u_0\|^2 + \|u_0 - u\|^2 \geq \|v - u_0\|^2,
+\]
+with equality iff $u = u_0$.
+\end{proof}
+
+\begin{keyresult}[Orthogonal Projection: The Best Approximation]
+The orthogonal projection $\text{proj}_U(v)$ is the unique element of $U$ closest to $v$.
+This is the geometric essence of least squares: given data and a model subspace, the least
+squares solution is the orthogonal projection of the data onto the model space. This principle
+generalizes to Hilbert spaces in functional analysis (Phase~01).
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 7: THE SPECTRAL THEOREM
+%% ============================================================
+\section{The Spectral Theorem}
+\label{sec:spectral}
+
+We now restrict to real symmetric matrices, which are the most important case for
+optimization and machine learning.
+
+\begin{theorem}[Real Eigenvalues of Symmetric Matrices]
+\label{thm:symmetric_real_eigenvalues}
+Every real symmetric matrix has only real eigenvalues.
+\end{theorem}
+
+\begin{proof}
+Let $A \in \R^{n \times n}$ be symmetric with $Av = \lambda v$ for some $v \in \C^n$,
+$v \neq 0$. Consider $\bar{v}^T A v$. On one hand,
+$\bar{v}^T A v = \bar{v}^T (\lambda v) = \lambda \bar{v}^T v = \lambda \sum |v_i|^2$.
+On the other hand, since $A = A^T$ is real,
+$\bar{v}^T A v = (A^T \bar{v})^T v = (A\bar{v})^T v = (\bar{\lambda}\bar{v})^T v
+= \bar{\lambda} \bar{v}^T v = \bar{\lambda} \sum |v_i|^2$.
+Since $\sum |v_i|^2 > 0$, we get $\lambda = \bar{\lambda}$, so $\lambda \in \R$.
+\end{proof}
+
+\begin{theorem}[Orthogonality of Eigenvectors]
+\label{thm:symmetric_orthogonal_eigenvectors}
+Eigenvectors of a real symmetric matrix corresponding to distinct eigenvalues are orthogonal.
+\end{theorem}
+
+\begin{proof}
+Let $Av = \lambda v$ and $Aw = \mu w$ with $\lambda \neq \mu$. Then
+$\lambda \langle v, w \rangle = \langle Av, w \rangle = \langle v, A^T w \rangle
+= \langle v, Aw \rangle = \mu \langle v, w \rangle$.
+So $(\lambda - \mu)\langle v, w \rangle = 0$. Since $\lambda \neq \mu$,
+$\langle v, w \rangle = 0$.
+\end{proof}
+
+\begin{theorem}[Real Spectral Theorem]
+\label{thm:spectral}
+Every real symmetric matrix $A \in \R^{n \times n}$ is orthogonally diagonalizable:
+there exists an orthogonal matrix $Q$ (i.e., $Q^T Q = I$) and a diagonal matrix
+$\Lambda = \diag(\lambda_1, \ldots, \lambda_n)$ such that $A = Q\Lambda Q^T$.
+\end{theorem}
+
+\begin{proof}
+We proceed by induction on $n$. The case $n = 1$ is trivial.
+
+Assume the result holds for $(n-1) \times (n-1)$ symmetric matrices. By
+Theorem~\ref{thm:symmetric_real_eigenvalues}, $A$ has a real eigenvalue $\lambda_1$ with
+a unit eigenvector $v_1 \in \R^n$. Extend $v_1$ to an orthonormal basis
+$\{v_1, v_2, \ldots, v_n\}$ of $\R^n$ (using Gram--Schmidt on any extension).
+Let $P = [v_1 \mid v_2 \mid \cdots \mid v_n]$. Then
+\[
+    P^T A P = \begin{pmatrix} \lambda_1 & b^T \\ b & B \end{pmatrix},
+\]
+where $b \in \R^{n-1}$ and $B \in \R^{(n-1) \times (n-1)}$. Since $P^TAP$ is symmetric
+(as $A$ is), the block structure gives $b^T = b^T$ (automatically) and we need $b = 0$.
+Indeed, the first column of $P^TAP$ is $P^TAv_1 = P^T(\lambda_1 v_1) = \lambda_1 e_1$,
+so $b = 0$. Also $B$ is symmetric.
+
+By the inductive hypothesis, $B = Q' \Lambda' (Q')^T$ for some orthogonal $Q'$ and diagonal
+$\Lambda'$. Set $Q_0 = \begin{pmatrix} 1 & 0 \\ 0 & Q' \end{pmatrix}$ and
+$Q = PQ_0$. Then $Q$ is orthogonal and
+$Q^T A Q = Q_0^T (P^T A P) Q_0 = \diag(\lambda_1, \Lambda') = \Lambda$.
+\end{proof}
+
+\begin{definition}[Positive Definite and Positive Semidefinite]
+\label{def:positive_definite}
+A symmetric matrix $A$ is:
+\begin{itemize}[nosep]
+    \item \emph{Positive definite} ($A \succ 0$) if $x^T A x > 0$ for all $x \neq 0$.
+    \item \emph{Positive semidefinite} ($A \succeq 0$) if $x^T A x \geq 0$ for all $x$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Eigenvalue Characterization]
+\label{thm:pd_eigenvalues}
+A symmetric matrix $A$ is positive definite if and only if all its eigenvalues are positive.
+It is positive semidefinite if and only if all its eigenvalues are nonnegative.
+\end{theorem}
+
+\begin{proof}
+By the spectral theorem, $A = Q\Lambda Q^T$. For any $x \neq 0$, let $y = Q^T x \neq 0$.
+Then $x^T A x = y^T \Lambda y = \sum \lambda_i y_i^2$. This is positive for all $y \neq 0$
+iff all $\lambda_i > 0$, and nonnegative for all $y$ iff all $\lambda_i \geq 0$.
+\end{proof}
+
+\begin{keyresult}[The Spectral Theorem in Practice]
+Every real symmetric matrix $A$ can be written as $A = Q\Lambda Q^T$ where $Q$ is orthogonal
+and $\Lambda$ is diagonal. This decomposition is the foundation of:
+\begin{enumerate}[nosep]
+    \item \textbf{PCA} --- the principal components are eigenvectors of the covariance matrix.
+    \item \textbf{Convexity} --- a twice-differentiable function is convex iff its Hessian is
+          positive semidefinite (all eigenvalues $\geq 0$).
+    \item \textbf{Natural policy gradient} --- the update direction is $F^{-1}\nabla J$,
+          where $F$ is the (symmetric, positive semidefinite) Fisher information matrix.
+\end{enumerate}
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 8: SINGULAR VALUE DECOMPOSITION
+%% ============================================================
+\section{Singular Value Decomposition}
+\label{sec:svd}
+
+The SVD extends diagonalization to rectangular matrices.
+
+\begin{theorem}[Singular Value Decomposition]
+\label{thm:svd}
+Every matrix $A \in \R^{m \times n}$ can be written as
+\[
+    A = U \Sigma V^T,
+\]
+where $U \in \R^{m \times m}$ is orthogonal, $V \in \R^{n \times n}$ is orthogonal, and
+$\Sigma \in \R^{m \times n}$ is ``diagonal'' with nonnegative entries
+$\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_{\min(m,n)} \geq 0$ (the \emph{singular values}).
+\end{theorem}
+
+\begin{proof}
+The matrix $A^TA \in \R^{n \times n}$ is symmetric and positive semidefinite (since
+$x^T A^T A x = \|Ax\|^2 \geq 0$). By the spectral theorem, $A^T A = V D V^T$ where
+$D = \diag(\sigma_1^2, \ldots, \sigma_n^2)$ with $\sigma_i \geq 0$ and $V$ orthogonal.
+
+For each $\sigma_i > 0$, define $u_i = Av_i / \sigma_i$. Then the $u_i$ are orthonormal:
+$\langle u_i, u_j \rangle = \frac{1}{\sigma_i \sigma_j} v_i^T A^T A v_j
+= \frac{\sigma_j^2}{\sigma_i \sigma_j} v_i^T v_j = \delta_{ij}$.
+
+Extend $\{u_1, \ldots, u_r\}$ (where $r = \rank A$) to an orthonormal basis of $\R^m$.
+Forming $U = [u_1 \mid \cdots \mid u_m]$ gives $AV = U\Sigma$, hence $A = U\Sigma V^T$.
+\end{proof}
+
+\begin{remark}[Geometric Interpretation]
+The SVD says: any linear map $\R^n \to \R^m$ can be decomposed as (1) rotate in the domain
+(apply $V^T$), (2) scale along coordinate axes (apply $\Sigma$), (3) rotate in the codomain
+(apply $U$). The singular values are the semi-axis lengths of the image of the unit ball.
+\end{remark}
+
+\begin{theorem}[Eckart--Young: Best Low-Rank Approximation]
+\label{thm:eckart_young}
+Let $A = U\Sigma V^T$ be the SVD of $A$ with singular values $\sigma_1 \geq \cdots \geq \sigma_r > 0$.
+For any $k < r$, the matrix $A_k = \sum_{i=1}^k \sigma_i u_i v_i^T$ minimizes $\|A - B\|_F$
+over all matrices $B$ of rank at most $k$, and $\|A - A_k\|_F = \sqrt{\sigma_{k+1}^2 + \cdots + \sigma_r^2}$.
+\end{theorem}
+
+\begin{proof}
+Write $A = \sum_{i=1}^r \sigma_i u_i v_i^T$. Since the $u_i v_i^T$ have orthonormal columns
+and rows, $\|A\|_F^2 = \sum \sigma_i^2$ (the Frobenius norm depends only on singular values).
+For $A_k = \sum_{i=1}^k \sigma_i u_i v_i^T$,
+$\|A - A_k\|_F^2 = \sum_{i=k+1}^r \sigma_i^2$.
+
+To show this is minimal, let $B$ have rank $\leq k$, so $\nullspace B$ has dimension $\geq n - k$.
+The space $\Span(v_1, \ldots, v_{k+1})$ has dimension $k+1$, so it intersects
+$\nullspace B$ nontrivially. Pick a unit $z$ in the intersection. Then
+$\|A - B\|_F^2 \geq \|(A-B)z\|^2 = \|Az\|^2 \geq \sigma_{k+1}^2$
+(since $z$ lies in the span of the top $k+1$ right singular vectors). Repeating this
+argument with an appropriate subspace gives $\|A-B\|_F^2 \geq \sum_{i=k+1}^r \sigma_i^2$.
+\end{proof}
+
+\begin{rlconnection}[SVD in Machine Learning]
+SVD is the workhorse of dimensionality reduction and matrix approximation. In RL,
+low-rank approximations appear in linear function approximation (projecting value functions
+onto a low-dimensional feature space) and in compressing large state-action value tables.
+PCA is a direct application: the principal components are the right singular vectors of the
+centered data matrix.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: MATRIX NORMS AND THE MATRIX EXPONENTIAL
+%% ============================================================
+\section{Matrix Norms and the Matrix Exponential}
+\label{sec:matrix_norms}
+
+\begin{definition}[Operator Norm]
+\label{def:operator_norm}
+For $A \in \R^{m \times n}$ and a vector norm $\|\cdot\|$ on both $\R^n$ and $\R^m$,
+the \emph{operator norm} (induced norm) is
+\[
+    \|A\|_{\text{op}} = \sup_{x \neq 0} \frac{\|Ax\|}{\|x\|} = \sup_{\|x\| = 1} \|Ax\|.
+\]
+For the Euclidean norm, $\|A\|_{\text{op}} = \sigma_1(A)$ (the largest singular value).
+\end{definition}
+
+\begin{definition}[Frobenius Norm]
+\label{def:frobenius}
+$\|A\|_F = \sqrt{\sum_{i,j} A_{ij}^2} = \sqrt{\tr(A^T A)} = \sqrt{\sum_i \sigma_i^2}$.
+\end{definition}
+
+\begin{theorem}[Submultiplicativity]
+\label{thm:submultiplicativity}
+For the operator norm, $\|AB\|_{\text{op}} \leq \|A\|_{\text{op}} \|B\|_{\text{op}}$.
+\end{theorem}
+
+\begin{proof}
+For any $x$ with $\|x\| = 1$, $\|ABx\| \leq \|A\|_{\text{op}} \|Bx\| \leq \|A\|_{\text{op}} \|B\|_{\text{op}} \|x\| = \|A\|_{\text{op}} \|B\|_{\text{op}}$. Taking the supremum over $x$ gives the result.
+\end{proof}
+
+\subsection{The Matrix Exponential}
+\label{subsec:matrix_exp}
+
+\begin{definition}[Matrix Exponential]
+\label{def:matrix_exp}
+For $A \in \R^{n \times n}$, the \emph{matrix exponential} is
+\[
+    e^A = \sum_{k=0}^{\infty} \frac{A^k}{k!},
+\]
+which converges absolutely in any matrix norm (since $\sum \|A\|^k / k! = e^{\|A\|} < \infty$).
+\end{definition}
+
+\begin{proposition}[Properties of the Matrix Exponential]
+\label{prop:matrix_exp_properties}
+\begin{enumerate}[nosep]
+    \item $e^{0} = I$.
+    \item If $AB = BA$, then $e^{A+B} = e^A e^B$.
+    \item $e^A$ is always invertible, with $(e^A)^{-1} = e^{-A}$.
+    \item $\frac{d}{dt} e^{tA} = A e^{tA}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(1)} $e^0 = \sum 0^k/k! = I$ (the $k=0$ term).
+
+\textbf{(2)} When $AB = BA$, the binomial theorem gives
+$(A+B)^k = \sum_{j=0}^k \binom{k}{j} A^j B^{k-j}$. Then
+$e^{A+B} = \sum_k \frac{1}{k!} \sum_j \binom{k}{j} A^j B^{k-j}
+= \sum_j \sum_\ell \frac{A^j}{j!} \frac{B^\ell}{\ell!} = e^A e^B$
+(reindexing $\ell = k - j$ and using absolute convergence to rearrange).
+
+\textbf{(3)} Since $A$ and $-A$ commute, $e^A e^{-A} = e^{A-A} = e^0 = I$.
+
+\textbf{(4)} $\frac{d}{dt} e^{tA} = \frac{d}{dt} \sum_k \frac{(tA)^k}{k!}
+= \sum_{k=1}^\infty \frac{k t^{k-1} A^k}{k!} = A \sum_{k=1}^\infty \frac{(tA)^{k-1}}{(k-1)!}
+= A e^{tA}$.
+\end{proof}
+
+\begin{proposition}[Matrix Exponential of Diagonalizable Matrices]
+\label{prop:exp_diag}
+If $A = P D P^{-1}$ with $D = \diag(\lambda_1, \ldots, \lambda_n)$, then
+$e^A = P \diag(e^{\lambda_1}, \ldots, e^{\lambda_n}) P^{-1}$.
+\end{proposition}
+
+\begin{proof}
+$A^k = P D^k P^{-1}$, so $e^A = \sum_k P D^k P^{-1} / k! = P (\sum_k D^k / k!) P^{-1}
+= P e^D P^{-1}$. Since $D$ is diagonal, $e^D = \diag(e^{\lambda_1}, \ldots, e^{\lambda_n})$.
+\end{proof}
+
+\begin{rlconnection}[Matrix Exponential in Dynamical Systems]
+The matrix exponential solves the linear ODE $\dot{x}(t) = Ax(t)$: the solution is
+$x(t) = e^{tA} x(0)$. This appears in continuous-time Markov chains (where the transition
+semigroup is $P(t) = e^{tQ}$ for a rate matrix $Q$) and in the analysis of linear dynamical
+systems that arise in control theory (Phase~06).
+\end{rlconnection}
+
+\end{document}

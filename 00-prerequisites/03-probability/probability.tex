@@ -1,0 +1,1700 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Review}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\indicator}{\mathbf{1}}
+
+% ---- Title ----
+\title{\textbf{Probability Review}\\[10pt]
+\large Random Variables, Expectation, and Limit Theorems\\[5pt]
+\normalsize Phase 0: Prerequisites Review $\mid$ Document 3 of 3\\
+\normalsize Primary texts: Ross, \emph{A First Course in Probability}; Blitzstein \& Hwang, \emph{Introduction to Probability}}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document is a self-contained refresher of classical (non-measure-theoretic) probability
+theory. We cover sample spaces, conditional probability, random variables, expectation,
+variance, joint distributions, moment generating functions, concentration inequalities, and
+limit theorems. Every result is stated precisely and proved completely. The treatment is
+elementary: we use probability mass functions, probability density functions, sums, and
+integrals --- not $\sigma$-algebras or Lebesgue integration. Phase~01 will rebuild the entire
+theory on measure-theoretic foundations; the goal here is to develop fluent computational
+facility with the classical tools.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+This document is a rigorous refresher of classical probability at the undergraduate level.
+It is designed for readers who have seen this material before but need to recall the key
+definitions, theorem statements, and proof techniques before proceeding to the
+measure-theoretic treatment in Phase~01.
+
+\medskip\noindent\textbf{What this document covers.}
+\begin{enumerate}[nosep]
+    \item \textbf{Sample spaces and events} --- axioms of probability, inclusion-exclusion,
+          continuity of probability.
+    \item \textbf{Conditional probability and independence} --- Bayes' theorem, mutual
+          independence.
+    \item \textbf{Discrete random variables} --- PMFs, Bernoulli, Binomial, Geometric, Poisson.
+    \item \textbf{Continuous random variables} --- PDFs, Uniform, Exponential, Normal.
+    \item \textbf{Expectation} --- linearity, LOTUS, indicator random variables.
+    \item \textbf{Variance and covariance} --- computational formulas, variance of sums.
+    \item \textbf{Joint distributions} --- marginals, conditional distributions, laws of total
+          expectation and total variance.
+    \item \textbf{Moment generating functions} --- computing moments, sums of independent
+          random variables.
+    \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Jensen.
+    \item \textbf{Limit theorems} --- weak law of large numbers, central limit theorem.
+    \item \textbf{Tail bounds and confidence intervals} --- Hoeffding's inequality, sample
+          complexity.
+\end{enumerate}
+
+\medskip\noindent\textbf{What this document does not cover.}
+We do not use $\sigma$-algebras, measurability, Lebesgue integration, filtrations,
+or martingale theory. These are developed from scratch in Phase~01.
+
+\begin{rlconnection}[Connection to Reinforcement Learning]
+Reinforcement learning is fundamentally about decision-making under uncertainty. Every
+concept here --- conditional probability, expectation, variance, the law of large
+numbers --- has a direct RL counterpart. Rewards are random variables. Value functions are
+conditional expectations. Monte Carlo methods converge by the law of large numbers. This
+review ensures you can compute fluently before Phase~01 introduces the measure-theoretic
+machinery that makes everything rigorous.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 2: SAMPLE SPACES AND EVENTS
+%% ============================================================
+\section{Sample Spaces and Events}
+\label{sec:sample_spaces}
+
+\begin{definition}[Sample Space, Outcome, Event]
+\label{def:sample_space}
+A \emph{sample space} $\Omega$ is a non-empty set whose elements $\omega \in \Omega$ are
+called \emph{outcomes}. An \emph{event} is a subset $A \subseteq \Omega$.
+\end{definition}
+
+\begin{remark}
+At this elementary level, we take the collection of all events to be the power set
+$2^\Omega$ (all subsets of $\Omega$). In Phase~01, this will be replaced by a
+$\sigma$-algebra $\mathcal{F} \subseteq 2^\Omega$, which is necessary for uncountable
+sample spaces.
+\end{remark}
+
+\begin{definition}[Set Operations on Events]
+\label{def:set_ops}
+Let $A, B \subseteq \Omega$.
+\begin{enumerate}[nosep]
+    \item \emph{Union:} $A \cup B = \{\omega \in \Omega : \omega \in A \text{ or } \omega \in B\}$ (``$A$ or $B$ occurs'').
+    \item \emph{Intersection:} $A \cap B = \{\omega \in \Omega : \omega \in A \text{ and } \omega \in B\}$ (``$A$ and $B$ occur'').
+    \item \emph{Complement:} $A^c = \Omega \setminus A = \{\omega \in \Omega : \omega \notin A\}$ (``$A$ does not occur'').
+    \item \emph{Disjoint:} $A$ and $B$ are \emph{disjoint} (or \emph{mutually exclusive}) if $A \cap B = \emptyset$.
+\end{enumerate}
+\end{definition}
+
+\subsection{Axioms of Probability}
+
+\begin{definition}[Probability (Kolmogorov Axioms)]
+\label{def:probability}
+A \emph{probability} on a sample space $\Omega$ is a function $\Prob$ assigning to each
+event $A \subseteq \Omega$ a real number $\Prob(A)$ satisfying:
+\begin{enumerate}[nosep]
+    \item \textbf{Non-negativity:} $\Prob(A) \geq 0$ for every event $A$.
+    \item \textbf{Normalization:} $\Prob(\Omega) = 1$.
+    \item \textbf{Countable additivity:} If $A_1, A_2, \ldots$ are pairwise disjoint events, then
+    \[
+        \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(A_n).
+    \]
+\end{enumerate}
+\end{definition}
+
+\subsection{Basic Properties}
+
+\begin{proposition}[Complement Rule]
+\label{prop:complement}
+For any event $A$, $\Prob(A^c) = 1 - \Prob(A)$.
+\end{proposition}
+
+\begin{proof}
+Since $A$ and $A^c$ are disjoint and $A \cup A^c = \Omega$, Axiom~3 gives
+$\Prob(\Omega) = \Prob(A) + \Prob(A^c)$. By Axiom~2, $\Prob(\Omega) = 1$, so
+$\Prob(A^c) = 1 - \Prob(A)$.
+\end{proof}
+
+\begin{corollary}
+$\Prob(\emptyset) = 0$.
+\end{corollary}
+
+\begin{proof}
+$\emptyset = \Omega^c$, so $\Prob(\emptyset) = 1 - \Prob(\Omega) = 1 - 1 = 0$.
+\end{proof}
+
+\begin{proposition}[Monotonicity]
+\label{prop:monotonicity}
+If $A \subseteq B$, then $\Prob(A) \leq \Prob(B)$.
+\end{proposition}
+
+\begin{proof}
+Write $B = A \cup (B \setminus A)$, where $A$ and $B \setminus A$ are disjoint. By
+Axiom~3, $\Prob(B) = \Prob(A) + \Prob(B \setminus A) \geq \Prob(A)$, since
+$\Prob(B \setminus A) \geq 0$ by Axiom~1.
+\end{proof}
+
+\begin{theorem}[Inclusion-Exclusion for Two Events]
+\label{thm:incl_excl_two}
+For any events $A$ and $B$,
+\[
+    \Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B).
+\]
+\end{theorem}
+
+\begin{proof}
+Write $A \cup B = A \cup (B \setminus A)$, where $A$ and $B \setminus A$ are disjoint.
+By Axiom~3, $\Prob(A \cup B) = \Prob(A) + \Prob(B \setminus A)$. Now write
+$B = (A \cap B) \cup (B \setminus A)$, where $A \cap B$ and $B \setminus A$ are disjoint.
+By Axiom~3, $\Prob(B) = \Prob(A \cap B) + \Prob(B \setminus A)$, so
+$\Prob(B \setminus A) = \Prob(B) - \Prob(A \cap B)$. Substituting,
+$\Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B)$.
+\end{proof}
+
+\begin{theorem}[Inclusion-Exclusion for $n$ Events]
+\label{thm:incl_excl_n}
+For events $A_1, \ldots, A_n$,
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right) = \sum_{k=1}^n (-1)^{k+1}
+    \sum_{1 \leq i_1 < \cdots < i_k \leq n} \Prob(A_{i_1} \cap \cdots \cap A_{i_k}).
+\]
+\end{theorem}
+
+\begin{proof}
+We proceed by induction on $n$.
+
+\emph{Base case ($n = 1$):} $\Prob(A_1) = \Prob(A_1)$. Trivially holds.
+
+\emph{Base case ($n = 2$):} This is Theorem~\ref{thm:incl_excl_two}.
+
+\emph{Inductive step:} Assume the formula holds for $n-1$ events. Write
+$\bigcup_{i=1}^n A_i = \left(\bigcup_{i=1}^{n-1} A_i\right) \cup A_n$. By
+Theorem~\ref{thm:incl_excl_two},
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right) = \Prob\!\left(\bigcup_{i=1}^{n-1} A_i\right)
+    + \Prob(A_n) - \Prob\!\left(\left(\bigcup_{i=1}^{n-1} A_i\right) \cap A_n\right).
+\]
+Since $\left(\bigcup_{i=1}^{n-1} A_i\right) \cap A_n = \bigcup_{i=1}^{n-1}(A_i \cap A_n)$,
+we can apply the inductive hypothesis to both $\Prob\!\left(\bigcup_{i=1}^{n-1} A_i\right)$
+and $\Prob\!\left(\bigcup_{i=1}^{n-1}(A_i \cap A_n)\right)$. Applying the inductive hypothesis
+to the first term gives the alternating sum over subsets of $\{1, \ldots, n-1\}$. Adding
+$\Prob(A_n)$ accounts for the singleton $\{n\}$. Subtracting the inductive hypothesis
+applied to $\bigcup_{i=1}^{n-1}(A_i \cap A_n)$ contributes exactly the terms involving
+$A_n$ in subsets of size $\geq 2$, each with the correct sign $(-1)^{k+1}$. Collecting
+all terms yields the formula for $n$ events.
+\end{proof}
+
+\subsection{Continuity of Probability}
+
+\begin{theorem}[Continuity of Probability]
+\label{thm:continuity_prob}
+Let $A_1 \subseteq A_2 \subseteq A_3 \subseteq \cdots$ be an increasing sequence of
+events. Then
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \lim_{n \to \infty} \Prob(A_n).
+\]
+\end{theorem}
+
+\begin{proof}
+Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for $n \geq 2$. The events
+$B_1, B_2, \ldots$ are pairwise disjoint (since $A_n \setminus A_{n-1}$ contains only
+elements in $A_n$ but not in $A_{n-1}$, and these sets are nested), and
+$\bigcup_{n=1}^\infty B_n = \bigcup_{n=1}^\infty A_n$. By countable additivity,
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(B_n).
+\]
+Now, $\sum_{k=1}^n \Prob(B_k) = \Prob\!\left(\bigcup_{k=1}^n B_k\right) = \Prob(A_n)$,
+where the first equality uses finite additivity (the $B_k$ are disjoint) and the second
+uses $\bigcup_{k=1}^n B_k = A_n$. Therefore
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(B_n)
+    = \lim_{n \to \infty} \sum_{k=1}^n \Prob(B_k) = \lim_{n \to \infty} \Prob(A_n).
+    \qedhere
+\]
+\end{proof}
+
+%% ============================================================
+%% SECTION 3: CONDITIONAL PROBABILITY AND INDEPENDENCE
+%% ============================================================
+\section{Conditional Probability and Independence}
+\label{sec:cond_prob}
+
+\subsection{Conditional Probability}
+
+\begin{definition}[Conditional Probability]
+\label{def:cond_prob}
+If $\Prob(B) > 0$, the \emph{conditional probability of $A$ given $B$} is
+\[
+    \Prob(A \mid B) = \frac{\Prob(A \cap B)}{\Prob(B)}.
+\]
+\end{definition}
+
+\begin{theorem}[Multiplication Rule]
+\label{thm:mult_rule}
+For events $A_1, \ldots, A_n$ with $\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$,
+\[
+    \Prob(A_1 \cap \cdots \cap A_n) = \Prob(A_1)\,\Prob(A_2 \mid A_1)\,
+    \Prob(A_3 \mid A_1 \cap A_2) \cdots \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}).
+\]
+\end{theorem}
+
+\begin{proof}
+By induction on $n$. For $n = 2$, the definition of conditional probability gives
+$\Prob(A_1 \cap A_2) = \Prob(A_1)\,\Prob(A_2 \mid A_1)$.
+
+Assume the result holds for $n - 1$ events. Then
+\begin{align*}
+    \Prob(A_1 \cap \cdots \cap A_n)
+    &= \Prob(A_1 \cap \cdots \cap A_{n-1}) \cdot \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}) \\
+    &= \Prob(A_1)\,\Prob(A_2 \mid A_1) \cdots \Prob(A_{n-1} \mid A_1 \cap \cdots \cap A_{n-2})
+       \cdot \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}),
+\end{align*}
+where the second line applies the inductive hypothesis.
+\end{proof}
+
+\begin{theorem}[Law of Total Probability]
+\label{thm:total_prob}
+Let $B_1, B_2, \ldots, B_n$ be a partition of $\Omega$ (i.e., the $B_i$ are pairwise
+disjoint and $\bigcup_{i=1}^n B_i = \Omega$) with $\Prob(B_i) > 0$ for all $i$. Then for
+any event $A$,
+\[
+    \Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i)\,\Prob(B_i).
+\]
+\end{theorem}
+
+\begin{proof}
+Since the $B_i$ partition $\Omega$, we have $A = A \cap \Omega = A \cap
+\left(\bigcup_{i=1}^n B_i\right) = \bigcup_{i=1}^n (A \cap B_i)$. The events
+$A \cap B_1, \ldots, A \cap B_n$ are pairwise disjoint (since the $B_i$ are). By
+finite additivity,
+\[
+    \Prob(A) = \sum_{i=1}^n \Prob(A \cap B_i) = \sum_{i=1}^n \Prob(A \mid B_i)\,\Prob(B_i),
+\]
+where the last step uses $\Prob(A \cap B_i) = \Prob(A \mid B_i)\,\Prob(B_i)$.
+\end{proof}
+
+\begin{theorem}[Bayes' Theorem]
+\label{thm:bayes}
+Let $B_1, \ldots, B_n$ be a partition of $\Omega$ with $\Prob(B_i) > 0$ for all $i$, and
+let $A$ be an event with $\Prob(A) > 0$. Then
+\[
+    \Prob(B_j \mid A) = \frac{\Prob(A \mid B_j)\,\Prob(B_j)}{\sum_{i=1}^n \Prob(A \mid B_i)\,\Prob(B_i)}.
+\]
+\end{theorem}
+
+\begin{proof}
+By definition, $\Prob(B_j \mid A) = \Prob(A \cap B_j)/\Prob(A)$. The numerator equals
+$\Prob(A \mid B_j)\,\Prob(B_j)$ by the definition of conditional probability. The
+denominator equals $\sum_{i=1}^n \Prob(A \mid B_i)\,\Prob(B_i)$ by the law of total
+probability (Theorem~\ref{thm:total_prob}).
+\end{proof}
+
+\subsection{Independence}
+
+\begin{definition}[Independence of Two Events]
+\label{def:indep_two}
+Events $A$ and $B$ are \emph{independent} if
+\[
+    \Prob(A \cap B) = \Prob(A)\,\Prob(B).
+\]
+\end{definition}
+
+\begin{remark}
+When $\Prob(B) > 0$, independence is equivalent to $\Prob(A \mid B) = \Prob(A)$: knowing
+that $B$ occurred does not change the probability of $A$.
+\end{remark}
+
+\begin{definition}[Mutual Independence]
+\label{def:mutual_indep}
+Events $A_1, \ldots, A_n$ are \emph{mutually independent} if for every subset
+$\{i_1, \ldots, i_k\} \subseteq \{1, \ldots, n\}$ with $k \geq 2$,
+\[
+    \Prob(A_{i_1} \cap \cdots \cap A_{i_k}) = \Prob(A_{i_1}) \cdots \Prob(A_{i_k}).
+\]
+This requires the product formula to hold for \emph{all} $2^n - n - 1$ subsets of size
+$\geq 2$, not merely for the $\binom{n}{2}$ pairs.
+\end{definition}
+
+\begin{warning}[Pairwise $\neq$ Mutual Independence]
+Pairwise independence does not imply mutual independence. The following example shows that
+the product rule can hold for every pair yet fail for the triple.
+\end{warning}
+
+\begin{example}[Pairwise but Not Mutually Independent]
+\label{ex:pairwise_not_mutual}
+Toss two fair coins. Let $A = \{\text{first coin is heads}\}$,
+$B = \{\text{second coin is heads}\}$, and $C = \{\text{exactly one head}\}$.
+The sample space is $\{HH, HT, TH, TT\}$, each with probability $1/4$.
+
+We have $\Prob(A) = \Prob(B) = \Prob(C) = 1/2$.
+\begin{itemize}[nosep]
+    \item $A \cap B = \{HH\}$, so $\Prob(A \cap B) = 1/4 = \Prob(A)\Prob(B)$.
+    \item $A \cap C = \{HT\}$, so $\Prob(A \cap C) = 1/4 = \Prob(A)\Prob(C)$.
+    \item $B \cap C = \{TH\}$, so $\Prob(B \cap C) = 1/4 = \Prob(B)\Prob(C)$.
+\end{itemize}
+All three pairs are independent. However, $A \cap B \cap C = \emptyset$, so
+$\Prob(A \cap B \cap C) = 0 \neq 1/8 = \Prob(A)\Prob(B)\Prob(C)$.
+Hence $A, B, C$ are pairwise independent but \emph{not} mutually independent.
+\end{example}
+
+\begin{rlconnection}[Connection to RL]
+The Markov property --- the foundation of MDPs --- is an independence statement: the future
+is independent of the past given the present. Bayes' theorem is the update rule in Bayesian
+reinforcement learning and POMDP belief updates.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 4: DISCRETE RANDOM VARIABLES
+%% ============================================================
+\section{Discrete Random Variables}
+\label{sec:discrete_rv}
+
+\begin{definition}[Random Variable]
+\label{def:rv}
+A \emph{random variable} is a function $X \colon \Omega \to \R$ that assigns a real number
+to each outcome. We write $\{X = x\}$ as shorthand for $\{\omega \in \Omega : X(\omega) = x\}$.
+\end{definition}
+
+\begin{remark}
+At this level, the definition is purely informal: any function from $\Omega$ to $\R$.
+Phase~01 will add the measurability requirement that makes this rigorous for uncountable
+sample spaces.
+\end{remark}
+
+\begin{definition}[Probability Mass Function]
+\label{def:pmf}
+A random variable $X$ is \emph{discrete} if it takes values in a finite or countable set
+$\{x_1, x_2, \ldots\}$. Its \emph{probability mass function (PMF)} is
+\[
+    p_X(x) = \Prob(X = x).
+\]
+The PMF satisfies $p_X(x) \geq 0$ for all $x$ and $\sum_x p_X(x) = 1$.
+\end{definition}
+
+\begin{definition}[Cumulative Distribution Function]
+\label{def:cdf}
+The \emph{cumulative distribution function (CDF)} of a random variable $X$ is
+\[
+    F_X(x) = \Prob(X \leq x), \quad x \in \R.
+\]
+For a discrete random variable, $F_X(x) = \sum_{x_i \leq x} p_X(x_i)$.
+\end{definition}
+
+\subsection{Common Discrete Distributions}
+
+\begin{definition}[Bernoulli Distribution]
+\label{def:bernoulli}
+A random variable $X$ has the $\mathrm{Bernoulli}(p)$ distribution, $0 \leq p \leq 1$, if
+$X$ takes values in $\{0, 1\}$ with
+\[
+    p_X(1) = p, \quad p_X(0) = 1 - p.
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:bernoulli_moments}
+If $X \sim \mathrm{Bernoulli}(p)$, then $\E[X] = p$ and $\Var(X) = p(1-p)$.
+\end{proposition}
+
+\begin{proof}
+$\E[X] = 0 \cdot (1-p) + 1 \cdot p = p$.
+For the variance: $\E[X^2] = 0^2 \cdot (1-p) + 1^2 \cdot p = p$, so
+$\Var(X) = \E[X^2] - (\E[X])^2 = p - p^2 = p(1-p)$.
+\end{proof}
+
+\begin{definition}[Binomial Distribution]
+\label{def:binomial}
+Suppose we perform $n$ independent Bernoulli trials, each with success probability $p$.
+Let $X$ count the total number of successes. Then $X \sim \mathrm{Binomial}(n, p)$.
+\end{definition}
+
+\begin{proposition}[Binomial PMF]
+\label{prop:binomial_pmf}
+If $X \sim \mathrm{Binomial}(n, p)$, then
+\[
+    p_X(k) = \binom{n}{k} p^k (1-p)^{n-k}, \quad k = 0, 1, \ldots, n.
+\]
+\end{proposition}
+
+\begin{proof}
+Each specific sequence of $k$ successes and $n - k$ failures has probability
+$p^k(1-p)^{n-k}$ by independence. There are $\binom{n}{k}$ such sequences (choosing which
+$k$ of the $n$ trials are successes), so $\Prob(X = k) = \binom{n}{k} p^k(1-p)^{n-k}$.
+\end{proof}
+
+\begin{proposition}
+\label{prop:binomial_moments}
+If $X \sim \mathrm{Binomial}(n, p)$, then $\E[X] = np$ and $\Var(X) = np(1-p)$.
+\end{proposition}
+
+\begin{proof}
+Write $X = X_1 + \cdots + X_n$, where $X_i \sim \mathrm{Bernoulli}(p)$ independently. By
+linearity of expectation (Theorem~\ref{thm:linearity} below),
+$\E[X] = \sum_{i=1}^n \E[X_i] = np$. Since the $X_i$ are independent, $\Var(X) =
+\sum_{i=1}^n \Var(X_i) = np(1-p)$ (using Corollary~\ref{cor:var_indep_sum} below).
+\end{proof}
+
+\begin{definition}[Geometric Distribution]
+\label{def:geometric}
+Perform independent Bernoulli trials with success probability $p > 0$. Let $X$ be the trial
+number of the first success. Then $X \sim \mathrm{Geometric}(p)$.
+\end{definition}
+
+\begin{proposition}[Geometric PMF]
+\label{prop:geometric_pmf}
+If $X \sim \mathrm{Geometric}(p)$, then
+\[
+    p_X(k) = (1-p)^{k-1} p, \quad k = 1, 2, 3, \ldots
+\]
+\end{proposition}
+
+\begin{proof}
+The first success occurs on trial $k$ exactly when the first $k-1$ trials are failures and
+trial $k$ is a success. By independence, this probability is $(1-p)^{k-1} \cdot p$.
+\end{proof}
+
+\begin{proposition}
+\label{prop:geometric_moments}
+If $X \sim \mathrm{Geometric}(p)$, then $\E[X] = 1/p$ and $\Var(X) = (1-p)/p^2$.
+\end{proposition}
+
+\begin{proof}
+Let $q = 1 - p$. We compute $\E[X]$ directly:
+\[
+    \E[X] = \sum_{k=1}^\infty k \, q^{k-1} p = p \sum_{k=1}^\infty k \, q^{k-1}.
+\]
+Recall that $\sum_{k=1}^\infty k \, q^{k-1} = \frac{d}{dq}\sum_{k=0}^\infty q^k
+= \frac{d}{dq}\frac{1}{1-q} = \frac{1}{(1-q)^2} = \frac{1}{p^2}$ for $|q| < 1$.
+Thus $\E[X] = p/p^2 = 1/p$.
+
+For the variance, compute $\E[X^2]$. We use $\E[X(X-1)] = \sum_{k=1}^\infty k(k-1)q^{k-1}p
+= p \, q \sum_{k=2}^\infty k(k-1)q^{k-2}$. Since $\sum_{k=2}^\infty k(k-1)q^{k-2}
+= \frac{d^2}{dq^2}\frac{1}{1-q} = \frac{2}{(1-q)^3} = \frac{2}{p^3}$, we get
+$\E[X(X-1)] = 2q/p^2$. Then $\E[X^2] = \E[X(X-1)] + \E[X] = 2q/p^2 + 1/p$, and
+\[
+    \Var(X) = \E[X^2] - (\E[X])^2 = \frac{2q}{p^2} + \frac{1}{p} - \frac{1}{p^2}
+    = \frac{2q + p - 1}{p^2} = \frac{q}{p^2} = \frac{1-p}{p^2},
+\]
+where we used $2q + p - 1 = 2(1-p) + p - 1 = 1 - p = q$.
+\end{proof}
+
+\begin{definition}[Poisson Distribution]
+\label{def:poisson}
+A random variable $X$ has the $\mathrm{Poisson}(\lambda)$ distribution, $\lambda > 0$, if
+\[
+    p_X(k) = \frac{e^{-\lambda}\lambda^k}{k!}, \quad k = 0, 1, 2, \ldots
+\]
+\end{definition}
+
+\begin{theorem}[Poisson as a Limit of Binomials]
+\label{thm:poisson_limit}
+Let $X_n \sim \mathrm{Binomial}(n, \lambda/n)$ with $\lambda > 0$ fixed. Then for each
+$k = 0, 1, 2, \ldots$,
+\[
+    \lim_{n \to \infty} \Prob(X_n = k) = \frac{e^{-\lambda}\lambda^k}{k!}.
+\]
+\end{theorem}
+
+\begin{proof}
+With $p = \lambda/n$,
+\[
+    \Prob(X_n = k) = \binom{n}{k}\left(\frac{\lambda}{n}\right)^k
+    \left(1 - \frac{\lambda}{n}\right)^{n-k}.
+\]
+Write $\binom{n}{k} = \frac{n(n-1)\cdots(n-k+1)}{k!}$, so
+\[
+    \Prob(X_n = k) = \frac{n(n-1)\cdots(n-k+1)}{n^k} \cdot \frac{\lambda^k}{k!}
+    \cdot \left(1 - \frac{\lambda}{n}\right)^{n-k}.
+\]
+As $n \to \infty$: $\frac{n(n-1)\cdots(n-k+1)}{n^k} \to 1$ (each factor $\frac{n-j}{n}
+\to 1$), and $\left(1 - \frac{\lambda}{n}\right)^n \to e^{-\lambda}$, and
+$\left(1 - \frac{\lambda}{n}\right)^{-k} \to 1$. Therefore $\Prob(X_n = k) \to
+e^{-\lambda}\lambda^k/k!$.
+\end{proof}
+
+\begin{proposition}
+\label{prop:poisson_moments}
+If $X \sim \mathrm{Poisson}(\lambda)$, then $\E[X] = \lambda$ and $\Var(X) = \lambda$.
+\end{proposition}
+
+\begin{proof}
+\begin{align*}
+    \E[X] &= \sum_{k=0}^\infty k \cdot \frac{e^{-\lambda}\lambda^k}{k!}
+    = \sum_{k=1}^\infty \frac{e^{-\lambda}\lambda^k}{(k-1)!}
+    = \lambda e^{-\lambda} \sum_{j=0}^\infty \frac{\lambda^j}{j!}
+    = \lambda e^{-\lambda} \cdot e^{\lambda} = \lambda.
+\end{align*}
+For the variance, compute $\E[X(X-1)]$:
+\begin{align*}
+    \E[X(X-1)] &= \sum_{k=2}^\infty k(k-1)\frac{e^{-\lambda}\lambda^k}{k!}
+    = \lambda^2 e^{-\lambda} \sum_{j=0}^\infty \frac{\lambda^j}{j!} = \lambda^2.
+\end{align*}
+Then $\E[X^2] = \E[X(X-1)] + \E[X] = \lambda^2 + \lambda$, so
+$\Var(X) = \lambda^2 + \lambda - \lambda^2 = \lambda$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 5: CONTINUOUS RANDOM VARIABLES
+%% ============================================================
+\section{Continuous Random Variables}
+\label{sec:continuous_rv}
+
+\begin{definition}[Probability Density Function]
+\label{def:pdf}
+A random variable $X$ is \emph{continuous} if there exists a non-negative function
+$f_X \colon \R \to [0, \infty)$ such that for every interval $[a, b]$,
+\[
+    \Prob(a \leq X \leq b) = \int_a^b f_X(x)\,dx.
+\]
+The function $f_X$ is called the \emph{probability density function (PDF)} of $X$. The PDF
+satisfies $\int_{-\infty}^\infty f_X(x)\,dx = 1$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:cdf_pdf}
+If $X$ is continuous with PDF $f_X$, then its CDF is $F_X(x) = \int_{-\infty}^x f_X(t)\,dt$,
+and $f_X(x) = F_X'(x)$ wherever $F_X$ is differentiable.
+\end{proposition}
+
+\begin{proof}
+By definition, $F_X(x) = \Prob(X \leq x) = \int_{-\infty}^x f_X(t)\,dt$. By the
+fundamental theorem of calculus, $F_X'(x) = f_X(x)$ at every point where $f_X$ is
+continuous.
+\end{proof}
+
+\begin{proposition}
+\label{prop:continuous_point_zero}
+If $X$ is a continuous random variable, then $\Prob(X = x) = 0$ for every $x \in \R$.
+\end{proposition}
+
+\begin{proof}
+$\Prob(X = x) = \Prob(x \leq X \leq x) = \int_x^x f_X(t)\,dt = 0$.
+\end{proof}
+
+\subsection{Common Continuous Distributions}
+
+\begin{definition}[Uniform Distribution]
+\label{def:uniform}
+$X \sim \mathrm{Uniform}(a, b)$ if $X$ has PDF
+\[
+    f_X(x) = \begin{cases} \frac{1}{b - a} & \text{if } a \leq x \leq b, \\ 0 & \text{otherwise.} \end{cases}
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:uniform_moments}
+If $X \sim \mathrm{Uniform}(a, b)$, then $\E[X] = \frac{a+b}{2}$ and
+$\Var(X) = \frac{(b-a)^2}{12}$.
+\end{proposition}
+
+\begin{proof}
+\[
+    \E[X] = \int_a^b x \cdot \frac{1}{b-a}\,dx = \frac{1}{b-a}\cdot\frac{x^2}{2}\bigg|_a^b
+    = \frac{b^2 - a^2}{2(b-a)} = \frac{a + b}{2}.
+\]
+\[
+    \E[X^2] = \int_a^b x^2 \cdot \frac{1}{b-a}\,dx = \frac{1}{b-a}\cdot\frac{x^3}{3}\bigg|_a^b
+    = \frac{b^3 - a^3}{3(b-a)} = \frac{a^2 + ab + b^2}{3}.
+\]
+Thus
+\[
+    \Var(X) = \E[X^2] - (\E[X])^2 = \frac{a^2 + ab + b^2}{3} - \frac{(a+b)^2}{4}
+    = \frac{4(a^2 + ab + b^2) - 3(a+b)^2}{12} = \frac{a^2 - 2ab + b^2}{12}
+    = \frac{(b-a)^2}{12}.
+    \qedhere
+\]
+\end{proof}
+
+\begin{definition}[Exponential Distribution]
+\label{def:exponential}
+$X \sim \mathrm{Exponential}(\lambda)$, $\lambda > 0$, if $X$ has PDF
+\[
+    f_X(x) = \begin{cases} \lambda e^{-\lambda x} & \text{if } x \geq 0, \\ 0 & \text{if } x < 0. \end{cases}
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:exponential_moments}
+If $X \sim \mathrm{Exponential}(\lambda)$, then $\E[X] = 1/\lambda$ and
+$\Var(X) = 1/\lambda^2$.
+\end{proposition}
+
+\begin{proof}
+Using integration by parts with $u = x$, $dv = \lambda e^{-\lambda x}\,dx$:
+\[
+    \E[X] = \int_0^\infty x \lambda e^{-\lambda x}\,dx
+    = \left[-x e^{-\lambda x}\right]_0^\infty + \int_0^\infty e^{-\lambda x}\,dx
+    = 0 + \frac{1}{\lambda} = \frac{1}{\lambda}.
+\]
+Similarly, integrating by parts twice:
+\[
+    \E[X^2] = \int_0^\infty x^2 \lambda e^{-\lambda x}\,dx = \frac{2}{\lambda^2}.
+\]
+Thus $\Var(X) = 2/\lambda^2 - 1/\lambda^2 = 1/\lambda^2$.
+\end{proof}
+
+\begin{theorem}[Memoryless Property of the Exponential]
+\label{thm:memoryless}
+If $X \sim \mathrm{Exponential}(\lambda)$, then for all $s, t \geq 0$,
+\[
+    \Prob(X > s + t \mid X > s) = \Prob(X > t).
+\]
+\end{theorem}
+
+\begin{proof}
+The survival function is $\Prob(X > x) = e^{-\lambda x}$ for $x \geq 0$. By definition
+of conditional probability,
+\[
+    \Prob(X > s + t \mid X > s) = \frac{\Prob(X > s + t \text{ and } X > s)}{\Prob(X > s)}
+    = \frac{\Prob(X > s + t)}{\Prob(X > s)} = \frac{e^{-\lambda(s+t)}}{e^{-\lambda s}}
+    = e^{-\lambda t} = \Prob(X > t).
+    \qedhere
+\]
+\end{proof}
+
+\begin{definition}[Normal (Gaussian) Distribution]
+\label{def:normal}
+$X \sim \mathcal{N}(\mu, \sigma^2)$ if $X$ has PDF
+\[
+    f_X(x) = \frac{1}{\sigma\sqrt{2\pi}} \exp\!\left(-\frac{(x - \mu)^2}{2\sigma^2}\right),
+    \quad x \in \R.
+\]
+When $\mu = 0$ and $\sigma^2 = 1$, we write $Z \sim \mathcal{N}(0,1)$ and call $Z$ a
+\emph{standard normal} random variable.
+\end{definition}
+
+\begin{theorem}[The Gaussian Integral]
+\label{thm:gaussian_integral}
+$\displaystyle \int_{-\infty}^\infty e^{-x^2/2}\,dx = \sqrt{2\pi}$.
+Consequently, the standard normal PDF integrates to $1$.
+\end{theorem}
+
+\begin{proof}
+Let $I = \int_{-\infty}^\infty e^{-x^2/2}\,dx$. We show $I^2 = 2\pi$. Consider
+\[
+    I^2 = \left(\int_{-\infty}^\infty e^{-x^2/2}\,dx\right)
+          \left(\int_{-\infty}^\infty e^{-y^2/2}\,dy\right)
+        = \int_{-\infty}^\infty \int_{-\infty}^\infty e^{-(x^2+y^2)/2}\,dx\,dy.
+\]
+Switch to polar coordinates: $x = r\cos\theta$, $y = r\sin\theta$,
+$dx\,dy = r\,dr\,d\theta$:
+\[
+    I^2 = \int_0^{2\pi}\int_0^\infty e^{-r^2/2}\,r\,dr\,d\theta
+    = 2\pi \int_0^\infty r\,e^{-r^2/2}\,dr.
+\]
+Substituting $u = r^2/2$, $du = r\,dr$:
+\[
+    \int_0^\infty r\,e^{-r^2/2}\,dr = \int_0^\infty e^{-u}\,du = 1.
+\]
+Therefore $I^2 = 2\pi$, so $I = \sqrt{2\pi}$ (since $I > 0$). It follows that
+$\int_{-\infty}^\infty \frac{1}{\sqrt{2\pi}}e^{-x^2/2}\,dx = 1$.
+\end{proof}
+
+\begin{proposition}
+\label{prop:normal_moments}
+If $X \sim \mathcal{N}(\mu, \sigma^2)$, then $\E[X] = \mu$ and $\Var(X) = \sigma^2$.
+\end{proposition}
+
+\begin{proof}
+Let $Z = (X - \mu)/\sigma$, so $Z \sim \mathcal{N}(0,1)$ and $X = \mu + \sigma Z$.
+It suffices to show $\E[Z] = 0$ and $\Var(Z) = 1$.
+
+For the mean: $\E[Z] = \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty z\,e^{-z^2/2}\,dz = 0$,
+since the integrand $z \mapsto z\,e^{-z^2/2}$ is an odd function.
+
+For the variance: $\E[Z^2] = \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty z^2 e^{-z^2/2}\,dz$.
+Integrate by parts with $u = z$, $dv = z\,e^{-z^2/2}\,dz$, so $du = dz$ and
+$v = -e^{-z^2/2}$:
+\[
+    \int_{-\infty}^\infty z^2 e^{-z^2/2}\,dz
+    = \left[-z\,e^{-z^2/2}\right]_{-\infty}^\infty + \int_{-\infty}^\infty e^{-z^2/2}\,dz
+    = 0 + \sqrt{2\pi}.
+\]
+Thus $\E[Z^2] = 1$, and $\Var(Z) = \E[Z^2] - (\E[Z])^2 = 1 - 0 = 1$. Therefore
+$\E[X] = \mu + \sigma \cdot 0 = \mu$ and $\Var(X) = \sigma^2 \Var(Z) = \sigma^2$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: EXPECTATION
+%% ============================================================
+\section{Expectation}
+\label{sec:expectation}
+
+\begin{definition}[Expectation]
+\label{def:expectation}
+Let $X$ be a random variable.
+\begin{itemize}[nosep]
+    \item \textbf{Discrete case:} If $X$ is discrete with PMF $p_X$, then
+    \[
+        \E[X] = \sum_x x \, p_X(x),
+    \]
+    provided the sum converges absolutely.
+    \item \textbf{Continuous case:} If $X$ is continuous with PDF $f_X$, then
+    \[
+        \E[X] = \int_{-\infty}^\infty x \, f_X(x)\,dx,
+    \]
+    provided the integral converges absolutely.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Law of the Unconscious Statistician (LOTUS)]
+\label{thm:lotus}
+Let $g \colon \R \to \R$.
+\begin{itemize}[nosep]
+    \item \textbf{Discrete:} $\E[g(X)] = \sum_x g(x)\,p_X(x)$.
+    \item \textbf{Continuous:} $\E[g(X)] = \int_{-\infty}^\infty g(x)\,f_X(x)\,dx$.
+\end{itemize}
+\end{theorem}
+
+\begin{proof}[Proof (discrete case)]
+Let $Y = g(X)$. For each value $y$ in the range of $g$,
+$p_Y(y) = \Prob(Y = y) = \sum_{x : g(x) = y} p_X(x)$.
+Then
+\[
+    \E[Y] = \sum_y y \, p_Y(y) = \sum_y y \sum_{x : g(x) = y} p_X(x)
+    = \sum_y \sum_{x : g(x) = y} g(x)\,p_X(x) = \sum_x g(x)\,p_X(x),
+\]
+where the last step rearranges the double sum: every $x$ appears exactly once in the
+partition $\{x : g(x) = y\}$ as $y$ ranges over the values of $g$.
+\end{proof}
+
+\begin{theorem}[Linearity of Expectation]
+\label{thm:linearity}
+For any random variables $X$ and $Y$ (on the same sample space) and constants $a, b \in \R$,
+\[
+    \E[aX + bY] = a\E[X] + b\E[Y].
+\]
+This holds \textbf{without any independence assumption}.
+\end{theorem}
+
+\begin{proof}
+We prove the discrete case; the continuous case is analogous with integrals.
+
+First, $\E[aX] = \sum_x (ax)\,p_X(x) = a\sum_x x\,p_X(x) = a\E[X]$.
+
+For the sum: let $(X, Y)$ have joint PMF $p_{X,Y}$. Then
+\begin{align*}
+    \E[X + Y] &= \sum_x \sum_y (x + y)\,p_{X,Y}(x,y) \\
+    &= \sum_x \sum_y x\,p_{X,Y}(x,y) + \sum_x \sum_y y\,p_{X,Y}(x,y) \\
+    &= \sum_x x \sum_y p_{X,Y}(x,y) + \sum_y y \sum_x p_{X,Y}(x,y) \\
+    &= \sum_x x\,p_X(x) + \sum_y y\,p_Y(y) = \E[X] + \E[Y].
+\end{align*}
+Combining: $\E[aX + bY] = \E[aX] + \E[bY] = a\E[X] + b\E[Y]$.
+\end{proof}
+
+\begin{proposition}[Expectation of Indicator Random Variables]
+\label{prop:indicator_expectation}
+Let $A$ be an event, and define $\indicator_A(\omega) = 1$ if $\omega \in A$ and
+$\indicator_A(\omega) = 0$ otherwise. Then $\E[\indicator_A] = \Prob(A)$.
+\end{proposition}
+
+\begin{proof}
+$\indicator_A \sim \mathrm{Bernoulli}(\Prob(A))$, so
+$\E[\indicator_A] = 1 \cdot \Prob(A) + 0 \cdot (1 - \Prob(A)) = \Prob(A)$.
+\end{proof}
+
+\begin{keyresult}[Linearity of Expectation]
+Linearity of expectation is arguably the single most useful property in probability. It
+holds unconditionally --- no independence required. In RL, the value function
+$V^\pi(s) = \E\!\left[\sum_{t=0}^\infty \gamma^t R_t \mid S_0 = s\right]$ is linear in the
+reward, and linearity lets us decompose it step by step.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 7: VARIANCE AND COVARIANCE
+%% ============================================================
+\section{Variance and Covariance}
+\label{sec:variance}
+
+\begin{definition}[Variance]
+\label{def:variance}
+The \emph{variance} of a random variable $X$ is
+\[
+    \Var(X) = \E\!\left[(X - \E[X])^2\right],
+\]
+provided this expectation exists.
+\end{definition}
+
+\begin{theorem}[Computational Formula for Variance]
+\label{thm:var_formula}
+$\Var(X) = \E[X^2] - (\E[X])^2$.
+\end{theorem}
+
+\begin{proof}
+Let $\mu = \E[X]$. Expanding the square:
+\[
+    \Var(X) = \E[(X - \mu)^2] = \E[X^2 - 2\mu X + \mu^2]
+    = \E[X^2] - 2\mu\E[X] + \mu^2 = \E[X^2] - 2\mu^2 + \mu^2 = \E[X^2] - \mu^2.
+    \qedhere
+\]
+\end{proof}
+
+\begin{proposition}[Affine Transformation of Variance]
+\label{prop:var_affine}
+For constants $a, b \in \R$, $\Var(aX + b) = a^2\Var(X)$.
+\end{proposition}
+
+\begin{proof}
+$\E[aX + b] = a\E[X] + b$, so
+\[
+    \Var(aX + b) = \E[(aX + b - a\E[X] - b)^2] = \E[a^2(X - \E[X])^2]
+    = a^2\E[(X - \E[X])^2] = a^2\Var(X).
+    \qedhere
+\]
+\end{proof}
+
+\begin{definition}[Standard Deviation]
+\label{def:std_dev}
+The \emph{standard deviation} of $X$ is $\mathrm{SD}(X) = \sqrt{\Var(X)}$.
+\end{definition}
+
+\begin{definition}[Covariance]
+\label{def:covariance}
+The \emph{covariance} of random variables $X$ and $Y$ is
+\[
+    \Cov(X, Y) = \E\!\left[(X - \E[X])(Y - \E[Y])\right].
+\]
+\end{definition}
+
+\begin{theorem}[Computational Formula for Covariance]
+\label{thm:cov_formula}
+$\Cov(X, Y) = \E[XY] - \E[X]\E[Y]$.
+\end{theorem}
+
+\begin{proof}
+Let $\mu_X = \E[X]$ and $\mu_Y = \E[Y]$. Expanding:
+\begin{align*}
+    \Cov(X,Y) &= \E[(X - \mu_X)(Y - \mu_Y)] = \E[XY - \mu_Y X - \mu_X Y + \mu_X\mu_Y] \\
+    &= \E[XY] - \mu_Y\E[X] - \mu_X\E[Y] + \mu_X\mu_Y = \E[XY] - \mu_X\mu_Y.
+    \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proposition}[Properties of Covariance]
+\label{prop:cov_properties}
+For random variables $X, Y, Z$ and constants $a, b \in \R$:
+\begin{enumerate}[nosep]
+    \item $\Cov(X, X) = \Var(X)$.
+    \item $\Cov(X, Y) = \Cov(Y, X)$ \hfill(symmetry).
+    \item $\Cov(aX + bY, Z) = a\Cov(X, Z) + b\Cov(Y, Z)$ \hfill(bilinearity).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(1)} $\Cov(X,X) = \E[(X - \E[X])(X - \E[X])] = \E[(X - \E[X])^2] = \Var(X)$.
+
+\textbf{(2)} Immediate from $\E[XY] = \E[YX]$.
+
+\textbf{(3)} Using the computational formula:
+\begin{align*}
+    \Cov(aX + bY, Z) &= \E[(aX + bY)Z] - \E[aX + bY]\E[Z] \\
+    &= a\E[XZ] + b\E[YZ] - (a\E[X] + b\E[Y])\E[Z] \\
+    &= a(\E[XZ] - \E[X]\E[Z]) + b(\E[YZ] - \E[Y]\E[Z]) \\
+    &= a\Cov(X,Z) + b\Cov(Y,Z).
+    \qedhere
+\end{align*}
+\end{proof}
+
+\begin{theorem}[Variance of a Sum]
+\label{thm:var_sum}
+$\Var(X + Y) = \Var(X) + \Var(Y) + 2\Cov(X,Y)$.
+\end{theorem}
+
+\begin{proof}
+\begin{align*}
+    \Var(X + Y) &= \Cov(X + Y, X + Y) \\
+    &= \Cov(X, X) + \Cov(X, Y) + \Cov(Y, X) + \Cov(Y, Y) \\
+    &= \Var(X) + 2\Cov(X, Y) + \Var(Y),
+\end{align*}
+where the second line uses bilinearity and the third uses
+$\Cov(X,X) = \Var(X)$, $\Cov(Y,Y) = \Var(Y)$, and symmetry.
+\end{proof}
+
+\begin{theorem}[Independent Implies Uncorrelated]
+\label{thm:indep_uncorr}
+If $X$ and $Y$ are independent random variables, then $\Cov(X,Y) = 0$.
+\end{theorem}
+
+\begin{proof}
+For independent discrete random variables,
+\[
+    \E[XY] = \sum_x \sum_y xy\,p_{X,Y}(x,y) = \sum_x \sum_y xy\,p_X(x)\,p_Y(y)
+    = \left(\sum_x x\,p_X(x)\right)\!\left(\sum_y y\,p_Y(y)\right) = \E[X]\E[Y].
+\]
+By Theorem~\ref{thm:cov_formula}, $\Cov(X,Y) = \E[XY] - \E[X]\E[Y] = 0$.
+\end{proof}
+
+\begin{corollary}[Variance of Sum of Independent Random Variables]
+\label{cor:var_indep_sum}
+If $X_1, \ldots, X_n$ are independent, then $\Var(X_1 + \cdots + X_n) = \Var(X_1) + \cdots + \Var(X_n)$.
+\end{corollary}
+
+\begin{proof}
+By induction using Theorem~\ref{thm:var_sum} and Theorem~\ref{thm:indep_uncorr}: all
+cross-covariance terms vanish.
+\end{proof}
+
+\begin{definition}[Correlation Coefficient]
+\label{def:correlation}
+The \emph{correlation} of $X$ and $Y$ (with $\Var(X), \Var(Y) > 0$) is
+\[
+    \rho(X,Y) = \frac{\Cov(X,Y)}{\sqrt{\Var(X)\Var(Y)}}.
+\]
+One can show $-1 \leq \rho(X,Y) \leq 1$ (this follows from the Cauchy--Schwarz inequality,
+Theorem~\ref{thm:cauchy_schwarz}).
+\end{definition}
+
+\subsection{Variances of the Standard Distributions}
+
+We collect the variance computations for the distributions of Sections~\ref{sec:discrete_rv}
+and~\ref{sec:continuous_rv}. The proofs of $\Var(X) = p(1-p)$ for Bernoulli,
+$\Var(X) = np(1-p)$ for Binomial, $\Var(X) = (1-p)/p^2$ for Geometric, and
+$\Var(X) = \lambda$ for Poisson were given in those sections. Similarly,
+$\Var(X) = (b-a)^2/12$ for Uniform, $\Var(X) = 1/\lambda^2$ for Exponential, and
+$\Var(X) = \sigma^2$ for Normal were proved there.
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Distribution & $\E[X]$ & $\Var(X)$ \\
+\midrule
+$\mathrm{Bernoulli}(p)$ & $p$ & $p(1-p)$ \\
+$\mathrm{Binomial}(n,p)$ & $np$ & $np(1-p)$ \\
+$\mathrm{Geometric}(p)$ & $1/p$ & $(1-p)/p^2$ \\
+$\mathrm{Poisson}(\lambda)$ & $\lambda$ & $\lambda$ \\
+$\mathrm{Uniform}(a,b)$ & $(a+b)/2$ & $(b-a)^2/12$ \\
+$\mathrm{Exponential}(\lambda)$ & $1/\lambda$ & $1/\lambda^2$ \\
+$\mathcal{N}(\mu, \sigma^2)$ & $\mu$ & $\sigma^2$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% ============================================================
+%% SECTION 8: JOINT DISTRIBUTIONS
+%% ============================================================
+\section{Joint Distributions}
+\label{sec:joint}
+
+\begin{definition}[Joint PMF]
+\label{def:joint_pmf}
+Discrete random variables $X$ and $Y$ have \emph{joint PMF}
+\[
+    p_{X,Y}(x,y) = \Prob(X = x, Y = y).
+\]
+\end{definition}
+
+\begin{definition}[Joint PDF]
+\label{def:joint_pdf}
+Continuous random variables $X$ and $Y$ have \emph{joint PDF} $f_{X,Y}$ if
+\[
+    \Prob((X,Y) \in A) = \iint_A f_{X,Y}(x,y)\,dx\,dy
+\]
+for every ``reasonable'' region $A \subseteq \R^2$.
+\end{definition}
+
+\subsection{Marginal Distributions}
+
+\begin{proposition}[Marginal from Joint]
+\label{prop:marginals}
+\begin{itemize}[nosep]
+    \item \textbf{Discrete:} $p_X(x) = \sum_y p_{X,Y}(x,y)$.
+    \item \textbf{Continuous:} $f_X(x) = \int_{-\infty}^\infty f_{X,Y}(x,y)\,dy$.
+\end{itemize}
+\end{proposition}
+
+\begin{proof}
+In the discrete case, $p_X(x) = \Prob(X = x) = \Prob\!\left(\bigcup_y \{X = x, Y = y\}\right)
+= \sum_y \Prob(X = x, Y = y) = \sum_y p_{X,Y}(x,y)$, where the third equality uses
+countable additivity (the events $\{Y = y\}$ are disjoint). The continuous case is analogous
+with integration replacing summation.
+\end{proof}
+
+\subsection{Conditional Distributions}
+
+\begin{definition}[Conditional PMF]
+\label{def:cond_pmf}
+If $\Prob(X = x) > 0$, the \emph{conditional PMF of $Y$ given $X = x$} is
+\[
+    p_{Y|X}(y \mid x) = \Prob(Y = y \mid X = x) = \frac{p_{X,Y}(x,y)}{p_X(x)}.
+\]
+\end{definition}
+
+\begin{definition}[Conditional PDF]
+\label{def:cond_pdf}
+If $f_X(x) > 0$, the \emph{conditional PDF of $Y$ given $X = x$} is
+\[
+    f_{Y|X}(y \mid x) = \frac{f_{X,Y}(x,y)}{f_X(x)}.
+\]
+\end{definition}
+
+\subsection{Independence of Random Variables}
+
+\begin{definition}[Independence of Random Variables]
+\label{def:indep_rv}
+Random variables $X$ and $Y$ are \emph{independent} if their joint distribution factors:
+\begin{itemize}[nosep]
+    \item \textbf{Discrete:} $p_{X,Y}(x,y) = p_X(x)\,p_Y(y)$ for all $x, y$.
+    \item \textbf{Continuous:} $f_{X,Y}(x,y) = f_X(x)\,f_Y(y)$ for all $x, y$.
+\end{itemize}
+\end{definition}
+
+\subsection{Conditional Expectation}
+
+\begin{definition}[Conditional Expectation Given an Event]
+\label{def:cond_exp}
+In the discrete case, the \emph{conditional expectation of $Y$ given $X = x$} is
+\[
+    \E[Y \mid X = x] = \sum_y y \, p_{Y|X}(y \mid x).
+\]
+In the continuous case,
+\[
+    \E[Y \mid X = x] = \int_{-\infty}^\infty y \, f_{Y|X}(y \mid x)\,dy.
+\]
+The function $g(x) = \E[Y \mid X = x]$ defines a new random variable $\E[Y \mid X] = g(X)$.
+\end{definition}
+
+\begin{theorem}[Law of Total Expectation (Tower Property)]
+\label{thm:total_expectation}
+$\E[Y] = \E\!\left[\E[Y \mid X]\right]$.
+\end{theorem}
+
+\begin{proof}[Proof (discrete case)]
+Let $g(x) = \E[Y \mid X = x]$. Then
+\begin{align*}
+    \E[\E[Y \mid X]] &= \E[g(X)] = \sum_x g(x)\,p_X(x)
+    = \sum_x \left(\sum_y y\,p_{Y|X}(y \mid x)\right) p_X(x) \\
+    &= \sum_x \sum_y y \cdot \frac{p_{X,Y}(x,y)}{p_X(x)} \cdot p_X(x)
+    = \sum_x \sum_y y\,p_{X,Y}(x,y) \\
+    &= \sum_y y \sum_x p_{X,Y}(x,y) = \sum_y y\,p_Y(y) = \E[Y].
+    \qedhere
+\end{align*}
+\end{proof}
+
+\begin{theorem}[Law of Total Variance]
+\label{thm:total_variance}
+$\Var(Y) = \E[\Var(Y \mid X)] + \Var(\E[Y \mid X])$.
+\end{theorem}
+
+\begin{proof}
+We use $\Var(Y) = \E[Y^2] - (\E[Y])^2$.
+
+The conditional variance is $\Var(Y \mid X) = \E[Y^2 \mid X] - (\E[Y \mid X])^2$.
+Taking expectations of both sides and using the tower property:
+\[
+    \E[\Var(Y \mid X)] = \E[\E[Y^2 \mid X]] - \E[(\E[Y \mid X])^2]
+    = \E[Y^2] - \E[(\E[Y \mid X])^2].
+\]
+For the second term, $\Var(\E[Y \mid X]) = \E[(\E[Y \mid X])^2] - (\E[\E[Y \mid X]])^2
+= \E[(\E[Y \mid X])^2] - (\E[Y])^2$.
+Adding:
+\begin{align*}
+    \E[\Var(Y \mid X)] + \Var(\E[Y \mid X])
+    &= \left(\E[Y^2] - \E[(\E[Y \mid X])^2]\right) + \left(\E[(\E[Y \mid X])^2] - (\E[Y])^2\right) \\
+    &= \E[Y^2] - (\E[Y])^2 = \Var(Y).
+    \qedhere
+\end{align*}
+\end{proof}
+
+\begin{keyresult}[Tower Property and Dynamic Programming]
+The law of total expectation (tower property) is the engine of dynamic programming. The
+Bellman equation
+\[
+    V(s) = \E[R + \gamma V(S') \mid S = s]
+    = \sum_a \pi(a \mid s) \sum_{s'} P(s' \mid s, a)\left[R(s,a,s') + \gamma V(s')\right]
+\]
+is obtained by conditioning on the action and next state. Phase~01 will prove this
+rigorously with $\sigma$-algebras.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 9: MOMENT GENERATING FUNCTIONS
+%% ============================================================
+\section{Moment Generating Functions}
+\label{sec:mgf}
+
+\begin{definition}[Moment Generating Function]
+\label{def:mgf}
+The \emph{moment generating function (MGF)} of a random variable $X$ is
+\[
+    M_X(t) = \E[e^{tX}],
+\]
+defined for all $t$ in an open interval containing $0$ where this expectation is finite.
+\end{definition}
+
+\begin{theorem}[MGF Determines the Distribution]
+\label{thm:mgf_unique}
+If $M_X(t) = M_Y(t)$ for all $t$ in an open interval containing $0$, then $X$ and $Y$
+have the same distribution.
+\end{theorem}
+
+\begin{remark}
+The proof uses the theory of Laplace transforms and analytic continuation. We state this
+theorem without proof and use it as a tool for identifying distributions.
+\end{remark}
+
+\begin{theorem}[Moments from MGF]
+\label{thm:mgf_moments}
+If $M_X(t)$ exists in a neighborhood of $0$, then
+\[
+    \E[X^n] = M_X^{(n)}(0) = \frac{d^n}{dt^n} M_X(t)\bigg|_{t=0}
+\]
+for every $n \geq 1$.
+\end{theorem}
+
+\begin{proof}
+Since $e^{tX} = \sum_{k=0}^\infty \frac{(tX)^k}{k!}$ and the MGF exists in a neighborhood
+of $0$ (justifying interchange of expectation and summation), we have
+\[
+    M_X(t) = \E[e^{tX}] = \sum_{k=0}^\infty \frac{t^k}{k!}\E[X^k].
+\]
+Differentiating $n$ times with respect to $t$:
+\[
+    M_X^{(n)}(t) = \sum_{k=n}^\infty \frac{t^{k-n}}{(k-n)!}\E[X^k].
+\]
+Setting $t = 0$: $M_X^{(n)}(0) = \E[X^n]$ (only the $k = n$ term survives).
+\end{proof}
+
+\begin{theorem}[MGF of Sum of Independent Random Variables]
+\label{thm:mgf_sum}
+If $X$ and $Y$ are independent, then $M_{X+Y}(t) = M_X(t) \cdot M_Y(t)$.
+\end{theorem}
+
+\begin{proof}
+$M_{X+Y}(t) = \E[e^{t(X+Y)}] = \E[e^{tX} \cdot e^{tY}] = \E[e^{tX}]\cdot\E[e^{tY}]
+= M_X(t) \cdot M_Y(t)$,
+where the third equality uses the fact that for independent random variables,
+$\E[g(X)h(Y)] = \E[g(X)]\E[h(Y)]$ (with $g(x) = e^{tx}$ and $h(y) = e^{ty}$).
+\end{proof}
+
+\subsection{MGFs of Standard Distributions}
+
+\begin{proposition}[MGF of Bernoulli]
+\label{prop:mgf_bernoulli}
+If $X \sim \mathrm{Bernoulli}(p)$, then $M_X(t) = 1 - p + pe^t$.
+\end{proposition}
+
+\begin{proof}
+$M_X(t) = \E[e^{tX}] = e^{t \cdot 0}(1-p) + e^{t \cdot 1} p = (1-p) + pe^t$.
+\end{proof}
+
+\begin{proposition}[MGF of Poisson]
+\label{prop:mgf_poisson}
+If $X \sim \mathrm{Poisson}(\lambda)$, then $M_X(t) = \exp(\lambda(e^t - 1))$.
+\end{proposition}
+
+\begin{proof}
+\[
+    M_X(t) = \sum_{k=0}^\infty e^{tk}\frac{e^{-\lambda}\lambda^k}{k!}
+    = e^{-\lambda}\sum_{k=0}^\infty \frac{(\lambda e^t)^k}{k!}
+    = e^{-\lambda}\cdot e^{\lambda e^t} = e^{\lambda(e^t - 1)}.
+    \qedhere
+\]
+\end{proof}
+
+\begin{proposition}[MGF of Normal]
+\label{prop:mgf_normal}
+If $X \sim \mathcal{N}(\mu, \sigma^2)$, then $M_X(t) = \exp(\mu t + \sigma^2 t^2/2)$.
+\end{proposition}
+
+\begin{proof}
+It suffices to prove the case $Z \sim \mathcal{N}(0,1)$, since
+$M_X(t) = \E[e^{t(\mu + \sigma Z)}] = e^{\mu t} M_Z(\sigma t)$.
+
+For $Z \sim \mathcal{N}(0,1)$:
+\begin{align*}
+    M_Z(t) &= \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty e^{tz} e^{-z^2/2}\,dz
+    = \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty e^{-(z^2 - 2tz)/2}\,dz \\
+    &= \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty e^{-((z-t)^2 - t^2)/2}\,dz
+    = e^{t^2/2} \cdot \frac{1}{\sqrt{2\pi}}\int_{-\infty}^\infty e^{-(z-t)^2/2}\,dz
+    = e^{t^2/2},
+\end{align*}
+where the last integral equals $1$ by the substitution $u = z - t$ and
+Theorem~\ref{thm:gaussian_integral}. Thus $M_X(t) = e^{\mu t} \cdot e^{(\sigma t)^2/2}
+= e^{\mu t + \sigma^2 t^2/2}$.
+\end{proof}
+
+\subsection{Applications of MGFs}
+
+\begin{theorem}[Sum of Independent Poissons]
+\label{thm:sum_poisson}
+If $X \sim \mathrm{Poisson}(\lambda)$ and $Y \sim \mathrm{Poisson}(\mu)$ are independent,
+then $X + Y \sim \mathrm{Poisson}(\lambda + \mu)$.
+\end{theorem}
+
+\begin{proof}
+$M_{X+Y}(t) = M_X(t)M_Y(t) = e^{\lambda(e^t-1)} \cdot e^{\mu(e^t-1)}
+= e^{(\lambda+\mu)(e^t-1)}$,
+which is the MGF of $\mathrm{Poisson}(\lambda + \mu)$. By
+Theorem~\ref{thm:mgf_unique}, $X + Y \sim \mathrm{Poisson}(\lambda + \mu)$.
+\end{proof}
+
+\begin{theorem}[Sum of Independent Normals]
+\label{thm:sum_normal}
+If $X \sim \mathcal{N}(\mu_1, \sigma_1^2)$ and $Y \sim \mathcal{N}(\mu_2, \sigma_2^2)$
+are independent, then $X + Y \sim \mathcal{N}(\mu_1 + \mu_2, \sigma_1^2 + \sigma_2^2)$.
+\end{theorem}
+
+\begin{proof}
+$M_{X+Y}(t) = M_X(t)M_Y(t) = e^{\mu_1 t + \sigma_1^2 t^2/2} \cdot
+e^{\mu_2 t + \sigma_2^2 t^2/2} = e^{(\mu_1+\mu_2)t + (\sigma_1^2+\sigma_2^2)t^2/2}$,
+which is the MGF of $\mathcal{N}(\mu_1 + \mu_2, \sigma_1^2 + \sigma_2^2)$. The result
+follows from Theorem~\ref{thm:mgf_unique}.
+\end{proof}
+
+%% ============================================================
+%% SECTION 10: PROBABILITY INEQUALITIES
+%% ============================================================
+\section{Probability Inequalities}
+\label{sec:inequalities}
+
+\begin{theorem}[Markov's Inequality]
+\label{thm:markov}
+If $X \geq 0$ and $a > 0$, then
+\[
+    \Prob(X \geq a) \leq \frac{\E[X]}{a}.
+\]
+\end{theorem}
+
+\begin{proof}
+We have $X \geq a \cdot \indicator_{\{X \geq a\}}$, since: if $X \geq a$ then the right
+side is $a \leq X$, and if $X < a$ then the right side is $0 \leq X$. Taking expectations:
+\[
+    \E[X] \geq a \cdot \E[\indicator_{\{X \geq a\}}] = a \cdot \Prob(X \geq a).
+\]
+Dividing by $a > 0$ gives the result.
+\end{proof}
+
+\begin{theorem}[Chebyshev's Inequality]
+\label{thm:chebyshev}
+For any random variable $X$ with finite variance and any $k > 0$,
+\[
+    \Prob(|X - \E[X]| \geq k) \leq \frac{\Var(X)}{k^2}.
+\]
+\end{theorem}
+
+\begin{proof}
+Apply Markov's inequality to the non-negative random variable $(X - \E[X])^2$ with
+threshold $k^2$:
+\[
+    \Prob(|X - \E[X]| \geq k) = \Prob((X - \E[X])^2 \geq k^2)
+    \leq \frac{\E[(X - \E[X])^2]}{k^2} = \frac{\Var(X)}{k^2}.
+    \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Cauchy--Schwarz Inequality for Expectations]
+\label{thm:cauchy_schwarz}
+For any random variables $X$ and $Y$ with $\E[X^2], \E[Y^2] < \infty$,
+\[
+    |\E[XY]|^2 \leq \E[X^2]\,\E[Y^2].
+\]
+\end{theorem}
+
+\begin{proof}
+If $\E[Y^2] = 0$, then $Y = 0$ a.s., so $\E[XY] = 0$ and both sides are $0$.
+
+Assume $\E[Y^2] > 0$. For any $t \in \R$, $\E[(X + tY)^2] \geq 0$. Expanding:
+\[
+    \E[X^2] + 2t\,\E[XY] + t^2\,\E[Y^2] \geq 0 \quad \text{for all } t \in \R.
+\]
+This is a quadratic in $t$ that is non-negative for all $t$. A quadratic $at^2 + bt + c$
+with $a > 0$ is non-negative for all $t$ if and only if its discriminant satisfies
+$b^2 - 4ac \leq 0$. Here $a = \E[Y^2] > 0$, $b = 2\E[XY]$, $c = \E[X^2]$, so
+\[
+    4(\E[XY])^2 - 4\E[X^2]\E[Y^2] \leq 0,
+\]
+which gives $(\E[XY])^2 \leq \E[X^2]\E[Y^2]$.
+\end{proof}
+
+\begin{theorem}[Jensen's Inequality]
+\label{thm:jensen}
+If $g \colon \R \to \R$ is convex and $\E[|X|] < \infty$, then
+\[
+    g(\E[X]) \leq \E[g(X)].
+\]
+\end{theorem}
+
+\begin{proof}[Proof (discrete case, by induction)]
+We prove that if $X$ takes values $x_1, \ldots, x_n$ with probabilities $p_1, \ldots, p_n$
+(where $p_i > 0$ and $\sum p_i = 1$), then $g\!\left(\sum_{i=1}^n p_i x_i\right) \leq
+\sum_{i=1}^n p_i\,g(x_i)$.
+
+\emph{Base case ($n = 1$):} $g(p_1 x_1) = g(x_1) = p_1 g(x_1)$. Holds trivially.
+
+\emph{Base case ($n = 2$):} This is the definition of convexity:
+$g(p_1 x_1 + p_2 x_2) \leq p_1 g(x_1) + p_2 g(x_2)$ with $p_1 + p_2 = 1$.
+
+\emph{Inductive step:} Assume the result for $n - 1$ values. Let $q = 1 - p_n > 0$
+(the case $p_n = 1$ is trivial). Write
+\[
+    \sum_{i=1}^n p_i x_i = q \cdot \underbrace{\sum_{i=1}^{n-1}\frac{p_i}{q}x_i}_{= \bar{x}} + p_n x_n.
+\]
+Since $q + p_n = 1$, convexity gives
+\[
+    g\!\left(\sum_{i=1}^n p_i x_i\right) = g(q\bar{x} + p_n x_n)
+    \leq q\,g(\bar{x}) + p_n\,g(x_n).
+\]
+The weights $p_i/q$ for $i = 1, \ldots, n-1$ sum to $1$, so the inductive hypothesis
+gives $g(\bar{x}) \leq \sum_{i=1}^{n-1}\frac{p_i}{q}g(x_i)$. Substituting:
+\[
+    g\!\left(\sum_{i=1}^n p_i x_i\right)
+    \leq q \sum_{i=1}^{n-1}\frac{p_i}{q}g(x_i) + p_n\,g(x_n)
+    = \sum_{i=1}^n p_i\,g(x_i).
+    \qedhere
+\]
+\end{proof}
+
+\begin{rlconnection}[Concentration Inequalities in RL]
+Concentration inequalities are the quantitative tools that turn convergence concepts into
+convergence rates. Markov and Chebyshev give basic tail bounds. Phase~01 will add the
+sharper Hoeffding and Azuma--Hoeffding inequalities used in RL convergence proofs.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 11: LIMIT THEOREMS
+%% ============================================================
+\section{Limit Theorems}
+\label{sec:limit_theorems}
+
+\begin{definition}[Convergence in Probability]
+\label{def:conv_prob}
+A sequence of random variables $X_1, X_2, \ldots$ \emph{converges in probability} to a
+random variable $X$, written $X_n \xrightarrow{\Prob} X$, if for every $\varepsilon > 0$,
+\[
+    \lim_{n \to \infty} \Prob(|X_n - X| \geq \varepsilon) = 0.
+\]
+\end{definition}
+
+\begin{theorem}[Weak Law of Large Numbers (WLLN)]
+\label{thm:wlln}
+Let $X_1, X_2, \ldots$ be independent and identically distributed (i.i.d.) random variables
+with $\E[X_i] = \mu$ and $\Var(X_i) = \sigma^2 < \infty$. Let
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$. Then $\bar{X}_n \xrightarrow{\Prob} \mu$.
+\end{theorem}
+
+\begin{proof}
+By linearity of expectation, $\E[\bar{X}_n] = \mu$. By independence,
+\[
+    \Var(\bar{X}_n) = \Var\!\left(\frac{1}{n}\sum_{i=1}^n X_i\right)
+    = \frac{1}{n^2}\sum_{i=1}^n \Var(X_i) = \frac{\sigma^2}{n}.
+\]
+By Chebyshev's inequality (Theorem~\ref{thm:chebyshev}), for any $\varepsilon > 0$:
+\[
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon)
+    \leq \frac{\Var(\bar{X}_n)}{\varepsilon^2} = \frac{\sigma^2}{n\varepsilon^2}
+    \to 0 \quad \text{as } n \to \infty.
+    \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Strong Law of Large Numbers (SLLN)]
+\label{thm:slln}
+Under the same hypotheses as Theorem~\ref{thm:wlln}, the convergence holds almost surely:
+$\bar{X}_n \to \mu$ with probability $1$.
+\end{theorem}
+
+\begin{remark}
+The SLLN requires measure-theoretic tools (the Borel--Cantelli lemma and
+truncation arguments) and is proved in Phase~01.
+\end{remark}
+
+\begin{definition}[Convergence in Distribution]
+\label{def:conv_dist}
+A sequence $X_1, X_2, \ldots$ \emph{converges in distribution} to $X$, written
+$X_n \xrightarrow{d} X$, if
+\[
+    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
+\]
+at every point $x$ where $F_X$ is continuous.
+\end{definition}
+
+\begin{theorem}[Central Limit Theorem (CLT)]
+\label{thm:clt}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_i] = \mu$ and $\Var(X_i) = \sigma^2 \in
+(0, \infty)$. Then
+\[
+    \frac{\bar{X}_n - \mu}{\sigma/\sqrt{n}} = \frac{\sum_{i=1}^n X_i - n\mu}{\sigma\sqrt{n}}
+    \xrightarrow{d} \mathcal{N}(0, 1).
+\]
+\end{theorem}
+
+\begin{remark}
+The standard proof uses characteristic functions (or equivalently, MGFs when they exist)
+and is deferred to Phase~01. Here we state the result and illustrate its use.
+\end{remark}
+
+\begin{example}[CLT Application: Polling]
+\label{ex:clt_polling}
+A poll surveys $n = 1000$ voters, each independently supporting a candidate with unknown
+probability $p$. The sample proportion is $\hat{p} = \bar{X}_n$ where $X_i \sim
+\mathrm{Bernoulli}(p)$. By the CLT,
+\[
+    \frac{\hat{p} - p}{\sqrt{p(1-p)/n}} \approx \mathcal{N}(0, 1).
+\]
+A $95\%$ confidence interval for $p$ is approximately $\hat{p} \pm 1.96\sqrt{\hat{p}(1-\hat{p})/n}$.
+With $n = 1000$ and $\hat{p} = 0.52$, the margin of error is
+$1.96\sqrt{0.52 \cdot 0.48/1000} \approx 0.031$.
+\end{example}
+
+\begin{example}[CLT Application: Sum of Dice]
+\label{ex:clt_dice}
+Roll a fair die $n = 100$ times and let $S_n = X_1 + \cdots + X_{100}$ be the total.
+Each $X_i$ is uniform on $\{1, \ldots, 6\}$ with $\mu = 7/2$ and
+$\sigma^2 = 35/12$. By the CLT,
+\[
+    \frac{S_{100} - 350}{\sqrt{100 \cdot 35/12}} \approx \mathcal{N}(0,1).
+\]
+So $\Prob(S_{100} \leq 330) \approx \Phi\!\left(\frac{330 - 350}{\sqrt{2916.67/100}}\right)
+= \Phi(-1.17) \approx 0.121$.
+\end{example}
+
+\begin{keyresult}[LLN and Monte Carlo]
+The law of large numbers justifies Monte Carlo estimation: the sample average of rewards
+converges to the expected return. This is why Monte Carlo policy evaluation works. The CLT
+tells us how fast: the error is approximately normal with standard deviation proportional to
+$1/\sqrt{n}$, giving us confidence intervals for value estimates.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 12: TAIL BOUNDS AND CONFIDENCE INTERVALS
+%% ============================================================
+\section{Tail Bounds and Confidence Intervals}
+\label{sec:tail_bounds}
+
+Chebyshev's inequality gives tail bounds in terms of the variance, but these are often loose.
+For bounded random variables, we can do much better.
+
+\subsection{Chebyshev Confidence Intervals}
+
+\begin{proposition}[Chebyshev Confidence Interval]
+\label{prop:chebyshev_ci}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with mean $\mu$ and variance $\sigma^2 < \infty$. For
+any $\delta \in (0, 1)$,
+\[
+    \Prob\!\left(|\bar{X}_n - \mu| < \frac{\sigma}{\sqrt{n\delta}}\right) \geq 1 - \delta.
+\]
+\end{proposition}
+
+\begin{proof}
+By Chebyshev's inequality with $k = \sigma/\sqrt{n\delta}$:
+\[
+    \Prob\!\left(|\bar{X}_n - \mu| \geq \frac{\sigma}{\sqrt{n\delta}}\right)
+    \leq \frac{\Var(\bar{X}_n)}{k^2} = \frac{\sigma^2/n}{\sigma^2/(n\delta)} = \delta.
+\]
+Taking complements gives the result.
+\end{proof}
+
+\subsection{Hoeffding's Inequality}
+
+\begin{lemma}[Hoeffding's Lemma]
+\label{lem:hoeffding}
+If $X$ is a random variable with $\E[X] = 0$ and $a \leq X \leq b$ almost surely, then
+for all $t > 0$,
+\[
+    \E[e^{tX}] \leq \exp\!\left(\frac{t^2(b-a)^2}{8}\right).
+\]
+\end{lemma}
+
+\begin{proof}
+Since $a \leq X \leq b$, we can write $X = \alpha b + (1 - \alpha)a$ where
+$\alpha = \frac{X - a}{b - a} \in [0, 1]$. By convexity of $e^{tx}$:
+\[
+    e^{tX} \leq \frac{X - a}{b - a}e^{tb} + \frac{b - X}{b - a}e^{ta}.
+\]
+Taking expectations and using $\E[X] = 0$:
+\[
+    \E[e^{tX}] \leq \frac{-a}{b-a}e^{tb} + \frac{b}{b-a}e^{ta}.
+\]
+Let $p = \frac{-a}{b-a}$, $h = t(b-a)$. Then
+\[
+    \E[e^{tX}] \leq p\,e^{(1-p)h} + (1-p)\,e^{-ph} = e^{-ph}\left(pe^h + 1 - p\right).
+\]
+Define $\varphi(h) = -ph + \ln(pe^h + 1 - p)$. Then $\varphi(0) = 0$ and $\varphi'(0) = 0$
+(verify: $\varphi'(h) = -p + \frac{pe^h}{pe^h + 1-p}$, and at $h=0$ this gives
+$-p + p = 0$). Furthermore,
+\[
+    \varphi''(h) = \frac{pe^h(1-p)}{(pe^h + 1-p)^2} \leq \frac{1}{4},
+\]
+since $\frac{u(1-u)}{1} \leq 1/4$ for $u \in [0,1]$, applied to $u = \frac{pe^h}{pe^h+1-p}$.
+By Taylor's theorem, $\varphi(h) = \varphi(0) + \varphi'(0)h + \frac{1}{2}\varphi''(c)h^2
+\leq h^2/8$ for some $c$. Therefore $\E[e^{tX}] \leq e^{h^2/8} = e^{t^2(b-a)^2/8}$.
+\end{proof}
+
+\begin{theorem}[Hoeffding's Inequality]
+\label{thm:hoeffding}
+Let $X_1, \ldots, X_n$ be independent random variables with $a_i \leq X_i \leq b_i$
+almost surely. Let $\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$. Then for any $\varepsilon > 0$,
+\[
+    \Prob\!\left(|\bar{X}_n - \E[\bar{X}_n]| \geq \varepsilon\right)
+    \leq 2\exp\!\left(-\frac{2n^2\varepsilon^2}{\sum_{i=1}^n (b_i - a_i)^2}\right).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $S_n = \sum_{i=1}^n X_i$ and $\mu = \E[S_n]$. We bound $\Prob(S_n - \mu \geq n\varepsilon)$;
+the lower tail is symmetric.
+
+For any $t > 0$, by Markov's inequality applied to $e^{t(S_n - \mu)}$:
+\[
+    \Prob(S_n - \mu \geq n\varepsilon)
+    = \Prob(e^{t(S_n - \mu)} \geq e^{tn\varepsilon})
+    \leq \frac{\E[e^{t(S_n - \mu)}]}{e^{tn\varepsilon}}.
+\]
+By independence, $\E[e^{t(S_n - \mu)}] = \prod_{i=1}^n \E[e^{t(X_i - \E[X_i])}]$. Each
+centered variable $X_i - \E[X_i]$ satisfies $a_i - \E[X_i] \leq X_i - \E[X_i] \leq
+b_i - \E[X_i]$, a range of $b_i - a_i$. By Hoeffding's Lemma,
+$\E[e^{t(X_i - \E[X_i])}] \leq e^{t^2(b_i - a_i)^2/8}$. Therefore
+\[
+    \Prob(S_n - \mu \geq n\varepsilon) \leq \exp\!\left(-tn\varepsilon +
+    \frac{t^2}{8}\sum_{i=1}^n(b_i - a_i)^2\right).
+\]
+Minimizing over $t$: the exponent is minimized at
+$t = \frac{4n\varepsilon}{\sum_{i=1}^n(b_i-a_i)^2}$, giving
+\[
+    \Prob(S_n - \mu \geq n\varepsilon) \leq \exp\!\left(-\frac{2n^2\varepsilon^2}{\sum_{i=1}^n(b_i-a_i)^2}\right).
+\]
+The same bound holds for $\Prob(S_n - \mu \leq -n\varepsilon)$ by applying the argument to
+$-X_i$. A union bound gives the two-sided result.
+\end{proof}
+
+\begin{corollary}[Hoeffding for i.i.d.\ Bounded Variables]
+\label{cor:hoeffding_iid}
+If $X_1, \ldots, X_n$ are i.i.d.\ with $a \leq X_i \leq b$, then
+\[
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq 2e^{-2n\varepsilon^2/(b-a)^2}.
+\]
+\end{corollary}
+
+\begin{proof}
+Set $a_i = a$ and $b_i = b$ for all $i$ in Theorem~\ref{thm:hoeffding}. Then
+$\sum_{i=1}^n(b_i - a_i)^2 = n(b-a)^2$.
+\end{proof}
+
+\subsection{Sample Complexity}
+
+\begin{proposition}[Sample Complexity from Hoeffding]
+\label{prop:sample_complexity}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with $a \leq X_i \leq b$. To guarantee
+$\Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \delta$, it suffices to take
+\[
+    n \geq \frac{(b-a)^2}{2\varepsilon^2}\ln\frac{2}{\delta}.
+\]
+\end{proposition}
+
+\begin{proof}
+By Corollary~\ref{cor:hoeffding_iid}, we need $2e^{-2n\varepsilon^2/(b-a)^2} \leq \delta$.
+This is equivalent to $e^{-2n\varepsilon^2/(b-a)^2} \leq \delta/2$, i.e.,
+$-2n\varepsilon^2/(b-a)^2 \leq \ln(\delta/2) = -\ln(2/\delta)$.
+Rearranging: $n \geq \frac{(b-a)^2}{2\varepsilon^2}\ln\frac{2}{\delta}$.
+\end{proof}
+
+\begin{remark}
+The dependence $n = O(\varepsilon^{-2}\ln\delta^{-1})$ is the standard sample complexity
+for Monte Carlo estimation of a bounded mean. The logarithmic dependence on $1/\delta$ is
+much better than Chebyshev's $O(\varepsilon^{-2}\delta^{-1})$ bound.
+\end{remark}
+
+\begin{rlconnection}[Sample Complexity in RL]
+In RL, if rewards are bounded in $[0, 1]$, the sample complexity of Monte Carlo policy
+evaluation with accuracy $\varepsilon$ and confidence $1 - \delta$ is
+$n \geq \frac{1}{2\varepsilon^2}\ln\frac{2}{\delta}$.
+For $\varepsilon = 0.01$ and $\delta = 0.05$, this gives $n \geq 18{,}445$ samples.
+Hoeffding's inequality makes this precise; Chebyshev would require
+$n \geq 1/(\varepsilon^2 \delta) = 200{,}000$ --- an order of magnitude worse.
+\end{rlconnection}
+
+\end{document}
