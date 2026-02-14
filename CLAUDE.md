@@ -4,24 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Purpose
 
-This is a collection of rigorous mathematical treatment documents (PDFs) covering AI/ML topics. Each document provides formal proofs, complete derivations, and theoretical foundations — not implementations or code.
+This is a collection of rigorous mathematical treatment documents (PDFs) covering AI/ML topics. Each document provides formal proofs, complete derivations, and theoretical foundations -- not implementations or code.
 
 ## Document Catalog
 
-Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf — 102 sessions). Each phase directory has its own `README.md` with full details.
+Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf -- 102 sessions). Each phase directory has its own `README.md` with full details.
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
 | 1 | `00-prerequisites/01-real-analysis/` | Ordered fields, supremum/infimum, sequences, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence | **exists** |
 | 2 | `00-prerequisites/02-linear-algebra/` | Vector spaces, linear maps, eigenvalues, diagonalization, inner product spaces, spectral theorem, SVD | **exists** |
 | 3 | `00-prerequisites/03-probability/` | Axioms, conditional probability, independence, random variables, distributions, expectation, variance, LLN, CLT | **exists** |
-| 4 | `01-math-foundations/01-measure-theory/01-measure-spaces` | σ-algebras, measures, Carathéodory extension, measurable functions, π-λ theorem | **exists** |
+| 4 | `01-math-foundations/01-measure-theory/01-measure-spaces` | sigma-algebras, measures, Caratheodory extension, measurable functions, pi-lambda theorem | **exists** |
 | 5 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales | **exists** |
 | 6 | `01-math-foundations/02-functional-analysis/` | Normed spaces, Banach spaces, Hilbert spaces, bounded operators, spectral theory | planned |
 | 7 | `01-math-foundations/03-optimization/` | Convex optimization, duality, gradient methods, stochastic approximation | planned |
 | 8 | `01-math-foundations/04-game-theory/` | Normal-form games, Nash equilibrium, extensive-form games, repeated games | planned |
 | 9 | `02-core-rl/01-mdp/` | MDPs, Bellman equations, value/policy iteration, contraction mappings | planned |
-| 10 | `02-core-rl/02-rl-algorithms/Temporal-Difference-Learning` | TD(0), n-step TD, TD(λ), SARSA, Q-learning, function approximation, deadly triad | **exists** |
+| 10 | `02-core-rl/02-rl-algorithms/Temporal-Difference-Learning` | TD(0), n-step TD, TD(lambda), SARSA, Q-learning, function approximation, deadly triad | **exists** |
 | 11 | `02-core-rl/03-policy-gradient/Policy-Gradient-Theorem` | Policy gradient theorem, REINFORCE, baseline methods | **exists** |
 | 12 | `02-core-rl/03-policy-gradient/Trust-Region-Policy-Optimization` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
 | 13 | `02-core-rl/03-policy-gradient/Proximal-Policy-Optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
@@ -44,56 +44,56 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 
 ## Dependency Tree / Reading Order
 
-The dependency tree shows prerequisites for each document. Arrows (→) indicate "is required by".
+The dependency tree shows prerequisites for each document. Arrows (->) indicate "is required by".
 
 ```
-Phase 00 — Prerequisites Review  (optional refresher)
+Phase 00 -- Prerequisites Review  (optional refresher)
   real-analysis
-    → linear-algebra
+    -> linear-algebra
   linear-algebra
-    → probability
+    -> probability
   probability
-    → [Phase 01]
+    -> [Phase 01]
 
-Phase 01 — Mathematical Foundations  (requires: Phase 00 or equivalent background)
+Phase 01 -- Mathematical Foundations  (requires: Phase 00 or equivalent background)
   01-measure-spaces
-    → probability-foundations
-    → [all Phase 02, 03 documents]
+    -> probability-foundations
+    -> [all Phase 02, 03 documents]
   probability-foundations
-    → [all Phase 02, 03 documents]
+    -> [all Phase 02, 03 documents]
   functional-analysis (planned)
   optimization (planned)
   game-theory (planned)
-    → [Phase 05: MARL]
+    -> [Phase 05: MARL]
 
-Phase 02 — Core Reinforcement Learning  (requires: Phase 01)
+Phase 02 -- Core Reinforcement Learning  (requires: Phase 01)
   MDP (planned)
-    → Temporal-Difference-Learning
+    -> Temporal-Difference-Learning
   Temporal-Difference-Learning
-    → Policy-Gradient-Theorem
+    -> Policy-Gradient-Theorem
   Policy-Gradient-Theorem
-    → Trust-Region-Policy-Optimization
+    -> Trust-Region-Policy-Optimization
   Trust-Region-Policy-Optimization
-    → Proximal-Policy-Optimization
+    -> Proximal-Policy-Optimization
 
-Phase 03 — Deep Learning  (requires: Phase 01; independent of Phase 02)
+Phase 03 -- Deep Learning  (requires: Phase 01; independent of Phase 02)
   rnn
-    → lstm
+    -> lstm
   optimization-for-dl (planned)
 
-Phase 04 — Deep Reinforcement Learning  (requires: Phase 02 + Phase 03)
+Phase 04 -- Deep Reinforcement Learning  (requires: Phase 02 + Phase 03)
   value-based (planned)
   policy-based (planned)
   model-based (planned)
 
-Phase 05 — Multi-Agent RL  (requires: Phase 02 + Phase 01/04-game-theory)
+Phase 05 -- Multi-Agent RL  (requires: Phase 02 + Phase 01/04-game-theory)
   stochastic-games (planned)
   cooperative (planned)
   competitive (planned)
   mean-field (planned)
   communication (planned)
 
-Phase 06 — Aerospace Applications  (requires: Phase 04 + Phase 05)
+Phase 06 -- Aerospace Applications  (requires: Phase 04 + Phase 05)
   continuous-control (planned)
   safety (planned)
   partial-observability (planned)
@@ -102,12 +102,12 @@ Phase 06 — Aerospace Applications  (requires: Phase 04 + Phase 05)
 ```
 
 **Inter-phase dependencies summary:**
-- **00 → 01** : Prerequisites review refreshes the background needed for measure theory
-- **01 → 02** : Measure theory and probability needed for RL foundations
-- **01 → 03** : Measure theory and probability needed for deep learning theory
-- **02 + 03 → 04** : Core RL + deep learning combine into deep RL
-- **02 + 01/game-theory → 05** : MARL requires RL theory and game theory
-- **04 + 05 → 06** : Aerospace applications integrate deep RL and multi-agent methods
+- **00 -> 01** : Prerequisites review refreshes the background needed for measure theory
+- **01 -> 02** : Measure theory and probability needed for RL foundations
+- **01 -> 03** : Measure theory and probability needed for deep learning theory
+- **02 + 03 -> 04** : Core RL + deep learning combine into deep RL
+- **02 + 01/game-theory -> 05** : MARL requires RL theory and game theory
+- **04 + 05 -> 06** : Aerospace applications integrate deep RL and multi-agent methods
 
 ## Conventions
 

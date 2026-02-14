@@ -1,4 +1,4 @@
-# Phase 04 — Deep Reinforcement Learning
+# Phase 04 -- Deep Reinforcement Learning
 
 Combines deep learning function approximation with reinforcement learning algorithms: value-based methods (DQN and extensions), policy-based methods with neural networks, and model-based approaches. This phase synthesizes Phases 02 and 03.
 
@@ -12,19 +12,19 @@ Combines deep learning function approximation with reinforcement learning algori
 
 | File | Directory | Topic | Status |
 |------|-----------|-------|--------|
-| — | `01-value-based/` | DQN, Rainbow, distributional RL | planned |
-| — | `02-policy-based/` | A3C, PPO+function approximation, SAC | planned |
-| — | `03-model-based/` | Dyna, MuZero, world models | planned |
+| -- | `01-value-based/` | DQN, Rainbow, distributional RL | planned |
+| -- | `02-policy-based/` | A3C, PPO+function approximation, SAC | planned |
+| -- | `03-model-based/` | Dyna, MuZero, world models | planned |
 
 ## Prerequisites
 
-- **Phase 02** (core RL theory) — required for all documents
-- **Phase 03** (deep learning foundations) — required for all documents
+- **Phase 02** (core RL theory) -- required for all documents
+- **Phase 03** (deep learning foundations) -- required for all documents
 
 ## Internal Reading Order
 
 ```
-value-based → policy-based → model-based
+value-based -> policy-based -> model-based
 ```
 
 Value-based methods introduce deep function approximation in RL; policy-based methods build on this; model-based methods extend both.

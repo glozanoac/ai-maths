@@ -1,21 +1,21 @@
 # Rigorous Mathematics for AI/ML
 
-A self-contained collection of mathematical treatises covering the theoretical foundations of artificial intelligence and machine learning — from measure theory through deep reinforcement learning to aerospace applications. Every result is stated precisely and proved in full; no hand-waving, no "it can be shown that."
+A self-contained collection of mathematical treatises covering the theoretical foundations of artificial intelligence and machine learning -- from measure theory through deep reinforcement learning to aerospace applications. Every result is stated precisely and proved in full; no hand-waving, no "it can be shown that."
 
 ## Motivation
 
 Most AI/ML resources fall into one of two categories: applied tutorials that skip the mathematics, or pure mathematics textbooks that never connect to learning algorithms. This collection bridges the gap by developing every concept with the same rigor found in a graduate mathematics course while maintaining a clear line of sight toward reinforcement learning, deep learning, and their applications.
 
-The goal is not to replace textbooks but to distill, unify, and extend their key results into a single coherent reference — one where every theorem has a proof, every algorithm has a convergence analysis, and every approximation has explicit error bounds.
+The goal is not to replace textbooks but to distill, unify, and extend their key results into a single coherent reference -- one where every theorem has a proof, every algorithm has a convergence analysis, and every approximation has explicit error bounds.
 
-The ultimate intent is to implement every algorithm from scratch — not to call opaque library functions, but to write each update rule, each gradient computation, and each optimization loop ourselves, grounded in the theory developed here. Understanding the mathematics is what makes that possible: when you know *exactly* what an algorithm does and *why* it converges, you can build it yourself, debug it yourself, and extend it yourself, without depending on frameworks that hide the details.
+The ultimate intent is to implement every algorithm from scratch -- not to call opaque library functions, but to write each update rule, each gradient computation, and each optimization loop ourselves, grounded in the theory developed here. Understanding the mathematics is what makes that possible: when you know *exactly* what an algorithm does and *why* it converges, you can build it yourself, debug it yourself, and extend it yourself, without depending on frameworks that hide the details.
 
 ## Approach
 
 Each document follows a strict methodology:
 
 - **Formal definitions** grounded in measure theory and functional analysis
-- **Complete proofs** — no steps are omitted or left as exercises
+- **Complete proofs** -- no steps are omitted or left as exercises
 - **Explicit assumptions** stated before every theorem, with counterexamples when assumptions are relaxed
 - **Connections to practice** highlighted through dedicated remarks that link abstract results to RL algorithms, neural network training, and real-world systems
 
@@ -27,7 +27,7 @@ This collection is written for readers who have:
 
 - **Undergraduate real analysis and linear algebra** (at the level of Rudin's *Principles* and Axler's *Linear Algebra Done Right*)
 - **Basic probability** (at the level of a first undergraduate course, e.g., Ross's *A First Course in Probability*)
-- **Mathematical maturity** — comfort with epsilon-delta arguments, proof by induction, and abstract algebraic structures
+- **Mathematical maturity** -- comfort with epsilon-delta arguments, proof by induction, and abstract algebraic structures
 
 It is aimed at:
 
@@ -35,7 +35,7 @@ It is aimed at:
 - Researchers transitioning into RL or deep learning who need to understand the proofs behind the algorithms
 - Engineers and practitioners who want to go beyond the "cookbook" level and understand *why* methods work and *when* they fail
 
-No prior knowledge of reinforcement learning, deep learning, or measure theory is assumed — Phase 01 builds these from scratch. If your undergraduate real analysis, linear algebra, or probability is rusty, Phase 00 provides a rigorous refresher to get you back up to speed before diving in.
+No prior knowledge of reinforcement learning, deep learning, or measure theory is assumed -- Phase 01 builds these from scratch. If your undergraduate real analysis, linear algebra, or probability is rusty, Phase 00 provides a rigorous refresher to get you back up to speed before diving in.
 
 ## Curriculum Overview
 
@@ -114,7 +114,7 @@ ai-maths/
 
 ## Getting Started
 
-1. **Assess your background** — if your real analysis, linear algebra, or probability feels rusty, start with Phase 00. If you can comfortably state and prove the Bolzano-Weierstrass theorem, diagonalize a symmetric matrix, and derive the variance of standard distributions, skip directly to Phase 01.
-2. **Start Phase 01** — begin with `01-measure-spaces` and then `probability-foundations`. These two documents establish the mathematical language used everywhere else.
-3. **Follow the dependency graph** — each document lists its prerequisites. Do not skip ahead; later proofs rely on earlier results.
-4. **Read the phase READMEs** — each phase directory has a `README.md` with reference textbooks, document details, and internal reading order.
+1. **Assess your background** -- if your real analysis, linear algebra, or probability feels rusty, start with Phase 00. If you can comfortably state and prove the Bolzano-Weierstrass theorem, diagonalize a symmetric matrix, and derive the variance of standard distributions, skip directly to Phase 01.
+2. **Start Phase 01** -- begin with `01-measure-spaces` and then `probability-foundations`. These two documents establish the mathematical language used everywhere else.
+3. **Follow the dependency graph** -- each document lists its prerequisites. Do not skip ahead; later proofs rely on earlier results.
+4. **Read the phase READMEs** -- each phase directory has a `README.md` with reference textbooks, document details, and internal reading order.

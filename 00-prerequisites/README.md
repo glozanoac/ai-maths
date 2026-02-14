@@ -1,6 +1,6 @@
-# Phase 00 — Prerequisites Review
+# Phase 00 -- Prerequisites Review
 
-A rigorous but concise refresher of the three pillars assumed by Phase 01: real analysis, linear algebra, and probability. These documents are not watered-down summaries — every theorem is stated formally and proved — but they are selective: only the results that Phase 01 and beyond actually depend on are included.
+A rigorous but concise refresher of the three pillars assumed by Phase 01: real analysis, linear algebra, and probability. These documents are not watered-down summaries -- every theorem is stated formally and proved -- but they are selective: only the results that Phase 01 and beyond actually depend on are included.
 
 **Who needs this phase?** Readers who have completed undergraduate courses in real analysis, linear algebra, and probability but have not used the material recently. If you can immediately state the Bolzano-Weierstrass theorem, diagonalize a symmetric matrix, and derive the variance of a geometric random variable, you can skip to Phase 01. Otherwise, start here.
 
@@ -20,7 +20,7 @@ A rigorous but concise refresher of the three pillars assumed by Phase 01: real 
 
 ## Prerequisites
 
-None — this is the entry point for the entire curriculum.
+None -- this is the entry point for the entire curriculum.
 
 ## Internal Reading Order
 
