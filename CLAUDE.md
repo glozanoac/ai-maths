@@ -8,43 +8,54 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 
 ## Document Catalog
 
-Documents are organized across 6 phases (aligned with curriculum.pdf — 102 sessions). Each phase directory has its own `README.md` with full details.
+Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf — 102 sessions). Each phase directory has its own `README.md` with full details.
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 1 | `01-math-foundations/01-measure-theory/01-measure-spaces` | σ-algebras, measures, Carathéodory extension, measurable functions, π-λ theorem | **exists** |
-| 2 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales | **exists** |
-| 3 | `01-math-foundations/02-functional-analysis/` | Normed spaces, Banach spaces, Hilbert spaces, bounded operators, spectral theory | planned |
-| 4 | `01-math-foundations/03-optimization/` | Convex optimization, duality, gradient methods, stochastic approximation | planned |
-| 5 | `01-math-foundations/04-game-theory/` | Normal-form games, Nash equilibrium, extensive-form games, repeated games | planned |
-| 6 | `02-core-rl/01-mdp/` | MDPs, Bellman equations, value/policy iteration, contraction mappings | planned |
-| 7 | `02-core-rl/02-rl-algorithms/Temporal-Difference-Learning` | TD(0), n-step TD, TD(λ), SARSA, Q-learning, function approximation, deadly triad | **exists** |
-| 8 | `02-core-rl/03-policy-gradient/Policy-Gradient-Theorem` | Policy gradient theorem, REINFORCE, baseline methods | **exists** |
-| 9 | `02-core-rl/03-policy-gradient/Trust-Region-Policy-Optimization` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
-| 10 | `02-core-rl/03-policy-gradient/Proximal-Policy-Optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
-| 11 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
-| 12 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
-| 13 | `03-deep-learning/02-optimization-for-dl/` | SGD analysis, Adam, learning rate schedules, batch normalization | planned |
-| 14 | `04-deep-rl/01-value-based/` | DQN, Rainbow, distributional RL | planned |
-| 15 | `04-deep-rl/02-policy-based/` | A3C, PPO+function approximation, SAC | planned |
-| 16 | `04-deep-rl/03-model-based/` | Dyna, MuZero, world models | planned |
-| 17 | `05-marl/01-stochastic-games/` | Stochastic games, Shapley value, Nash-Q | planned |
-| 18 | `05-marl/02-cooperative/` | CTDE, QMIX, MAPPO | planned |
-| 19 | `05-marl/03-competitive/` | Minimax MARL, policy-space response oracles | planned |
-| 20 | `05-marl/04-mean-field/` | Mean-field games, McKean-Vlasov dynamics | planned |
-| 21 | `05-marl/05-communication/` | CommNet, TarMAC, emergent communication | planned |
-| 22 | `06-aerospace/01-continuous-control/` | Continuous action spaces, Lie group methods | planned |
-| 23 | `06-aerospace/02-safety/` | Constrained MDPs, Lyapunov-based methods | planned |
-| 24 | `06-aerospace/03-partial-observability/` | POMDPs, belief-space planning | planned |
-| 25 | `06-aerospace/04-sim-to-real/` | Domain randomization, system identification | planned |
-| 26 | `06-aerospace/05-multi-vehicle/` | Formation control, task allocation | planned |
+| 1 | `00-prerequisites/01-real-analysis/` | Ordered fields, supremum/infimum, sequences, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence | planned |
+| 2 | `00-prerequisites/02-linear-algebra/` | Vector spaces, linear maps, eigenvalues, diagonalization, inner product spaces, spectral theorem, SVD | planned |
+| 3 | `00-prerequisites/03-probability/` | Axioms, conditional probability, independence, random variables, distributions, expectation, variance, LLN, CLT | planned |
+| 4 | `01-math-foundations/01-measure-theory/01-measure-spaces` | σ-algebras, measures, Carathéodory extension, measurable functions, π-λ theorem | **exists** |
+| 5 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales | **exists** |
+| 6 | `01-math-foundations/02-functional-analysis/` | Normed spaces, Banach spaces, Hilbert spaces, bounded operators, spectral theory | planned |
+| 7 | `01-math-foundations/03-optimization/` | Convex optimization, duality, gradient methods, stochastic approximation | planned |
+| 8 | `01-math-foundations/04-game-theory/` | Normal-form games, Nash equilibrium, extensive-form games, repeated games | planned |
+| 9 | `02-core-rl/01-mdp/` | MDPs, Bellman equations, value/policy iteration, contraction mappings | planned |
+| 10 | `02-core-rl/02-rl-algorithms/Temporal-Difference-Learning` | TD(0), n-step TD, TD(λ), SARSA, Q-learning, function approximation, deadly triad | **exists** |
+| 11 | `02-core-rl/03-policy-gradient/Policy-Gradient-Theorem` | Policy gradient theorem, REINFORCE, baseline methods | **exists** |
+| 12 | `02-core-rl/03-policy-gradient/Trust-Region-Policy-Optimization` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
+| 13 | `02-core-rl/03-policy-gradient/Proximal-Policy-Optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
+| 14 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
+| 15 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
+| 16 | `03-deep-learning/02-optimization-for-dl/` | SGD analysis, Adam, learning rate schedules, batch normalization | planned |
+| 17 | `04-deep-rl/01-value-based/` | DQN, Rainbow, distributional RL | planned |
+| 18 | `04-deep-rl/02-policy-based/` | A3C, PPO+function approximation, SAC | planned |
+| 19 | `04-deep-rl/03-model-based/` | Dyna, MuZero, world models | planned |
+| 20 | `05-marl/01-stochastic-games/` | Stochastic games, Shapley value, Nash-Q | planned |
+| 21 | `05-marl/02-cooperative/` | CTDE, QMIX, MAPPO | planned |
+| 22 | `05-marl/03-competitive/` | Minimax MARL, policy-space response oracles | planned |
+| 23 | `05-marl/04-mean-field/` | Mean-field games, McKean-Vlasov dynamics | planned |
+| 24 | `05-marl/05-communication/` | CommNet, TarMAC, emergent communication | planned |
+| 25 | `06-aerospace/01-continuous-control/` | Continuous action spaces, Lie group methods | planned |
+| 26 | `06-aerospace/02-safety/` | Constrained MDPs, Lyapunov-based methods | planned |
+| 27 | `06-aerospace/03-partial-observability/` | POMDPs, belief-space planning | planned |
+| 28 | `06-aerospace/04-sim-to-real/` | Domain randomization, system identification | planned |
+| 29 | `06-aerospace/05-multi-vehicle/` | Formation control, task allocation | planned |
 
 ## Dependency Tree / Reading Order
 
 The dependency tree shows prerequisites for each document. Arrows (→) indicate "is required by".
 
 ```
-Phase 01 — Mathematical Foundations
+Phase 00 — Prerequisites Review  (optional refresher)
+  real-analysis (planned)
+    → linear-algebra
+  linear-algebra (planned)
+    → probability
+  probability (planned)
+    → [Phase 01]
+
+Phase 01 — Mathematical Foundations  (requires: Phase 00 or equivalent background)
   01-measure-spaces
     → probability-foundations
     → [all Phase 02, 03 documents]
@@ -91,6 +102,7 @@ Phase 06 — Aerospace Applications  (requires: Phase 04 + Phase 05)
 ```
 
 **Inter-phase dependencies summary:**
+- **00 → 01** : Prerequisites review refreshes the background needed for measure theory
 - **01 → 02** : Measure theory and probability needed for RL foundations
 - **01 → 03** : Measure theory and probability needed for deep learning theory
 - **02 + 03 → 04** : Core RL + deep learning combine into deep RL
@@ -103,3 +115,4 @@ Phase 06 — Aerospace Applications  (requires: Phase 04 + Phase 05)
 - Commit messages reference the primary topic added
 - After any modification compile and commit the changes with a meaningful commit message.
 - When creating a new document, add it to the Document Catalog in this file and update the corresponding phase `README.md`.
+- Only use ASCII characters to write documents.

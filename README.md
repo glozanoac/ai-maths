@@ -35,14 +35,15 @@ It is aimed at:
 - Researchers transitioning into RL or deep learning who need to understand the proofs behind the algorithms
 - Engineers and practitioners who want to go beyond the "cookbook" level and understand *why* methods work and *when* they fail
 
-No prior knowledge of reinforcement learning, deep learning, or measure theory is assumed — Phase 01 builds these from scratch.
+No prior knowledge of reinforcement learning, deep learning, or measure theory is assumed — Phase 01 builds these from scratch. If your undergraduate real analysis, linear algebra, or probability is rusty, Phase 00 provides a rigorous refresher to get you back up to speed before diving in.
 
 ## Curriculum Overview
 
-The collection spans **26 documents** organized across **6 phases**, aligned with a 102-session study curriculum. Documents within each phase have explicit prerequisites and a recommended reading order.
+The collection spans **29 documents** organized across **7 phases** (Phase 00 prerequisites + Phases 01-06 aligned with a 102-session study curriculum). Documents within each phase have explicit prerequisites and a recommended reading order.
 
 | Phase | Topic | Documents | Status |
 |-------|-------|-----------|--------|
+| **00** | Prerequisites Review | Real analysis, linear algebra, probability (rigorous refresher) | planned |
 | **01** | Mathematical Foundations | Measure theory, probability, functional analysis, optimization, game theory | 2 of 5 complete |
 | **02** | Core Reinforcement Learning | MDPs, TD learning, policy gradients (REINFORCE, TRPO, PPO) | 4 of 5 complete |
 | **03** | Deep Learning | RNNs, LSTMs, optimization for deep learning | 2 of 3 complete |
@@ -55,6 +56,10 @@ Each phase directory contains its own `README.md` with reference textbooks, docu
 ## Dependency Graph
 
 ```
+Phase 00: Prerequisites Review (optional)
+  real-analysis --> linear-algebra --> probability
+        |
+        v
 Phase 01: Mathematical Foundations
   measure-spaces --> probability-foundations
                  \-> functional-analysis (planned)
@@ -86,6 +91,10 @@ Phase 06: Aerospace Applications
 
 ```
 ai-maths/
+  00-prerequisites/
+    01-real-analysis/
+    02-linear-algebra/
+    03-probability/
   01-math-foundations/
     01-measure-theory/
     02-functional-analysis/
@@ -105,6 +114,7 @@ ai-maths/
 
 ## Getting Started
 
-1. **Start with Phase 01** — begin with `01-measure-spaces` and then `probability-foundations`. These two documents establish the mathematical language used everywhere else.
-2. **Follow the dependency graph** — each document lists its prerequisites. Do not skip ahead; later proofs rely on earlier results.
-3. **Read the phase READMEs** — each phase directory has a `README.md` with reference textbooks and detailed reading order.
+1. **Assess your background** — if your real analysis, linear algebra, or probability feels rusty, start with Phase 00. If you can comfortably state and prove the Bolzano-Weierstrass theorem, diagonalize a symmetric matrix, and derive the variance of standard distributions, skip directly to Phase 01.
+2. **Start Phase 01** — begin with `01-measure-spaces` and then `probability-foundations`. These two documents establish the mathematical language used everywhere else.
+3. **Follow the dependency graph** — each document lists its prerequisites. Do not skip ahead; later proofs rely on earlier results.
+4. **Read the phase READMEs** — each phase directory has a `README.md` with reference textbooks, document details, and internal reading order.
