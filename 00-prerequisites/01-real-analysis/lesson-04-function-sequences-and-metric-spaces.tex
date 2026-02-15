@@ -1,0 +1,1058 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 4: Function Sequences and Metric Spaces}}
+\fancyhead[R]{\thepage}
+\title{Lesson 4: Function Sequences and Metric Spaces}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a reinforcement learning agent that iteratively improves its
+value function. Starting from an arbitrary bounded function $V_0$, the
+agent computes $V_1 = TV_0$, $V_2 = TV_1$, and so on, where $T$ is the
+Bellman optimality operator. Three questions immediately arise: (1) Does
+the sequence of functions $\{V_n\}$ converge? (2) If so, what kind of
+convergence do we get---pointwise for each state, or something stronger?
+(3) Is the limit guaranteed to be the unique fixed point of $T$? These
+questions cannot be answered with sequences of real numbers alone; we
+need a theory of \emph{sequences of functions} and, more fundamentally,
+a notion of distance between functions. The framework of \emph{metric
+spaces} provides exactly this: by equipping the set of bounded functions
+with the supremum metric, we can treat value functions as points in a
+complete metric space and apply the \emph{Banach fixed-point theorem} to
+establish both existence, uniqueness, and a geometric convergence rate.
+The tools developed in this lesson will let us prove that value
+iteration converges, quantify its rate, and understand precisely when
+limits commute with integration and other operations.
+
+\begin{rlconnection}[title={Why RL/ML needs function sequences and metric spaces}]
+\begin{itemize}[nosep]
+  \item \textbf{Value iteration.} The Bellman operator $T$ is a
+    $\gamma$-contraction on the complete metric space of bounded value
+    functions under the sup-norm. The Banach fixed-point theorem
+    guarantees convergence of $V_n = T^n V_0$ to the unique optimal
+    value function $V^*$ at rate $O(\gamma^n)$.
+  \item \textbf{Policy evaluation.} Temporal difference methods generate
+    sequences of value function estimates; uniform convergence ensures
+    that continuity and integrability of the limit are preserved.
+  \item \textbf{Fitted value iteration.} When value functions are
+    approximated by neural networks, one works in function spaces
+    equipped with metrics (e.g., $L^2$ or sup-norm), and completeness
+    of these spaces is essential for convergence guarantees.
+  \item \textbf{Monte Carlo integration.} The interchange of limit and
+    integral, justified by uniform convergence, underpins the validity
+    of approximating expected rewards by sample averages of convergent
+    function sequences.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Convergence of real sequences, the Cauchy criterion, supremum and
+infimum (Lesson~1, Definitions~3.4--3.5 and Theorem~4.10). Continuity
+($\varepsilon$-$\delta$ characterization), uniform continuity, and the
+extreme value theorem (Lesson~2, Theorems~5.2 and~7.4). The Riemann
+integral, its properties, and the fundamental theorem of calculus
+(Lesson~3, Theorems~\mbox{7.6--9.2}).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} pointwise and uniform convergence of function
+    sequences, and \textbf{explain} the key difference (dependence of
+    $N$ on $x$).
+  \item \textbf{Prove} that the uniform limit of continuous functions is
+    continuous and that uniform convergence permits interchange of limit
+    and Riemann integral.
+  \item \textbf{Apply} the Weierstrass $M$-test to determine uniform
+    convergence of series of functions.
+  \item \textbf{Define} metric spaces, open and closed sets, Cauchy
+    sequences, completeness, and sequential compactness.
+  \item \textbf{State} and \textbf{prove} the Banach fixed-point
+    theorem, including existence, uniqueness, and the convergence rate
+    estimate.
+  \item \textbf{Justify} why value iteration converges by identifying
+    the Bellman operator as a contraction on a complete metric space.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapter 7]{rudin1976} --- Rigorous treatment of sequences
+    and series of functions, uniform convergence, equicontinuity, and
+    the Stone--Weierstrass theorem.
+  \item \citet[Chapter 6]{abbott2015} --- Accessible development of
+    pointwise vs.\ uniform convergence with many examples and the
+    interchange theorems.
+  \item \citet[Chapter 2]{rudin1976} --- Metric space topology: open
+    and closed sets, compactness, completeness, and the contraction
+    mapping principle.
+  \item \citet[Chapters 8--9]{bartle2011} --- Detailed treatment of
+    function sequences, metric spaces, and the contraction mapping
+    theorem with applications.
+  \item \citet[Chapter 2]{pugh2015} --- Metric spaces with a geometric
+    viewpoint, completeness, and the Banach fixed-point theorem.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: POINTWISE AND UNIFORM CONVERGENCE
+%% ============================================================
+\section{Pointwise and Uniform Convergence}
+\label{sec:pointwise_uniform}
+
+We begin with the two fundamental modes of convergence for sequences of
+functions. The distinction between them---seemingly a minor quantifier
+swap---has profound consequences for the regularity of the limit.
+
+\begin{definition}[Pointwise Convergence]
+\label{def:pointwise}
+Let $A \subseteq \R$ and let $\{f_n\}$ be a sequence of functions
+$f_n \colon A \to \R$. We say $\{f_n\}$ \emph{converges pointwise} to
+$f \colon A \to \R$ if for every $x \in A$ and every $\varepsilon > 0$,
+there exists $N \in \N$ (which may depend on \emph{both} $x$ and
+$\varepsilon$) such that
+\[
+  n \ge N \implies |f_n(x) - f(x)| < \varepsilon.
+\]
+We write $f_n \to f$ pointwise on $A$.
+\end{definition}
+
+\begin{definition}[Uniform Convergence]
+\label{def:uniform}
+Let $A \subseteq \R$ and let $\{f_n\}$ be a sequence of functions
+$f_n \colon A \to \R$. We say $\{f_n\}$ \emph{converges uniformly} to
+$f \colon A \to \R$ if for every $\varepsilon > 0$, there exists
+$N \in \N$ (depending \emph{only} on $\varepsilon$) such that
+\[
+  n \ge N \implies |f_n(x) - f(x)| < \varepsilon
+  \quad \text{for all } x \in A.
+\]
+Equivalently, $\sup_{x \in A} |f_n(x) - f(x)| \to 0$ as
+$n \to \infty$. We write $f_n \rightrightarrows f$ on $A$.
+\end{definition}
+
+\begin{remark}
+\label{rem:uniform_implies_pointwise}
+Uniform convergence implies pointwise convergence (take the same $N$
+for every $x$), but the converse is false, as the next example shows.
+\end{remark}
+
+\begin{example}[Pointwise but Not Uniform Convergence]
+\label{ex:x_n}
+Define $f_n \colon [0, 1] \to \R$ by $f_n(x) = x^n$. For each fixed
+$x \in [0, 1)$, $x^n \to 0$ as $n \to \infty$, and $f_n(1) = 1$ for
+all $n$. Thus $f_n \to f$ pointwise, where
+\[
+  f(x) = \begin{cases} 0 & \text{if } 0 \le x < 1, \\ 1 & \text{if } x = 1. \end{cases}
+\]
+Each $f_n$ is continuous on $[0, 1]$, but the limit $f$ is
+\emph{discontinuous} at $x = 1$. We claim the convergence is not
+uniform. Indeed, for any $n$, choosing $x_n = (1/2)^{1/n} \in [0, 1)$
+gives $f_n(x_n) = 1/2$, while $f(x_n) = 0$, so
+\[
+  \sup_{x \in [0,1]} |f_n(x) - f(x)| \ge |f_n(x_n) - f(x_n)|
+  = \tfrac{1}{2} \not\to 0.
+\]
+This example shows that pointwise convergence can destroy continuity.
+Uniform convergence prevents this, as we prove next.
+\end{example}
+
+\begin{example}[Uniform Convergence on a Restricted Domain]
+\label{ex:x_n_restricted}
+Consider the same functions $f_n(x) = x^n$, but now on $[0, a]$ for a
+fixed $a \in (0, 1)$. The pointwise limit is $f \equiv 0$, and
+\[
+  \sup_{x \in [0, a]} |f_n(x) - 0| = a^n \to 0
+\]
+as $n \to \infty$. Hence $f_n \rightrightarrows 0$ on $[0, a]$. The
+limit is continuous, consistent with the theorem below.
+\end{example}
+
+\begin{keyresult}[title={Uniform Limit of Continuous Functions}]
+\begin{theorem}[Continuity of the Uniform Limit]
+\label{thm:uniform_limit_continuous}
+Let $\{f_n\}$ be a sequence of continuous functions
+$f_n \colon A \to \R$ that converges uniformly to $f$ on $A$. Then $f$
+is continuous on $A$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Fix $c \in A$ and let $\varepsilon > 0$. We need to find $\delta > 0$
+such that $|x - c| < \delta$ implies $|f(x) - f(c)| < \varepsilon$.
+We split the difference into three parts:
+\[
+  |f(x) - f(c)| \le |f(x) - f_n(x)| + |f_n(x) - f_n(c)|
+  + |f_n(c) - f(c)|.
+\]
+\emph{Step 1.} Since $f_n \rightrightarrows f$, choose $N$ such that
+$\sup_{t \in A} |f_n(t) - f(t)| < \varepsilon/3$ for all $n \ge N$.
+Fix any such $n$. Then $|f(x) - f_n(x)| < \varepsilon/3$ and
+$|f_n(c) - f(c)| < \varepsilon/3$.
+
+\emph{Step 2.} Since $f_n$ (for this fixed $n$) is continuous at $c$,
+choose $\delta > 0$ such that $|x - c| < \delta$ implies
+$|f_n(x) - f_n(c)| < \varepsilon/3$.
+
+Combining:
+\[
+  |f(x) - f(c)| < \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+  + \frac{\varepsilon}{3} = \varepsilon. \qedhere
+\]
+\end{proof}
+
+\begin{warning}[title={Pointwise convergence does not preserve continuity}]
+Example~\ref{ex:x_n} shows that pointwise convergence of continuous
+functions can produce a discontinuous limit. The culprit is that the
+convergence rate $N(x, \varepsilon)$ may blow up as $x$ approaches
+certain points (in that example, $x \to 1^-$). Uniform convergence
+eliminates this by requiring a single $N(\varepsilon)$ that works
+simultaneously for all $x$. This is the function-sequence analogue of
+the distinction between continuity and uniform continuity from Lesson~2.
+\end{warning}
+
+The next theorem shows that uniform convergence also permits
+interchanging limits and Riemann integrals.
+
+\begin{theorem}[Interchange of Limit and Integral]
+\label{thm:interchange_limit_integral}
+Let $\{f_n\}$ be a sequence of Riemann integrable functions on $[a, b]$
+that converges uniformly to $f$ on $[a, b]$. Then $f$ is Riemann
+integrable on $[a, b]$ and
+\[
+  \lim_{n \to \infty} \int_a^b f_n(x)\,dx = \int_a^b f(x)\,dx.
+\]
+\end{theorem}
+
+\begin{proof}
+\emph{Step 1: $f$ is Riemann integrable.} Given $\varepsilon > 0$,
+choose $N$ such that $\sup_{x \in [a,b]} |f_n(x) - f(x)| <
+\varepsilon / (3(b - a))$ for all $n \ge N$. Fix such an $n$. Since
+$f_n$ is Riemann integrable, by the integrability criterion (Lesson~3,
+Theorem~7.6), there exists a partition $P$ with
+$U(f_n, P) - L(f_n, P) < \varepsilon/3$.
+
+On each subinterval $[x_{i-1}, x_i]$, for any $s, t \in [x_{i-1}, x_i]$:
+\begin{align*}
+  f(s) - f(t) &= \bigl(f(s) - f_n(s)\bigr) + \bigl(f_n(s) - f_n(t)\bigr)
+  + \bigl(f_n(t) - f(t)\bigr).
+\end{align*}
+Taking the supremum over $s$ and infimum over $t$:
+\[
+  M_i(f) - m_i(f) \le \frac{2\varepsilon}{3(b-a)} + (M_i(f_n) - m_i(f_n)),
+\]
+where $M_i(g) = \sup_{[x_{i-1}, x_i]} g$ and
+$m_i(g) = \inf_{[x_{i-1}, x_i]} g$. Therefore:
+\begin{align*}
+  U(f, P) - L(f, P)
+  &= \sum_{i=1}^k (M_i(f) - m_i(f))(x_i - x_{i-1}) \\
+  &\le \frac{2\varepsilon}{3(b-a)} \sum_{i=1}^k (x_i - x_{i-1})
+  + \sum_{i=1}^k (M_i(f_n) - m_i(f_n))(x_i - x_{i-1}) \\
+  &= \frac{2\varepsilon}{3} + U(f_n, P) - L(f_n, P)
+  < \frac{2\varepsilon}{3} + \frac{\varepsilon}{3} = \varepsilon.
+\end{align*}
+By the integrability criterion, $f$ is Riemann integrable.
+
+\emph{Step 2: The integrals converge.} For $n \ge N$:
+\begin{align*}
+  \left|\int_a^b f_n - \int_a^b f\right|
+  &= \left|\int_a^b (f_n - f)\right|
+  \le \int_a^b |f_n - f| \\
+  &\le (b - a) \sup_{x \in [a,b]} |f_n(x) - f(x)|.
+\end{align*}
+Since $\sup_{x \in [a,b]} |f_n(x) - f(x)| \to 0$, the right side
+tends to $0$, giving $\int_a^b f_n \to \int_a^b f$.
+\end{proof}
+
+\begin{example}[Interchange Fails Under Pointwise Convergence]
+\label{ex:interchange_fails}
+Define $g_n \colon [0, 1] \to \R$ by
+\[
+  g_n(x) = \begin{cases}
+    n^2 x & \text{if } 0 \le x \le 1/n, \\
+    2n - n^2 x & \text{if } 1/n < x \le 2/n, \\
+    0 & \text{if } 2/n < x \le 1.
+  \end{cases}
+\]
+Each $g_n$ is a ``tent'' function with height $n$ and base $[0, 2/n]$.
+For every fixed $x > 0$, $g_n(x) = 0$ for all $n > 2/x$, so
+$g_n \to 0$ pointwise. Also $g_n(0) = 0$ for all $n$. Hence
+$g_n \to 0$ pointwise on $[0, 1]$. But
+$\int_0^1 g_n = \frac{1}{2} \cdot \frac{2}{n} \cdot n = 1$ for all $n$.
+Thus
+\[
+  \lim_{n \to \infty} \int_0^1 g_n = 1 \neq 0
+  = \int_0^1 \lim_{n \to \infty} g_n.
+\]
+The convergence is not uniform ($\sup |g_n| = n \to \infty$), so
+Theorem~\ref{thm:interchange_limit_integral} does not apply.
+\end{example}
+
+\begin{rlconnection}[title={Uniform convergence and expected reward computation}]
+In reinforcement learning, the expected cumulative reward under a policy
+$\pi$ is $J(\pi) = \E\bigl[\sum_{t=0}^\infty \gamma^t r_t\bigr]$. When
+we approximate the value function $V^\pi$ by a sequence of iterates
+$V_n$, we need the approximation error in the integral
+$\int V_n\,d\mu$ to vanish. Uniform convergence
+$\|V_n - V^\pi\|_\infty \to 0$ guarantees
+$\int V_n\,d\mu \to \int V^\pi\,d\mu$ for any probability measure
+$\mu$. In Phase~01 (Measure Theory), the dominated convergence theorem
+provides a more general sufficient condition that relaxes uniform
+convergence to pointwise convergence plus a dominating integrable
+function.
+\end{rlconnection}
+
+We now turn to series of functions, where uniform convergence is
+established by a powerful comparison test.
+
+%% ============================================================
+%% SECTION 4: THE WEIERSTRASS M-TEST
+%% ============================================================
+\section{The Weierstrass $M$-Test}
+\label{sec:weierstrass}
+
+A \emph{series of functions} $\sum_{n=1}^\infty g_n(x)$ converges
+pointwise (resp.\ uniformly) on $A$ if the partial sums
+$S_N(x) = \sum_{n=1}^N g_n(x)$ converge pointwise (resp.\ uniformly)
+on $A$.
+
+\begin{theorem}[Weierstrass $M$-Test]
+\label{thm:weierstrass_m_test}
+Let $\{g_n\}$ be a sequence of functions $g_n \colon A \to \R$. Suppose
+there exist constants $M_n \ge 0$ such that:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $|g_n(x)| \le M_n$ for all $x \in A$ and all $n \ge 1$, and
+  \item $\sum_{n=1}^\infty M_n$ converges.
+\end{enumerate}
+Then $\sum_{n=1}^\infty g_n(x)$ converges uniformly (and absolutely)
+on $A$.
+\end{theorem}
+
+\begin{proof}
+Let $S_N(x) = \sum_{n=1}^N g_n(x)$. We show $\{S_N\}$ is uniformly
+Cauchy: for $M > N$,
+\[
+  |S_M(x) - S_N(x)| = \left|\sum_{n=N+1}^M g_n(x)\right|
+  \le \sum_{n=N+1}^M |g_n(x)| \le \sum_{n=N+1}^M M_n.
+\]
+Since $\sum M_n$ converges, its tail $\sum_{n=N+1}^\infty M_n \to 0$ as
+$N \to \infty$ (Lesson~1, the Cauchy criterion for series). Given
+$\varepsilon > 0$, choose $N_0$ such that
+$\sum_{n=N_0+1}^\infty M_n < \varepsilon$. Then for all $M > N \ge N_0$
+and \emph{all} $x \in A$:
+\[
+  |S_M(x) - S_N(x)| \le \sum_{n=N+1}^M M_n
+  \le \sum_{n=N_0+1}^\infty M_n < \varepsilon.
+\]
+Letting $M \to \infty$, the partial sums converge pointwise to some
+function $S(x) = \sum_{n=1}^\infty g_n(x)$, and the bound above gives
+$|S(x) - S_N(x)| \le \varepsilon$ for all $x \in A$ and $N \ge N_0$.
+This means $\sup_{x \in A} |S(x) - S_N(x)| \le \varepsilon$ for
+$N \ge N_0$, i.e., $S_N \rightrightarrows S$.
+
+Absolute convergence follows because
+$\sum |g_n(x)| \le \sum M_n < \infty$ for every $x \in A$.
+\end{proof}
+
+\begin{example}[Uniform Convergence of a Power Series]
+\label{ex:power_series}
+Consider the series $\sum_{n=0}^\infty x^n / n!$ on $[-R, R]$ for any
+fixed $R > 0$. Setting $M_n = R^n / n!$, we have $|x^n / n!| \le M_n$
+for all $|x| \le R$, and $\sum M_n = e^R < \infty$. By the Weierstrass
+$M$-test, the series converges uniformly on $[-R, R]$. Since each
+partial sum is a polynomial (hence continuous), the uniform limit
+$e^x = \sum_{n=0}^\infty x^n / n!$ is continuous on $[-R, R]$ by
+Theorem~\ref{thm:uniform_limit_continuous}.
+\end{example}
+
+\begin{example}[The $p$-Series of Functions]
+\label{ex:p_series}
+Define $g_n(x) = \sin(nx) / n^2$ on $\R$. Since
+$|g_n(x)| \le 1/n^2 = M_n$ and $\sum 1/n^2 = \pi^2/6 < \infty$, the
+Weierstrass $M$-test gives uniform convergence of
+$\sum_{n=1}^\infty \sin(nx)/n^2$ on all of $\R$. Each partial sum is
+continuous, so the limit function is continuous.
+\end{example}
+
+\begin{example}[A Series Where the $M$-Test Fails]
+\label{ex:m_test_fails}
+The series $\sum_{n=1}^\infty (-1)^{n+1} x^n / n$ converges pointwise
+on $(-1, 1]$ to $\ln(1 + x)$ (by the alternating series test). However,
+$\sup_{x \in (-1, 1]} |x^n / n| = 1/n$, and $\sum 1/n$ diverges, so
+the $M$-test does not apply on the full interval. On any $[-a, a]$ with
+$0 < a < 1$, we have $|x^n/n| \le a^n/n$ and $\sum a^n/n < \infty$
+(comparison with a geometric series), so uniform convergence holds on
+$[-a, a]$.
+\end{example}
+
+\begin{keyresult}[title={Connection to dominated convergence}]
+The Weierstrass $M$-test is the series analogue of the dominated
+convergence theorem from Lebesgue integration theory (Phase~01,
+Lesson~5). Both results use a ``dominating'' bound ($M_n$ here, an
+integrable function $g$ there) to justify interchange of limit and
+summation or integration. In Phase~01, the dominated convergence theorem
+will generalize Theorem~\ref{thm:interchange_limit_integral} from
+uniform to pointwise convergence, provided a dominating integrable
+function exists.
+\end{keyresult}
+
+With the theory of function sequences in hand, we now generalize the
+notion of convergence itself by moving from $\R$ to abstract metric
+spaces.
+
+%% ============================================================
+%% SECTION 5: METRIC SPACES
+%% ============================================================
+\section{Metric Spaces}
+\label{sec:metric_spaces}
+
+\begin{definition}[Metric Space]
+\label{def:metric_space}
+A \emph{metric space} is a pair $(X, d)$ where $X$ is a nonempty set
+and $d \colon X \times X \to [0, \infty)$ is a function (called a
+\emph{metric} or \emph{distance function}) satisfying, for all
+$x, y, z \in X$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Identity of indiscernibles:} $d(x, y) = 0$ if and only
+    if $x = y$.
+  \item \textbf{Symmetry:} $d(x, y) = d(y, x)$.
+  \item \textbf{Triangle inequality:} $d(x, z) \le d(x, y) + d(y, z)$.
+\end{enumerate}
+\end{definition}
+
+\begin{example}[Euclidean Metric on $\R^n$]
+\label{ex:euclidean_metric}
+The space $\R^n$ with the Euclidean metric
+$d(\mathbf{x}, \mathbf{y}) = \bigl(\sum_{i=1}^n (x_i - y_i)^2
+\bigr)^{1/2}$ is a metric space. The triangle inequality is the
+Cauchy--Schwarz inequality applied to $\R^n$. When $n = 1$, this
+reduces to $d(x, y) = |x - y|$, the standard metric on $\R$.
+\end{example}
+
+\begin{example}[Discrete Metric]
+\label{ex:discrete_metric}
+On any nonempty set $X$, define
+\[
+  d(x, y) = \begin{cases} 0 & \text{if } x = y, \\ 1 & \text{if } x \neq y. \end{cases}
+\]
+Verification of the metric axioms is immediate. The triangle inequality
+holds because $d(x, z) \le 1 \le d(x, y) + d(y, z)$ whenever
+$x \neq z$ (at least one of $d(x, y), d(y, z)$ equals $1$). In this
+metric, every subset is open (since the open ball $B(x, 1/2) = \{x\}$),
+and every sequence converges if and only if it is eventually constant.
+\end{example}
+
+\begin{example}[{Supremum Metric on $C[a, b]$}]
+\label{ex:sup_metric}
+Let $C[a, b]$ denote the set of continuous functions
+$f \colon [a, b] \to \R$. Define
+\[
+  d_\infty(f, g) = \sup_{x \in [a, b]} |f(x) - g(x)|
+  = \|f - g\|_\infty.
+\]
+This is a metric (the supremum exists by the extreme value theorem,
+since $|f - g|$ is continuous on the compact set $[a, b]$). Note that
+$d_\infty(f_n, f) \to 0$ is precisely the statement that
+$f_n \rightrightarrows f$ on $[a, b]$: uniform convergence \emph{is}
+convergence in the sup-metric.
+\end{example}
+
+\begin{definition}[Open Ball, Open Set, Closed Set]
+\label{def:open_closed}
+Let $(X, d)$ be a metric space.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The \emph{open ball} of radius $r > 0$ centered at $x \in X$ is
+    $B(x, r) = \{y \in X : d(x, y) < r\}$.
+  \item A set $U \subseteq X$ is \emph{open} if for every $x \in U$
+    there exists $r > 0$ such that $B(x, r) \subseteq U$.
+  \item A set $F \subseteq X$ is \emph{closed} if its complement
+    $X \setminus F$ is open.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Properties of Open and Closed Sets]
+\label{prop:open_closed_props}
+In a metric space $(X, d)$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $\emptyset$ and $X$ are both open and closed.
+  \item Arbitrary unions of open sets are open.
+  \item Finite intersections of open sets are open.
+  \item A set $F$ is closed if and only if every convergent sequence
+    $\{x_n\} \subseteq F$ has its limit in $F$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) $\emptyset$ is open vacuously; $X$ is open since $B(x, 1) \subseteq
+X$ for all $x$.
+
+(ii) Let $U = \bigcup_{\alpha} U_\alpha$ where each $U_\alpha$ is open.
+If $x \in U$, then $x \in U_\alpha$ for some $\alpha$, so there exists
+$r > 0$ with $B(x, r) \subseteq U_\alpha \subseteq U$.
+
+(iii) Let $U = U_1 \cap \cdots \cap U_k$ where each $U_i$ is open. If
+$x \in U$, then $x \in U_i$ for each $i$, so there exist $r_i > 0$
+with $B(x, r_i) \subseteq U_i$. Setting $r = \min(r_1, \ldots, r_k)
+> 0$, we get $B(x, r) \subseteq U_i$ for all $i$, so
+$B(x, r) \subseteq U$.
+
+(iv) ($\Rightarrow$) Suppose $F$ is closed and $\{x_n\} \subseteq F$
+with $x_n \to x$. If $x \notin F$, then $x \in X \setminus F$ which
+is open, so there exists $r > 0$ with $B(x, r) \subseteq X \setminus
+F$. But $x_n \to x$ implies $x_n \in B(x, r)$ for large $n$,
+contradicting $x_n \in F$.
+
+($\Leftarrow$) Suppose every convergent sequence in $F$ has its limit
+in $F$. If $X \setminus F$ is not open, there exists
+$x \in X \setminus F$ such that for every $n \ge 1$, $B(x, 1/n)$
+contains a point $x_n \in F$. Then $d(x_n, x) < 1/n \to 0$, so
+$x_n \to x$, forcing $x \in F$ by hypothesis---a contradiction.
+\end{proof}
+
+\begin{definition}[Convergence in a Metric Space]
+\label{def:convergence_metric}
+A sequence $\{x_n\}$ in a metric space $(X, d)$ \emph{converges} to
+$x \in X$ if $d(x_n, x) \to 0$ as $n \to \infty$. That is, for every
+$\varepsilon > 0$ there exists $N \in \N$ with
+$d(x_n, x) < \varepsilon$ for all $n \ge N$. We write $x_n \to x$.
+\end{definition}
+
+\begin{proposition}[Uniqueness of Limits]
+\label{prop:unique_limit}
+In a metric space, limits are unique: if $x_n \to x$ and $x_n \to y$,
+then $x = y$.
+\end{proposition}
+
+\begin{proof}
+By the triangle inequality: $d(x, y) \le d(x, x_n) + d(x_n, y) \to
+0 + 0 = 0$. Hence $d(x, y) = 0$, so $x = y$.
+\end{proof}
+
+With the basic metric space framework established, we can now define
+Cauchy sequences and completeness---the properties that make convergence
+arguments work.
+
+%% ============================================================
+%% SECTION 6: COMPLETENESS AND COMPACTNESS
+%% ============================================================
+\section{Completeness and Compactness}
+\label{sec:completeness}
+
+\begin{definition}[Cauchy Sequence]
+\label{def:cauchy_metric}
+A sequence $\{x_n\}$ in a metric space $(X, d)$ is a \emph{Cauchy
+sequence} if for every $\varepsilon > 0$ there exists $N \in \N$ such
+that $d(x_m, x_n) < \varepsilon$ for all $m, n \ge N$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:convergent_is_cauchy}
+Every convergent sequence in a metric space is Cauchy.
+\end{proposition}
+
+\begin{proof}
+If $x_n \to x$, then for $\varepsilon > 0$, choose $N$ with
+$d(x_n, x) < \varepsilon/2$ for $n \ge N$. For $m, n \ge N$:
+$d(x_m, x_n) \le d(x_m, x) + d(x, x_n) < \varepsilon/2 +
+\varepsilon/2 = \varepsilon$.
+\end{proof}
+
+\begin{definition}[Complete Metric Space]
+\label{def:complete}
+A metric space $(X, d)$ is \emph{complete} if every Cauchy sequence in
+$X$ converges to a limit in $X$.
+\end{definition}
+
+\begin{example}[$\R$ Is Complete; $\Q$ Is Not]
+\label{ex:R_complete}
+The real line $(\R, |\cdot|)$ is complete---this is the content of the
+Cauchy convergence criterion (Lesson~1, Theorem~4.10). In contrast,
+$\Q$ is not complete: the sequence $x_1 = 1, x_{n+1} =
+\frac{1}{2}(x_n + 2/x_n)$ is Cauchy in $\Q$ (Newton's method applied
+to $f(x) = x^2 - 2$), but its limit $\sqrt{2}$ is not in $\Q$.
+\end{example}
+
+\begin{theorem}[{$C[a, b]$ with the Sup-Metric Is Complete}]
+\label{thm:C_complete}
+The metric space $(C[a, b], d_\infty)$ is complete.
+\end{theorem}
+
+\begin{proof}
+Let $\{f_n\}$ be a Cauchy sequence in $(C[a, b], d_\infty)$. We must
+show it converges to some $f \in C[a, b]$.
+
+\emph{Step 1: Pointwise limit exists.} For each fixed $x \in [a, b]$,
+$|f_m(x) - f_n(x)| \le d_\infty(f_m, f_n)$, so $\{f_n(x)\}$ is a
+Cauchy sequence in $\R$. Since $\R$ is complete, $f_n(x)$ converges to
+some value, which we call $f(x)$. This defines a function
+$f \colon [a, b] \to \R$.
+
+\emph{Step 2: Convergence is uniform.} Given $\varepsilon > 0$, choose
+$N$ such that $d_\infty(f_m, f_n) < \varepsilon$ for all $m, n \ge N$.
+For any fixed $x \in [a, b]$ and $n \ge N$, take $m \to \infty$ in
+$|f_m(x) - f_n(x)| \le \varepsilon$ (using continuity of
+$|\cdot|$) to get $|f(x) - f_n(x)| \le \varepsilon$. Since this holds
+for every $x$, $\sup_{x \in [a,b]} |f(x) - f_n(x)| \le \varepsilon$
+for all $n \ge N$. Thus $f_n \rightrightarrows f$.
+
+\emph{Step 3: $f$ is continuous.} Each $f_n$ is continuous and
+$f_n \rightrightarrows f$, so $f$ is continuous by
+Theorem~\ref{thm:uniform_limit_continuous}. Hence $f \in C[a, b]$ and
+$d_\infty(f_n, f) \to 0$.
+\end{proof}
+
+\begin{rlconnection}[title={Completeness of function spaces in RL}]
+The completeness of $(C[a,b], d_\infty)$ is a prototype for a central
+pattern in reinforcement learning theory. The space of bounded functions
+$B(S)$ on a state space $S$, equipped with the sup-norm
+$\|V\|_\infty = \sup_{s \in S} |V(s)|$, is also complete (by the same
+argument: pointwise limits of Cauchy sequences exist in $\R$, and the
+convergence is uniform). This is the space in which value functions
+live, and its completeness is what makes the contraction mapping
+theorem applicable. In Phase~01 (Functional Analysis), we will study
+Banach spaces---complete normed vector spaces---as the general framework
+for these arguments.
+\end{rlconnection}
+
+\begin{definition}[Sequential Compactness]
+\label{def:seq_compact}
+A metric space $(X, d)$ is \emph{sequentially compact} if every
+sequence in $X$ has a convergent subsequence (with limit in $X$).
+\end{definition}
+
+\begin{theorem}[Heine--Borel for $\R^n$]
+\label{thm:heine_borel}
+A subset $K \subseteq \R^n$ (with the Euclidean metric) is sequentially
+compact if and only if it is closed and bounded.
+\end{theorem}
+
+\begin{proof}
+($\Leftarrow$) Let $K \subseteq \R^n$ be closed and bounded, and let
+$\{x_k\} \subseteq K$. Since $K$ is bounded, $K \subseteq [-M, M]^n$
+for some $M > 0$. Write $x_k = (x_k^{(1)}, \ldots, x_k^{(n)})$. The
+sequence $\{x_k^{(1)}\}$ is bounded, so by Bolzano--Weierstrass
+(Lesson~1, Theorem~4.7), it has a convergent subsequence. Passing to
+this subsequence, the second coordinates $\{x_k^{(2)}\}$ are bounded,
+so they also have a convergent subsequence. Repeating $n$ times (each
+time passing to a further subsequence), we obtain a subsequence
+$\{x_{k_j}\}$ such that every coordinate converges. Hence
+$x_{k_j} \to x$ for some $x \in \R^n$. Since $K$ is closed,
+$x \in K$.
+
+($\Rightarrow$) If $K$ is not bounded, choose $x_k \in K$ with
+$\|x_k\| \ge k$; no subsequence can converge. If $K$ is not closed,
+choose $x_k \in K$ with $x_k \to x \notin K$; every convergent
+subsequence must also converge to $x \notin K$, contradicting
+sequential compactness.
+\end{proof}
+
+\begin{example}
+\label{ex:compact_interval}
+The interval $[0, 1] \subset \R$ is sequentially compact (closed and
+bounded). The open interval $(0, 1)$ is bounded but not closed: the
+sequence $1/n \to 0 \notin (0,1)$ shows it is not sequentially compact.
+The set $\R$ itself is closed but not bounded, hence not sequentially
+compact: the sequence $n$ has no convergent subsequence.
+\end{example}
+
+We now have all the ingredients for the main result of this lesson.
+
+%% ============================================================
+%% SECTION 7: THE CONTRACTION MAPPING THEOREM
+%% ============================================================
+\section{The Contraction Mapping Theorem}
+\label{sec:contraction}
+
+\begin{definition}[Contraction Mapping]
+\label{def:contraction}
+Let $(X, d)$ be a metric space. A function $T \colon X \to X$ is a
+\emph{contraction mapping} (or \emph{contraction}) if there exists a
+constant $\gamma \in [0, 1)$ such that
+\[
+  d(T(x), T(y)) \le \gamma\, d(x, y) \quad \text{for all } x, y \in X.
+\]
+The constant $\gamma$ is called the \emph{contraction factor}.
+\end{definition}
+
+\begin{remark}
+\label{rem:contraction_continuous}
+Every contraction is (uniformly) continuous: given $\varepsilon > 0$,
+taking $\delta = \varepsilon$ gives $d(T(x), T(y)) \le \gamma\,d(x,y)
+< d(x,y) < \varepsilon$ whenever $d(x,y) < \delta$. In fact, every
+contraction is Lipschitz continuous with Lipschitz constant $\gamma < 1$.
+\end{remark}
+
+\begin{keyresult}[title={Banach Fixed-Point Theorem}]
+\begin{theorem}[Banach Fixed-Point Theorem (Contraction Mapping Theorem)]
+\label{thm:banach}
+Let $(X, d)$ be a complete metric space and let $T \colon X \to X$ be a
+contraction with contraction factor $\gamma \in [0, 1)$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Existence.} $T$ has a fixed point: there exists
+    $x^* \in X$ with $T(x^*) = x^*$.
+  \item \textbf{Uniqueness.} The fixed point is unique.
+  \item \textbf{Convergence rate.} For any starting point $x_0 \in X$,
+    the iterates $x_n = T(x_{n-1}) = T^n(x_0)$ satisfy
+    \[
+      d(x_n, x^*) \le \frac{\gamma^n}{1 - \gamma}\, d(x_0, x_1).
+    \]
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Fix any $x_0 \in X$ and define $x_n = T(x_{n-1})$ for $n \ge 1$.
+
+\textbf{Step 1: $\{x_n\}$ is Cauchy.} First, observe that
+\[
+  d(x_{n+1}, x_n) = d(T(x_n), T(x_{n-1}))
+  \le \gamma\, d(x_n, x_{n-1}) \le \cdots \le \gamma^n\, d(x_1, x_0).
+\]
+For $m > n$, the triangle inequality gives:
+\begin{align*}
+  d(x_m, x_n)
+  &\le \sum_{k=n}^{m-1} d(x_{k+1}, x_k)
+  \le \sum_{k=n}^{m-1} \gamma^k\, d(x_1, x_0) \\
+  &= \gamma^n \sum_{j=0}^{m-n-1} \gamma^j\, d(x_1, x_0)
+  \le \gamma^n \sum_{j=0}^{\infty} \gamma^j\, d(x_1, x_0)
+  = \frac{\gamma^n}{1 - \gamma}\, d(x_1, x_0).
+\end{align*}
+Since $\gamma \in [0, 1)$, $\gamma^n \to 0$, so the right side tends
+to $0$ as $n \to \infty$. Hence $\{x_n\}$ is Cauchy.
+
+\textbf{Step 2: Existence.} Since $(X, d)$ is complete, $x_n \to x^*$
+for some $x^* \in X$. We show $T(x^*) = x^*$. Since $T$ is continuous
+(Remark~\ref{rem:contraction_continuous}):
+\[
+  T(x^*) = T\left(\lim_{n \to \infty} x_n\right)
+  = \lim_{n \to \infty} T(x_n) = \lim_{n \to \infty} x_{n+1} = x^*.
+\]
+
+\textbf{Step 3: Uniqueness.} Suppose $T(y^*) = y^*$ for some
+$y^* \in X$. Then
+\[
+  d(x^*, y^*) = d(T(x^*), T(y^*)) \le \gamma\, d(x^*, y^*).
+\]
+Since $\gamma < 1$, this implies $(1 - \gamma)\, d(x^*, y^*) \le 0$,
+so $d(x^*, y^*) = 0$, hence $x^* = y^*$.
+
+\textbf{Step 4: Convergence rate.} From Step~1, for $m > n$:
+$d(x_m, x_n) \le \frac{\gamma^n}{1 - \gamma}\, d(x_1, x_0)$.
+Taking $m \to \infty$ and using continuity of the metric:
+\[
+  d(x^*, x_n) = \lim_{m \to \infty} d(x_m, x_n)
+  \le \frac{\gamma^n}{1 - \gamma}\, d(x_1, x_0)
+  = \frac{\gamma^n}{1 - \gamma}\, d(x_0, x_1). \qedhere
+\]
+\end{proof}
+
+\begin{example}[Contraction on $\R$]
+\label{ex:contraction_R}
+Let $T \colon [0, \infty) \to [0, \infty)$ be defined by
+$T(x) = \frac{1}{2}(x + 2/x)$ (Newton's method for $\sqrt{2}$). For
+$x, y \ge 1$:
+\[
+  |T(x) - T(y)| = \left|\frac{1}{2}(x - y) - \frac{(x - y)}{xy}\right|
+  = \frac{|x - y|}{2}\left|1 - \frac{2}{xy}\right|.
+\]
+On $[1, 2]$, $xy \ge 1$ and $2/(xy) \le 2$, so this analysis requires
+care. Instead, note that $T$ maps $[\sqrt{2}, 2]$ into itself (since
+$T(x) \ge \sqrt{2}$ by AM-GM and $T(x) \le x \le 2$ for
+$x \ge \sqrt{2}$), and on $[\sqrt{2}, 2]$,
+$|T'(x)| = \frac{1}{2}|1 - 2/x^2| \le 1/2$ by the MVT (Lesson~3,
+Theorem~5.4). Hence $T$ is a contraction with $\gamma = 1/2$ on
+$[\sqrt{2}, 2]$, and the unique fixed point is $x^* = \sqrt{2}$.
+Starting from $x_0 = 2$: $x_1 = 3/2 = 1.5$, $x_2 = 17/12 \approx
+1.4167$, converging rapidly to $\sqrt{2} \approx 1.4142$.
+\end{example}
+
+\begin{example}[Non-Example: $\gamma = 1$ Fails]
+\label{ex:gamma_one}
+The map $T \colon [0, \infty) \to [0, \infty)$ defined by $T(x) = x+1$
+satisfies $|T(x) - T(y)| = |x - y|$ (so $\gamma = 1$, not strictly
+less than $1$). It has no fixed point: $T(x) = x$ would require
+$x + 1 = x$.
+
+Similarly, the map $T(x) = x/(1+x)$ on $[0, \infty)$ satisfies
+$|T(x) - T(y)| \le |x - y|$ (with $\gamma$ approaching $1$ as
+$x, y \to 0$). It has a unique fixed point $x^* = 0$, but the
+convergence rate is only $O(1/n)$, not geometric. The strict inequality
+$\gamma < 1$ in the Banach theorem is essential for the geometric rate.
+\end{example}
+
+\begin{example}[Value Iteration as a Contraction]
+\label{ex:value_iteration}
+Consider a finite Markov decision process with state space
+$S = \{1, \ldots, |S|\}$, action space $A$, rewards bounded by
+$R_{\max}$, transition probabilities $p(s'|s,a)$, and discount factor
+$\gamma \in (0, 1)$. The Bellman optimality operator
+$T \colon \R^{|S|} \to \R^{|S|}$ is defined by
+\[
+  (TV)(s) = \max_{a \in A}\left[r(s, a) + \gamma \sum_{s' \in S}
+  p(s'|s,a)\, V(s')\right].
+\]
+For any $V, W \in \R^{|S|}$ and any state $s$:
+\begin{align*}
+  |(TV)(s) - (TW)(s)|
+  &= \left|\max_a\left[r(s,a) + \gamma \sum_{s'} p(s'|s,a) V(s')\right]
+  - \max_a\left[r(s,a) + \gamma \sum_{s'} p(s'|s,a) W(s')\right]\right| \\
+  &\le \max_a \gamma \sum_{s'} p(s'|s,a)\, |V(s') - W(s')| \\
+  &\le \gamma \|V - W\|_\infty,
+\end{align*}
+where the first inequality uses $|\max_a f(a) - \max_a g(a)| \le
+\max_a |f(a) - g(a)|$. Taking the supremum over $s$:
+$\|TV - TW\|_\infty \le \gamma \|V - W\|_\infty$.
+
+Since $(\R^{|S|}, \|\cdot\|_\infty)$ is a complete metric space and $T$
+is a $\gamma$-contraction, the Banach fixed-point theorem gives:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item There exists a unique $V^* \in \R^{|S|}$ with $TV^* = V^*$
+    (the Bellman optimality equation).
+  \item For any initial $V_0$, the value iteration sequence
+    $V_n = TV_{n-1}$ satisfies
+    $\|V_n - V^*\|_\infty \le \frac{\gamma^n}{1 - \gamma}\|V_0 - V_1\|_\infty$.
+\end{enumerate}
+With $\gamma = 0.99$, reaching $\varepsilon$-accuracy requires about
+$n \ge \frac{\log(\varepsilon(1-\gamma)/\|V_0 - V_1\|_\infty)}{\log \gamma}$
+iterations.
+\end{example}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Sup-norm characterization of uniform convergence]
+\textnormal{(\(*\))} \\
+Let $f_n, f \colon [a,b] \to \R$ be bounded functions. Prove that
+$f_n \rightrightarrows f$ on $[a,b]$ if and only if
+$\|f_n - f\|_\infty \to 0$, where
+$\|g\|_\infty = \sup_{x \in [a,b]} |g(x)|$.
+\end{exercise}
+
+\begin{exercise}[Weierstrass $M$-test application]
+\textnormal{(\(*\))} \\
+Show that the series $\sum_{n=1}^\infty \frac{\cos(nx)}{n^3}$ converges
+uniformly on $\R$. Conclude that its sum is a continuous function.
+\end{exercise}
+
+\begin{exercise}[Completeness of $\ell^\infty$]
+\textnormal{(\(**\))} \\
+Let $\ell^\infty$ be the set of bounded real sequences
+$\mathbf{x} = (x_1, x_2, \ldots)$ with the metric
+$d(\mathbf{x}, \mathbf{y}) = \sup_{n \ge 1} |x_n - y_n|$. Prove that
+$(\ell^\infty, d)$ is a complete metric space.
+
+\textit{Hint:} Mimic the proof of Theorem~\ref{thm:C_complete}: show
+that a Cauchy sequence in $\ell^\infty$ converges coordinatewise, the
+convergence is uniform, and the limit is bounded.
+\end{exercise}
+
+\begin{exercise}[Failure of the contraction mapping theorem without completeness]
+\textnormal{(\(**\))} \\
+Let $X = (0, 1]$ with the standard metric $d(x, y) = |x - y|$ and
+define $T \colon X \to X$ by $T(x) = x/2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Show that $T$ is a contraction with factor $\gamma = 1/2$.
+  \item Show that $T$ has no fixed point in $X$.
+  \item Explain why this does not contradict the Banach fixed-point
+    theorem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Value iteration convergence rate]
+\textnormal{(\(**\))} \\
+Consider a two-state MDP with $S = \{s_1, s_2\}$, a single action,
+rewards $r(s_1) = 1$, $r(s_2) = 0$, transition probabilities
+$p(s_1 | s_1) = p(s_2 | s_2) = 1$ (absorbing states), and discount
+factor $\gamma = 0.9$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Write the Bellman operator $T$ explicitly and verify that
+    $V^* = (10, 0)$.
+  \item Starting from $V_0 = (0, 0)$, compute $V_1, V_2, V_3$ and
+    verify the bound
+    $\|V_n - V^*\|_\infty \le \frac{\gamma^n}{1-\gamma}\|V_0 - V_1\|_\infty$.
+  \item How many iterations are needed to guarantee
+    $\|V_n - V^*\|_\infty < 0.01$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Uniform convergence and differentiation]
+\textnormal{(\(***\))} \\
+The interchange of limit and derivative is more delicate than the
+interchange of limit and integral. Consider $f_n(x) = \frac{\sin(nx)}{n}$
+on $\R$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Show that $f_n \rightrightarrows 0$ on $\R$.
+  \item Compute $f_n'(x)$ and show that $\{f_n'\}$ does not converge
+    pointwise at $x = 0$.
+  \item Conclude that uniform convergence of $\{f_n\}$ does not imply
+    convergence of $\{f_n'\}$. Compare with
+    Theorem~\ref{thm:interchange_limit_integral}: why is
+    differentiation harder than integration?
+\end{enumerate}
+\textit{Hint:} For (c), note that differentiation amplifies oscillation
+(multiplies by frequency $n$), while integration averages it out.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item \textbf{Pointwise convergence} $f_n \to f$ requires
+    $|f_n(x) - f(x)| < \varepsilon$ for each $x$ separately, with $N$
+    depending on both $x$ and $\varepsilon$; it can destroy continuity
+    of the limit (e.g., $x^n$ on $[0,1]$).
+
+  \item \textbf{Uniform convergence} $f_n \rightrightarrows f$ requires
+    a single $N(\varepsilon)$ that works for all $x$ simultaneously,
+    equivalently $\|f_n - f\|_\infty \to 0$; it preserves continuity
+    and permits interchange of limit and Riemann integral.
+
+  \item The \textbf{Weierstrass $M$-test} establishes uniform
+    convergence of a series $\sum g_n$ by bounding $|g_n(x)| \le M_n$
+    with a convergent numerical series $\sum M_n$. It is the
+    function-series analogue of the dominated convergence theorem.
+
+  \item A \textbf{metric space} $(X, d)$ abstracts the notion of
+    distance, enabling convergence, continuity, and completeness to be
+    studied in general settings (function spaces, sequence spaces,
+    etc.).
+
+  \item \textbf{Completeness} (every Cauchy sequence converges) is the
+    key property that distinguishes $\R$ from $\Q$ and makes fixed-point
+    arguments work. The function space $(C[a,b], \|\cdot\|_\infty)$ is
+    complete.
+
+  \item \textbf{Sequential compactness} generalizes the
+    Bolzano--Weierstrass theorem; in $\R^n$ (Heine--Borel), a set is
+    sequentially compact if and only if it is closed and bounded.
+
+  \item The \textbf{Banach fixed-point theorem} states that a
+    contraction $T$ on a complete metric space has a unique fixed point
+    $x^*$, and the iterates $T^n(x_0)$ converge to $x^*$ at a
+    geometric rate $O(\gamma^n)$.
+
+  \item The Bellman optimality operator is a $\gamma$-contraction on
+    the complete space of bounded value functions, so \textbf{value
+    iteration converges} to the unique optimal value function at rate
+    $O(\gamma^n)$.
+
+  \item Pointwise convergence can fail to commute with integration
+    (tent function example) or differentiation ($\sin(nx)/n$); uniform
+    convergence fixes the integration issue but not the differentiation
+    one.
+\end{itemize}
+
+\bigskip
+
+As the capstone lesson of the Real Analysis subdomain, we summarize the
+full arc of Lessons~1--4 in the following table.
+
+\begin{table}[h]
+\centering
+\caption{Real Analysis Subdomain: Lessons 1--4 Overview}
+\label{tab:subdomain_summary}
+\begin{tabular}{@{} c l l @{}}
+\toprule
+\textbf{Lesson} & \textbf{Core Topics} & \textbf{Key RL/ML Applications} \\
+\midrule
+1 & Real numbers, sequences, series &
+  Convergence of iterative algorithms, \\
+  & (completeness, Cauchy criterion, &
+  existence of suprema/infima \\
+  & Bolzano--Weierstrass) & for optimization \\
+\midrule
+2 & Topology, continuity, &
+  Continuous dependence of policies \\
+  & compactness on $\R$ &
+  on parameters, extreme value \\
+  & (EVT, IVT, uniform continuity) &
+  theorem for bounded rewards \\
+\midrule
+3 & Differentiation, integration &
+  Gradient descent (MVT, Taylor), \\
+  & (chain rule, MVT, Taylor, &
+  backpropagation (chain rule), \\
+  & Riemann integral, FTC) &
+  expected reward computation \\
+\midrule
+4 & Function sequences, metric spaces &
+  Value iteration convergence \\
+  & (uniform convergence, completeness, &
+  (contraction mapping theorem), \\
+  & Banach fixed-point theorem) &
+  function space analysis \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item In \textbf{Phase~01} (Functional Analysis, Lessons~6--7), the
+    metric space framework is extended to \emph{normed spaces} and
+    \emph{Banach spaces} (complete normed spaces), providing the
+    natural setting for the contraction mapping theorem in infinite
+    dimensions. \emph{Hilbert spaces} add inner product structure,
+    enabling orthogonal projections and the Riesz representation
+    theorem.
+
+  \item In \textbf{Phase~01} (Measure Theory, Lessons~4--5), the
+    interchange of limit and integral is treated definitively via the
+    \emph{monotone convergence theorem} and the \emph{dominated
+    convergence theorem}, which generalize
+    Theorem~\ref{thm:interchange_limit_integral} by replacing uniform
+    convergence with weaker hypotheses.
+
+  \item In \textbf{Phase~02} (Core RL, Lessons~13--14), the Banach
+    fixed-point theorem is applied to the Bellman operators for both
+    policy evaluation and optimal control, yielding convergence of
+    value iteration and policy iteration with explicit rate bounds.
+
+  \item \citet[Chapter 7]{rudin1976} continues with
+    \emph{equicontinuity} and the \emph{Arzel\`{a}--Ascoli theorem},
+    characterizing compact subsets of $C[a,b]$---essential for proving
+    existence of optimal policies in continuous-state MDPs.
+
+  \item \citet[Chapters 2--3]{pugh2015} develops metric space topology
+    in greater depth, including the Baire category theorem and its
+    applications to analysis.
+
+  \item The Stone--Weierstrass theorem (\citet[Theorem 7.26]{rudin1976})
+    shows that polynomials are dense in $C[a,b]$ under the sup-norm,
+    providing a classical density result that foreshadows neural network
+    universal approximation theorems (Phase~03).
+
+  \item For historical context, Banach's original 1922 paper introduced
+    the fixed-point theorem in the setting of complete metric spaces.
+    The theorem was independently discovered by Caccioppoli in 1931.
+    \citet[Chapter 9]{bartle2011} provides a textbook treatment with
+    many applications.
+\end{itemize}
+
+\bibliography{real-analysis-refs}
+
+\end{document}

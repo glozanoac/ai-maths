@@ -10,79 +10,88 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 
 Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf -- 102 sessions). Each phase directory has its own `README.md` with full details.
 
-**Total: 37 documents** (13 exist, 24 planned)
+**Total: 46 documents** (22 exist, 24 planned)
 
-### Phase 00 -- Prerequisites (3 docs)
+### Phase 00 -- Prerequisites (12 lessons)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 1 | `00-prerequisites/01-real-analysis/real-analysis` | Ordered fields, supremum/infimum, sequences, limits, continuity, differentiation, Riemann integration, metric spaces, compactness, uniform convergence | **exists** |
-| 2 | `00-prerequisites/02-linear-algebra/linear-algebra` | Vector spaces, linear maps, eigenvalues, diagonalization, inner product spaces, spectral theorem, SVD | **exists** |
-| 3 | `00-prerequisites/03-probability/probability` | Axioms, conditional probability, independence, random variables, distributions, expectation, variance, LLN, CLT | **exists** |
+| 1 | `00-prerequisites/01-real-analysis/lesson-01-real-numbers-sequences-series` | Ordered fields, supremum/infimum, Archimedean property, sequences, convergence, Bolzano-Weierstrass, series, convergence tests | **exists** |
+| 2 | `00-prerequisites/01-real-analysis/lesson-02-topology-and-continuity` | Open/closed sets, compactness, Heine-Borel, continuity, IVT, EVT, uniform continuity | **exists** |
+| 3 | `00-prerequisites/01-real-analysis/lesson-03-differentiation-and-integration` | Derivatives, chain rule, MVT, Taylor's theorem, Riemann integral, FTC | **exists** |
+| 4 | `00-prerequisites/01-real-analysis/lesson-04-function-sequences-and-metric-spaces` | Pointwise/uniform convergence, interchange theorems, metric spaces, completeness, Banach fixed-point theorem | **exists** |
+| 5 | `00-prerequisites/02-linear-algebra/lesson-05-vector-spaces-and-linear-maps` | Vector spaces, subspaces, bases, dimension, linear maps, rank-nullity, matrix representation | **exists** |
+| 6 | `00-prerequisites/02-linear-algebra/lesson-06-determinants-and-eigenvalues` | Determinants, cofactor expansion, eigenvalues, characteristic polynomial, diagonalization, Cayley-Hamilton | **exists** |
+| 7 | `00-prerequisites/02-linear-algebra/lesson-07-inner-products-and-spectral-theory` | Inner product spaces, Cauchy-Schwarz, Gram-Schmidt, orthogonal projections, spectral theorem, positive definiteness | **exists** |
+| 8 | `00-prerequisites/02-linear-algebra/lesson-08-svd-norms-and-matrix-calculus` | Quadratic forms, SVD, Eckart-Young, matrix norms, condition number, matrix exponential, gradient, Jacobian, Hessian | **exists** |
+| 9 | `00-prerequisites/03-probability/lesson-09-probability-spaces-and-conditioning` | Probability spaces, Kolmogorov axioms, inclusion-exclusion, conditional probability, Bayes' theorem, independence | **exists** |
+| 10 | `00-prerequisites/03-probability/lesson-10-random-variables-and-distributions` | Discrete RVs (Bernoulli, binomial, geometric, Poisson), continuous RVs (uniform, exponential, normal), CDFs, PDFs | **exists** |
+| 11 | `00-prerequisites/03-probability/lesson-11-expectation-variance-joint-distributions` | Expectation, LOTUS, variance, covariance, correlation, joint distributions, conditional expectation, tower property | **exists** |
+| 12 | `00-prerequisites/03-probability/lesson-12-inequalities-and-limit-theorems` | MGFs, Markov/Chebyshev/Hoeffding inequalities, WLLN, SLLN, CLT, sample complexity | **exists** |
 
 ### Phase 01 -- Mathematical Foundations (9 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 4 | `01-math-foundations/01-measure-theory/01-measure-spaces` | sigma-algebras, measures, Caratheodory extension, measurable functions, pi-lambda theorem | **exists** |
-| 5 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, convergence modes, inequalities, Borel-Cantelli, LLN, CLT, Markov chains, martingales | **exists** |
-| 6 | `01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces` | Metric spaces, normed spaces, Banach spaces, completeness, compactness in normed spaces | **exists** |
-| 7 | `01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators` | Inner product spaces, Hilbert spaces, orthogonal projections, Riesz representation, Hahn-Banach, uniform boundedness, fixed point theorems (Banach, Brouwer, Schauder, Kakutani) | **exists** |
-| 8 | `01-math-foundations/03-optimization/01-convex-analysis` | Convex sets, convex functions, operations preserving convexity, conjugate functions, separation theorems | **exists** |
-| 9 | `01-math-foundations/03-optimization/02-convex-optimization-and-duality` | Convex optimization problems, Lagrangian duality, KKT conditions, gradient descent, accelerated methods, proximal methods, interior point methods | **exists** |
-| 10 | `01-math-foundations/03-optimization/03-stochastic-approximation` | Robbins-Monro, ODE method, convergence analysis, two-timescale SA | **exists** |
-| 11 | `01-math-foundations/04-game-theory/01-static-and-extensive-form-games` | Normal-form games, Nash equilibrium, minimax theorem, correlated equilibrium, extensive-form games, subgame perfection | **exists** |
-| 12 | `01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info` | Repeated games, folk theorems, fictitious play, no-regret learning, Bayesian games, PBE, signaling games, potential games | **exists** |
+| 13 | `01-math-foundations/01-measure-theory/01-measure-spaces` | sigma-algebras, measures, Caratheodory extension, measurable functions, pi-lambda theorem | **exists** |
+| 14 | `01-math-foundations/01-measure-theory/probability-foundations` | Expectation, conditional expectation, tower property, variance, convergence modes, inequalities, Borel-Cantelli, LLN, CLT, Markov chains, martingales | **exists** |
+| 15 | `01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces` | Metric spaces, normed spaces, Banach spaces, completeness, compactness in normed spaces | **exists** |
+| 16 | `01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators` | Inner product spaces, Hilbert spaces, orthogonal projections, Riesz representation, Hahn-Banach, uniform boundedness, fixed point theorems (Banach, Brouwer, Schauder, Kakutani) | **exists** |
+| 17 | `01-math-foundations/03-optimization/01-convex-analysis` | Convex sets, convex functions, operations preserving convexity, conjugate functions, separation theorems | **exists** |
+| 18 | `01-math-foundations/03-optimization/02-convex-optimization-and-duality` | Convex optimization problems, Lagrangian duality, KKT conditions, gradient descent, accelerated methods, proximal methods, interior point methods | **exists** |
+| 19 | `01-math-foundations/03-optimization/03-stochastic-approximation` | Robbins-Monro, ODE method, convergence analysis, two-timescale SA | **exists** |
+| 20 | `01-math-foundations/04-game-theory/01-static-and-extensive-form-games` | Normal-form games, Nash equilibrium, minimax theorem, correlated equilibrium, extensive-form games, subgame perfection | **exists** |
+| 21 | `01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info` | Repeated games, folk theorems, fictitious play, no-regret learning, Bayesian games, PBE, signaling games, potential games | **exists** |
 
 ### Phase 02 -- Core Reinforcement Learning (4 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 13 | `02-core-rl/01-mdp/01-mdp-formulation-and-finite-horizon` | MDP model, policies, finite-horizon MDPs, backward induction | planned |
-| 14 | `02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming` | Discounted/average reward, Bellman equations, contraction, value/policy iteration, LP formulation | planned |
-| 15 | `02-core-rl/02-rl-algorithms/temporal-difference-learning` | TD(0), n-step TD, TD(lambda), SARSA, Q-learning, function approximation, deadly triad | **exists** |
-| 16 | `02-core-rl/03-policy-gradient/policy-gradient-theorem` | Policy gradient theorem, REINFORCE, baseline variance reduction, natural gradient, Fisher information | **exists** |
+| 22 | `02-core-rl/01-mdp/01-mdp-formulation-and-finite-horizon` | MDP model, policies, finite-horizon MDPs, backward induction | planned |
+| 23 | `02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming` | Discounted/average reward, Bellman equations, contraction, value/policy iteration, LP formulation | planned |
+| 24 | `02-core-rl/02-rl-algorithms/temporal-difference-learning` | TD(0), n-step TD, TD(lambda), SARSA, Q-learning, function approximation, deadly triad | **exists** |
+| 25 | `02-core-rl/03-policy-gradient/policy-gradient-theorem` | Policy gradient theorem, REINFORCE, baseline variance reduction, natural gradient, Fisher information | **exists** |
 
 ### Phase 03 -- Deep Learning (4 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 17 | `03-deep-learning/01-neural-networks/01-approximation-theory` | Universal approximation (Cybenko, Hornik), Barron's theorem, approximation rates, Rademacher complexity, NTK perspective | planned |
-| 18 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
-| 19 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
-| 20 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
+| 26 | `03-deep-learning/01-neural-networks/01-approximation-theory` | Universal approximation (Cybenko, Hornik), Barron's theorem, approximation rates, Rademacher complexity, NTK perspective | planned |
+| 27 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
+| 28 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
+| 29 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
 
 ### Phase 04 -- Deep Reinforcement Learning (7 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 21 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
-| 22 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
-| 23 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
-| 24 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
-| 25 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
-| 26 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
-| 27 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
+| 30 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
+| 31 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
+| 32 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
+| 33 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
+| 34 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
+| 35 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
+| 36 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
 
 ### Phase 05 -- Multi-Agent RL (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 28 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
-| 29 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
-| 30 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
-| 31 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
-| 32 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
+| 37 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
+| 38 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
+| 39 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
+| 40 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
+| 41 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
 
 ### Phase 06 -- Aerospace Applications (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 33 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
-| 34 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
-| 35 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
-| 36 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
-| 37 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
+| 42 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
+| 43 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
+| 44 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
+| 45 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
+| 46 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
 
 ## Dependency Tree / Reading Order
 

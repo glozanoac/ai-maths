@@ -1,0 +1,1011 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 5: Vector Spaces and Linear Maps}}
+\fancyhead[R]{\thepage}
+\title{Lesson 5: Vector Spaces and Linear Maps}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a neural network with a single hidden layer.  The forward pass computes
+$x \mapsto \sigma(W_2 \,\sigma(W_1 x + b_1) + b_2)$, where $W_1 \in \R^{d \times n}$
+and $W_2 \in \R^{k \times d}$ are weight matrices.  Strip away the nonlinearity
+$\sigma$ for a moment: the remaining map $x \mapsto W_2 W_1 x$ is a \emph{composition
+of linear maps} $\R^n \to \R^d \to \R^k$.  Its range, null space, and rank determine
+which inputs the network can distinguish and how many independent features the hidden
+layer can encode.  If $\rank(W_2 W_1) < \min(k, n)$, the network suffers a
+\emph{bottleneck} -- it collapses distinct inputs to the same output.
+
+More broadly, policy gradient methods in reinforcement learning parameterize a policy
+$\pi_\theta$ by a vector $\theta \in \R^p$.  The parameter space is a vector space, and
+the Fisher information matrix defines a natural inner product on its tangent space.
+Understanding bases, dimension, and change of basis is prerequisite to reasoning about
+such geometric structures.  The tools developed in this lesson will let us define linear
+maps rigorously, prove the rank--nullity theorem, and analyze how matrix representations
+change with a choice of basis -- all of which are essential for the spectral and
+optimization theory developed in later lessons.
+
+\begin{rlconnection}[title={Where Vector Spaces and Linear Maps Appear in RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Linear function approximation (TD learning).}
+        Value functions are approximated as $\hat{V}(s) = \phi(s)^\top w$, a linear
+        map from feature space to $\R$; the rank of the feature matrix $\Phi$
+        determines expressiveness.
+  \item \textbf{Policy gradient / natural gradient.}
+        The parameter update $\theta \leftarrow \theta + \alpha \, F^{-1} \nabla J$
+        requires understanding coordinate changes and similarity transformations.
+  \item \textbf{Principal component analysis (PCA).}
+        Dimensionality reduction projects data onto a subspace spanned by the top
+        eigenvectors -- a direct application of bases, span, and projections.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Familiarity with sets, functions, and the field axioms of $\R$ (Lesson 1);
+sequences and limits in $\R$ (Lesson 2); continuity of real-valued functions
+(Lesson 3); basic properties of $\R^n$ as a set of tuples.
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} a vector space, subspace, span, linear independence, basis,
+        dimension, and linear map, and verify these definitions in concrete examples.
+  \item \textbf{Prove} that the intersection of subspaces is a subspace and that any
+        two bases of a finite-dimensional space have the same cardinality.
+  \item \textbf{Derive} the rank--nullity theorem from the definition of a basis
+        and apply it to determine injectivity and surjectivity of linear maps.
+  \item \textbf{Compute} the matrix representation of a linear map with respect to
+        given bases and carry out a change-of-basis computation.
+  \item \textbf{Classify} linear maps between finite-dimensional spaces as injective,
+        surjective, or bijective using dimension arguments.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 1--3]{axler2015} -- Primary reference; develops vector
+        spaces, span, independence, bases, and linear maps without determinants.
+  \item \citet[Chapters 1--3]{hoffman1971} -- Classical treatment with emphasis on
+        the interplay between abstract vector spaces and matrices.
+  \item \citet[Chapters 1--3]{strang2016} -- Computational perspective with
+        many worked examples connecting to applications.
+  \item \citet[Chapter 1]{horn2013} -- Concise review of vector spaces and linear
+        maps as background for matrix analysis.
+  \item \citet[Chapters 1--4]{lax2007} -- Elegant proofs and connections to
+        functional analysis.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: VECTOR SPACES
+%% ============================================================
+\section{Vector Spaces}
+\label{sec:vector_spaces}
+
+Throughout this lesson, $\F$ denotes either $\R$ or $\C$.
+
+\subsection{Axioms}
+
+\begin{definition}[Vector Space]
+\label{def:vector_space}
+A \emph{vector space} over a field $\F$ is a set $V$ together with an addition
+$+\colon V \times V \to V$ and a scalar multiplication $\cdot\colon \F \times V \to V$
+satisfying the following axioms for all $u, v, w \in V$ and all $a, b \in \F$:
+\begin{enumerate}[nosep]
+  \item \textbf{Commutativity:} $u + v = v + u$.
+  \item \textbf{Associativity of addition:} $(u + v) + w = u + (v + w)$.
+  \item \textbf{Additive identity:} There exists $0 \in V$ such that $v + 0 = v$
+        for all $v \in V$.
+  \item \textbf{Additive inverse:} For each $v \in V$, there exists $w \in V$
+        with $v + w = 0$.
+  \item \textbf{Multiplicative identity:} $1v = v$.
+  \item \textbf{Associativity of scalar multiplication:} $a(bv) = (ab)v$.
+  \item \textbf{Distributive laws:} $a(u + v) = au + av$ and $(a + b)v = av + bv$.
+\end{enumerate}
+Elements of $V$ are called \emph{vectors} and elements of $\F$ are called \emph{scalars}.
+\end{definition}
+
+\begin{remark}
+\label{rem:uniqueness_zero}
+The additive identity is unique: if $0'$ also satisfies $v + 0' = v$ for all $v$,
+then $0 = 0 + 0' = 0'$.  Similarly, each vector has a unique additive inverse,
+which we denote $-v$.
+\end{remark}
+
+\begin{example}[Standard Vector Spaces]
+\label{ex:standard_spaces}
+The following are vector spaces over $\F$:
+\begin{enumerate}[nosep]
+  \item $\F^n = \{(x_1, \ldots, x_n) : x_i \in \F\}$ with componentwise addition
+        and scalar multiplication.
+  \item $\F[x]_{\leq n}$, the set of polynomials with coefficients in $\F$ of
+        degree at most $n$, with usual polynomial operations.
+  \item $C[a,b]$, the set of continuous functions $f\colon [a,b] \to \R$, with
+        pointwise addition $(f+g)(x) = f(x) + g(x)$ and scalar multiplication
+        $(\alpha f)(x) = \alpha f(x)$.
+  \item $\F^{m \times n}$, the set of $m \times n$ matrices with entries in $\F$,
+        with entry-wise addition and scalar multiplication.
+\end{enumerate}
+\end{example}
+
+\begin{example}[Solution Set of a Homogeneous System]
+\label{ex:solution_space}
+Let $A \in \R^{m \times n}$.  The solution set
+$S = \{x \in \R^n : Ax = 0\}$ is a vector space over $\R$ (a subspace of $\R^n$):
+if $Ax = 0$ and $Ay = 0$, then $A(x + y) = 0$ and $A(\alpha x) = 0$.
+In machine learning, the null space of a feature matrix determines the set of
+weight vectors that produce identical predictions.
+\end{example}
+
+\subsection{Subspaces}
+
+\begin{definition}[Subspace]
+\label{def:subspace}
+A subset $U \subseteq V$ is a \emph{subspace} of $V$ if $U$ is itself a vector
+space under the operations inherited from $V$.  Equivalently (the \emph{subspace
+test}), $U$ is a subspace if and only if:
+\begin{enumerate}[nosep]
+  \item $0 \in U$,
+  \item $u + v \in U$ for all $u, v \in U$ \quad (closure under addition),
+  \item $\lambda u \in U$ for all $\lambda \in \F$, $u \in U$
+        \quad (closure under scalar multiplication).
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Intersection of Subspaces]
+\label{prop:intersection}
+If $U_1, U_2$ are subspaces of $V$, then $U_1 \cap U_2$ is a subspace of $V$.
+More generally, the intersection of any collection of subspaces is a subspace.
+\end{proposition}
+
+\begin{proof}
+We verify the three conditions of Definition~\ref{def:subspace}.
+(1)~Since $0 \in U_1$ and $0 \in U_2$, we have $0 \in U_1 \cap U_2$.
+(2)~If $u, v \in U_1 \cap U_2$, then $u, v \in U_1$, so $u + v \in U_1$ by
+closure in $U_1$.  Similarly $u + v \in U_2$.  Hence $u + v \in U_1 \cap U_2$.
+(3)~If $u \in U_1 \cap U_2$ and $\lambda \in \F$, then $\lambda u \in U_1$ and
+$\lambda u \in U_2$, so $\lambda u \in U_1 \cap U_2$.
+The argument for an arbitrary collection is identical, checking each subspace
+in the family.
+\end{proof}
+
+\begin{warning}[title={Union of Subspaces}]
+The \emph{union} of two subspaces is generally \emph{not} a subspace.  For instance,
+in $\R^2$ let $U_1 = \{(x,0) : x \in \R\}$ and $U_2 = \{(0,y) : y \in \R\}$.
+Then $(1,0) \in U_1$ and $(0,1) \in U_2$, but $(1,1) = (1,0) + (0,1) \notin
+U_1 \cup U_2$.  The correct notion that combines two subspaces into a larger
+subspace is the \emph{sum}, defined next.
+\end{warning}
+
+\subsection{Sums and Direct Sums}
+
+\begin{definition}[Sum of Subspaces]
+\label{def:sum}
+If $U_1, \ldots, U_m$ are subspaces of $V$, their \emph{sum} is
+\[
+  U_1 + \cdots + U_m
+  = \{u_1 + \cdots + u_m : u_i \in U_i \text{ for each } i\}.
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:sum_smallest}
+The sum $U_1 + \cdots + U_m$ is the smallest subspace of $V$ containing every $U_i$.
+\end{proposition}
+
+\begin{proof}
+The sum is a subspace: it contains $0$ (take each $u_i = 0$); if
+$u = u_1 + \cdots + u_m$ and $v = v_1 + \cdots + v_m$ with $u_i, v_i \in U_i$,
+then $u + v = (u_1 + v_1) + \cdots + (u_m + v_m)$ with $u_i + v_i \in U_i$;
+and $\lambda u = \lambda u_1 + \cdots + \lambda u_m$ with $\lambda u_i \in U_i$.
+Each $U_i$ is contained in the sum (set all other summands to $0$).  Any subspace
+containing every $U_i$ must contain all sums $u_1 + \cdots + u_m$, so the sum
+is the smallest such subspace.
+\end{proof}
+
+\begin{definition}[Direct Sum]
+\label{def:direct_sum}
+The sum $U_1 + \cdots + U_m$ is called a \emph{direct sum}, written
+$U_1 \oplus \cdots \oplus U_m$, if each element of the sum can be expressed
+in \emph{exactly one way} as $u_1 + \cdots + u_m$ with $u_i \in U_i$.
+\end{definition}
+
+\begin{proposition}[Characterization of Direct Sums for Two Subspaces]
+\label{prop:direct_sum_char}
+$V = U_1 \oplus U_2$ if and only if $V = U_1 + U_2$ and $U_1 \cap U_2 = \{0\}$.
+\end{proposition}
+
+\begin{proof}
+$(\Rightarrow)$\; Suppose $V = U_1 \oplus U_2$ and let $v \in U_1 \cap U_2$.
+Then $0 = v + (-v)$ with $v \in U_1$ and $-v \in U_2$.  But also $0 = 0 + 0$
+with $0 \in U_1$ and $0 \in U_2$.  By the uniqueness requirement in the direct
+sum, $v = 0$.
+
+$(\Leftarrow)$\; Suppose $V = U_1 + U_2$ and $U_1 \cap U_2 = \{0\}$.  If
+$u_1 + u_2 = u_1' + u_2'$ with $u_i, u_i' \in U_i$, then
+$u_1 - u_1' = u_2' - u_2$.  The left side belongs to $U_1$ and the right to
+$U_2$, so both belong to $U_1 \cap U_2 = \{0\}$.  Hence $u_1 = u_1'$ and
+$u_2 = u_2'$, giving uniqueness.
+\end{proof}
+
+\begin{example}[Direct Sum in $\R^3$]
+\label{ex:direct_sum_R3}
+Let $U = \{(x, y, 0) : x, y \in \R\}$ and $W = \{(0, 0, z) : z \in \R\}$.
+Every $(x,y,z) \in \R^3$ has the unique decomposition $(x,y,0) + (0,0,z)$
+with the first summand in $U$ and the second in $W$.  Since $U \cap W = \{0\}$,
+Proposition~\ref{prop:direct_sum_char} confirms $\R^3 = U \oplus W$.
+\end{example}
+
+\begin{theorem}[Dimension of a Sum]
+\label{thm:dim_sum}
+If $U_1$ and $U_2$ are finite-dimensional subspaces of $V$, then
+\[
+  \dim(U_1 + U_2) = \dim U_1 + \dim U_2 - \dim(U_1 \cap U_2).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $\{w_1, \ldots, w_k\}$ be a basis of $U_1 \cap U_2$.  Extend this to a
+basis $\{w_1, \ldots, w_k, u_1, \ldots, u_p\}$ of $U_1$ (by
+Proposition~\ref{prop:basis_extension} below) and to a basis
+$\{w_1, \ldots, w_k, v_1, \ldots, v_q\}$ of $U_2$.
+
+We claim the list
+$\mathcal{L} = \{w_1, \ldots, w_k, u_1, \ldots, u_p, v_1, \ldots, v_q\}$
+is a basis of $U_1 + U_2$.
+
+\textbf{Spanning.}\; Any $x \in U_1 + U_2$ is $x = a + b$ with $a \in U_1$
+and $b \in U_2$.  Then $a$ is a combination of the $w$'s and $u$'s, and $b$
+is a combination of the $w$'s and $v$'s, so $x$ lies in $\Span(\mathcal{L})$.
+
+\textbf{Independence.}\; Suppose
+$\sum_{i} \alpha_i w_i + \sum_{j} \beta_j u_j + \sum_{\ell} \gamma_\ell v_\ell = 0$.
+Then $\sum_\ell \gamma_\ell v_\ell = -\sum_i \alpha_i w_i - \sum_j \beta_j u_j$.
+The left side lies in $U_2$ and the right side lies in $U_1$, so both sides
+belong to $U_1 \cap U_2$.  Hence $\sum_\ell \gamma_\ell v_\ell
+= \sum_i \delta_i w_i$ for some scalars $\delta_i$.  Since
+$\{w_1, \ldots, w_k, v_1, \ldots, v_q\}$ is a basis of $U_2$ (hence linearly
+independent), all $\gamma_\ell = 0$ and all $\delta_i = 0$.  The remaining
+equation $\sum_i \alpha_i w_i + \sum_j \beta_j u_j = 0$, together with the
+independence of the basis of $U_1$, gives all $\alpha_i = 0$ and $\beta_j = 0$.
+
+Therefore $\dim(U_1 + U_2) = k + p + q = (k+p) + (k+q) - k
+= \dim U_1 + \dim U_2 - \dim(U_1 \cap U_2)$.
+\end{proof}
+
+\begin{rlconnection}[title={Feature Subspaces in Representation Learning}]
+In multi-task learning, each task may learn features in a subspace $U_i$ of
+a shared representation space.  The dimension formula
+$\dim(U_1 + U_2) = \dim U_1 + \dim U_2 - \dim(U_1 \cap U_2)$ quantifies
+how much the tasks share: a large intersection means the tasks exploit
+similar features, justifying a shared hidden layer with dimension close
+to $\dim U_1$ rather than $\dim U_1 + \dim U_2$.
+\end{rlconnection}
+
+With the vocabulary of subspaces and sums in place, we now turn to the
+building blocks from which every finite-dimensional subspace is constructed:
+spanning sets and linearly independent lists.
+
+%% ============================================================
+%% SECTION 4: BASES AND DIMENSION
+%% ============================================================
+\section{Bases and Dimension}
+\label{sec:bases_dimension}
+
+\subsection{Span}
+
+\begin{definition}[Span]
+\label{def:span}
+The \emph{span} (or \emph{linear span}) of a list of vectors
+$v_1, \ldots, v_m \in V$ is
+\[
+  \Span(v_1, \ldots, v_m)
+  = \bigl\{\lambda_1 v_1 + \cdots + \lambda_m v_m
+    : \lambda_1, \ldots, \lambda_m \in \F\bigr\}.
+\]
+By convention, $\Span(\,) = \{0\}$ (the span of the empty list is $\{0\}$).
+A vector space $V$ is \emph{finite-dimensional} if there exists a finite list
+of vectors that spans $V$.
+\end{definition}
+
+\begin{example}[Span in $\R^3$]
+\label{ex:span_R3}
+The vectors $e_1 = (1,0,0)$ and $e_2 = (0,1,0)$ satisfy
+$\Span(e_1, e_2) = \{(a, b, 0) : a, b \in \R\}$, which is the $xy$-plane
+in $\R^3$.  Adding $e_3 = (0,0,1)$ gives $\Span(e_1, e_2, e_3) = \R^3$.
+\end{example}
+
+\subsection{Linear Independence}
+
+\begin{definition}[Linear Independence]
+\label{def:linear_independence}
+Vectors $v_1, \ldots, v_m \in V$ are \emph{linearly independent} if the only
+choice of scalars satisfying
+$\lambda_1 v_1 + \cdots + \lambda_m v_m = 0$
+is $\lambda_1 = \cdots = \lambda_m = 0$.  They are \emph{linearly dependent}
+otherwise, i.e., some non-trivial combination equals $0$.
+\end{definition}
+
+\begin{example}[Testing Independence]
+\label{ex:independence_test}
+In $\R^3$, the vectors $(1,0,0)$, $(1,1,0)$, $(1,1,1)$ are linearly
+independent: if $\alpha(1,0,0) + \beta(1,1,0) + \gamma(1,1,1) = (0,0,0)$,
+then the system $\alpha + \beta + \gamma = 0$, $\beta + \gamma = 0$,
+$\gamma = 0$ gives $\gamma = 0$, $\beta = 0$, $\alpha = 0$.
+
+On the other hand, $(1,0,0)$, $(0,1,0)$, $(1,1,0)$ are linearly dependent
+because $(1,0,0) + (0,1,0) - (1,1,0) = (0,0,0)$.
+\end{example}
+
+\begin{lemma}[Linear Dependence Lemma]
+\label{lem:linear_dependence}
+If $v_1, \ldots, v_m$ are linearly dependent and $v_1 \neq 0$, then there
+exists an index $j \in \{2, \ldots, m\}$ such that:
+\begin{enumerate}[nosep]
+  \item $v_j \in \Span(v_1, \ldots, v_{j-1})$, and
+  \item $\Span(v_1, \ldots, v_{j-1}, v_{j+1}, \ldots, v_m)
+         = \Span(v_1, \ldots, v_m)$.
+\end{enumerate}
+In words, one can remove $v_j$ without shrinking the span.
+\end{lemma}
+
+\begin{proof}
+Since the list is linearly dependent, there exist scalars
+$\lambda_1, \ldots, \lambda_m$, not all zero, with
+$\sum_{i=1}^{m} \lambda_i v_i = 0$.  Let $j$ be the largest index such that
+$\lambda_j \neq 0$.  We must have $j \geq 2$: if $j = 1$, then
+$\lambda_1 v_1 = 0$ with $\lambda_1 \neq 0$, giving $v_1 = 0$, contradicting
+$v_1 \neq 0$.
+
+Solving for $v_j$:
+\[
+  v_j = -\lambda_j^{-1} \sum_{i=1}^{j-1} \lambda_i v_i
+  \in \Span(v_1, \ldots, v_{j-1}).
+\]
+For (2), any vector in $\Span(v_1, \ldots, v_m)$ can replace its $v_j$
+component using the expression above, so removing $v_j$ does not change
+the span.
+\end{proof}
+
+\subsection{Basis and Dimension}
+
+\begin{definition}[Basis]
+\label{def:basis}
+A \emph{basis} of $V$ is a list of vectors in $V$ that is both linearly
+independent and spans $V$.
+\end{definition}
+
+\begin{example}[Standard Basis of $\F^n$]
+\label{ex:standard_basis}
+The \emph{standard basis} of $\F^n$ is $e_1 = (1,0,\ldots,0)$,
+$e_2 = (0,1,\ldots,0)$, \ldots, $e_n = (0,0,\ldots,1)$.  Independence is
+immediate, and any $(x_1, \ldots, x_n) = x_1 e_1 + \cdots + x_n e_n$.
+\end{example}
+
+\begin{example}[Basis of Polynomial Space]
+\label{ex:polynomial_basis}
+A basis of $\F[x]_{\leq n}$ is $\{1, x, x^2, \ldots, x^n\}$.  Thus
+$\dim \F[x]_{\leq n} = n + 1$.
+\end{example}
+
+\begin{theorem}[All Bases Have the Same Length]
+\label{thm:bases_same_length}
+If $V$ is finite-dimensional, then any two bases of $V$ have the same number
+of elements.
+\end{theorem}
+
+\begin{proof}
+Let $\mathcal{U} = \{u_1, \ldots, u_m\}$ and $\mathcal{W} = \{w_1, \ldots, w_n\}$
+be two bases of $V$.  We show $m \leq n$.
+
+Since $\mathcal{W}$ spans $V$, the list $w_1, \ldots, w_n, u_1$ is linearly
+dependent (it has $n+1$ vectors in a space spanned by $n$ vectors).
+By the linear dependence lemma (Lemma~\ref{lem:linear_dependence}), since
+$w_1 \neq 0$, we can remove some $w_j$ without changing the span.  We thus
+obtain a spanning list of length $n$ that includes $u_1$.
+
+Repeat: insert $u_2$ into this list (making it linearly dependent, as it has
+$n+1$ elements spanning an $n$-dimensional space) and remove one of the
+remaining $w$'s.  After $m$ steps, we have a spanning list consisting of all
+$u_1, \ldots, u_m$ together with $n - m$ of the original $w$'s.  This requires
+$n - m \geq 0$, so $m \leq n$.
+
+Exchanging the roles of $\mathcal{U}$ and $\mathcal{W}$ gives $n \leq m$.
+Therefore $m = n$.
+\end{proof}
+
+\begin{keyresult}[title={Dimension Is Well-Defined}]
+Theorem~\ref{thm:bases_same_length} ensures that the following definition is
+unambiguous: the dimension of a finite-dimensional vector space is the common
+length of all its bases.  This single number encodes the ``size'' of the space
+in a coordinate-free way.
+\end{keyresult}
+
+\begin{definition}[Dimension]
+\label{def:dimension}
+The \emph{dimension} of a finite-dimensional vector space $V$, denoted
+$\dim V$, is the number of elements in any (hence every) basis of $V$.
+\end{definition}
+
+\begin{proposition}[Basis Extension]
+\label{prop:basis_extension}
+Every linearly independent list in a finite-dimensional vector space $V$ can be
+extended to a basis of $V$.
+\end{proposition}
+
+\begin{proof}
+Let $v_1, \ldots, v_m$ be linearly independent in $V$ with $\dim V = n$.
+If $m = n$, the list already spans $V$: a linearly independent list of length
+equal to the dimension must be a basis (any vector not in the span would extend
+it to an independent list of length $n+1$, contradicting
+Theorem~\ref{thm:bases_same_length}).
+
+If $m < n$, the list does not span $V$, so there exists
+$v_{m+1} \notin \Span(v_1, \ldots, v_m)$.  Then $v_1, \ldots, v_{m+1}$ is
+linearly independent (any dependence relation involving $v_{m+1}$ would place
+$v_{m+1}$ in $\Span(v_1, \ldots, v_m)$).  Repeat until the list has length $n$.
+\end{proof}
+
+\begin{proposition}[Dimension of a Subspace]
+\label{prop:dim_subspace}
+If $U$ is a subspace of a finite-dimensional space $V$, then
+$\dim U \leq \dim V$.  Equality holds if and only if $U = V$.
+\end{proposition}
+
+\begin{proof}
+Any linearly independent list in $U$ is also linearly independent in $V$,
+so its length is at most $\dim V$.  Hence $\dim U \leq \dim V$.
+
+If $\dim U = \dim V = n$, let $\{u_1, \ldots, u_n\}$ be a basis of $U$.
+This is a linearly independent list of length $n$ in $V$, so by
+Theorem~\ref{thm:bases_same_length} it is a basis of $V$.  Thus every
+$v \in V$ lies in $\Span(u_1, \ldots, u_n) \subseteq U$, giving $V \subseteq U$
+and hence $U = V$.
+
+Conversely, $U = V$ trivially implies $\dim U = \dim V$.
+\end{proof}
+
+\begin{rlconnection}[title={Embedding Dimension and Feature Rank}]
+In neural network design, the hidden layer dimension $d$ in an encoder
+$\phi\colon \R^n \to \R^d$ controls the representational capacity.
+The image $\phi(\R^n)$ (under a linear encoder) is a subspace of $\R^d$ with
+$\dim(\phi(\R^n)) = \rank(\phi) \leq \min(n, d)$.  Choosing $d$ too small
+forces $\rank(\phi) < n$, losing information.  The dimension inequality
+in Proposition~\ref{prop:dim_subspace} makes this precise: the encoder
+image, as a subspace, cannot exceed the ambient dimension $d$.
+\end{rlconnection}
+
+Having established that finite-dimensional vector spaces are characterized up to
+isomorphism by a single integer (the dimension), we now study the maps that
+respect vector space structure.
+
+%% ============================================================
+%% SECTION 5: LINEAR MAPS
+%% ============================================================
+\section{Linear Maps}
+\label{sec:linear_maps}
+
+\subsection{Definition and Basic Properties}
+
+\begin{definition}[Linear Map]
+\label{def:linear_map}
+A function $T\colon V \to W$ between vector spaces over $\F$ is a \emph{linear
+map} if for all $u, v \in V$ and $\lambda \in \F$:
+\begin{enumerate}[nosep]
+  \item $T(u + v) = Tu + Tv$ \quad (additivity),
+  \item $T(\lambda v) = \lambda\, Tv$ \quad (homogeneity).
+\end{enumerate}
+Equivalently, $T(\alpha u + \beta v) = \alpha\, Tu + \beta\, Tv$ for all
+$\alpha, \beta \in \F$ and $u, v \in V$.  The set of all linear maps from
+$V$ to $W$ is denoted $\mathcal{L}(V, W)$.
+\end{definition}
+
+\begin{example}[Linear Maps]
+\label{ex:linear_maps}
+\begin{enumerate}[nosep]
+  \item The \emph{zero map} $0\colon V \to W$ defined by $0(v) = 0$ for all $v$.
+  \item The \emph{identity map} $I\colon V \to V$ defined by $Iv = v$ for all $v$.
+  \item \emph{Differentiation} $D\colon \F[x]_{\leq n} \to \F[x]_{\leq n-1}$
+        defined by $Dp = p'$ is linear.
+  \item For any matrix $A \in \F^{m \times n}$, the map $T_A\colon \F^n \to \F^m$
+        defined by $T_A(x) = Ax$ is linear.
+\end{enumerate}
+\end{example}
+
+\subsection{Null Space and Range}
+
+\begin{definition}[Null Space and Range]
+\label{def:null_range}
+For a linear map $T\colon V \to W$:
+\begin{itemize}[nosep]
+  \item The \emph{null space} (or \emph{kernel}) of $T$ is
+        $\nullspace T = \{v \in V : Tv = 0\}$.
+  \item The \emph{range} (or \emph{image}) of $T$ is
+        $\range T = \{Tv : v \in V\}$.
+\end{itemize}
+\end{definition}
+
+\begin{proposition}
+\label{prop:null_range_subspace}
+For any linear map $T\colon V \to W$, the null space $\nullspace T$ is a
+subspace of $V$ and the range $\range T$ is a subspace of $W$.
+\end{proposition}
+
+\begin{proof}
+\textbf{Null space.}\;
+$T(0) = 0$, so $0 \in \nullspace T$.  If $u, v \in \nullspace T$, then
+$T(u+v) = Tu + Tv = 0 + 0 = 0$, so $u + v \in \nullspace T$.  If
+$\lambda \in \F$, then $T(\lambda u) = \lambda\, Tu = \lambda \cdot 0 = 0$,
+so $\lambda u \in \nullspace T$.
+
+\textbf{Range.}\;
+$T(0) = 0$, so $0 \in \range T$.  If $w_1, w_2 \in \range T$, write
+$w_1 = Tv_1$ and $w_2 = Tv_2$.  Then $w_1 + w_2 = T(v_1 + v_2) \in \range T$.
+If $\lambda \in \F$, then $\lambda w_1 = T(\lambda v_1) \in \range T$.
+\end{proof}
+
+\begin{proposition}[Injectivity Criterion]
+\label{prop:injectivity}
+A linear map $T\colon V \to W$ is injective if and only if
+$\nullspace T = \{0\}$.
+\end{proposition}
+
+\begin{proof}
+$(\Rightarrow)$\; If $T$ is injective and $Tv = 0 = T(0)$, then $v = 0$.
+Hence $\nullspace T = \{0\}$.
+
+$(\Leftarrow)$\; Suppose $\nullspace T = \{0\}$ and $Tu = Tv$.  Then
+$T(u - v) = Tu - Tv = 0$, so $u - v \in \nullspace T = \{0\}$, giving
+$u = v$.
+\end{proof}
+
+\subsection{The Rank--Nullity Theorem}
+
+\begin{keyresult}[title={The Rank--Nullity Theorem}]
+\begin{theorem}[Rank--Nullity Theorem]
+\label{thm:rank_nullity}
+If $V$ is finite-dimensional and $T\colon V \to W$ is a linear map, then
+\[
+  \dim V = \dim(\nullspace T) + \dim(\range T).
+\]
+Equivalently, writing $\nullity(T) = \dim(\nullspace T)$ and
+$\rank(T) = \dim(\range T)$:
+\[
+  \dim V = \nullity(T) + \rank(T).
+\]
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $\{u_1, \ldots, u_m\}$ be a basis of $\nullspace T$.  By
+Proposition~\ref{prop:basis_extension}, extend it to a basis
+$\{u_1, \ldots, u_m, v_1, \ldots, v_k\}$ of $V$, so that
+$\dim V = m + k$.  We claim that $\{Tv_1, \ldots, Tv_k\}$ is a basis
+of $\range T$.
+
+\textbf{Spanning.}\;
+Let $w \in \range T$.  Then $w = T(x)$ for some $x \in V$.  Write
+$x = \alpha_1 u_1 + \cdots + \alpha_m u_m + \mu_1 v_1 + \cdots + \mu_k v_k$.
+Applying $T$ and using $Tu_i = 0$:
+\[
+  w = T(x) = \mu_1 Tv_1 + \cdots + \mu_k Tv_k.
+\]
+Hence $\{Tv_1, \ldots, Tv_k\}$ spans $\range T$.
+
+\textbf{Independence.}\;
+Suppose $\mu_1 Tv_1 + \cdots + \mu_k Tv_k = 0$.  By linearity,
+$T(\mu_1 v_1 + \cdots + \mu_k v_k) = 0$, so
+$\mu_1 v_1 + \cdots + \mu_k v_k \in \nullspace T$.  Since
+$\{u_1, \ldots, u_m\}$ is a basis of $\nullspace T$, there exist scalars
+$\alpha_i$ with
+\[
+  \mu_1 v_1 + \cdots + \mu_k v_k = \alpha_1 u_1 + \cdots + \alpha_m u_m.
+\]
+Rearranging:
+$\alpha_1 u_1 + \cdots + \alpha_m u_m - \mu_1 v_1 - \cdots - \mu_k v_k = 0$.
+Since $\{u_1, \ldots, u_m, v_1, \ldots, v_k\}$ is a basis of $V$ (hence
+linearly independent), all coefficients vanish: $\alpha_i = 0$ for each $i$
+and $\mu_j = 0$ for each $j$.
+
+Therefore $\dim(\range T) = k$ and
+$\dim V = m + k = \dim(\nullspace T) + \dim(\range T)$.
+\end{proof}
+
+\begin{corollary}[Equivalence for Square Dimensions]
+\label{cor:square}
+Let $T\colon V \to W$ be linear with $\dim V = \dim W = n$.  The following
+are equivalent:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $T$ is injective.
+  \item $T$ is surjective.
+  \item $T$ is invertible (bijective).
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+By the rank--nullity theorem, $\nullity(T) + \rank(T) = n$.
+
+(i)$\Rightarrow$(ii):\; Injectivity means $\nullity(T) = 0$, so
+$\rank(T) = n = \dim W$, i.e., $\range T = W$ (surjectivity).
+
+(ii)$\Rightarrow$(i):\; Surjectivity means $\rank(T) = n$, so
+$\nullity(T) = 0$ (injectivity).
+
+(iii)$\Leftrightarrow$(i)$\wedge$(ii):\; Invertibility is, by definition,
+injectivity plus surjectivity, and we have shown these are equivalent.
+\end{proof}
+
+\begin{example}[Rank--Nullity for Differentiation]
+\label{ex:rank_nullity_diff}
+Let $D\colon \R[x]_{\leq 3} \to \R[x]_{\leq 2}$ be the differentiation map
+$Dp = p'$.  Here $\dim(\R[x]_{\leq 3}) = 4$ and
+$\nullspace D = \Span(1)$ (the constant polynomials), so
+$\nullity(D) = 1$.  By rank--nullity, $\rank(D) = 4 - 1 = 3 = \dim(\R[x]_{\leq 2})$,
+confirming that $D$ is surjective (every polynomial of degree $\leq 2$ is the
+derivative of some cubic).
+\end{example}
+
+\begin{example}[Projection Map]
+\label{ex:projection}
+Define $P\colon \R^3 \to \R^3$ by $P(x_1, x_2, x_3) = (x_1, x_2, 0)$.
+Then $\nullspace P = \{(0,0,z) : z \in \R\}$ with $\nullity(P) = 1$,
+and $\range P = \{(x,y,0) : x,y \in \R\}$ with $\rank(P) = 2$.
+Indeed $1 + 2 = 3 = \dim \R^3$.
+\end{example}
+
+\begin{rlconnection}[title={Rank Deficiency and Bottleneck Layers}]
+In a deep neural network, each linear layer $W_\ell \in \R^{d_{\ell} \times d_{\ell-1}}$
+defines a linear map $\R^{d_{\ell-1}} \to \R^{d_\ell}$.  By rank--nullity,
+$\rank(W_\ell) + \nullity(W_\ell) = d_{\ell-1}$.  If $d_\ell < d_{\ell-1}$
+(a bottleneck), then $\nullity(W_\ell) \geq d_{\ell-1} - d_\ell > 0$:
+information is inevitably lost.  This is precisely the mechanism exploited
+in autoencoders, where the bottleneck forces the network to learn a
+low-dimensional representation.
+\end{rlconnection}
+
+\subsection{Matrix Representation}
+
+Fix ordered bases $\mathcal{B} = \{v_1, \ldots, v_n\}$ of $V$ and
+$\mathcal{C} = \{w_1, \ldots, w_m\}$ of $W$.  A linear map $T\colon V \to W$
+is uniquely determined by its action on the basis of $V$.  Write
+\[
+  Tv_j = \sum_{i=1}^{m} A_{ij}\, w_i, \qquad j = 1, \ldots, n.
+\]
+The $m \times n$ matrix $A = (A_{ij})$ is called the \emph{matrix of $T$ with
+respect to $\mathcal{B}$ and $\mathcal{C}$}, denoted
+$\mathcal{M}(T, \mathcal{B}, \mathcal{C})$ or simply $[T]_{\mathcal{B}}^{\mathcal{C}}$.
+
+\begin{proposition}
+\label{prop:composition_matrix}
+If $S\colon U \to V$ has matrix $B$ (with respect to appropriate bases) and
+$T\colon V \to W$ has matrix $A$, then $T \circ S$ has matrix $AB$.
+\end{proposition}
+
+\begin{proof}
+Let $\{e_1, \ldots, e_p\}$, $\{v_1, \ldots, v_n\}$, $\{w_1, \ldots, w_m\}$ be
+the ordered bases of $U$, $V$, $W$ respectively.  Then
+$Se_k = \sum_j B_{jk} v_j$ and $Tv_j = \sum_i A_{ij} w_i$.  Hence
+\[
+  (T \circ S)(e_k)
+  = T\Bigl(\sum_j B_{jk} v_j\Bigr)
+  = \sum_j B_{jk} Tv_j
+  = \sum_j B_{jk} \sum_i A_{ij} w_i
+  = \sum_i \Bigl(\sum_j A_{ij} B_{jk}\Bigr) w_i
+  = \sum_i (AB)_{ik}\, w_i.
+\]
+So the matrix of $T \circ S$ is $AB$.
+\end{proof}
+
+\begin{example}[Matrix of Differentiation]
+\label{ex:matrix_diff}
+Let $D\colon \R[x]_{\leq 2} \to \R[x]_{\leq 1}$ be differentiation.  With
+basis $\mathcal{B} = \{1, x, x^2\}$ for the domain and
+$\mathcal{C} = \{1, x\}$ for the codomain:
+$D(1) = 0 = 0 \cdot 1 + 0 \cdot x$,\;
+$D(x) = 1 = 1 \cdot 1 + 0 \cdot x$,\;
+$D(x^2) = 2x = 0 \cdot 1 + 2 \cdot x$.
+Thus
+\[
+  [D]_{\mathcal{B}}^{\mathcal{C}}
+  = \begin{pmatrix} 0 & 1 & 0 \\ 0 & 0 & 2 \end{pmatrix}.
+\]
+\end{example}
+
+\subsection{Change of Basis and Similarity}
+
+\begin{definition}[Change-of-Basis Matrix]
+\label{def:change_of_basis}
+Let $\mathcal{B} = \{v_1, \ldots, v_n\}$ and
+$\mathcal{B}' = \{v_1', \ldots, v_n'\}$ be two ordered bases of $V$.
+The \emph{change-of-basis matrix} from $\mathcal{B}$ to $\mathcal{B}'$ is the
+$n \times n$ matrix $P$ whose $j$-th column is the coordinate vector of $v_j$
+with respect to $\mathcal{B}'$:
+\[
+  v_j = \sum_{i=1}^{n} P_{ij}\, v_i', \qquad j = 1, \ldots, n.
+\]
+Equivalently, if $[x]_{\mathcal{B}}$ denotes the coordinate vector of $x$
+relative to $\mathcal{B}$, then $[x]_{\mathcal{B}} = P\,[x]_{\mathcal{B}'}$
+for all $x \in V$... wait, let us be precise.  We have
+$P\,[x]_{\mathcal{B}'} = [x]_{\mathcal{B}}$, i.e., $P$ converts
+$\mathcal{B}'$-coordinates to $\mathcal{B}$-coordinates.
+\end{definition}
+
+\begin{remark}
+The matrix $P$ is invertible since it represents the identity map
+$I\colon V \to V$ with respect to the bases $\mathcal{B}'$ (domain) and
+$\mathcal{B}$ (codomain).  Its inverse $P^{-1}$ converts
+$\mathcal{B}$-coordinates to $\mathcal{B}'$-coordinates.
+\end{remark}
+
+\begin{proposition}[Similarity of Matrix Representations]
+\label{prop:similarity}
+Let $T\colon V \to V$ be a linear operator.  If $T$ has matrix $A$ with respect
+to basis $\mathcal{B}$ and matrix $A'$ with respect to basis $\mathcal{B}'$,
+then
+\[
+  A' = P^{-1} A P,
+\]
+where $P$ is the change-of-basis matrix from $\mathcal{B}'$ to $\mathcal{B}$
+(so that $P[x]_{\mathcal{B}'} = [x]_{\mathcal{B}}$).
+\end{proposition}
+
+\begin{proof}
+For any $x \in V$, coordinate representations satisfy:
+\begin{align*}
+  A'[x]_{\mathcal{B}'}
+  &= [Tx]_{\mathcal{B}'}
+   = P^{-1}[Tx]_{\mathcal{B}}
+   = P^{-1} A\, [x]_{\mathcal{B}}
+   = P^{-1} A\, P\, [x]_{\mathcal{B}'}.
+\end{align*}
+Since this holds for all $x \in V$ and the coordinate map relative to
+$\mathcal{B}'$ is an isomorphism, $A' = P^{-1}AP$.
+\end{proof}
+
+\begin{example}[Change of Basis in $\R^2$]
+\label{ex:change_basis_R2}
+Let $T\colon \R^2 \to \R^2$ be the linear map with matrix
+$A = \bigl(\begin{smallmatrix} 2 & 1 \\ 0 & 3 \end{smallmatrix}\bigr)$
+relative to the standard basis $\mathcal{B} = \{e_1, e_2\}$.
+Consider the new basis $\mathcal{B}' = \{(1,0), (1,1)\}$.  The change-of-basis
+matrix from $\mathcal{B}'$ to $\mathcal{B}$ has columns
+$[v_1']_{\mathcal{B}} = (1,0)^\top$ and $[v_2']_{\mathcal{B}} = (1,1)^\top$:
+\[
+  P = \begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}, \qquad
+  P^{-1} = \begin{pmatrix} 1 & -1 \\ 0 & 1 \end{pmatrix}.
+\]
+Then
+\[
+  A' = P^{-1}AP
+  = \begin{pmatrix} 1 & -1 \\ 0 & 1 \end{pmatrix}
+    \begin{pmatrix} 2 & 1 \\ 0 & 3 \end{pmatrix}
+    \begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}
+  = \begin{pmatrix} 2 & 0 \\ 0 & 3 \end{pmatrix}.
+\]
+The new basis diagonalizes $T$.  This illustrates the general strategy:
+find a basis of eigenvectors to simplify the matrix representation.
+\end{example}
+
+\subsection{Isomorphism}
+
+\begin{proposition}[Isomorphism Criterion]
+\label{prop:isomorphism}
+Two finite-dimensional vector spaces over $\F$ are isomorphic if and only if
+they have the same dimension.
+\end{proposition}
+
+\begin{proof}
+$(\Rightarrow)$\; Let $T\colon V \to W$ be an isomorphism and let
+$\{v_1, \ldots, v_n\}$ be a basis of $V$.  We show
+$\{Tv_1, \ldots, Tv_n\}$ is a basis of $W$.
+
+\emph{Independence:}\; If $\sum_i \lambda_i Tv_i = 0$, then
+$T(\sum_i \lambda_i v_i) = 0$.  Since $T$ is injective,
+$\sum_i \lambda_i v_i = 0$, and since $\{v_i\}$ is independent,
+all $\lambda_i = 0$.
+
+\emph{Spanning:}\; For any $w \in W$, surjectivity of $T$ gives $w = Tv$
+for some $v = \sum_i \lambda_i v_i$.  Then
+$w = \sum_i \lambda_i Tv_i \in \Span(Tv_1, \ldots, Tv_n)$.
+
+Hence $\dim W = n = \dim V$.
+
+$(\Leftarrow)$\; Suppose $\dim V = \dim W = n$.  Pick bases
+$\{v_1, \ldots, v_n\}$ of $V$ and $\{w_1, \ldots, w_n\}$ of $W$.
+Define $T\colon V \to W$ by $Tv_i = w_i$ for each $i$ and extend linearly.
+This map is well-defined (every $v \in V$ has a unique basis expansion) and
+linear by construction.  It is bijective because it maps a basis to a basis:
+the same argument as above shows $\{Tv_1, \ldots, Tv_n\} = \{w_1, \ldots, w_n\}$
+is a basis of $W$.
+\end{proof}
+
+\begin{rlconnection}[title={Bellman Equation as a Linear System}]
+For a fixed policy $\pi$ in a finite MDP with $n$ states, the Bellman
+equation is $V^\pi = r^\pi + \gamma P^\pi V^\pi$, where
+$V^\pi, r^\pi \in \R^n$ and $P^\pi \in \R^{n \times n}$ is the transition
+matrix.  Rearranging gives $(I - \gamma P^\pi) V^\pi = r^\pi$.  The
+operator $I - \gamma P^\pi$ is a linear map $\R^n \to \R^n$.  Since
+$\gamma < 1$ and all eigenvalues of $P^\pi$ have modulus at most $1$, the
+eigenvalues of $I - \gamma P^\pi$ are $1 - \gamma \lambda_i \neq 0$, so
+the map is invertible by Corollary~\ref{cor:square}.  Hence the Bellman
+equation has a unique solution.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Subspace Verification]
+\label{ex:subspace_verify}
+\textnormal{(\(*\))} \\
+Let $V = \R^3$.  Determine which of the following subsets are subspaces.
+Prove your answer in each case.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $S_1 = \{(x,y,z) \in \R^3 : x + 2y - z = 0\}$.
+  \item $S_2 = \{(x,y,z) \in \R^3 : x + 2y - z = 1\}$.
+  \item $S_3 = \{(x,y,z) \in \R^3 : xz = 0\}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Dimension of a Sum]
+\label{ex:dim_sum}
+\textnormal{(\(*\))} \\
+Let $U = \Span\bigl((1,1,0,0),\, (1,0,1,0)\bigr)$ and
+$W = \Span\bigl((1,0,1,0),\, (0,0,1,1)\bigr)$ in $\R^4$.
+Compute $\dim(U \cap W)$, $\dim(U + W)$, and determine whether
+$U + W$ is a direct sum.
+\end{exercise}
+
+\begin{exercise}[Rank--Nullity Application]
+\label{ex:rank_nullity_app}
+\textnormal{(\(**\))} \\
+Let $T\colon \R^4 \to \R^3$ be the linear map defined by
+\[
+  T(x_1, x_2, x_3, x_4) = (x_1 + x_2,\; x_2 + x_3,\; x_3 + x_4).
+\]
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Find a basis for $\nullspace T$ and compute $\nullity(T)$.
+  \item Find a basis for $\range T$ and compute $\rank(T)$.
+  \item Verify the rank--nullity theorem for this map.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Change of Basis and Diagonalization]
+\label{ex:change_basis}
+\textnormal{(\(**\))} \\
+Let $T\colon \R^2 \to \R^2$ have matrix
+$A = \bigl(\begin{smallmatrix} 5 & 3 \\ -6 & -4 \end{smallmatrix}\bigr)$
+with respect to the standard basis.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Find the eigenvalues of $A$.
+  \item For each eigenvalue, find an eigenvector and verify it forms a basis
+        of $\R^2$.
+  \item Compute the change-of-basis matrix $P$ and verify
+        $P^{-1}AP$ is diagonal.
+\end{enumerate}
+\textit{Hint:} The characteristic polynomial is $\lambda^2 - \lambda - 2$.
+\end{exercise}
+
+\begin{exercise}[RL Application: Feature Matrix Rank]
+\label{ex:feature_rank}
+\textnormal{(\(**\))} \\
+In linear value function approximation, the value of state $s_i$ is
+approximated as $\hat{V}(s_i) = \phi(s_i)^\top w$ where
+$\phi(s_i) \in \R^d$ is a feature vector.  For $n$ states, define the
+feature matrix $\Phi \in \R^{n \times d}$ with row $i$ equal to
+$\phi(s_i)^\top$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Show that $\hat{V} = \Phi w$ defines a linear map
+        $T_\Phi\colon \R^d \to \R^n$ and that $\range T_\Phi$ is the set of
+        representable value functions.
+  \item Prove that if $d < n$ and $\rank(\Phi) = d$, then $T_\Phi$ is
+        injective but not surjective: there exist value functions that
+        cannot be represented.
+  \item What happens if $\rank(\Phi) < d$?  Describe the null space of
+        $T_\Phi$ and explain its implications for learning.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Direct Sum Decomposition]
+\label{ex:direct_sum_proof}
+\textnormal{(\(***\))} \\
+Let $V$ be a finite-dimensional vector space and $U$ a subspace of $V$.
+Prove that there exists a subspace $W$ of $V$ such that $V = U \oplus W$.
+
+\textit{Hint:} Extend a basis of $U$ to a basis of $V$ and let $W$ be the
+span of the added vectors.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 7: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A \emph{vector space} over $\F$ is a set with addition and scalar
+        multiplication satisfying seven axioms (commutativity, associativity,
+        identities, inverses, distributivity).
+
+  \item A \emph{subspace} is a nonempty subset closed under addition and
+        scalar multiplication; equivalently, it contains $0$ and is closed
+        under linear combinations.  The intersection of subspaces is always
+        a subspace, but the union generally is not.
+
+  \item The \emph{sum} $U_1 + U_2$ is the smallest subspace containing both
+        $U_1$ and $U_2$; it is a \emph{direct sum} $U_1 \oplus U_2$
+        precisely when $U_1 \cap U_2 = \{0\}$.
+
+  \item A \emph{basis} is a linearly independent spanning list.  All bases
+        of a finite-dimensional space have the same length, which defines
+        the \emph{dimension}.
+
+  \item The \emph{linear dependence lemma} is the engine behind most
+        dimension arguments: in a dependent list with nonzero first vector,
+        some later vector can be removed without changing the span.
+
+  \item The \emph{rank--nullity theorem} states
+        $\dim V = \nullity(T) + \rank(T)$ for any linear map
+        $T\colon V \to W$ with $V$ finite-dimensional.  This is the
+        fundamental constraint relating injectivity, surjectivity, and
+        dimension.
+
+  \item Every linear map between finite-dimensional spaces has a unique
+        \emph{matrix representation} once bases are chosen.  Changing the
+        basis yields a \emph{similar} matrix $A' = P^{-1}AP$.
+
+  \item Two finite-dimensional vector spaces are \emph{isomorphic} if and
+        only if they have the same dimension.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 8: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 6} (Eigenvalues and Eigenvectors) builds directly on
+        the matrix representation and similarity theory developed here.
+        The goal is to find bases in which the matrix of a linear operator
+        takes a particularly simple form (diagonal or upper triangular).
+
+  \item \textbf{Lesson 7} (Inner Product Spaces) introduces additional
+        geometric structure -- lengths, angles, and orthogonality -- on
+        vector spaces.  The key results (Gram--Schmidt, orthogonal projections)
+        require the basis and dimension theory from this lesson.
+
+  \item \textbf{Lesson 8} (Spectral Theorem and SVD) combines eigenvalue
+        theory with inner product structure to obtain the spectral theorem
+        for self-adjoint operators and the singular value decomposition.
+
+  \item For a deeper treatment of infinite-dimensional vector spaces and
+        their applications to ML, see Phase~01 on functional analysis
+        (metric spaces, normed spaces, Hilbert spaces), which generalizes
+        the finite-dimensional theory developed here.
+
+  \item \citet{axler2015} is the primary reference for the ``determinant-free''
+        approach to linear algebra followed in this lesson.
+        \citet{hoffman1971} provides an alternative, more algebraic perspective.
+        \citet{lax2007} connects the finite-dimensional theory to operator
+        theory and applications.
+\end{itemize}
+
+\bibliography{linear-algebra-refs}
+\end{document}

@@ -1,0 +1,851 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 1: Real Numbers, Sequences, and Series}}
+\fancyhead[R]{\thepage}
+\title{Lesson 1: Real Numbers, Sequences, and Series}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a Markov decision process with state space $S$ and discount factor
+$\gamma \in (0,1)$. The Bellman optimality operator $T$ maps any bounded
+value function $V$ to the function
+\[
+  (TV)(s) = \max_{a} \Bigl[ r(s,a)
+    + \gamma \sum_{s'} p(s' \mid s,a)\, V(s') \Bigr].
+\]
+Value iteration generates the sequence $V_0, V_1 = TV_0, V_2 = TV_1, \ldots$
+and one asserts that $V_n$ converges to the unique optimal value function
+$V^*$. But \emph{why} does this limit exist? The proof relies on the Banach
+fixed-point theorem, which itself rests on the completeness of $\R$: every
+Cauchy sequence of real numbers converges. Without the completeness axiom,
+the iterates could approach a limit that simply does not exist in our number
+system---exactly the situation one encounters in $\Q$. The tools developed in
+this lesson will let us formalize convergence, suprema, and the completeness
+property that underwrites every convergence argument in reinforcement
+learning and optimization.
+
+\begin{rlconnection}[title={Why RL/ML needs the real number system}]
+\begin{itemize}[nosep]
+  \item \textbf{Value iteration.} Convergence of the sequence $V_n = T^n V_0$
+    to $V^*$ requires $\R$ to be complete (every Cauchy sequence converges).
+  \item \textbf{Gradient descent.} The statement ``$f(x_k)$ converges to
+    $\inf_x f(x)$'' relies on the infimum existing, guaranteed by the
+    completeness axiom.
+  \item \textbf{Monte Carlo estimation.} The law of large numbers asserts
+    $\frac{1}{n}\sum_{i=1}^n X_i \to \E[X]$; its proof uses the
+    Bolzano--Weierstrass theorem and Cauchy completeness developed here.
+  \item \textbf{Series in function approximation.} Neural network
+    universality theorems express target functions as convergent series;
+    the ratio and root tests verify absolute convergence of these
+    expansions.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Familiarity with high-school algebra (field operations, inequalities,
+absolute values), basic set theory (subsets, unions, intersections), and
+informal notions of natural numbers $\N$, integers $\Z$, and rationals $\Q$.
+No prior analysis course is assumed.
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{State} the ordered-field axioms and the completeness axiom
+    for $\R$, and \textbf{explain} why $\Q$ fails to be complete.
+  \item \textbf{Define} supremum, infimum, convergence of sequences, and
+    Cauchy sequences.
+  \item \textbf{Prove} the Archimedean property, the monotone convergence
+    theorem, and the Bolzano--Weierstrass theorem.
+  \item \textbf{Compute} limits using the algebraic limit theorems and
+    determine convergence of series via the ratio and root tests.
+  \item \textbf{Derive} the relationship between $\limsup$, $\liminf$,
+    and convergence of a bounded sequence.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 1--3]{rudin1976} --- The canonical reference for
+    the real number system, sequences, and series; concise and rigorous.
+  \item \citet[Chapters 1--2]{abbott2015} --- An accessible introduction
+    emphasizing the completeness axiom and its consequences.
+  \item \citet[Chapter 0]{folland1999} --- A brief review of real-number
+    foundations aimed at students proceeding to measure theory.
+  \item \citet[Chapters 2--3]{bartle2011} --- Detailed treatment of
+    sequences, series, and convergence with many worked examples.
+  \item \citet[Chapter 1]{tao2016} --- A construction-oriented approach
+    building $\R$ from the rationals via Cauchy sequences.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE REAL NUMBER SYSTEM
+%% ============================================================
+\section{The Real Number System}
+\label{sec:real_numbers}
+
+\begin{definition}[Ordered Field]
+\label{def:ordered_field}
+The real numbers $\R$ form an \emph{ordered field}: a set equipped with
+operations $+$ and $\cdot$ and a total order $\le$ satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Field axioms.} $(\R, +, \cdot)$ is a field: addition and
+    multiplication are commutative, associative, and distributive, with
+    identity elements $0$ and $1$ respectively, additive inverses for all
+    elements, and multiplicative inverses for all nonzero elements.
+  \item \textbf{Order axioms.} The relation $\le$ is a total order
+    compatible with the field operations: if $a \le b$ then
+    $a + c \le b + c$ for all $c$; if $0 \le a$ and $0 \le b$ then
+    $0 \le ab$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:Q_ordered_field}
+The rationals $\Q$ also form an ordered field. What distinguishes $\R$
+from $\Q$ is the completeness axiom below.
+\end{remark}
+
+\begin{example}
+\label{ex:Q_incomplete}
+The set $S = \{q \in \Q : q^2 < 2\}$ is nonempty (e.g., $1 \in S$) and
+bounded above in $\Q$ (e.g., by $2$). However, $S$ has no supremum
+\emph{in} $\Q$: any candidate rational upper bound can be improved by
+moving closer to $\sqrt{2}$, which is irrational. This failure motivates
+the completeness axiom.
+\end{example}
+
+\begin{definition}[Upper Bound, Supremum]
+\label{def:supremum}
+Let $S \subseteq \R$ be nonempty.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item An element $u \in \R$ is an \emph{upper bound} for $S$ if
+    $s \le u$ for every $s \in S$. We say $S$ is \emph{bounded above}.
+  \item An element $\alpha \in \R$ is the \emph{supremum} (or
+    \emph{least upper bound}) of $S$, written $\alpha = \sup S$, if:
+    \begin{enumerate}[nosep,label=(\alph*)]
+      \item $\alpha$ is an upper bound for $S$, and
+      \item if $u$ is any upper bound for $S$, then $\alpha \le u$.
+    \end{enumerate}
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Lower Bound, Infimum]
+\label{def:infimum}
+Dually, $\ell \in \R$ is a \emph{lower bound} for $S$ if $\ell \le s$ for
+every $s \in S$. The \emph{infimum} $\inf S$ is the greatest lower bound:
+$\inf S$ is a lower bound and $\ell \le \inf S$ for every lower bound
+$\ell$.
+\end{definition}
+
+\begin{remark}
+\label{rem:sup_epsilon}
+The supremum $\alpha = \sup S$ is characterized by the
+\emph{$\varepsilon$-criterion}: $\alpha$ is an upper bound for $S$, and
+for every $\varepsilon > 0$ there exists $s \in S$ with
+$s > \alpha - \varepsilon$. This characterization is used constantly in
+analysis.
+\end{remark}
+
+\begin{keyresult}[title={Completeness Axiom}]
+\begin{theorem}[Completeness Axiom / Least Upper Bound Property]
+\label{thm:completeness}
+Every nonempty subset of\/ $\R$ that is bounded above has a supremum
+in~$\R$.
+\end{theorem}
+This is an \emph{axiom}: it is not proved from more basic principles but
+is the defining property that distinguishes $\R$ from $\Q$. It
+guarantees that limits, infima, and suprema exist whenever they should.
+\end{keyresult}
+
+\begin{corollary}[Greatest Lower Bound Property]
+\label{cor:glb}
+Every nonempty subset of\/ $\R$ that is bounded below has an infimum
+in~$\R$.
+\end{corollary}
+
+\begin{proof}
+Let $S \subseteq \R$ be nonempty and bounded below. Define
+$-S = \{-s : s \in S\}$. Then $-S$ is nonempty and bounded above (if
+$\ell$ is a lower bound for $S$, then $-\ell$ is an upper bound for $-S$).
+By the completeness axiom, $\alpha = \sup(-S)$ exists. We claim
+$\inf S = -\alpha$.
+
+Since $\alpha$ is an upper bound for $-S$, we have $-s \le \alpha$ for
+all $s \in S$, hence $s \ge -\alpha$, so $-\alpha$ is a lower bound for
+$S$. If $\ell$ is any lower bound for $S$, then $-\ell$ is an upper
+bound for $-S$, so $\alpha \le -\ell$, hence $\ell \le -\alpha$. Thus
+$-\alpha$ is the greatest lower bound.
+\end{proof}
+
+\begin{rlconnection}[title={Suprema and infima in optimization}]
+In optimization and RL, one routinely writes $\inf_{x \in X} f(x)$ or
+$\sup_\pi V^\pi(s)$. The completeness axiom and the greatest lower bound
+property guarantee these quantities exist as real numbers (when the sets
+are bounded), rather than as formal symbols with no concrete value.
+Without completeness, the optimal value function $V^*(s) = \sup_\pi
+V^\pi(s)$ might fail to exist, and no algorithm could converge to it.
+\end{rlconnection}
+
+\begin{theorem}[Archimedean Property]
+\label{thm:archimedean}
+For every $x \in \R$, there exists $n \in \N$ with $n > x$.
+Equivalently, for every $\varepsilon > 0$ and every $M > 0$, there exists
+$n \in \N$ with $n\varepsilon > M$.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that $\N$ is bounded above in $\R$. By the
+completeness axiom, $\alpha = \sup \N$ exists. Then $\alpha - 1$ is not
+an upper bound for $\N$ (since $\alpha$ is the \emph{least} upper
+bound), so there exists $m \in \N$ with $m > \alpha - 1$. But then
+$m + 1 > \alpha$ with $m + 1 \in \N$, contradicting the fact that
+$\alpha$ is an upper bound for $\N$.
+
+The second formulation follows by applying the first to
+$x = M/\varepsilon$.
+\end{proof}
+
+\begin{example}
+\label{ex:archimedean_step_size}
+In gradient descent with step size $\eta > 0$, one often needs
+$n$ iterations so that $n\eta$ exceeds a given threshold $M$
+(e.g., to traverse a distance $M$ in parameter space). The Archimedean
+property guarantees such $n$ exists for any positive step size, no matter
+how small.
+\end{example}
+
+\begin{theorem}[Density of Rationals]
+\label{thm:density_Q}
+For every $a, b \in \R$ with $a < b$, there exists $q \in \Q$ with
+$a < q < b$.
+\end{theorem}
+
+\begin{proof}
+By the Archimedean property, choose $n \in \N$ with $n(b - a) > 1$,
+i.e., $nb - na > 1$. Again by the Archimedean property, the sets
+$\{k \in \Z : k > na\}$ and $\{k \in \Z : k < na\}$ are both nonempty,
+so we may define $m = \min\{k \in \Z : k > na\}$ (this minimum exists
+because the positive integers exceeding $na$ form a nonempty subset of
+$\N$, which has a least element by the well-ordering principle). Then
+$m > na$ and $m - 1 \le na$, so $m \le na + 1 < nb$ (since
+$nb - na > 1$). Setting $q = m/n$ gives $a < q < b$ with $q \in \Q$.
+\end{proof}
+
+\begin{theorem}[Nested Intervals Property]
+\label{thm:nested_intervals}
+Let $I_n = [a_n, b_n]$ be a sequence of closed bounded intervals with
+$I_1 \supseteq I_2 \supseteq I_3 \supseteq \cdots$. Then
+$\bigcap_{n=1}^\infty I_n \neq \emptyset$.
+\end{theorem}
+
+\begin{proof}
+The nesting condition gives $a_1 \le a_2 \le \cdots$ and
+$b_1 \ge b_2 \ge \cdots$ with $a_n \le b_n$ for all $n$. In particular,
+$a_n \le b_1$ for all $n$, so $\{a_n : n \in \N\}$ is bounded above.
+By the completeness axiom, $\alpha = \sup\{a_n : n \in \N\}$ exists.
+
+For every $n$, we have $a_n \le \alpha$ (since $\alpha$ is an upper
+bound) and $\alpha \le b_n$ (since $b_n$ is an upper bound for
+$\{a_k\}$: for $k \le n$, $a_k \le a_n \le b_n$; for $k > n$,
+$a_k \le b_k \le b_n$). Therefore $\alpha \in [a_n, b_n]$ for every
+$n$, giving $\alpha \in \bigcap_{n=1}^\infty I_n$.
+\end{proof}
+
+\begin{warning}[title={Closure and boundedness are both essential}]
+The nested intervals conclusion fails for open intervals:
+$\bigcap_{n=1}^\infty (0, 1/n) = \emptyset$.
+It also fails for unbounded closed sets:
+$\bigcap_{n=1}^\infty [n, \infty) = \emptyset$.
+Both closure \emph{and} boundedness are required.
+\end{warning}
+
+\begin{example}
+\label{ex:bisection}
+The bisection method for root-finding constructs nested intervals
+$[a_n, b_n]$ with $f(a_n) < 0 < f(b_n)$ and $b_n - a_n = (b_0 - a_0)/2^n$.
+The nested intervals property guarantees a point in $\bigcap_n [a_n, b_n]$,
+and continuity of $f$ forces $f$ to vanish there.
+\end{example}
+
+With the real number system and its completeness properties established,
+we now turn to the central objects of analysis: sequences and their
+convergence behavior.
+
+%% ============================================================
+%% SECTION 4: SEQUENCES
+%% ============================================================
+\section{Sequences}
+\label{sec:sequences}
+
+\begin{definition}[Convergence]
+\label{def:convergence}
+A sequence $(a_n)_{n=1}^\infty$ in $\R$ \emph{converges} to $L \in \R$,
+written $\lim_{n \to \infty} a_n = L$ or $a_n \to L$, if for every
+$\varepsilon > 0$ there exists $N \in \N$ such that $|a_n - L| <
+\varepsilon$ for all $n \ge N$. A sequence that does not converge is
+\emph{divergent}.
+\end{definition}
+
+\begin{example}
+\label{ex:seq_1_over_n}
+The sequence $a_n = 1/n$ converges to $0$. Given $\varepsilon > 0$,
+choose $N \in \N$ with $N > 1/\varepsilon$ (Archimedean property). For
+$n \ge N$: $|a_n - 0| = 1/n \le 1/N < \varepsilon$.
+\end{example}
+
+\begin{theorem}[Uniqueness of Limits]
+\label{thm:unique_limit}
+If $a_n \to L$ and $a_n \to M$, then $L = M$.
+\end{theorem}
+
+\begin{proof}
+Let $\varepsilon > 0$. There exist $N_1, N_2 \in \N$ such that
+$|a_n - L| < \varepsilon/2$ for $n \ge N_1$ and $|a_n - M| <
+\varepsilon/2$ for $n \ge N_2$. For $n \ge \max(N_1, N_2)$:
+\[
+  |L - M| \le |L - a_n| + |a_n - M|
+  < \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon.
+\]
+Since $|L - M| < \varepsilon$ for every $\varepsilon > 0$, we conclude
+$L = M$.
+\end{proof}
+
+\begin{theorem}[Algebraic Limit Theorems]
+\label{thm:alg_limit}
+Suppose $a_n \to a$ and $b_n \to b$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $a_n + b_n \to a + b$.
+  \item $a_n \cdot b_n \to a \cdot b$.
+  \item If $b \neq 0$, then $a_n / b_n \to a / b$ (for $n$ sufficiently
+    large that $b_n \neq 0$).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+We prove (ii); parts (i) and (iii) follow by similar arguments.
+
+Since $(a_n)$ converges, it is bounded: there exists $M > 0$ with
+$|a_n| \le M$ for all $n$. Let $\varepsilon > 0$. Choose $N_1$ so that
+$|a_n - a| < \varepsilon/(2(|b| + 1))$ for $n \ge N_1$, and $N_2$ so
+that $|b_n - b| < \varepsilon/(2M)$ for $n \ge N_2$. For
+$n \ge \max(N_1, N_2)$:
+\begin{align*}
+  |a_n b_n - ab|
+  &= |a_n b_n - a_n b + a_n b - ab| \\
+  &\le |a_n||b_n - b| + |b||a_n - a| \\
+  &\le M \cdot \frac{\varepsilon}{2M}
+       + |b| \cdot \frac{\varepsilon}{2(|b|+1)} \\
+  &< \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon.
+    \qedhere
+\end{align*}
+\end{proof}
+
+\begin{example}
+\label{ex:alg_limit}
+Consider the sequence $a_n = (3n^2 + 1)/(n^2 + 5n)$. Dividing numerator
+and denominator by $n^2$:
+\[
+  a_n = \frac{3 + 1/n^2}{1 + 5/n}.
+\]
+Since $1/n^2 \to 0$ and $5/n \to 0$, the algebraic limit theorems give
+$a_n \to 3/1 = 3$.
+\end{example}
+
+\begin{keyresult}[title={Monotone Convergence Theorem}]
+\begin{theorem}[Monotone Convergence Theorem for Sequences]
+\label{thm:mct_seq}
+Every bounded monotone sequence converges. Specifically:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item If $(a_n)$ is increasing and bounded above, then
+    $a_n \to \sup\{a_n : n \in \N\}$.
+  \item If $(a_n)$ is decreasing and bounded below, then
+    $a_n \to \inf\{a_n : n \in \N\}$.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove (i). Let $\alpha = \sup\{a_n : n \in \N\}$, which exists by the
+completeness axiom. Let $\varepsilon > 0$. Since $\alpha - \varepsilon$
+is not an upper bound for $\{a_n\}$, there exists $N$ with
+$a_N > \alpha - \varepsilon$. Since $(a_n)$ is increasing, for
+$n \ge N$:
+\[
+  \alpha - \varepsilon < a_N \le a_n \le \alpha,
+\]
+so $|a_n - \alpha| < \varepsilon$. Part (ii) follows by applying (i) to
+$(-a_n)$.
+\end{proof}
+
+\begin{rlconnection}[title={Monotone convergence in policy iteration}]
+Policy iteration generates a sequence of value functions $V^{\pi_0},
+V^{\pi_1}, V^{\pi_2}, \ldots$ that is monotonically non-decreasing
+(each policy improvement step satisfies $V^{\pi_{k+1}}(s) \ge
+V^{\pi_k}(s)$ for all $s$) and bounded above by $V^*(s) \le
+R_{\max}/(1-\gamma)$. The monotone convergence theorem guarantees
+convergence of this sequence.
+\end{rlconnection}
+
+\begin{theorem}[Bolzano--Weierstrass]
+\label{thm:bolzano_weierstrass}
+Every bounded sequence in $\R$ has a convergent subsequence.
+\end{theorem}
+
+\begin{proof}
+Let $(a_n)$ be bounded. We construct a monotone subsequence, which
+converges by Theorem~\ref{thm:mct_seq}.
+
+Call an index $n$ a \emph{peak} if $a_n \ge a_m$ for all $m > n$.
+
+\textbf{Case 1:} There are infinitely many peaks $n_1 < n_2 < n_3 <
+\cdots$. Then $a_{n_1} \ge a_{n_2} \ge a_{n_3} \ge \cdots$ is a
+decreasing subsequence. It is bounded (since $(a_n)$ is bounded), hence
+convergent by Theorem~\ref{thm:mct_seq}.
+
+\textbf{Case 2:} There are only finitely many peaks. Let $N$ be larger
+than all peak indices. Then no index $n \ge N$ is a peak, meaning for
+every $n \ge N$ there exists $m > n$ with $a_m > a_n$. Starting with
+$n_1 = N$, inductively choose $n_{k+1} > n_k$ with
+$a_{n_{k+1}} > a_{n_k}$. This gives a strictly increasing subsequence.
+It is bounded above (since $(a_n)$ is bounded), hence convergent by
+Theorem~\ref{thm:mct_seq}.
+\end{proof}
+
+\begin{example}
+\label{ex:subsequence}
+The sequence $a_n = (-1)^n(1 + 1/n)$ is bounded but divergent. However,
+the subsequence $a_{2k} = 1 + 1/(2k) \to 1$ converges, as guaranteed by
+Bolzano--Weierstrass.
+\end{example}
+
+\begin{definition}[Cauchy Sequence]
+\label{def:cauchy}
+A sequence $(a_n)$ in $\R$ is \emph{Cauchy} if for every
+$\varepsilon > 0$ there exists $N \in \N$ such that
+$|a_n - a_m| < \varepsilon$ for all $n, m \ge N$.
+\end{definition}
+
+\begin{theorem}[Completeness of $\R$: Cauchy Criterion]
+\label{thm:cauchy_complete}
+A sequence in $\R$ converges if and only if it is Cauchy.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $a_n \to L$. Given $\varepsilon > 0$, choose $N$
+so that $|a_n - L| < \varepsilon/2$ for $n \ge N$. For $n, m \ge N$:
+\[
+  |a_n - a_m| \le |a_n - L| + |L - a_m| < \varepsilon.
+\]
+
+$(\Leftarrow)$ Suppose $(a_n)$ is Cauchy. First, $(a_n)$ is bounded:
+choose $N$ so that $|a_n - a_m| < 1$ for $n, m \ge N$; then
+$|a_n| \le \max(|a_1|, \ldots, |a_{N-1}|, |a_N| + 1)$ for all $n$.
+
+By Bolzano--Weierstrass (Theorem~\ref{thm:bolzano_weierstrass}),
+$(a_n)$ has a convergent subsequence $a_{n_k} \to L$. We show
+$a_n \to L$. Given $\varepsilon > 0$, choose $N_1$ so that
+$|a_n - a_m| < \varepsilon/2$ for $n, m \ge N_1$, and choose $K$ so
+that $|a_{n_k} - L| < \varepsilon/2$ for $k \ge K$. Pick $k \ge K$
+with $n_k \ge N_1$. Then for $n \ge N_1$:
+\[
+  |a_n - L| \le |a_n - a_{n_k}| + |a_{n_k} - L|
+  < \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon.
+  \qedhere
+\]
+\end{proof}
+
+\begin{rlconnection}[title={Cauchy sequences in iterative algorithms}]
+The Cauchy criterion is indispensable in RL and optimization because it
+certifies convergence \emph{without knowing the limit}. In practice, we
+often cannot compute $V^*$ or $\theta^*$ directly. Instead, we show
+successive iterates $\|V_{n+1} - V_n\|$ shrink geometrically (e.g., by a
+factor $\gamma$), verifying the Cauchy condition, and conclude that the
+limit exists. This is precisely the logic behind contraction-mapping
+proofs of value iteration convergence.
+\end{rlconnection}
+
+\begin{definition}[$\limsup$ and $\liminf$]
+\label{def:limsup_liminf}
+For a bounded sequence $(a_n)$, define:
+\[
+  \limsup_{n \to \infty} a_n
+  = \lim_{n \to \infty}\Bigl(\sup_{k \ge n} a_k\Bigr), \qquad
+  \liminf_{n \to \infty} a_n
+  = \lim_{n \to \infty}\Bigl(\inf_{k \ge n} a_k\Bigr).
+\]
+The sequence $\sup_{k \ge n} a_k$ is decreasing and bounded below
+(by $\inf a_k$), and $\inf_{k \ge n} a_k$ is increasing and bounded
+above (by $\sup a_k$), so both limits exist by
+Theorem~\ref{thm:mct_seq}.
+\end{definition}
+
+\begin{example}
+\label{ex:limsup_liminf}
+For $a_n = (-1)^n + 1/n$, the odd-indexed terms approach $-1$ from above
+and the even-indexed terms approach $1$ from above. We have
+$\sup_{k \ge n} a_k \to 1$ and $\inf_{k \ge n} a_k \to -1$, so
+$\limsup a_n = 1$ and $\liminf a_n = -1$. Since these differ, the
+sequence diverges.
+\end{example}
+
+\begin{proposition}[Properties of $\limsup$ and $\liminf$]
+\label{prop:limsup_props}
+Let $(a_n)$ be a bounded sequence. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $\liminf_{n\to\infty} a_n \le \limsup_{n\to\infty} a_n$.
+  \item $(a_n)$ converges if and only if
+    $\liminf_{n\to\infty} a_n = \limsup_{n\to\infty} a_n$, and in that
+    case the common value equals $\lim a_n$.
+  \item $\limsup_{n\to\infty} a_n = L$ if and only if: for every
+    $\varepsilon > 0$, (a)~$a_n < L + \varepsilon$ for all sufficiently
+    large $n$, and (b)~$a_n > L - \varepsilon$ for infinitely many $n$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) For each $n$, $\inf_{k \ge n} a_k \le \sup_{k \ge n} a_k$. Taking
+limits preserves the inequality.
+
+(ii) $(\Rightarrow)$ Suppose $a_n \to L$. Given $\varepsilon > 0$, for
+large $n$ we have $L - \varepsilon < a_k < L + \varepsilon$ for all
+$k \ge n$, so
+$L - \varepsilon \le \inf_{k \ge n} a_k \le \sup_{k \ge n} a_k \le
+L + \varepsilon$.
+Taking $n \to \infty$ gives
+$L - \varepsilon \le \liminf a_n \le \limsup a_n \le L + \varepsilon$
+for all $\varepsilon > 0$, so both equal $L$.
+
+$(\Leftarrow)$ Suppose $\liminf a_n = \limsup a_n = L$. For any
+$\varepsilon > 0$, choose $N$ so that
+$|\sup_{k \ge n} a_k - L| < \varepsilon$ and
+$|\inf_{k \ge n} a_k - L| < \varepsilon$ for $n \ge N$. Then for
+$n \ge N$:
+\[
+  L - \varepsilon < \inf_{k \ge n} a_k \le a_n
+  \le \sup_{k \ge n} a_k < L + \varepsilon,
+\]
+so $|a_n - L| < \varepsilon$.
+
+(iii) Let $s_n = \sup_{k \ge n} a_k$ and $L = \lim s_n$.
+
+For (a): given $\varepsilon > 0$, choose $N$ with $s_N < L + \varepsilon$.
+Then $a_n \le s_N < L + \varepsilon$ for all $n \ge N$.
+
+For (b): given $\varepsilon > 0$, for every $n$ we have $s_n \ge L$
+(since $s_n$ decreases to $L$), so there exists $k \ge n$ with
+$a_k > s_n - \varepsilon \ge L - \varepsilon$. Since $n$ is arbitrary,
+infinitely many such $k$ exist.
+
+Conversely, suppose (a) and (b) hold for some value $L'$. From (a),
+$s_n \le L' + \varepsilon$ for large $n$, so
+$\limsup a_n \le L' + \varepsilon$. From (b), for each $n$ there exists
+$k \ge n$ with $a_k > L' - \varepsilon$, so
+$s_n \ge L' - \varepsilon$, giving
+$\limsup a_n \ge L' - \varepsilon$. Since $\varepsilon$ is arbitrary,
+$\limsup a_n = L'$.
+\end{proof}
+
+\begin{warning}[title={$\limsup$ is not $\sup$}]
+A common mistake is to confuse $\limsup_{n\to\infty} a_n$ with
+$\sup_n a_n$. The supremum $\sup_n a_n$ is the largest value attained
+(or approached) by the entire sequence, while $\limsup a_n$ captures
+the largest \emph{cluster point}---the largest value that subsequences
+approach. For instance, the sequence $a_1 = 100, a_n = (-1)^n$ for
+$n \ge 2$ has $\sup a_n = 100$ but $\limsup a_n = 1$.
+\end{warning}
+
+With the theory of sequences complete---including criteria for
+convergence, extraction of convergent subsequences, and the $\limsup$ and
+$\liminf$ tools---we are ready to study infinite series.
+
+%% ============================================================
+%% SECTION 5: SERIES
+%% ============================================================
+\section{Series}
+\label{sec:series}
+
+\begin{definition}[Convergence of Series and Absolute Convergence]
+\label{def:series}
+Let $(a_n)_{n=1}^\infty$ be a sequence. The \emph{series}
+$\sum_{n=1}^\infty a_n$ \emph{converges} if the sequence of partial
+sums $S_N = \sum_{n=1}^N a_n$ converges. The series \emph{converges
+absolutely} if $\sum_{n=1}^\infty |a_n|$ converges.
+\end{definition}
+
+\begin{example}
+\label{ex:geometric_series}
+The geometric series $\sum_{n=0}^\infty r^n$ converges for $|r| < 1$.
+Indeed, the partial sum $S_N = (1 - r^{N+1})/(1 - r)$ satisfies
+$S_N \to 1/(1 - r)$, since $|r|^{N+1} \to 0$ by the Archimedean
+property and algebraic limit theorems.
+\end{example}
+
+\begin{theorem}[Comparison Test]
+\label{thm:comparison}
+If $0 \le a_n \le b_n$ for all $n$ and $\sum b_n$ converges, then
+$\sum a_n$ converges.
+\end{theorem}
+
+\begin{proof}
+The partial sums $S_N = \sum_{n=1}^N a_n$ form an increasing sequence
+(since $a_n \ge 0$) bounded above by $\sum_{n=1}^\infty b_n < \infty$.
+By the monotone convergence theorem (Theorem~\ref{thm:mct_seq}),
+$(S_N)$ converges.
+\end{proof}
+
+\begin{theorem}[Absolute Convergence Implies Convergence]
+\label{thm:abs_conv}
+If $\sum_{n=1}^\infty |a_n|$ converges, then $\sum_{n=1}^\infty a_n$
+converges.
+\end{theorem}
+
+\begin{proof}
+Absolute convergence means the partial sums of $|a_n|$ form a Cauchy
+sequence. For $m > n$:
+\[
+  \Bigl|\sum_{k=n+1}^{m} a_k\Bigr| \le \sum_{k=n+1}^{m} |a_k|,
+\]
+so the partial sums of $a_n$ are also Cauchy, hence convergent by
+Theorem~\ref{thm:cauchy_complete}.
+\end{proof}
+
+\begin{example}
+\label{ex:abs_conv}
+The series $\sum_{n=1}^\infty (-1)^n / n^2$ converges absolutely, since
+$\sum 1/n^2$ converges (this can be shown by comparison with
+$\sum 1/(n(n-1))$, which telescopes to $1$). By
+Theorem~\ref{thm:abs_conv}, the original alternating series converges.
+\end{example}
+
+\begin{keyresult}[title={Ratio and Root Tests}]
+\begin{theorem}[Ratio Test]
+\label{thm:ratio}
+Let $(a_n)$ be a sequence with $a_n \neq 0$ for all $n$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item If $\limsup_{n\to\infty} |a_{n+1}/a_n| < 1$, then $\sum a_n$
+    converges absolutely.
+  \item If $\liminf_{n\to\infty} |a_{n+1}/a_n| > 1$, then $\sum a_n$
+    diverges.
+\end{enumerate}
+\end{theorem}
+\begin{theorem}[Root Test]
+\label{thm:root}
+Let $\alpha = \limsup_{n\to\infty} |a_n|^{1/n}$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item If $\alpha < 1$, then $\sum a_n$ converges absolutely.
+  \item If $\alpha > 1$, then $\sum a_n$ diverges.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}[Proof of the Ratio Test]
+Suppose $\limsup |a_{n+1}/a_n| = L < 1$. Choose $r$ with $L < r < 1$.
+By Proposition~\ref{prop:limsup_props}(iii), there exists $N$ such that
+$|a_{n+1}/a_n| < r$ for all $n \ge N$. Then $|a_n| \le |a_N| r^{n-N}$
+for $n \ge N$, and $\sum |a_N| r^{n-N}$ converges (geometric series
+with ratio $r < 1$). By the comparison test, $\sum |a_n|$ converges.
+
+If $\liminf |a_{n+1}/a_n| > 1$, then $|a_{n+1}| > |a_n|$ for all
+sufficiently large $n$, so $a_n \not\to 0$ and the series diverges
+(since convergence requires $a_n \to 0$).
+\end{proof}
+
+\begin{proof}[Proof of the Root Test]
+If $\alpha < 1$, choose $r$ with $\alpha < r < 1$. By
+Proposition~\ref{prop:limsup_props}(iii), $|a_n|^{1/n} < r$ for all
+sufficiently large $n$, so $|a_n| < r^n$. The comparison test with the
+geometric series $\sum r^n$ gives absolute convergence.
+
+If $\alpha > 1$, then $|a_n|^{1/n} > 1$ for infinitely many $n$
+(Proposition~\ref{prop:limsup_props}(iii)), so $|a_n| > 1$ infinitely
+often, meaning $a_n \not\to 0$ and the series diverges.
+\end{proof}
+
+\begin{example}
+\label{ex:ratio_test}
+Consider the series $\sum_{n=0}^\infty x^n / n!$ (the exponential
+series). The ratio test gives
+$|a_{n+1}/a_n| = |x|/(n+1) \to 0 < 1$,
+so the series converges absolutely for every $x \in \R$. This defines
+$e^x$ as a convergent power series.
+\end{example}
+
+\begin{rlconnection}[title={Series convergence in function approximation}]
+In supervised learning, kernel methods express predictions as
+$f(x) = \sum_{n=1}^\infty \alpha_n \phi_n(x)$ for basis functions
+$\phi_n$. Convergence of this series (and control of the approximation
+error from truncating to finitely many terms) is established via the
+comparison, ratio, or root tests applied to the coefficient sequence
+$(\alpha_n)$.
+\end{rlconnection}
+
+\begin{remark}[Conditional Convergence]
+\label{rem:conditional}
+A series that converges but does not converge absolutely is called
+\emph{conditionally convergent}. The alternating harmonic series
+$\sum (-1)^{n+1}/n$ is the classic example. By the Riemann
+rearrangement theorem, any conditionally convergent series can be
+rearranged to converge to any prescribed real value, or to diverge.
+This pathology motivates the focus on absolute convergence in
+applications. In RL and numerical analysis, one almost always works
+with absolutely convergent series to ensure robustness under reordering
+of summation.
+\end{remark}
+
+%% ============================================================
+%% SECTION 6: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Supremum computation]
+\textnormal{(\(*\))} \\
+Let $S = \{1 - 1/n : n \in \N\}$. Prove that $\sup S = 1$ directly from
+the definition of supremum (Definition~\ref{def:supremum}).
+\end{exercise}
+
+\begin{exercise}[Convergence from the definition]
+\textnormal{(\(*\))} \\
+Prove directly from Definition~\ref{def:convergence} that the sequence
+$a_n = (2n+1)/(n+3)$ converges to $2$.
+\end{exercise}
+
+\begin{exercise}[Monotone convergence application]
+\textnormal{(\(**\))} \\
+Define the sequence $a_1 = 1$, $a_{n+1} = \sqrt{2 + a_n}$. Prove that
+$(a_n)$ is increasing and bounded above, and find its limit.
+
+\textit{Hint:} Show by induction that $a_n < 2$ for all $n$. For the
+limit, if $a_n \to L$ then $L = \sqrt{2 + L}$.
+\end{exercise}
+
+\begin{exercise}[Cauchy criterion in RL]
+\textnormal{(\(**\))} \\
+Let $T\colon \R \to \R$ be a contraction mapping with factor
+$\gamma \in (0,1)$: $|Tx - Ty| \le \gamma|x - y|$ for all $x,y \in \R$.
+Define $x_0 \in \R$ arbitrarily and $x_{n+1} = Tx_n$. Prove that
+$(x_n)$ is a Cauchy sequence, and conclude that it converges.
+
+\textit{Hint:} Show $|x_{n+1} - x_n| \le \gamma^n |x_1 - x_0|$, then
+use the geometric series formula for $|x_n - x_m|$.
+\end{exercise}
+
+\begin{exercise}[Series convergence tests]
+\textnormal{(\(*\))} \\
+Determine whether each series converges or diverges, and state which test
+you use:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $\displaystyle \sum_{n=1}^\infty \frac{3^n}{n!}$
+  \item $\displaystyle \sum_{n=1}^\infty \frac{n}{2^n}$
+  \item $\displaystyle \sum_{n=1}^\infty \frac{1}{n^{1/2}}$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Limsup and subsequential limits]
+\textnormal{(\(***\))} \\
+Let $(a_n)$ be a bounded sequence. Prove that there exists a subsequence
+$(a_{n_k})$ with $a_{n_k} \to \limsup_{n\to\infty} a_n$.
+
+\textit{Hint:} Use the characterization in
+Proposition~\ref{prop:limsup_props}(iii) to inductively select $n_k$
+with $|a_{n_k} - L| < 1/k$ where $L = \limsup a_n$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 7: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The real numbers $\R$ form an ordered field satisfying the
+    \emph{completeness axiom}: every nonempty subset bounded above has a
+    supremum. This axiom is what distinguishes $\R$ from $\Q$.
+
+  \item The completeness axiom implies the \emph{greatest lower bound
+    property}: every nonempty subset bounded below has an infimum
+    (Corollary~\ref{cor:glb}).
+
+  \item The \emph{Archimedean property} ($\N$ is unbounded) and the
+    \emph{density of rationals} are consequences of completeness.
+
+  \item A sequence $(a_n)$ converges to $L$ if the terms eventually stay
+    within any prescribed distance $\varepsilon$ of $L$; limits are
+    unique and respect algebraic operations.
+
+  \item The \emph{monotone convergence theorem} states that every bounded
+    monotone sequence converges; this directly underpins policy iteration
+    convergence in RL.
+
+  \item The \emph{Bolzano--Weierstrass theorem} guarantees that every
+    bounded sequence has a convergent subsequence, a cornerstone for
+    compactness arguments.
+
+  \item A sequence converges if and only if it is \emph{Cauchy}
+    (completeness of $\R$). The Cauchy criterion enables convergence
+    proofs for iterative algorithms without knowing the limit.
+
+  \item The $\limsup$ and $\liminf$ of a bounded sequence always exist;
+    the sequence converges exactly when these two values coincide.
+
+  \item For series, the \emph{comparison test}, \emph{ratio test}, and
+    \emph{root test} provide practical tools for establishing absolute
+    convergence. Absolute convergence implies convergence and guards
+    against rearrangement pathologies.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 8: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 2} (Continuity, Differentiation, and Integration)
+    builds on the convergence theory developed here. The intermediate
+    value theorem, mean value theorem, and Riemann integration all
+    rely on completeness and the Bolzano--Weierstrass theorem.
+
+  \item \textbf{Lesson 3} (Topology of the Real Line and Metric Spaces)
+    generalizes convergence to abstract metric spaces. Compactness in
+    metric spaces is the natural extension of the Bolzano--Weierstrass
+    property.
+
+  \item \textbf{Lesson 4} (Sequences and Series of Functions) treats
+    pointwise and uniform convergence, power series, and the Weierstrass
+    M-test---a direct generalization of the comparison test to function
+    series.
+
+  \item For a deeper treatment of the construction of $\R$ from $\Q$
+    via Dedekind cuts or Cauchy sequences, see \citet[Chapter 1]{rudin1976}
+    or \citet[Chapters 1--5]{tao2016}.
+
+  \item Students proceeding to Phase 01 (measure theory) will find that
+    the monotone convergence theorem and Cauchy completeness generalize
+    to Lebesgue integration, where the monotone convergence theorem for
+    integrals and the completeness of $L^p$ spaces play analogous roles.
+
+  \item \citet{pugh2015} provides an enriched treatment with many
+    challenging exercises and a geometric perspective on real analysis
+    that complements the more algebraic approach of \citet{rudin1976}.
+\end{itemize}
+
+\bibliography{real-analysis-refs}
+
+\end{document}

@@ -1,0 +1,926 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 3: Differentiation and Integration}}
+\fancyhead[R]{\thepage}
+\title{Lesson 3: Differentiation and Integration}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Every modern deep learning system is trained by \emph{gradient descent}:
+given a loss function $L(\theta)$, we compute its derivative with respect
+to the parameters $\theta$ and update $\theta \leftarrow \theta -
+\eta \nabla L(\theta)$. The chain rule, applied layer by layer through
+the network, is the mathematical engine behind backpropagation. But what
+guarantees that the derivative exists, that the chain rule is valid, and
+that the loss decrease can be quantified? The \emph{mean value theorem}
+gives precise bounds on how much a function changes in terms of its
+derivative, and \emph{Taylor's theorem} provides the polynomial
+approximation that justifies gradient descent convergence rates.
+
+On the integration side, expected values $\E[f(X)] = \int f(x)\, p(x)
+\,dx$ are the foundation of every statistical learning objective, from
+maximum likelihood to policy gradient. The Riemann integral provides the
+first rigorous framework for these integrals, and the \emph{fundamental
+theorem of calculus} connects differentiation and integration, enabling
+the computation of integrals via antiderivatives. The tools developed in
+this lesson will let us make all of these arguments precise.
+
+\begin{rlconnection}[title={Why RL/ML needs differentiation and integration}]
+\begin{itemize}[nosep]
+  \item \textbf{Backpropagation.} The chain rule computes
+    $\partial L / \partial \theta_i$ by composing derivatives through
+    layers of a neural network, making gradient-based training possible.
+  \item \textbf{Convergence of gradient descent.} The mean value theorem
+    and Taylor's theorem establish that gradient descent with step size
+    $\eta$ decreases the loss by approximately
+    $\eta \|\nabla L\|^2$, yielding convergence rates.
+  \item \textbf{Policy gradient.} The REINFORCE estimator
+    $\nabla_\theta J(\theta) = \E[\nabla_\theta \log \pi_\theta(a|s)
+    \cdot Q^\pi(s,a)]$ requires exchanging differentiation and
+    integration, justified by the dominated convergence theorem (which
+    extends the Riemann integral framework developed here).
+  \item \textbf{Limitations of Riemann integration.} Many functions
+    arising in probability (e.g., indicator functions of complicated
+    sets) are not Riemann integrable, motivating the Lebesgue integral
+    in Phase~01.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Continuity ($\varepsilon$-$\delta$ and sequential characterizations), the
+extreme value theorem, the intermediate value theorem, and uniform
+continuity (Lesson~2). Completeness of $\R$, convergence of sequences,
+and supremum/infimum (Lesson~1).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the derivative and \textbf{prove} that
+    differentiability implies continuity.
+  \item \textbf{Derive} the sum, product, quotient, and chain rules for
+    differentiation.
+  \item \textbf{State} and \textbf{prove} Fermat's theorem, Rolle's
+    theorem, and the mean value theorem.
+  \item \textbf{Apply} Taylor's theorem with Lagrange remainder to obtain
+    polynomial approximations and error bounds.
+  \item \textbf{Define} the Riemann integral via partitions and upper/lower
+    sums, and \textbf{prove} that continuous functions are integrable.
+  \item \textbf{State} and \textbf{prove} the fundamental theorem of
+    calculus (both parts).
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 5--6]{rudin1976} --- Rigorous treatment of
+    differentiation and the Riemann--Stieltjes integral.
+  \item \citet[Chapters 5--7]{abbott2015} --- Accessible development of
+    derivatives, the mean value theorem, and Riemann integration.
+  \item \citet[Chapters 6--7]{bartle2011} --- Detailed coverage of
+    differentiation rules, Taylor's theorem, and the Riemann integral
+    with many examples.
+  \item \citet[Chapters 5--6]{pugh2015} --- Differentiation and
+    integration with a geometric viewpoint.
+  \item \citet[Chapter 1]{folland1999} --- Brief review of Riemann
+    integration as motivation for the Lebesgue theory.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE DERIVATIVE
+%% ============================================================
+\section{The Derivative}
+\label{sec:derivative}
+
+\begin{definition}[Derivative]
+\label{def:derivative}
+Let $f \colon (a, b) \to \R$ and $c \in (a, b)$. The \emph{derivative}
+of $f$ at $c$ is
+\[
+  f'(c) = \lim_{x \to c} \frac{f(x) - f(c)}{x - c},
+\]
+provided this limit exists. If $f'(c)$ exists, we say $f$ is
+\emph{differentiable} at $c$. Equivalently, $f'(c) = \lim_{h \to 0}
+(f(c + h) - f(c))/h$.
+\end{definition}
+
+\begin{theorem}[Differentiability Implies Continuity]
+\label{thm:diff_implies_cont}
+If $f$ is differentiable at $c$, then $f$ is continuous at $c$.
+\end{theorem}
+
+\begin{proof}
+Suppose $f'(c)$ exists. For $x \neq c$:
+\[
+  f(x) - f(c) = \frac{f(x) - f(c)}{x - c} \cdot (x - c).
+\]
+Taking $x \to c$: the first factor converges to $f'(c)$ and the second
+to $0$, so $f(x) - f(c) \to 0$ by the algebraic limit theorems
+(Lesson~1, Theorem~4.4). Hence $f(x) \to f(c)$, i.e., $f$ is continuous
+at $c$.
+\end{proof}
+
+\begin{example}
+\label{ex:abs_not_diff}
+The function $f(x) = |x|$ is continuous at $0$ but not differentiable
+there. The left-hand limit $\lim_{h \to 0^-} (|h| - 0)/h = -1$ and the
+right-hand limit $\lim_{h \to 0^+} |h|/h = 1$ disagree, so the
+two-sided limit does not exist.
+\end{example}
+
+\begin{example}
+\label{ex:power_rule}
+For $f(x) = x^n$ with $n \in \N$, the derivative is $f'(x) = nx^{n-1}$.
+Indeed,
+\[
+  \frac{(c+h)^n - c^n}{h}
+  = \frac{h\bigl(nc^{n-1} + \binom{n}{2}c^{n-2}h + \cdots + h^{n-1}\bigr)}{h}
+  \to nc^{n-1}
+\]
+as $h \to 0$.
+\end{example}
+
+%% ============================================================
+%% SECTION 4: DIFFERENTIATION RULES
+%% ============================================================
+\section{Differentiation Rules}
+\label{sec:diff_rules}
+
+\begin{theorem}[Sum and Constant Multiple Rules]
+\label{thm:sum_rule}
+If $f$ and $g$ are differentiable at $c$ and $\alpha \in \R$, then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $(f + g)'(c) = f'(c) + g'(c)$.
+  \item $(\alpha f)'(c) = \alpha f'(c)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) $\displaystyle\frac{(f+g)(x) - (f+g)(c)}{x - c}
+= \frac{f(x) - f(c)}{x - c} + \frac{g(x) - g(c)}{x - c}
+\to f'(c) + g'(c)$ as $x \to c$, by the algebraic limit theorem for
+sums.
+
+(ii) is similar, using the constant multiple rule for limits.
+\end{proof}
+
+\begin{theorem}[Product Rule]
+\label{thm:product_rule}
+If $f$ and $g$ are differentiable at $c$, then
+$(fg)'(c) = f'(c)\,g(c) + f(c)\,g'(c)$.
+\end{theorem}
+
+\begin{proof}
+We write:
+\begin{align*}
+  \frac{f(x)g(x) - f(c)g(c)}{x - c}
+  &= \frac{f(x)g(x) - f(c)g(x) + f(c)g(x) - f(c)g(c)}{x - c} \\
+  &= \frac{f(x) - f(c)}{x - c}\,g(x) + f(c)\,\frac{g(x) - g(c)}{x - c}.
+\end{align*}
+As $x \to c$: the first term converges to $f'(c) \cdot g(c)$ (using
+$g(x) \to g(c)$ by Theorem~\ref{thm:diff_implies_cont}), and the second
+to $f(c) \cdot g'(c)$.
+\end{proof}
+
+\begin{theorem}[Quotient Rule]
+\label{thm:quotient_rule}
+If $f$ and $g$ are differentiable at $c$ and $g(c) \neq 0$, then
+\[
+  \left(\frac{f}{g}\right)'(c)
+  = \frac{f'(c)\,g(c) - f(c)\,g'(c)}{g(c)^2}.
+\]
+\end{theorem}
+
+\begin{proof}
+It suffices to show $(1/g)'(c) = -g'(c)/g(c)^2$ and then apply the
+product rule to $f \cdot (1/g)$.  Since $g(c) \neq 0$ and $g$ is
+continuous at $c$, $g(x) \neq 0$ near $c$.  Then:
+\[
+  \frac{1/(g(x)) - 1/(g(c))}{x - c}
+  = \frac{g(c) - g(x)}{(x - c)\,g(x)\,g(c)}
+  = -\frac{1}{g(x)\,g(c)} \cdot \frac{g(x) - g(c)}{x - c}
+  \to -\frac{g'(c)}{g(c)^2}. \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Chain Rule]
+\label{thm:chain_rule}
+Let $f$ be differentiable at $c$ and $g$ be differentiable at $f(c)$.
+Then $g \circ f$ is differentiable at $c$ and
+\[
+  (g \circ f)'(c) = g'(f(c)) \cdot f'(c).
+\]
+\end{theorem}
+
+\begin{proof}
+Define the auxiliary function
+\[
+  \phi(y) = \begin{cases}
+    \dfrac{g(y) - g(f(c))}{y - f(c)} & \text{if } y \neq f(c), \\[6pt]
+    g'(f(c)) & \text{if } y = f(c).
+  \end{cases}
+\]
+Since $g$ is differentiable at $f(c)$, $\phi$ is continuous at $f(c)$.
+For $x \neq c$ with $f(x) \neq f(c)$:
+\[
+  \frac{g(f(x)) - g(f(c))}{x - c}
+  = \phi(f(x)) \cdot \frac{f(x) - f(c)}{x - c}.
+\]
+This identity also holds when $f(x) = f(c)$ (both sides are $0$). Taking
+$x \to c$: $f(x) \to f(c)$ (continuity from differentiability), so
+$\phi(f(x)) \to \phi(f(c)) = g'(f(c))$, and
+$(f(x) - f(c))/(x - c) \to f'(c)$. Hence
+$(g \circ f)'(c) = g'(f(c)) \cdot f'(c)$.
+\end{proof}
+
+\begin{rlconnection}[title={The chain rule as the backbone of backpropagation}]
+A neural network computes a composition $f = f_L \circ f_{L-1} \circ
+\cdots \circ f_1$, where each $f_\ell(\mathbf{x}) = \sigma(W_\ell
+\mathbf{x} + \mathbf{b}_\ell)$ applies an affine transformation followed
+by a nonlinearity $\sigma$. The chain rule gives
+\[
+  \frac{\partial L}{\partial W_\ell}
+  = \frac{\partial L}{\partial f_L} \cdot
+    \frac{\partial f_L}{\partial f_{L-1}} \cdots
+    \frac{\partial f_{\ell+1}}{\partial f_\ell} \cdot
+    \frac{\partial f_\ell}{\partial W_\ell},
+\]
+which is computed efficiently by the backpropagation algorithm.  Without
+the chain rule, computing gradients of deep networks would require
+finite-difference approximations with cost proportional to the number of
+parameters.
+\end{rlconnection}
+
+\begin{example}
+\label{ex:chain_rule}
+Let $h(x) = (3x^2 + 1)^5$. Setting $f(x) = 3x^2 + 1$ and $g(y) = y^5$,
+the chain rule gives $h'(x) = 5(3x^2+1)^4 \cdot 6x = 30x(3x^2+1)^4$.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: MEAN VALUE THEOREM AND CONSEQUENCES
+%% ============================================================
+\section{Mean Value Theorem and Consequences}
+\label{sec:mvt}
+
+\begin{theorem}[Fermat's Theorem]
+\label{thm:fermat}
+Let $f \colon (a, b) \to \R$ and suppose $f$ attains a local maximum or
+minimum at $c \in (a, b)$. If $f$ is differentiable at $c$, then
+$f'(c) = 0$.
+\end{theorem}
+
+\begin{proof}
+Suppose $f$ has a local maximum at $c$: there exists $\delta > 0$ such
+that $f(x) \le f(c)$ for $|x - c| < \delta$. For $0 < h < \delta$:
+\[
+  \frac{f(c + h) - f(c)}{h} \le 0,
+\]
+so $f'(c) = \lim_{h \to 0^+} (f(c+h) - f(c))/h \le 0$. For
+$-\delta < h < 0$:
+\[
+  \frac{f(c + h) - f(c)}{h} \ge 0,
+\]
+so $f'(c) = \lim_{h \to 0^-} (f(c+h) - f(c))/h \ge 0$. Together,
+$f'(c) = 0$. The proof for a local minimum is analogous.
+\end{proof}
+
+\begin{theorem}[Rolle's Theorem]
+\label{thm:rolle}
+If $f \colon [a, b] \to \R$ is continuous on $[a, b]$, differentiable on
+$(a, b)$, and $f(a) = f(b)$, then there exists $c \in (a, b)$ with
+$f'(c) = 0$.
+\end{theorem}
+
+\begin{proof}
+If $f$ is constant on $[a, b]$, then $f'(c) = 0$ for every
+$c \in (a, b)$. Otherwise, $f$ is not constant, so by the extreme value
+theorem (Lesson~2, Theorem~6.2), $f$ attains its maximum $M$ and minimum
+$m$ on $[a, b]$. Since $f$ is not constant and $f(a) = f(b)$, at least
+one extreme value is attained at some $c \in (a, b)$ (both cannot occur
+only at the endpoints, since $f(a) = f(b)$). By Fermat's theorem,
+$f'(c) = 0$.
+\end{proof}
+
+\begin{keyresult}[title={Mean Value Theorem}]
+\begin{theorem}[Mean Value Theorem (MVT)]
+\label{thm:mvt}
+If $f \colon [a, b] \to \R$ is continuous on $[a, b]$ and differentiable
+on $(a, b)$, then there exists $c \in (a, b)$ with
+\[
+  f'(c) = \frac{f(b) - f(a)}{b - a}.
+\]
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Define the auxiliary function
+\[
+  g(x) = f(x) - f(a) - \frac{f(b) - f(a)}{b - a}(x - a).
+\]
+Then $g$ is continuous on $[a, b]$, differentiable on $(a, b)$, and
+$g(a) = 0 = g(b)$. By Rolle's theorem, there exists $c \in (a, b)$
+with $g'(c) = 0$, i.e.,
+\[
+  f'(c) - \frac{f(b) - f(a)}{b - a} = 0. \qedhere
+\]
+\end{proof}
+
+\begin{example}
+\label{ex:mvt_speed}
+If a car travels 150 km in 2 hours, the MVT guarantees there is an
+instant when the car's speed is exactly $150/2 = 75$ km/h, regardless
+of how the speed varied during the trip.
+\end{example}
+
+\begin{corollary}[Monotonicity from the Derivative]
+\label{cor:monotone_deriv}
+Let $f$ be continuous on $[a, b]$ and differentiable on $(a, b)$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item If $f'(x) > 0$ for all $x \in (a, b)$, then $f$ is strictly
+    increasing on $[a, b]$.
+  \item If $f'(x) = 0$ for all $x \in (a, b)$, then $f$ is constant on
+    $[a, b]$.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+(i) For $a \le x_1 < x_2 \le b$, the MVT gives $c \in (x_1, x_2)$ with
+$f(x_2) - f(x_1) = f'(c)(x_2 - x_1) > 0$.
+
+(ii) For any $x_1, x_2 \in [a, b]$, the MVT gives
+$|f(x_2) - f(x_1)| = |f'(c)||x_2 - x_1| = 0$.
+\end{proof}
+
+\begin{rlconnection}[title={MVT in optimization convergence analysis}]
+The mean value theorem is the workhorse of optimization convergence
+proofs. For gradient descent with step size $\eta$ on a function $f$
+with $L$-Lipschitz gradient ($\|f'(x) - f'(y)\| \le L\|x-y\|$), the
+MVT (generalized to $\R^n$) gives
+\[
+  f(x - \eta f'(x)) \le f(x) - \eta \|f'(x)\|^2
+  + \frac{L\eta^2}{2}\|f'(x)\|^2.
+\]
+Choosing $\eta = 1/L$ yields $f(x_{k+1}) \le f(x_k) -
+\frac{1}{2L}\|f'(x_k)\|^2$, the standard descent lemma that drives
+$O(1/k)$ convergence rates for smooth convex functions.
+\end{rlconnection}
+
+\begin{example}
+\label{ex:mvt_bound}
+Let $f(x) = e^x$ on $[0, h]$ for $h > 0$. The MVT gives $c \in (0, h)$
+with $e^h - 1 = e^c \cdot h$. Since $1 < e^c < e^h$, we obtain the
+bounds $h < e^h - 1 < h\,e^h$.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: TAYLOR'S THEOREM
+%% ============================================================
+\section{Taylor's Theorem}
+\label{sec:taylor}
+
+\begin{theorem}[Taylor's Theorem with Lagrange Remainder]
+\label{thm:taylor}
+Let $f \colon [a, b] \to \R$ be such that $f, f', \ldots, f^{(n)}$ are
+continuous on $[a, b]$ and $f^{(n+1)}$ exists on $(a, b)$. Then for every
+$x \in [a, b]$, there exists $c$ between $a$ and $x$ such that
+\[
+  f(x) = \sum_{k=0}^{n} \frac{f^{(k)}(a)}{k!}(x - a)^k
+  + \frac{f^{(n+1)}(c)}{(n+1)!}(x - a)^{n+1}.
+\]
+\end{theorem}
+
+\begin{proof}
+Define the remainder $R_n(x) = f(x) - \sum_{k=0}^n
+\frac{f^{(k)}(a)}{k!}(x-a)^k$. We seek $c$ with
+$R_n(x) = \frac{f^{(n+1)}(c)}{(n+1)!}(x-a)^{n+1}$.
+
+Fix $x \neq a$ and define $M$ by $R_n(x) = M(x - a)^{n+1}$, i.e.,
+$M = R_n(x)/(x - a)^{n+1}$. Define
+\[
+  g(t) = f(t) - \sum_{k=0}^{n} \frac{f^{(k)}(a)}{k!}(t - a)^k
+  - M(t - a)^{n+1}.
+\]
+Then $g(a) = 0$ (all terms vanish at $t = a$) and $g(x) = R_n(x) -
+M(x - a)^{n+1} = 0$ by the choice of $M$.
+
+By Rolle's theorem, there exists $c_1$ between $a$ and $x$ with
+$g'(c_1) = 0$. Now $g'(a) = 0$ (since the first $n$ Taylor terms are
+chosen to match derivatives at $a$, and the $(n+1)$-th term contributes
+$(n+1)M(t-a)^n$ which vanishes at $a$). Applying Rolle's theorem to
+$g'$ on the interval between $a$ and $c_1$, we get $c_2$ with
+$g''(c_2) = 0$. Continuing $n+1$ times, we obtain $c = c_{n+1}$ between
+$a$ and $x$ with $g^{(n+1)}(c) = 0$. But
+$g^{(n+1)}(t) = f^{(n+1)}(t) - (n+1)!\,M$,
+so $f^{(n+1)}(c) = (n+1)!\,M$, giving
+$R_n(x) = \frac{f^{(n+1)}(c)}{(n+1)!}(x - a)^{n+1}$.
+\end{proof}
+
+\begin{example}
+\label{ex:taylor_exp}
+For $f(x) = e^x$ centered at $a = 0$, $f^{(k)}(0) = 1$ for all $k$,
+so the Taylor polynomial is $\sum_{k=0}^n x^k / k!$ and the remainder
+is $R_n(x) = e^c x^{n+1}/(n+1)!$ for some $c$ between $0$ and $x$.
+For any fixed $x$, $|R_n(x)| \le e^{|x|} |x|^{n+1}/(n+1)! \to 0$
+as $n \to \infty$ (by the ratio test applied to $|x|^n/n!$), confirming
+$e^x = \sum_{k=0}^\infty x^k/k!$.
+\end{example}
+
+\begin{example}
+\label{ex:taylor_quadratic}
+The first-order Taylor expansion of a smooth function $f$ at $x_0$ is
+$f(x) = f(x_0) + f'(x_0)(x - x_0) + \frac{f''(c)}{2}(x - x_0)^2$.
+In optimization, setting $x = x_0 - \eta f'(x_0)$ and bounding
+$|f''(c)| \le L$ gives
+\[
+  f(x_0 - \eta f'(x_0)) \le f(x_0) - \eta (f'(x_0))^2
+  + \frac{L\eta^2}{2}(f'(x_0))^2,
+\]
+the descent inequality used to analyze gradient descent.
+\end{example}
+
+\begin{rlconnection}[title={Taylor approximations in optimization convergence}]
+Taylor's theorem provides the mathematical foundation for convergence
+analysis of first- and second-order optimization methods. The
+second-order expansion $f(x + h) \approx f(x) + f'(x)h +
+\frac{1}{2}f''(x)h^2$ is used to:
+\begin{itemize}[nosep]
+  \item Derive the \emph{descent lemma} for gradient descent with
+    $L$-smooth functions.
+  \item Analyze \emph{Newton's method}, which uses the full quadratic
+    model to achieve quadratic convergence near a minimizer.
+  \item Justify \emph{natural gradient} and \emph{trust region} methods
+    in policy optimization, where the policy is locally approximated by
+    a quadratic model in the parameter space.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: RIEMANN INTEGRATION
+%% ============================================================
+\section{Riemann Integration}
+\label{sec:riemann}
+
+\begin{definition}[Partition, Upper and Lower Sums]
+\label{def:partition}
+Let $f \colon [a, b] \to \R$ be bounded.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item A \emph{partition} of $[a, b]$ is a finite set
+    $P = \{x_0, x_1, \ldots, x_n\}$ with
+    $a = x_0 < x_1 < \cdots < x_n = b$.
+  \item On each subinterval $[x_{i-1}, x_i]$, define
+    $m_i = \inf\{f(x) : x \in [x_{i-1}, x_i]\}$ and
+    $M_i = \sup\{f(x) : x \in [x_{i-1}, x_i]\}$.
+  \item The \emph{lower sum} is
+    $L(f, P) = \sum_{i=1}^n m_i (x_i - x_{i-1})$.
+  \item The \emph{upper sum} is
+    $U(f, P) = \sum_{i=1}^n M_i (x_i - x_{i-1})$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Refinement]
+\label{def:refinement}
+A partition $Q$ is a \emph{refinement} of $P$ if $P \subseteq Q$.
+\end{definition}
+
+\begin{lemma}[Refinement Lemma]
+\label{lem:refinement}
+If $Q$ is a refinement of $P$, then
+$L(f, P) \le L(f, Q) \le U(f, Q) \le U(f, P)$.
+\end{lemma}
+
+\begin{proof}
+It suffices to prove the result when $Q$ has one additional point $x^*$
+in $[x_{j-1}, x_j]$; the general case follows by induction. The lower
+sum changes only on $[x_{j-1}, x_j]$:
+\begin{align*}
+  &\inf_{[x_{j-1}, x^*]} f \cdot (x^* - x_{j-1})
+  + \inf_{[x^*, x_j]} f \cdot (x_j - x^*) \\
+  &\qquad \ge \inf_{[x_{j-1}, x_j]} f \cdot
+  \bigl((x^* - x_{j-1}) + (x_j - x^*)\bigr)
+  = m_j(x_j - x_{j-1}),
+\end{align*}
+since $\inf_{[x_{j-1}, x^*]} f \ge \inf_{[x_{j-1}, x_j]} f$ and
+similarly for $[x^*, x_j]$. Hence $L(f, Q) \ge L(f, P)$. The argument
+for $U(f, Q) \le U(f, P)$ is analogous (with sup and the inequality
+reversed). Finally, $L(f, Q) \le U(f, Q)$ since $m_i \le M_i$ on each
+subinterval.
+\end{proof}
+
+\begin{corollary}
+\label{cor:lower_upper}
+For any two partitions $P_1, P_2$ of $[a, b]$:
+$L(f, P_1) \le U(f, P_2)$.
+\end{corollary}
+
+\begin{proof}
+Let $Q = P_1 \cup P_2$ (a common refinement). Then
+$L(f, P_1) \le L(f, Q) \le U(f, Q) \le U(f, P_2)$
+by Lemma~\ref{lem:refinement}.
+\end{proof}
+
+\begin{definition}[Riemann Integral]
+\label{def:riemann}
+Let $f \colon [a, b] \to \R$ be bounded. Define the \emph{lower
+integral} and \emph{upper integral}:
+\[
+  \underline{\int_a^b} f = \sup_P L(f, P), \qquad
+  \overline{\int_a^b} f = \inf_P U(f, P),
+\]
+where the supremum and infimum are over all partitions $P$ of $[a, b]$.
+By Corollary~\ref{cor:lower_upper},
+$\underline{\int_a^b} f \le \overline{\int_a^b} f$.
+We say $f$ is \emph{Riemann integrable} on $[a, b]$ if
+$\underline{\int_a^b} f = \overline{\int_a^b} f$, and the common value
+is denoted $\int_a^b f(x)\,dx$ or $\int_a^b f$.
+\end{definition}
+
+\begin{theorem}[Integrability Criterion]
+\label{thm:int_criterion}
+A bounded function $f$ on $[a, b]$ is Riemann integrable if and only if
+for every $\varepsilon > 0$ there exists a partition $P$ such that
+$U(f, P) - L(f, P) < \varepsilon$.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $f$ is integrable with
+$\underline{\int} f = \overline{\int} f = I$. Given $\varepsilon > 0$,
+by definition of supremum and infimum, choose $P_1$ with
+$L(f, P_1) > I - \varepsilon/2$ and $P_2$ with
+$U(f, P_2) < I + \varepsilon/2$. Let $P = P_1 \cup P_2$. Then
+$L(f, P) \ge L(f, P_1) > I - \varepsilon/2$ and
+$U(f, P) \le U(f, P_2) < I + \varepsilon/2$, so
+$U(f, P) - L(f, P) < \varepsilon$.
+
+$(\Leftarrow)$ For each $n$, choose $P_n$ with
+$U(f, P_n) - L(f, P_n) < 1/n$. Then
+$\overline{\int} f - \underline{\int} f \le U(f, P_n) - L(f, P_n) < 1/n$
+for all $n$. Hence $\overline{\int} f = \underline{\int} f$.
+\end{proof}
+
+\begin{theorem}[Continuous Functions Are Integrable]
+\label{thm:cont_integrable}
+If $f \colon [a, b] \to \R$ is continuous, then $f$ is Riemann
+integrable.
+\end{theorem}
+
+\begin{proof}
+Since $[a, b]$ is compact and $f$ is continuous, $f$ is uniformly
+continuous (Lesson~2, Theorem~7.4). Given $\varepsilon > 0$, choose
+$\delta > 0$ such that $|f(x) - f(y)| < \varepsilon/(b - a)$ whenever
+$|x - y| < \delta$. Take any partition $P = \{x_0, \ldots, x_n\}$ with
+mesh $\|P\| = \max_i(x_i - x_{i-1}) < \delta$. Then on each
+$[x_{i-1}, x_i]$, $M_i - m_i < \varepsilon/(b - a)$ (since the
+subinterval has diameter less than $\delta$), so
+\[
+  U(f, P) - L(f, P) = \sum_{i=1}^n (M_i - m_i)(x_i - x_{i-1})
+  < \frac{\varepsilon}{b - a} \sum_{i=1}^n (x_i - x_{i-1})
+  = \varepsilon.
+\]
+By Theorem~\ref{thm:int_criterion}, $f$ is integrable.
+\end{proof}
+
+\begin{example}
+\label{ex:integral_x_squared}
+Let $f(x) = x^2$ on $[0, 1]$. Using the uniform partition
+$P_n = \{0, 1/n, 2/n, \ldots, 1\}$:
+\[
+  L(f, P_n) = \sum_{i=1}^n \left(\frac{i-1}{n}\right)^2 \cdot \frac{1}{n}
+  = \frac{1}{n^3}\sum_{i=0}^{n-1} i^2
+  = \frac{(n-1)n(2n-1)}{6n^3} \to \frac{1}{3}.
+\]
+Similarly, $U(f, P_n) = \frac{n(n+1)(2n+1)}{6n^3} \to 1/3$. Since
+$U(f, P_n) - L(f, P_n) \to 0$, we confirm $\int_0^1 x^2\,dx = 1/3$.
+\end{example}
+
+%% ============================================================
+%% SECTION 8: PROPERTIES OF THE INTEGRAL
+%% ============================================================
+\section{Properties of the Integral}
+\label{sec:integral_props}
+
+\begin{theorem}[Properties of the Riemann Integral]
+\label{thm:integral_props}
+Let $f, g$ be Riemann integrable on $[a, b]$ and $\alpha \in \R$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Linearity:}
+    $\int_a^b (\alpha f + g) = \alpha \int_a^b f + \int_a^b g$.
+  \item \textbf{Monotonicity:} If $f(x) \le g(x)$ for all
+    $x \in [a, b]$, then $\int_a^b f \le \int_a^b g$.
+  \item \textbf{Additivity:} For $a < c < b$,
+    $\int_a^b f = \int_a^c f + \int_c^b f$.
+  \item \textbf{Triangle inequality:}
+    $\left|\int_a^b f\right| \le \int_a^b |f|$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) For the scalar multiple: on each subinterval, $\sup(\alpha f) =
+\alpha \sup f$ if $\alpha \ge 0$ (and $\alpha \inf f$ if $\alpha < 0$),
+so $U(\alpha f, P) = \alpha\, U(f, P)$ for $\alpha \ge 0$. The case
+$\alpha < 0$ uses $U(\alpha f, P) = \alpha\, L(f, P)$. Taking
+suprema/infima over partitions gives
+$\int \alpha f = \alpha \int f$.
+
+For the sum: on each subinterval $[x_{i-1}, x_i]$,
+$\inf f + \inf g \le \inf(f + g) \le \sup(f + g) \le \sup f + \sup g$,
+so $L(f, P) + L(g, P) \le L(f+g, P)$ and
+$U(f+g, P) \le U(f, P) + U(g, P)$. Given $\varepsilon > 0$, choose
+$P_1, P_2$ with $U(f, P_1) - L(f, P_1) < \varepsilon/2$ and
+$U(g, P_2) - L(g, P_2) < \varepsilon/2$. Let $P = P_1 \cup P_2$. Then
+\[
+  U(f+g, P) - L(f+g, P) \le \bigl(U(f, P) - L(f, P)\bigr)
+  + \bigl(U(g, P) - L(g, P)\bigr) < \varepsilon,
+\]
+so $f + g$ is integrable. The value equals $\int f + \int g$ by
+taking limits of upper sums.
+
+(ii) If $f \le g$, then for any partition $P$,
+$U(f, P) \le U(g, P)$, so $\int f = \inf_P U(f, P) \le \inf_P U(g, P)
+= \int g$.
+
+(iii) Given $\varepsilon > 0$, choose partitions $P'$ of $[a, c]$ and
+$P''$ of $[c, b]$ with $U(f, P') - L(f, P') < \varepsilon/2$ and
+$U(f, P'') - L(f, P'') < \varepsilon/2$. Then $P = P' \cup P''$ is a
+partition of $[a, b]$ with $L(f, P) = L(f, P') + L(f, P'')$ and
+$U(f, P) = U(f, P') + U(f, P'')$. The result follows by taking
+$\varepsilon \to 0$.
+
+(iv) Since $-|f(x)| \le f(x) \le |f(x)|$, monotonicity gives
+$-\int |f| \le \int f \le \int |f|$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 9: FUNDAMENTAL THEOREM OF CALCULUS
+%% ============================================================
+\section{Fundamental Theorem of Calculus}
+\label{sec:ftc}
+
+\begin{keyresult}[title={Fundamental Theorem of Calculus}]
+\begin{theorem}[FTC Part I]
+\label{thm:ftc1}
+Let $f \colon [a, b] \to \R$ be Riemann integrable. Define
+$F(x) = \int_a^x f(t)\,dt$ for $x \in [a, b]$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $F$ is continuous on $[a, b]$.
+  \item If $f$ is continuous at $c \in (a, b)$, then $F$ is
+    differentiable at $c$ and $F'(c) = f(c)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{theorem}[FTC Part II]
+\label{thm:ftc2}
+If $f \colon [a, b] \to \R$ is continuous and $G$ is any antiderivative
+of $f$ (i.e., $G'(x) = f(x)$ for all $x \in (a, b)$, with $G$
+continuous on $[a, b]$), then
+\[
+  \int_a^b f(x)\,dx = G(b) - G(a).
+\]
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}[Proof of FTC Part I]
+(i) Since $f$ is bounded, say $|f(t)| \le M$ for $t \in [a, b]$, we
+have for $x, y \in [a, b]$ with $x < y$:
+\[
+  |F(y) - F(x)| = \left|\int_x^y f(t)\,dt\right|
+  \le \int_x^y |f(t)|\,dt \le M(y - x).
+\]
+Given $\varepsilon > 0$, taking $\delta = \varepsilon/M$ gives
+$|F(y) - F(x)| < \varepsilon$ whenever $|y - x| < \delta$. Hence $F$
+is (uniformly) continuous.
+
+(ii) Suppose $f$ is continuous at $c$. Given $\varepsilon > 0$, choose
+$\delta > 0$ with $|f(t) - f(c)| < \varepsilon$ for $|t - c| < \delta$.
+For $0 < |h| < \delta$:
+\[
+  \frac{F(c + h) - F(c)}{h} - f(c)
+  = \frac{1}{h}\int_c^{c+h} f(t)\,dt - f(c)
+  = \frac{1}{h}\int_c^{c+h} \bigl(f(t) - f(c)\bigr)\,dt.
+\]
+For $h > 0$:
+$\left|\frac{1}{h}\int_c^{c+h}(f(t) - f(c))\,dt\right|
+\le \frac{1}{h}\int_c^{c+h}|f(t) - f(c)|\,dt
+< \frac{1}{h} \cdot \varepsilon h = \varepsilon$.
+The case $h < 0$ is analogous. Hence $F'(c) = f(c)$.
+\end{proof}
+
+\begin{proof}[Proof of FTC Part II]
+Let $F(x) = \int_a^x f(t)\,dt$. By Part~I, $F'(x) = f(x) = G'(x)$ for
+$x \in (a, b)$. Hence $(F - G)'(x) = 0$ on $(a, b)$, so $F - G$ is
+constant on $[a, b]$ by Corollary~\ref{cor:monotone_deriv}(ii). Since
+$F(a) = 0$, we get $F(x) = G(x) - G(a)$ for all $x \in [a, b]$.
+Evaluating at $x = b$:
+$\int_a^b f = F(b) = G(b) - G(a)$.
+\end{proof}
+
+\begin{example}
+\label{ex:ftc}
+To compute $\int_0^1 x^3\,dx$: an antiderivative of $f(x) = x^3$ is
+$G(x) = x^4/4$. By FTC Part~II,
+$\int_0^1 x^3\,dx = G(1) - G(0) = 1/4 - 0 = 1/4$.
+\end{example}
+
+\begin{example}
+\label{ex:ftc_derivative}
+Let $F(x) = \int_0^x e^{-t^2}\,dt$. By FTC Part~I, $F'(x) = e^{-x^2}$.
+While $F$ cannot be expressed in closed form using elementary functions,
+the FTC guarantees its differentiability and gives the derivative
+explicitly. The function $F$ is closely related to the error function
+$\operatorname{erf}(x) = \frac{2}{\sqrt{\pi}} F(x)$, ubiquitous in
+probability and statistics.
+\end{example}
+
+\begin{warning}[title={Limitations of the Riemann integral}]
+The Riemann integral has fundamental limitations:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The indicator function $\indicator_\Q$ of the rationals on $[0,1]$
+    is not Riemann integrable: $L(f, P) = 0$ and $U(f, P) = 1$ for every
+    partition $P$ (since every subinterval contains both rationals and
+    irrationals).
+  \item Pointwise limits of Riemann integrable functions need not be
+    Riemann integrable, and even when they are, the limit of the
+    integrals need not equal the integral of the limit.
+  \item The Riemann integral does not interact well with measure theory:
+    it cannot integrate with respect to general measures.
+\end{enumerate}
+These limitations motivate the \emph{Lebesgue integral} (Phase~01,
+Measure Theory), which resolves all three issues and provides the
+foundation for modern probability theory.
+\end{warning}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Differentiation from the definition]
+\textnormal{(\(*\))} \\
+Using Definition~\ref{def:derivative}, prove that $f(x) = 1/(x+1)$ is
+differentiable on $(-1, \infty)$ and compute $f'(x)$.
+\end{exercise}
+
+\begin{exercise}[Chain rule application]
+\textnormal{(\(*\))} \\
+Let $g(x) = \sin(x^2 + 1)$. Compute $g'(x)$ using the chain rule
+(Theorem~\ref{thm:chain_rule}), identifying the inner and outer
+functions explicitly.
+\end{exercise}
+
+\begin{exercise}[MVT in gradient descent]
+\textnormal{(\(**\))} \\
+Let $f \colon \R \to \R$ be differentiable with $|f'(x) - f'(y)| \le
+L|x - y|$ for all $x, y \in \R$ (i.e., $f'$ is Lipschitz with
+constant $L$).
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Use Taylor's theorem (Theorem~\ref{thm:taylor} with $n = 1$) to
+    show that for all $x, h \in \R$:
+    $|f(x + h) - f(x) - f'(x)h| \le \frac{L}{2}h^2$.
+  \item Deduce that the gradient descent update $x_{k+1} = x_k -
+    \frac{1}{L} f'(x_k)$ satisfies
+    $f(x_{k+1}) \le f(x_k) - \frac{1}{2L}(f'(x_k))^2$.
+\end{enumerate}
+\textit{Hint:} For (a), the Lagrange remainder involves $f''(c)$, and
+$|f''(c)| \le L$ follows from the Lipschitz condition on $f'$ via the
+MVT.
+\end{exercise}
+
+\begin{exercise}[Integrability of monotone functions]
+\textnormal{(\(**\))} \\
+Prove that every monotone function $f \colon [a, b] \to \R$ is Riemann
+integrable.
+
+\textit{Hint:} Assume $f$ is increasing. Use the uniform partition
+$P_n$ with $n$ equal subintervals, and show
+$U(f, P_n) - L(f, P_n) = \frac{b-a}{n}(f(b) - f(a)) \to 0$.
+\end{exercise}
+
+\begin{exercise}[FTC and the Gaussian integral]
+\textnormal{(\(**\))} \\
+Define $F(x) = \int_0^x e^{-t^2/2}\,dt$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Use FTC Part~I to show $F$ is differentiable and find $F'(x)$.
+  \item Show $F$ is strictly increasing on $[0, \infty)$ and bounded
+    above. Conclude that $\lim_{x \to \infty} F(x)$ exists.
+  \item Use the bound $e^{-t^2/2} \le e^{-t/2}$ for $t \ge 1$ to show
+    $F(x) \le 1 + 2e^{-1/2}$ for all $x \ge 0$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Non-integrability and measure theory motivation]
+\textnormal{(\(***\))} \\
+Let $f = \indicator_\Q$ on $[0,1]$ (i.e., $f(x) = 1$ if $x \in \Q$,
+$f(x) = 0$ otherwise).
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Prove that $L(f, P) = 0$ and $U(f, P) = 1$ for every partition
+    $P$ of $[0,1]$.
+  \item Conclude that $f$ is not Riemann integrable.
+  \item The Lebesgue integral assigns $\int_{[0,1]} f\,d\lambda = 0$
+    (since $\Q$ has Lebesgue measure zero). Explain informally why this
+    is the ``right'' answer and why the Riemann integral fails to
+    capture it.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \emph{derivative} $f'(c) = \lim_{h \to 0}(f(c+h) - f(c))/h$
+    measures the instantaneous rate of change; differentiability at $c$
+    implies continuity at $c$, but not conversely (e.g., $|x|$ at $0$).
+
+  \item The \emph{sum, product, quotient, and chain rules} reduce
+    differentiation of complex expressions to differentiation of
+    simpler components. The chain rule is the mathematical basis of
+    backpropagation.
+
+  \item \emph{Fermat's theorem}: at an interior extremum of a
+    differentiable function, the derivative vanishes. This leads to
+    \emph{Rolle's theorem} and the \emph{mean value theorem}, which
+    connects the derivative to the function's total change.
+
+  \item \emph{Taylor's theorem} with Lagrange remainder provides
+    polynomial approximations with explicit error bounds:
+    $|R_n(x)| \le \frac{M}{(n+1)!}|x - a|^{n+1}$ where
+    $M = \sup |f^{(n+1)}|$. This underpins convergence analysis of
+    gradient descent and Newton's method.
+
+  \item The \emph{Riemann integral} is defined via upper and lower sums
+    over partitions. A bounded function is integrable if and only if for
+    every $\varepsilon > 0$ there exists a partition with
+    $U(f,P) - L(f,P) < \varepsilon$.
+
+  \item \emph{Continuous functions are Riemann integrable}, via uniform
+    continuity on compact sets.
+
+  \item \emph{FTC Part I}: the integral $F(x) = \int_a^x f$ is
+    continuous, and $F'(c) = f(c)$ at points of continuity of $f$.
+    \emph{FTC Part II}: $\int_a^b f = G(b) - G(a)$ for any
+    antiderivative $G$.
+
+  \item The Riemann integral has fundamental limitations (non-integrable
+    functions, poor behavior under limits) that motivate the
+    \emph{Lebesgue integral} developed in Phase~01.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 4} (Sequences and Series of Functions) extends
+    differentiation and integration to function sequences, addressing
+    when differentiation and integration commute with limits---a
+    question whose definitive answer comes from the Lebesgue theory.
+
+  \item In \textbf{Phase~01} (Measure Theory, Lessons~4--5), the Riemann
+    integral is replaced by the Lebesgue integral, which integrates a
+    much larger class of functions and satisfies powerful limit theorems
+    (monotone convergence, dominated convergence) that the Riemann
+    integral lacks.
+
+  \item In \textbf{Phase~01} (Optimization, Lessons~8--10), the mean
+    value theorem and Taylor's theorem are extended to $\R^n$ and used
+    systematically to analyze gradient descent, proximal methods, and
+    interior-point methods.
+
+  \item For multivariable differentiation (partial derivatives, the
+    Jacobian, and the general chain rule), see \citet[Chapter 9]{rudin1976}
+    or \citet[Chapter 5]{pugh2015}. These are essential for understanding
+    backpropagation in neural networks with vector-valued layers.
+
+  \item \citet[Chapter 6]{bartle2011} provides an extensive collection
+    of examples and counterexamples for Riemann integrability, clarifying
+    the boundary between integrable and non-integrable functions.
+
+  \item For historical context, the development of the integral from
+    Cauchy through Riemann to Lebesgue is discussed in
+    \citet[Chapter 1]{folland1999}, providing motivation for the modern
+    measure-theoretic approach.
+\end{itemize}
+
+\bibliography{real-analysis-refs}
+
+\end{document}

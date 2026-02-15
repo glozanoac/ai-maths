@@ -1,0 +1,968 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 11: Expectation, Variance, and Joint Distributions}}
+\fancyhead[R]{\thepage}
+\title{Lesson 11: Expectation, Variance, and Joint Distributions}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+An RL agent estimates the value of a state as an expected sum of future
+rewards: $V^\pi(s) = \E\bigl[\sum_{t=0}^\infty \gamma^t R_t \mid
+S_0 = s\bigr]$. This expression involves an expectation over many random
+variables (the rewards $R_t$), decomposes as a sum of individual
+expectations by linearity, and connects values at successive time steps
+through the tower property
+$\E[V^\pi(S_{t+1}) \mid S_t] = \E[\E[\sum \gamma^k R_{t+1+k} \mid
+S_{t+1}] \mid S_t]$. To make such manipulations rigorous, we need
+a systematic treatment of expectation, variance, covariance, and the way
+multiple random variables interact through joint distributions. How does
+the expectation of a sum relate to the sum of expectations? When does the
+variance of a sum simplify? How do we condition on one random variable to
+compute the distribution of another?
+
+The tools developed in this lesson will let us prove the linearity of
+expectation without assuming independence, establish the variance
+decomposition for sums, define joint and conditional distributions, and
+derive the tower property of conditional expectation -- the algebraic
+engine behind the Bellman equation.
+
+\begin{rlconnection}[title={Why Expectation and Joint Distributions
+    Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Value function decomposition}: The Bellman equation
+    $V^\pi(s) = \E[R + \gamma V^\pi(S') \mid S = s]$ uses linearity of
+    expectation to split a value function into an immediate reward and a
+    discounted future value.
+    \item \textbf{Bellman equation via the tower property}: The recursive
+    structure of value functions follows from the law of total
+    expectation (tower property), which allows conditioning on the next
+    state.
+    \item \textbf{REINFORCE variance reduction}: The baseline subtraction
+    $\nabla J \approx \E[\nabla \log\pi \cdot (G - b)]$ uses the fact
+    that adding a baseline $b(s)$ does not change the expectation (by
+    linearity) but can reduce variance (by the variance of a
+    difference formula).
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Random variables, probability mass functions, probability density
+functions, cumulative distribution functions, and common distributions
+(Lesson~10). Conditional probability and independence of events
+(Lesson~9).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{State} and \emph{prove} the linearity of expectation for
+    both discrete and continuous random variables, without assuming
+    independence.
+    \item \emph{Compute} expectations using the Law of the Unconscious
+    Statistician (LOTUS).
+    \item \emph{Derive} the computational formula
+    $\Var(X) = \E[X^2] - (\E[X])^2$ and the affine transformation rule
+    $\Var(aX + b) = a^2\Var(X)$.
+    \item \emph{Define} covariance and correlation, and \emph{prove}
+    the variance of a sum formula.
+    \item \emph{Construct} an example showing that uncorrelated random
+    variables need not be independent.
+    \item \emph{Define} joint, marginal, and conditional distributions
+    and \emph{prove} the law of total expectation (tower property) and
+    the law of total variance.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 4, 6--7]{ross2019} -- Expectation, variance,
+    jointly distributed random variables, conditional distributions.
+    \item \citet[Chapters 4, 6--7]{blitzstein2019} -- Expectation,
+    moments, joint distributions, conditional expectation with many
+    examples from applied probability.
+    \item \citet[Chapter 3]{grimmett2020} -- Discrete and continuous
+    random variables, expectation, variance, generating functions.
+    \item \citet[Chapters 2--4]{bertsekas2008} -- Expectation, variance,
+    multiple random variables, conditioning.
+    \item \citet[Sections 1.5--1.6]{durrett2019} -- Expectation and
+    conditional expectation in the measure-theoretic framework.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: EXPECTATION
+%% ============================================================
+
+\section{Expectation}
+\label{sec:expectation}
+
+We develop the properties of expectation for discrete random variables
+first, then extend to the continuous case.
+
+\subsection{Expectation for Discrete Random Variables}
+
+Recall from Lesson~10 (Definition~4.2) that if $X$ is a discrete random
+variable with PMF $p_X$, then $\E[X] = \sum_x x\,p_X(x)$ whenever the
+sum converges absolutely.
+
+\begin{theorem}[Law of the Unconscious Statistician -- Discrete Case]
+\label{thm:lotus_discrete}
+Let $X$ be a discrete random variable and $g \colon \R \to \R$ any
+function. Then
+\[
+    \E[g(X)] = \sum_x g(x) \, p_X(x),
+\]
+provided the sum converges absolutely.
+\end{theorem}
+
+\begin{proof}
+Define $Y = g(X)$. The random variable $Y$ takes values in
+$\{g(x) : x \in \mathrm{range}(X)\}$. For each value $y$ in the range
+of $Y$,
+\[
+    p_Y(y) = \Prob(Y = y) = \Prob(g(X) = y)
+    = \sum_{\{x : g(x) = y\}} p_X(x).
+\]
+Therefore
+\[
+    \E[Y] = \sum_y y \, p_Y(y)
+    = \sum_y y \sum_{\{x : g(x) = y\}} p_X(x)
+    = \sum_y \sum_{\{x : g(x) = y\}} g(x) \, p_X(x)
+    = \sum_x g(x) \, p_X(x),
+\]
+where the last equality rearranges the double sum: each $x$ in the range
+of $X$ appears exactly once, under the unique $y = g(x)$.
+\end{proof}
+
+\begin{keyresult}[title={Linearity of Expectation}]
+Linearity of expectation is arguably the single most useful property
+in probability. It states that $\E[aX + bY] = a\E[X] + b\E[Y]$ for
+\emph{any} random variables $X$ and $Y$ (with finite expectations) and
+constants $a, b \in \R$. Crucially, no independence assumption is
+needed. This property underlies the decomposition of value functions,
+the analysis of Monte Carlo estimators, and virtually every expected
+reward computation in RL.
+\end{keyresult}
+
+\begin{theorem}[Linearity of Expectation -- Discrete Case]
+\label{thm:linearity_discrete}
+Let $X$ and $Y$ be discrete random variables defined on the same
+probability space with finite expectations. Then for any
+$a, b \in \R$,
+\[
+    \E[aX + bY] = a\E[X] + b\E[Y].
+\]
+\end{theorem}
+
+\begin{proof}
+Let $p_{X,Y}(x,y) = \Prob(X = x, Y = y)$ be the joint PMF. By the
+definition of expectation applied to the random variable $aX + bY$,
+\begin{align*}
+    \E[aX + bY]
+    &= \sum_x \sum_y (ax + by) \, p_{X,Y}(x,y) \\
+    &= a \sum_x \sum_y x \, p_{X,Y}(x,y)
+       + b \sum_x \sum_y y \, p_{X,Y}(x,y).
+\end{align*}
+For the first term, note that
+$\sum_y p_{X,Y}(x,y) = p_X(x)$ (the marginal PMF of $X$), so
+\[
+    \sum_x \sum_y x \, p_{X,Y}(x,y)
+    = \sum_x x \sum_y p_{X,Y}(x,y)
+    = \sum_x x \, p_X(x)
+    = \E[X].
+\]
+Similarly, $\sum_x p_{X,Y}(x,y) = p_Y(y)$, so the second term
+equals $\E[Y]$. Combining:
+$\E[aX + bY] = a\E[X] + b\E[Y]$.
+\end{proof}
+
+\begin{remark}
+\label{rem:linearity_general}
+The proof extends immediately to any finite sum: for random variables
+$X_1, \ldots, X_n$ and constants $a_1, \ldots, a_n$,
+\[
+    \E\!\left[\sum_{i=1}^n a_i X_i\right]
+    = \sum_{i=1}^n a_i \E[X_i].
+\]
+This is proved by induction on $n$, applying
+Theorem~\ref{thm:linearity_discrete} at each step.
+\end{remark}
+
+\begin{example}[Indicator Expectation]
+\label{ex:indicator_expectation}
+Let $A$ be an event and $\indicator_A$ the indicator random variable
+with $\indicator_A(\omega) = 1$ if $\omega \in A$ and $0$ otherwise.
+Then $\indicator_A \sim \mathrm{Bernoulli}(\Prob(A))$, so
+$\E[\indicator_A] = \Prob(A)$. This links probability to expectation:
+every probability is the expectation of an indicator.
+\end{example}
+
+\begin{example}[Expected Number of Fixed Points]
+\label{ex:fixed_points}
+A random permutation $\sigma$ of $\{1, 2, \ldots, n\}$ is chosen
+uniformly. Let $X$ be the number of fixed points ($\sigma(i) = i$).
+Write $X = \sum_{i=1}^n \indicator_{\{\sigma(i)=i\}}$. Each indicator
+has expectation $\Prob(\sigma(i) = i) = 1/n$ (since each element is
+equally likely to land in any position). By linearity,
+$\E[X] = n \cdot (1/n) = 1$,
+regardless of $n$. Note that the indicators are \emph{not} independent,
+but linearity of expectation applies nonetheless.
+\end{example}
+
+\subsection{Expectation for Continuous Random Variables}
+
+\begin{theorem}[LOTUS and Linearity -- Continuous Case]
+\label{thm:lotus_continuous}
+Let $X$ be a continuous random variable with PDF $f_X$ and
+$g \colon \R \to \R$. Then
+$\E[g(X)] = \int_{-\infty}^{\infty} g(x) f_X(x)\,dx$,
+provided the integral converges absolutely. In particular, linearity
+holds: for jointly continuous $X, Y$ with joint PDF $f_{X,Y}$,
+\[
+    \E[aX + bY] = a\E[X] + b\E[Y].
+\]
+\end{theorem}
+
+\begin{proof}
+The LOTUS formula is analogous to the discrete case
+(Theorem~\ref{thm:lotus_discrete}): one integrates $g(x) f_X(x)$
+instead of summing $g(x) p_X(x)$.
+
+For linearity,
+\begin{align*}
+    \E[aX + bY]
+    &= \int_{-\infty}^{\infty}\int_{-\infty}^{\infty}
+    (ax + by) f_{X,Y}(x,y)\,dx\,dy \\
+    &= a\int_{-\infty}^{\infty}\int_{-\infty}^{\infty}
+    x\,f_{X,Y}(x,y)\,dx\,dy
+    + b\int_{-\infty}^{\infty}\int_{-\infty}^{\infty}
+    y\,f_{X,Y}(x,y)\,dx\,dy \\
+    &= a\int_{-\infty}^{\infty} x\,f_X(x)\,dx
+    + b\int_{-\infty}^{\infty} y\,f_Y(y)\,dy
+    = a\E[X] + b\E[Y],
+\end{align*}
+where $f_X(x) = \int f_{X,Y}(x,y)\,dy$ is the marginal PDF of $X$.
+\end{proof}
+
+\begin{rlconnection}[title={Linearity and Value Function Decomposition}]
+The Bellman equation for a policy $\pi$ in a discounted MDP is
+\[
+    V^\pi(s) = \E\bigl[R_t + \gamma V^\pi(S_{t+1}) \mid S_t = s\bigr]
+    = \E[R_t \mid S_t = s] + \gamma \, \E[V^\pi(S_{t+1}) \mid S_t = s].
+\]
+The second equality is a direct application of linearity: the
+expectation of the sum (immediate reward plus discounted future value)
+equals the sum of expectations. No independence between $R_t$ and
+$S_{t+1}$ is assumed -- they may be highly correlated (e.g., higher
+rewards might occur in states with better future prospects).
+\end{rlconnection}
+
+We now turn to variance and its properties.
+
+%% ============================================================
+%% SECTION 4: VARIANCE AND COVARIANCE
+%% ============================================================
+
+\section{Variance and Covariance}
+\label{sec:variance}
+
+\subsection{Variance Properties}
+
+Recall from Lesson~10 that $\Var(X) = \E[(X - \E[X])^2]$ and the
+computational formula $\Var(X) = \E[X^2] - (\E[X])^2$
+(Lesson~10, Proposition~4.4).
+
+\begin{proposition}[Affine Transformation of Variance]
+\label{prop:affine_var}
+For any random variable $X$ with finite variance and constants
+$a, b \in \R$,
+\[
+    \Var(aX + b) = a^2 \Var(X).
+\]
+In particular, adding a constant does not change the variance, and
+scaling by $a$ scales the variance by $a^2$.
+\end{proposition}
+
+\begin{proof}
+Since $\E[aX + b] = a\E[X] + b$ by linearity,
+\begin{align*}
+    \Var(aX + b) &= \E\bigl[(aX + b - a\E[X] - b)^2\bigr]
+    = \E\bigl[a^2(X - \E[X])^2\bigr]
+    = a^2 \E\bigl[(X - \E[X])^2\bigr]
+    = a^2 \Var(X). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{example}[Standardization]
+\label{ex:standardization}
+If $\E[X] = \mu$ and $\Var(X) = \sigma^2 > 0$, define the
+\emph{standardized} variable $Z = (X - \mu)/\sigma$. Then
+$\E[Z] = 0$ and $\Var(Z) = \Var(X)/\sigma^2 = 1$.
+\end{example}
+
+\subsection{Covariance}
+
+\begin{definition}[Covariance]
+\label{def:covariance}
+The \emph{covariance} of random variables $X$ and $Y$ (with finite
+second moments) is
+\[
+    \Cov(X, Y) = \E\bigl[(X - \E[X])(Y - \E[Y])\bigr].
+\]
+\end{definition}
+
+\begin{proposition}[Computational Formula for Covariance]
+\label{prop:cov_formula}
+\[
+    \Cov(X, Y) = \E[XY] - \E[X]\E[Y].
+\]
+\end{proposition}
+
+\begin{proof}
+Let $\mu_X = \E[X]$ and $\mu_Y = \E[Y]$. Then
+\begin{align*}
+    \Cov(X,Y) &= \E[(X - \mu_X)(Y - \mu_Y)]
+    = \E[XY - \mu_X Y - X \mu_Y + \mu_X \mu_Y] \\
+    &= \E[XY] - \mu_X \E[Y] - \E[X] \mu_Y + \mu_X \mu_Y
+    = \E[XY] - \mu_X \mu_Y. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{proposition}[Properties of Covariance]
+\label{prop:cov_properties}
+For random variables $X, Y, Z$ with finite second moments and constants
+$a, b \in \R$:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item \textbf{Symmetry:} $\Cov(X, Y) = \Cov(Y, X)$.
+    \item \textbf{Self-covariance:} $\Cov(X, X) = \Var(X)$.
+    \item \textbf{Bilinearity:}
+    $\Cov(aX + bY, Z) = a\,\Cov(X, Z) + b\,\Cov(Y, Z)$.
+    \item \textbf{Constant:} $\Cov(X, c) = 0$ for any constant $c$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(i)} By commutativity of multiplication:
+$(X - \E[X])(Y - \E[Y]) = (Y - \E[Y])(X - \E[X])$.
+
+\textbf{(ii)} $\Cov(X, X) = \E[(X - \E[X])^2] = \Var(X)$.
+
+\textbf{(iii)} Using the computational formula:
+\begin{align*}
+    \Cov(aX + bY, Z)
+    &= \E[(aX + bY)Z] - \E[aX + bY]\E[Z] \\
+    &= a\E[XZ] + b\E[YZ] - (a\E[X] + b\E[Y])\E[Z] \\
+    &= a(\E[XZ] - \E[X]\E[Z]) + b(\E[YZ] - \E[Y]\E[Z]) \\
+    &= a\,\Cov(X,Z) + b\,\Cov(Y,Z).
+\end{align*}
+
+\textbf{(iv)} $\Cov(X, c) = \E[Xc] - \E[X]\E[c]
+= c\E[X] - c\E[X] = 0$.
+\end{proof}
+
+\begin{theorem}[Variance of a Sum]
+\label{thm:var_sum}
+For random variables $X_1, \ldots, X_n$ with finite second moments,
+\[
+    \Var\!\left(\sum_{i=1}^n X_i\right)
+    = \sum_{i=1}^n \Var(X_i)
+    + 2 \sum_{1 \leq i < j \leq n} \Cov(X_i, X_j).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $S = \sum_{i=1}^n X_i$ and $\mu_i = \E[X_i]$. Then
+$\E[S] = \sum_i \mu_i$ and
+\begin{align*}
+    \Var(S) &= \E\!\left[\left(\sum_{i=1}^n (X_i - \mu_i)\right)^2\right]
+    = \E\!\left[\sum_{i=1}^n \sum_{j=1}^n
+    (X_i - \mu_i)(X_j - \mu_j)\right] \\
+    &= \sum_{i=1}^n \sum_{j=1}^n
+    \E\bigl[(X_i - \mu_i)(X_j - \mu_j)\bigr]
+    = \sum_{i=1}^n \sum_{j=1}^n \Cov(X_i, X_j).
+\end{align*}
+Separating diagonal terms ($i = j$) from off-diagonal terms ($i \neq j$)
+and using symmetry $\Cov(X_i, X_j) = \Cov(X_j, X_i)$:
+\[
+    \Var(S) = \sum_{i=1}^n \Var(X_i)
+    + 2\sum_{1 \leq i < j \leq n} \Cov(X_i, X_j). \qedhere
+\]
+\end{proof}
+
+\begin{corollary}[Variance of Independent Sum]
+\label{cor:var_indep_sum}
+If $X_1, \ldots, X_n$ are pairwise independent (i.e.,
+$\Cov(X_i, X_j) = 0$ for $i \neq j$; see
+Proposition~\ref{prop:indep_uncorrelated} below), then
+\[
+    \Var\!\left(\sum_{i=1}^n X_i\right)
+    = \sum_{i=1}^n \Var(X_i).
+\]
+\end{corollary}
+
+\begin{proposition}[Independent Implies Uncorrelated]
+\label{prop:indep_uncorrelated}
+If $X$ and $Y$ are independent random variables with finite second
+moments, then $\Cov(X, Y) = 0$.
+\end{proposition}
+
+\begin{proof}
+Independence of $X$ and $Y$ implies $\E[XY] = \E[X]\E[Y]$. (For
+discrete random variables: $\E[XY] = \sum_x \sum_y xy \, p_{X,Y}(x,y)
+= \sum_x \sum_y xy \, p_X(x) p_Y(y) = (\sum_x x \, p_X(x))(\sum_y y
+\, p_Y(y)) = \E[X]\E[Y]$; the continuous case is analogous with
+integrals and the factorization $f_{X,Y}(x,y) = f_X(x) f_Y(y)$.)
+By the computational formula,
+$\Cov(X,Y) = \E[XY] - \E[X]\E[Y] = 0$.
+\end{proof}
+
+\begin{warning}[title={Uncorrelated Does Not Imply Independent}]
+The converse of Proposition~\ref{prop:indep_uncorrelated} is false:
+$\Cov(X, Y) = 0$ does not imply that $X$ and $Y$ are independent.
+Covariance measures only \emph{linear} association. Two variables can be
+functionally related yet uncorrelated.
+\end{warning}
+
+\begin{example}[Uncorrelated but Dependent]
+\label{ex:uncorrelated_dependent}
+Let $X \sim \mathrm{Uniform}(-1, 1)$ and $Y = X^2$. Then $Y$ is
+completely determined by $X$ (maximal dependence). However,
+$\E[X] = 0$, so $\Cov(X, Y) = \E[XY] - \E[X]\E[Y] = \E[X^3]$.
+Since $x^3 f_X(x) = x^3/(2)$ is an odd function on $(-1, 1)$,
+$\E[X^3] = \int_{-1}^{1} x^3/(2)\,dx = 0$.
+Thus $\Cov(X, Y) = 0$ even though $Y$ is a deterministic function of $X$.
+\end{example}
+
+\subsection{Correlation Coefficient}
+
+\begin{definition}[Correlation Coefficient]
+\label{def:correlation}
+The \emph{(Pearson) correlation coefficient} of $X$ and $Y$ (with
+$\Var(X) > 0$ and $\Var(Y) > 0$) is
+\[
+    \rho(X, Y) = \frac{\Cov(X, Y)}{\sqrt{\Var(X) \Var(Y)}}.
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:correlation_bounds}
+$-1 \leq \rho(X, Y) \leq 1$, with $|\rho(X,Y)| = 1$ if and only if
+$Y = aX + b$ almost surely for some constants $a \neq 0, b$.
+\end{proposition}
+
+\begin{proof}
+For any $t \in \R$, consider the non-negative quantity
+\[
+    0 \leq \Var(X + tY)
+    = \Var(X) + 2t\,\Cov(X,Y) + t^2 \Var(Y).
+\]
+This is a quadratic in $t$ with a non-negative minimum, so its
+discriminant must be non-positive:
+$4\Cov(X,Y)^2 - 4\Var(X)\Var(Y) \leq 0$,
+which gives $\Cov(X,Y)^2 \leq \Var(X)\Var(Y)$ and hence
+$|\rho(X,Y)| \leq 1$.
+
+Equality $|\rho| = 1$ holds if and only if the discriminant is zero,
+meaning the quadratic $\Var(X + tY)$ touches zero at some
+$t_0 = -\Cov(X,Y)/\Var(Y)$. Then
+$\Var(X + t_0 Y) = 0$, so $X + t_0 Y = c$ almost surely for some
+constant $c$, giving $X = -t_0 Y + c$, i.e., $Y = aX + b$ with
+$a = -1/t_0 \neq 0$.
+\end{proof}
+
+\begin{rlconnection}[title={Variance Reduction in REINFORCE}]
+The REINFORCE gradient estimator is
+$\hat{g} = \sum_{t=0}^{T-1} \nabla_\theta \log\pi_\theta(A_t \mid S_t)
+\cdot (G_t - b(S_t))$,
+where $G_t$ is the return and $b(S_t)$ is a baseline. By linearity,
+\[
+    \E[\nabla\log\pi \cdot b(S)] = \E[\nabla\log\pi] \cdot b(S) = 0
+\]
+(under regularity conditions), so the baseline does not bias the
+estimator. However, by the variance formula,
+$\Var(\nabla\log\pi \cdot (G - b))
+= \Var(\nabla\log\pi \cdot G) - 2\Cov(\nabla\log\pi \cdot G,
+\nabla\log\pi \cdot b) + \Var(\nabla\log\pi \cdot b)$.
+Choosing $b$ to minimize this variance (often $b(s) \approx V^\pi(s)$)
+is a direct application of the covariance and variance algebra developed
+in this section.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: JOINT DISTRIBUTIONS
+%% ============================================================
+
+\section{Joint Distributions}
+\label{sec:joint}
+
+We now formalize the joint behavior of two or more random variables.
+
+\subsection{Joint PMF and PDF}
+
+\begin{definition}[Joint PMF]
+\label{def:joint_pmf}
+Let $X$ and $Y$ be discrete random variables. The \emph{joint PMF} is
+\[
+    p_{X,Y}(x, y) = \Prob(X = x, Y = y).
+\]
+It satisfies $p_{X,Y}(x,y) \geq 0$ for all $(x,y)$ and
+$\sum_x \sum_y p_{X,Y}(x,y) = 1$.
+\end{definition}
+
+\begin{definition}[Joint PDF]
+\label{def:joint_pdf}
+Random variables $X$ and $Y$ are \emph{jointly continuous} if there
+exists a non-negative function $f_{X,Y} \colon \R^2 \to [0,\infty)$
+such that for every region $B \subseteq \R^2$,
+\[
+    \Prob((X, Y) \in B) = \iint_B f_{X,Y}(x, y) \, dx \, dy.
+\]
+The function $f_{X,Y}$ is the \emph{joint PDF}, satisfying
+$\iint_{\R^2} f_{X,Y}(x,y)\,dx\,dy = 1$.
+\end{definition}
+
+\subsection{Marginal Distributions}
+
+\begin{definition}[Marginal Distributions]
+\label{def:marginals}
+The \emph{marginal PMF} of $X$ from the joint PMF is
+$p_X(x) = \sum_y p_{X,Y}(x, y)$.
+The \emph{marginal PDF} of $X$ from the joint PDF is
+$f_X(x) = \int_{-\infty}^{\infty} f_{X,Y}(x, y) \, dy$.
+\end{definition}
+
+\begin{example}[Joint and Marginal PMF]
+\label{ex:joint_pmf}
+Let $(X, Y)$ have the joint PMF given by the following table:
+\[
+    \begin{array}{c|cc|c}
+    p_{X,Y} & Y = 0 & Y = 1 & p_X \\ \hline
+    X = 0 & 0.2 & 0.3 & 0.5 \\
+    X = 1 & 0.1 & 0.4 & 0.5 \\ \hline
+    p_Y & 0.3 & 0.7 &
+    \end{array}
+\]
+The marginal PMFs are $p_X(0) = 0.5$, $p_X(1) = 0.5$,
+$p_Y(0) = 0.3$, $p_Y(1) = 0.7$.
+\end{example}
+
+\begin{example}[Joint Uniform Distribution]
+\label{ex:joint_uniform}
+Let $(X, Y)$ be uniformly distributed on the unit square $[0,1]^2$, so
+$f_{X,Y}(x,y) = 1$ for $(x,y) \in [0,1]^2$ and $0$ otherwise. The
+marginal of $X$ is
+$f_X(x) = \int_0^1 1\,dy = 1$ for $x \in [0,1]$,
+i.e., $X \sim \mathrm{Uniform}(0,1)$, and similarly for $Y$.
+\end{example}
+
+\subsection{Independence of Random Variables}
+
+\begin{definition}[Independence of Random Variables]
+\label{def:rv_independence}
+Discrete random variables $X$ and $Y$ are \emph{independent} if
+$p_{X,Y}(x, y) = p_X(x) \, p_Y(y)$ for all $x, y$.
+Continuous random variables $X$ and $Y$ are \emph{independent} if
+$f_{X,Y}(x, y) = f_X(x) \, f_Y(y)$ for all $x, y$.
+\end{definition}
+
+\begin{example}[Testing Independence from a Joint PMF]
+\label{ex:test_independence}
+Continuing Example~\ref{ex:joint_pmf}, check whether $X$ and $Y$ are
+independent. We need $p_{X,Y}(x,y) = p_X(x) p_Y(y)$ for all $(x,y)$.
+At $(0, 0)$: $p_{X,Y}(0,0) = 0.2$ but
+$p_X(0) p_Y(0) = 0.5 \times 0.3 = 0.15 \neq 0.2$.
+Therefore $X$ and $Y$ are \emph{not} independent.
+\end{example}
+
+\subsection{Conditional Distributions}
+
+\begin{definition}[Conditional PMF]
+\label{def:cond_pmf}
+If $X$ and $Y$ are discrete with $p_Y(y) > 0$, the \emph{conditional
+PMF of $X$ given $Y = y$} is
+\[
+    p_{X \mid Y}(x \mid y)
+    = \frac{p_{X,Y}(x, y)}{p_Y(y)}.
+\]
+\end{definition}
+
+\begin{definition}[Conditional PDF]
+\label{def:cond_pdf}
+If $X$ and $Y$ are jointly continuous with $f_Y(y) > 0$, the
+\emph{conditional PDF of $X$ given $Y = y$} is
+\[
+    f_{X \mid Y}(x \mid y)
+    = \frac{f_{X,Y}(x, y)}{f_Y(y)}.
+\]
+\end{definition}
+
+\begin{example}[Conditional PMF Computation]
+\label{ex:cond_pmf_compute}
+From Example~\ref{ex:joint_pmf}, the conditional PMF of $X$ given
+$Y = 1$ is
+\[
+    p_{X \mid Y}(0 \mid 1) = \frac{0.3}{0.7} = \frac{3}{7}, \qquad
+    p_{X \mid Y}(1 \mid 1) = \frac{0.4}{0.7} = \frac{4}{7}.
+\]
+Given $Y = 1$, the conditional distribution of $X$ is
+$\mathrm{Bernoulli}(4/7)$.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: CONDITIONAL EXPECTATION AND THE TOWER PROPERTY
+%% ============================================================
+
+\section{Conditional Expectation and the Tower Property}
+\label{sec:cond_exp}
+
+\begin{definition}[Conditional Expectation Given an Event]
+\label{def:cond_exp_event}
+Let $X$ be a random variable and $B$ an event with $\Prob(B) > 0$. The
+\emph{conditional expectation of $X$ given $B$} is
+\[
+    \E[X \mid B] = \sum_x x \, \Prob(X = x \mid B)
+    \quad \text{(discrete)}
+\]
+or $\E[X \mid B] = \int x \, f_{X \mid B}(x)\,dx$ (continuous).
+\end{definition}
+
+\begin{definition}[Conditional Expectation Given a Random Variable]
+\label{def:cond_exp_rv}
+Let $X$ and $Y$ be random variables. The \emph{conditional expectation
+of $X$ given $Y = y$} is
+\[
+    \E[X \mid Y = y] = \begin{cases}
+    \sum_x x \, p_{X \mid Y}(x \mid y) & \text{(discrete)}, \\
+    \int_{-\infty}^{\infty} x \, f_{X \mid Y}(x \mid y)\,dx
+    & \text{(continuous)}.
+    \end{cases}
+\]
+The \emph{conditional expectation of $X$ given $Y$}, denoted
+$\E[X \mid Y]$, is the random variable obtained by evaluating
+$\E[X \mid Y = y]$ at $Y$: it equals $h(Y)$ where $h(y) = \E[X \mid Y = y]$.
+\end{definition}
+
+\begin{keyresult}[title={Law of Total Expectation (Tower Property)}]
+The law of total expectation, also called the tower property or iterated
+expectation, states that $\E[\E[X \mid Y]] = \E[X]$. This identity is
+the algebraic backbone of the Bellman equation: by conditioning on the
+next state $S_{t+1}$, the value function at time $t$ decomposes into an
+immediate reward and a conditional future value.
+\end{keyresult}
+
+\begin{theorem}[Law of Total Expectation]
+\label{thm:tower}
+Let $X$ and $Y$ be random variables with $\E[|X|] < \infty$. Then
+\[
+    \E\bigl[\E[X \mid Y]\bigr] = \E[X].
+\]
+\end{theorem}
+
+\begin{proof}
+We prove the discrete case; the continuous case is analogous with
+integrals replacing sums.
+
+Let $h(y) = \E[X \mid Y = y] = \sum_x x \, p_{X \mid Y}(x \mid y)$.
+Then $\E[X \mid Y] = h(Y)$ is a function of $Y$, so
+\begin{align*}
+    \E\bigl[\E[X \mid Y]\bigr]
+    &= \E[h(Y)]
+    = \sum_y h(y) \, p_Y(y) \\
+    &= \sum_y \left(\sum_x x \, p_{X \mid Y}(x \mid y)\right) p_Y(y) \\
+    &= \sum_y \sum_x x \, \frac{p_{X,Y}(x,y)}{p_Y(y)} \, p_Y(y) \\
+    &= \sum_y \sum_x x \, p_{X,Y}(x,y)
+    = \sum_x x \sum_y p_{X,Y}(x,y)
+    = \sum_x x \, p_X(x) = \E[X].
+\end{align*}
+The key step is that $p_{X\mid Y}(x \mid y) \cdot p_Y(y) = p_{X,Y}(x,y)$
+cancels the denominator, recovering the joint PMF.
+\end{proof}
+
+\begin{example}[Tower Property in Action]
+\label{ex:tower_concrete}
+Roll a fair die ($Y$), then toss a fair coin $Y$ times. Let $X$ be the
+number of heads. Given $Y = y$, we have
+$X \mid (Y = y) \sim \mathrm{Bin}(y, 1/2)$, so
+$\E[X \mid Y = y] = y/2$, and thus $\E[X \mid Y] = Y/2$.
+By the tower property,
+$\E[X] = \E[\E[X \mid Y]] = \E[Y/2] = \E[Y]/2 = 3.5/2 = 1.75$.
+\end{example}
+
+\begin{rlconnection}[title={Tower Property and the Bellman Equation}]
+The Bellman equation for the state-value function is derived by
+conditioning on the first transition:
+\begin{align*}
+    V^\pi(s) &= \E\!\left[\sum_{t=0}^\infty \gamma^t R_t
+    \;\middle|\; S_0 = s\right]
+    = \E\!\left[R_0 + \gamma \sum_{t=1}^\infty \gamma^{t-1} R_t
+    \;\middle|\; S_0 = s\right] \\
+    &= \E[R_0 \mid S_0 = s]
+    + \gamma \, \E\!\left[\E\!\left[\sum_{t=1}^\infty
+    \gamma^{t-1} R_t \;\middle|\; S_1\right]
+    \;\middle|\; S_0 = s\right] \\
+    &= \E[R_0 \mid S_0 = s] + \gamma \, \E[V^\pi(S_1) \mid S_0 = s].
+\end{align*}
+The second line applies the tower property: the outer expectation is over
+$S_1$ (given $S_0 = s$), and the inner expectation is over the future
+trajectory given $S_1$. Without the tower property, the recursive
+decomposition of value functions would not be justified.
+\end{rlconnection}
+
+\begin{example}[Conditional Expectation with Continuous Variables]
+\label{ex:cond_exp_continuous}
+Let $X \sim \mathrm{Exp}(1)$ and $Y \mid (X = x) \sim
+\mathrm{Uniform}(0, x)$. Then
+$\E[Y \mid X = x] = x/2$, so $\E[Y \mid X] = X/2$.
+By the tower property,
+$\E[Y] = \E[X/2] = \E[X]/2 = 1/2$.
+\end{example}
+
+\subsection{Law of Total Variance}
+
+\begin{theorem}[Law of Total Variance]
+\label{thm:total_variance}
+Let $X$ and $Y$ be random variables with $\E[X^2] < \infty$. Then
+\[
+    \Var(X) = \E[\Var(X \mid Y)] + \Var(\E[X \mid Y]),
+\]
+where $\Var(X \mid Y)$ is the random variable
+$\E[X^2 \mid Y] - (\E[X \mid Y])^2$.
+\end{theorem}
+
+\begin{proof}
+By the computational formula for variance,
+$\Var(X) = \E[X^2] - (\E[X])^2$.
+We compute each term using the tower property.
+
+\emph{First term.} By the tower property,
+$\E[X^2] = \E[\E[X^2 \mid Y]]$.
+
+\emph{Second term.} By the tower property,
+$\E[X] = \E[\E[X \mid Y]]$, so $(\E[X])^2 = (\E[\E[X \mid Y]])^2$.
+
+Now consider the right-hand side. The conditional variance is
+$\Var(X \mid Y) = \E[X^2 \mid Y] - (\E[X \mid Y])^2$. Taking
+expectations:
+\[
+    \E[\Var(X \mid Y)] = \E[\E[X^2 \mid Y]] - \E[(\E[X \mid Y])^2]
+    = \E[X^2] - \E[(\E[X \mid Y])^2].
+\]
+The variance of the conditional expectation is
+\[
+    \Var(\E[X \mid Y]) = \E[(\E[X \mid Y])^2] - (\E[\E[X \mid Y]])^2
+    = \E[(\E[X \mid Y])^2] - (\E[X])^2.
+\]
+Adding:
+\begin{align*}
+    \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])
+    &= \bigl(\E[X^2] - \E[(\E[X \mid Y])^2]\bigr)
+    + \bigl(\E[(\E[X \mid Y])^2] - (\E[X])^2\bigr) \\
+    &= \E[X^2] - (\E[X])^2 = \Var(X). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{example}[Total Variance with Die and Coin]
+\label{ex:total_variance}
+Continuing Example~\ref{ex:tower_concrete}: $Y$ is a die roll,
+$X \mid (Y = y) \sim \mathrm{Bin}(y, 1/2)$.
+\begin{itemize}[nosep]
+    \item $\E[X \mid Y] = Y/2$, so $\Var(\E[X \mid Y])
+    = \Var(Y/2) = \Var(Y)/4 = (35/12)/4 = 35/48$.
+    \item $\Var(X \mid Y) = Y \cdot (1/2)(1/2) = Y/4$, so
+    $\E[\Var(X \mid Y)] = \E[Y]/4 = 3.5/4 = 7/8$.
+    \item $\Var(X) = 7/8 + 35/48 = 42/48 + 35/48 = 77/48 \approx 1.604$.
+\end{itemize}
+The within-group variance ($7/8$) and the between-group variance
+($35/48$) together account for the total.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Indicator Expectation and Probability]
+\textnormal{(\(\ast\))} \\
+Let $A_1, \ldots, A_n$ be events. Using the indicator random variables
+$\indicator_{A_i}$ and linearity of expectation, prove that
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right)
+    \leq \sum_{i=1}^n \Prob(A_i)
+\]
+(the union bound). Compare this proof with the inclusion-exclusion
+approach from Lesson~9.
+\end{exercise}
+
+\begin{exercise}[Variance of a Linear Combination]
+\textnormal{(\(\ast\))} \\
+Let $X_1, X_2, X_3$ be random variables with $\Var(X_i) = \sigma^2$
+for each $i$ and $\Cov(X_i, X_j) = \rho \sigma^2$ for $i \neq j$,
+where $\rho \in [-1/2, 1]$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\Var(X_1 + X_2 + X_3)$ in terms of $\sigma^2$ and
+    $\rho$.
+    \item For what value of $\rho$ is the variance of the sum minimized?
+    What is the minimum?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Conditional Expectation Practice]
+\textnormal{(\(\ast\ast\))} \\
+A box contains $N$ balls numbered $1, \ldots, N$, where $N$ itself is
+random with $\Prob(N = n) = 1/4$ for $n = 1, 2, 3, 4$. A ball is drawn
+uniformly at random from the box; let $X$ be its number.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\E[X \mid N = n]$ for each $n$.
+    \item Use the tower property to compute $\E[X]$.
+    \item Use the law of total variance to compute $\Var(X)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Uncorrelated but Dependent -- Discrete Case]
+\textnormal{(\(\ast\ast\))} \\
+Let $Y$ be uniformly distributed on $\{-1, 0, 1\}$ and define
+$X = Y^2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\E[X]$, $\E[Y]$, $\E[XY]$, and $\Cov(X, Y)$.
+    \item Verify that $X$ and $Y$ are uncorrelated.
+    \item Show that $X$ and $Y$ are \emph{not} independent by finding
+    values $x, y$ such that $p_{X,Y}(x, y) \neq p_X(x) p_Y(y)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Tower Property and Bellman Equation]
+\textnormal{(\(\ast\ast\ast\))} \\
+Consider an MDP with states $\{s_1, s_2\}$, actions $\{a\}$ (single
+action), discount factor $\gamma = 0.9$, reward
+$R(s_1) = 1$, $R(s_2) = 0$, and transition probabilities
+$\Prob(S_{t+1} = s_1 \mid S_t = s_1) = 0.8$ and
+$\Prob(S_{t+1} = s_1 \mid S_t = s_2) = 0.4$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Write out the Bellman equations for $V(s_1)$ and $V(s_2)$
+    using the tower property decomposition.
+    \item Solve the system of linear equations for $V(s_1)$ and
+    $V(s_2)$.
+    \item Verify your answer by computing
+    $V(s_1) = \E[R_0 \mid S_0 = s_1] + \gamma \, \E[V(S_1) \mid
+    S_0 = s_1]$ explicitly.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Law of Total Variance for Mixture Distributions]
+\textnormal{(\(\ast\ast\ast\))} \\
+A reward distribution is a mixture: with probability $\alpha$, the
+reward is $R \sim \mathcal{N}(\mu_1, \sigma_1^2)$, and with probability
+$1 - \alpha$, the reward is $R \sim \mathcal{N}(\mu_2, \sigma_2^2)$.
+Let $Z \in \{1, 2\}$ indicate the component.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Use the tower property to compute $\E[R]$.
+    \item Use the law of total variance to compute $\Var(R)$ and show
+    that it decomposes as
+    \[
+        \Var(R) = \underbrace{\alpha\sigma_1^2 +
+        (1-\alpha)\sigma_2^2}_{\text{within-component}}
+        + \underbrace{\alpha(1-\alpha)(\mu_1 - \mu_2)^2}_{%
+        \text{between-component}}.
+    \]
+    \item Explain why mixture distributions always have higher variance
+    than any single component when $\mu_1 \neq \mu_2$.
+\end{enumerate}
+\textit{Hint:} For part (b), compute $\Var(\E[R \mid Z])$ by noting
+that $\E[R \mid Z]$ takes two values with known probabilities.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{Law of the Unconscious Statistician} (LOTUS) states
+    $\E[g(X)] = \sum_x g(x) p_X(x)$ (discrete) or
+    $\E[g(X)] = \int g(x) f_X(x)\,dx$ (continuous), allowing
+    computation of expectations of transformed variables without
+    finding the new distribution.
+    \item \emph{Linearity of expectation}
+    ($\E[aX + bY] = a\E[X] + b\E[Y]$) holds for \emph{all} random
+    variables with finite expectations, with \emph{no independence
+    assumption required}.
+    \item Every probability can be expressed as the expectation of an
+    indicator: $\Prob(A) = \E[\indicator_A]$.
+    \item The \emph{variance} satisfies $\Var(aX + b) = a^2\Var(X)$
+    and the computational formula
+    $\Var(X) = \E[X^2] - (\E[X])^2$.
+    \item \emph{Covariance} $\Cov(X,Y) = \E[XY] - \E[X]\E[Y]$ is
+    a symmetric, bilinear measure of linear association.
+    \item The \emph{variance of a sum} decomposes as
+    $\Var(\sum X_i) = \sum \Var(X_i) + 2\sum_{i<j} \Cov(X_i,X_j)$;
+    for independent variables, the cross-covariance terms vanish.
+    \item Independence implies zero covariance, but \emph{the converse
+    is false}: uncorrelated variables can be strongly dependent
+    (e.g., $X$ and $X^2$ when $X$ is symmetric around zero).
+    \item The \emph{conditional expectation} $\E[X \mid Y]$ is a
+    random variable (a function of $Y$) that satisfies the
+    \emph{tower property}: $\E[\E[X \mid Y]] = \E[X]$.
+    \item The \emph{law of total variance}
+    $\Var(X) = \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])$ decomposes
+    total variability into within-group and between-group components.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Lesson 12} develops the law of large numbers and the
+    central limit theorem, which explain how sample means concentrate
+    and why the normal distribution appears as a universal limit.
+    \item \textbf{Phase 01, Lesson 5} (probability foundations) revisits
+    expectation and conditional expectation in the measure-theoretic
+    framework, defining $\E[X \mid \mathcal{G}]$ as a
+    $\mathcal{G}$-measurable random variable satisfying a projection
+    property. The tower property becomes a consequence of the
+    $\sigma$-algebra nesting $\mathcal{G}_1 \subseteq \mathcal{G}_2$.
+    \item \textbf{Phase 02} (Temporal Difference Learning, Policy
+    Gradient Theorem) relies heavily on the linearity of expectation
+    and the tower property for deriving TD update rules and the
+    policy gradient theorem.
+    \item For additional worked examples on conditional expectation and
+    the tower property, see \citet[Chapter 9]{blitzstein2019}, which
+    includes the ``conditional expectation as a projection''
+    perspective.
+    \item The law of total variance is sometimes called the
+    \emph{Eve's law} (``E of the V plus V of the E''); a thorough
+    discussion with applications to hierarchical models appears in
+    \citet[Section 4.4]{bertsekas2008}.
+    \item The Cauchy-Schwarz inequality for random variables
+    ($|\E[XY]|^2 \leq \E[X^2]\E[Y^2]$), which underlies the
+    correlation bound $|\rho| \leq 1$, has far-reaching consequences
+    in functional analysis; see Phase~01 (Lesson~7, inner product
+    spaces).
+\end{itemize}
+
+\bibliography{probability-refs}
+
+\end{document}

@@ -1,0 +1,980 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Probability Spaces and Conditioning}}
+\fancyhead[R]{\thepage}
+\title{Lesson 9: Probability Spaces and Conditioning}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a reinforcement learning agent navigating a stochastic gridworld.
+At each time step the agent selects an action, but the resulting state
+transition is random: a ``move north'' command might succeed with probability
+$0.8$ and slip sideways with probability $0.1$ in each perpendicular
+direction. To compute expected returns, compare policies, or update beliefs
+after observing a trajectory, the agent needs a rigorous language for
+quantifying uncertainty. What does it mean for an event to have probability
+$0.8$? How should the agent revise its beliefs about a hidden parameter after
+collecting data? If two noise sources affect the system, when can their
+contributions be analyzed separately?
+
+The tools developed in this lesson will let us formalize these questions.
+We construct probability spaces via the Kolmogorov axioms, derive the
+fundamental rules for computing with probabilities (complement, monotonicity,
+inclusion-exclusion, continuity), and develop conditional probability, Bayes'
+theorem, and the concept of independence. These results form the
+prerequisite language for every probabilistic statement in reinforcement
+learning and machine learning.
+
+\begin{rlconnection}[title={Why Probability Spaces Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Markov decision processes}: the transition kernel
+    $p(s' \mid s, a)$ is a conditional probability; the Markov property is a
+    conditional independence statement.
+    \item \textbf{Bayesian inference}: posterior updates in Thompson sampling
+    and Bayesian neural networks apply Bayes' theorem at every step.
+    \item \textbf{Monte Carlo methods}: REINFORCE and Monte Carlo tree search
+    estimate expectations by sampling from probability spaces.
+    \item \textbf{PAC learning bounds}: generalization guarantees in
+    supervised learning rely on the union bound, inclusion-exclusion, and
+    independence of training samples.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Basic set theory: unions, intersections, complements, De Morgan's laws
+(Lesson~1). Familiarity with sequences and limits of real numbers
+(Lessons~2--3). No linear algebra is required for this lesson.
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} sample spaces, events, and probability measures via
+    the Kolmogorov axioms.
+    \item \emph{Derive} basic properties of probability (complement rule,
+    monotonicity, inclusion-exclusion) from the axioms.
+    \item \emph{Prove} the continuity of probability for monotone sequences
+    of events.
+    \item \emph{Compute} conditional probabilities and apply the
+    multiplication rule, law of total probability, and Bayes' theorem.
+    \item \emph{Distinguish} between pairwise and mutual independence and
+    \emph{construct} examples separating the two notions.
+    \item \emph{Apply} Bayes' theorem to belief-update problems arising in
+    machine learning.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 1--2]{ross2019} -- Combinatorial analysis, axioms
+    of probability, conditional probability and independence.
+    \item \citet[Chapters 1--2]{blitzstein2019} -- Probability and counting,
+    conditional probability with extensive examples.
+    \item \citet[Chapter 1]{feller1968} -- Classical introduction to sample
+    spaces and probability axioms.
+    \item \citet[Chapter 1]{grimmett2020} -- Events and their probabilities,
+    with a path toward measure-theoretic foundations.
+    \item \citet[Chapters 1--2]{bertsekas2008} -- Sample space, probability
+    axioms, conditioning, and independence with engineering applications.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: PROBABILITY SPACES
+%% ============================================================
+
+\section{Probability Spaces}
+\label{sec:prob_spaces}
+
+We begin by defining the mathematical objects that model random experiments.
+
+\begin{definition}[Sample Space, Outcome, Event]
+\label{def:sample_space}
+A \emph{sample space} $\Omega$ is a non-empty set. Each element
+$\omega \in \Omega$ is called an \emph{outcome}. An \emph{event} is a
+subset $A \subseteq \Omega$.
+\end{definition}
+
+\begin{remark}
+\label{rem:power_set}
+In this lesson we take the collection of all events to be the power set
+$2^\Omega$ (the set of all subsets of $\Omega$). For uncountable sample
+spaces, one must restrict to a $\sigma$-algebra
+$\mathcal{F} \subseteq 2^\Omega$ to avoid measure-theoretic paradoxes;
+this refinement is developed in Phase~01 (Lesson~1, $\sigma$-algebras).
+\end{remark}
+
+\begin{definition}[Set Operations on Events]
+\label{def:set_ops}
+Let $A, B \subseteq \Omega$.
+\begin{enumerate}[nosep]
+    \item \emph{Union:}
+    $A \cup B = \{\omega \in \Omega : \omega \in A \text{ or }
+    \omega \in B\}$ (``$A$ or $B$ occurs'').
+    \item \emph{Intersection:}
+    $A \cap B = \{\omega \in \Omega : \omega \in A \text{ and }
+    \omega \in B\}$ (``both $A$ and $B$ occur'').
+    \item \emph{Complement:}
+    $A^c = \Omega \setminus A = \{\omega \in \Omega : \omega \notin A\}$
+    (``$A$ does not occur'').
+    \item \emph{Disjoint:} $A$ and $B$ are \emph{disjoint} (or
+    \emph{mutually exclusive}) if $A \cap B = \emptyset$.
+\end{enumerate}
+\end{definition}
+
+\begin{example}[Die Roll]
+\label{ex:die_roll}
+Roll a fair six-sided die. The sample space is
+$\Omega = \{1, 2, 3, 4, 5, 6\}$. Let $A = \{2, 4, 6\}$ (``even'') and
+$B = \{1, 2, 3\}$ (``at most 3''). Then $A \cup B = \{1, 2, 3, 4, 6\}$,
+$A \cap B = \{2\}$, and $A^c = \{1, 3, 5\}$.
+\end{example}
+
+\subsection{The Kolmogorov Axioms}
+
+\begin{definition}[Probability Measure -- Kolmogorov Axioms]
+\label{def:kolmogorov}
+A \emph{probability measure} (or simply a \emph{probability}) on a sample
+space $\Omega$ is a function $\Prob \colon 2^\Omega \to \R$ satisfying:
+\begin{enumerate}[nosep,label=(K\arabic*)]
+    \item \textbf{Non-negativity:} $\Prob(A) \geq 0$ for every event $A$.
+    \item \textbf{Normalization:} $\Prob(\Omega) = 1$.
+    \item \textbf{Countable additivity:} If $A_1, A_2, \ldots$ are pairwise
+    disjoint events, then
+    \[
+        \Prob\!\left(\bigcup_{n=1}^\infty A_n\right)
+        = \sum_{n=1}^\infty \Prob(A_n).
+    \]
+\end{enumerate}
+The pair $(\Omega, \Prob)$ is called a \emph{probability space}.
+\end{definition}
+
+\begin{remark}
+\label{rem:finite_additivity}
+Countable additivity (K3) implies \emph{finite additivity}: if
+$A_1, \ldots, A_n$ are pairwise disjoint, set $A_k = \emptyset$ for
+$k > n$. Once we prove $\Prob(\emptyset) = 0$ below, the tail terms
+vanish and $\Prob(\bigcup_{i=1}^n A_i) = \sum_{i=1}^n \Prob(A_i)$.
+\end{remark}
+
+\begin{example}[Uniform Probability on a Finite Set]
+\label{ex:uniform}
+Let $\Omega$ be a finite set with $|\Omega| = N$. Define
+$\Prob(A) = |A|/N$ for every $A \subseteq \Omega$. Then (K1) holds
+because $|A| \geq 0$; (K2) holds because $|\Omega|/N = 1$; (K3) holds
+because for disjoint sets $|A \cup B| = |A| + |B|$ (and only finitely many
+events are non-empty, so the infinite sum reduces to a finite one).
+\end{example}
+
+\subsection{Basic Properties}
+
+We now derive the fundamental consequences of the Kolmogorov axioms.
+
+\begin{proposition}[Complement Rule]
+\label{prop:complement}
+For any event $A$, $\Prob(A^c) = 1 - \Prob(A)$.
+\end{proposition}
+
+\begin{proof}
+Since $A$ and $A^c$ are disjoint and $A \cup A^c = \Omega$, countable
+additivity (K3) (applied to two events, with the remaining sets empty)
+gives $\Prob(\Omega) = \Prob(A) + \Prob(A^c)$. By normalization (K2),
+$\Prob(\Omega) = 1$, so $\Prob(A^c) = 1 - \Prob(A)$.
+\end{proof}
+
+\begin{corollary}[$\Prob(\emptyset) = 0$]
+\label{cor:empty_set}
+$\Prob(\emptyset) = 0$.
+\end{corollary}
+
+\begin{proof}
+Since $\emptyset = \Omega^c$, the complement rule gives
+$\Prob(\emptyset) = 1 - \Prob(\Omega) = 1 - 1 = 0$.
+\end{proof}
+
+\begin{proposition}[Monotonicity]
+\label{prop:monotonicity}
+If $A \subseteq B$, then $\Prob(A) \leq \Prob(B)$.
+\end{proposition}
+
+\begin{proof}
+Write $B = A \cup (B \setminus A)$, where $A$ and $B \setminus A$ are
+disjoint. By finite additivity,
+$\Prob(B) = \Prob(A) + \Prob(B \setminus A)$. Since
+$\Prob(B \setminus A) \geq 0$ by (K1), we conclude
+$\Prob(B) \geq \Prob(A)$.
+\end{proof}
+
+\begin{example}[Applying Monotonicity]
+\label{ex:monotonicity_app}
+Roll a fair die. Let $A = \{6\}$ and $B = \{4, 5, 6\}$. Since
+$A \subseteq B$, monotonicity guarantees $\Prob(A) \leq \Prob(B)$.
+Indeed, $1/6 \leq 3/6 = 1/2$.
+\end{example}
+
+\begin{keyresult}[title={Inclusion-Exclusion Principle}]
+The inclusion-exclusion formula generalizes finite additivity to
+overlapping events. For two events it corrects for double-counting;
+for $n$ events it alternates between over- and under-counting.
+\end{keyresult}
+
+\begin{theorem}[Inclusion-Exclusion for Two Events]
+\label{thm:ie_two}
+For any events $A$ and $B$,
+\[
+    \Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B).
+\]
+\end{theorem}
+
+\begin{proof}
+Write $A \cup B = A \cup (B \setminus A)$, where $A$ and $B \setminus A$
+are disjoint. By finite additivity,
+\begin{equation}
+\label{eq:ie_step1}
+    \Prob(A \cup B) = \Prob(A) + \Prob(B \setminus A).
+\end{equation}
+Similarly, $B = (A \cap B) \cup (B \setminus A)$ with
+$A \cap B$ and $B \setminus A$ disjoint, so
+\begin{equation}
+\label{eq:ie_step2}
+    \Prob(B) = \Prob(A \cap B) + \Prob(B \setminus A),
+\end{equation}
+which gives $\Prob(B \setminus A) = \Prob(B) - \Prob(A \cap B)$.
+Substituting into \eqref{eq:ie_step1}:
+\[
+    \Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B). \qedhere
+\]
+\end{proof}
+
+\begin{example}[Inclusion-Exclusion Applied]
+\label{ex:ie_applied}
+Draw one card from a standard 52-card deck. Let $A$ = ``the card is a
+heart'' and $B$ = ``the card is a face card (J, Q, K).'' Then
+$\Prob(A) = 13/52$, $\Prob(B) = 12/52$, and
+$\Prob(A \cap B) = 3/52$ (the three heart face cards). By
+inclusion-exclusion,
+$\Prob(A \cup B) = 13/52 + 12/52 - 3/52 = 22/52 = 11/26$.
+\end{example}
+
+\begin{theorem}[Inclusion-Exclusion for $n$ Events]
+\label{thm:ie_n}
+For events $A_1, \ldots, A_n$,
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right)
+    = \sum_{k=1}^n (-1)^{k+1}
+    \sum_{1 \leq i_1 < \cdots < i_k \leq n}
+    \Prob(A_{i_1} \cap \cdots \cap A_{i_k}).
+\]
+\end{theorem}
+
+\begin{proof}
+We proceed by induction on $n$.
+
+\emph{Base case} ($n = 1$): $\Prob(A_1) = \Prob(A_1)$, which is trivially
+the formula with a single term.
+
+\emph{Base case} ($n = 2$): This is Theorem~\ref{thm:ie_two}.
+
+\emph{Inductive step.} Assume the formula holds for $n - 1$ events. Write
+\[
+    \bigcup_{i=1}^n A_i
+    = \left(\bigcup_{i=1}^{n-1} A_i\right) \cup A_n.
+\]
+By Theorem~\ref{thm:ie_two},
+\begin{equation}
+\label{eq:ie_induction}
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right)
+    = \Prob\!\left(\bigcup_{i=1}^{n-1} A_i\right) + \Prob(A_n)
+    - \Prob\!\left(\left(\bigcup_{i=1}^{n-1} A_i\right) \cap A_n\right).
+\end{equation}
+By distributivity,
+$\left(\bigcup_{i=1}^{n-1} A_i\right) \cap A_n
+= \bigcup_{i=1}^{n-1} (A_i \cap A_n)$.
+Apply the inductive hypothesis to the first term in \eqref{eq:ie_induction}
+(a union of $n-1$ events $A_1, \ldots, A_{n-1}$) and to the third term
+(a union of $n-1$ events $A_1 \cap A_n, \ldots, A_{n-1} \cap A_n$).
+
+The first term contributes the alternating sum over all subsets of
+$\{1, \ldots, n-1\}$. Adding $\Prob(A_n)$ accounts for the singleton
+$\{n\}$. Subtracting the inductive hypothesis applied to
+$\bigcup_{i=1}^{n-1}(A_i \cap A_n)$ contributes exactly the terms
+involving $A_n$ in subsets of size $\geq 2$, each with sign
+$(-1)^{k+1}$ (the extra intersection with $A_n$ increases the subset
+size by one and flips the sign). Collecting all terms yields the formula
+for $n$ events.
+\end{proof}
+
+\begin{warning}[title={Union Bound as a Corollary}]
+A common shortcut is the \emph{union bound} (Boole's inequality):
+$\Prob(\bigcup_{i=1}^n A_i) \leq \sum_{i=1}^n \Prob(A_i)$.
+This follows from inclusion-exclusion by dropping the
+alternating correction terms (or directly from monotonicity and finite
+additivity). In machine learning, the union bound is the workhorse
+behind PAC learning arguments and uniform convergence bounds. Be aware
+that it can be very loose when events overlap significantly.
+\end{warning}
+
+\subsection{Continuity of Probability}
+
+The following theorem connects the axioms to limits of sequences of events
+and is essential for analyzing asymptotic properties.
+
+\begin{theorem}[Continuity of Probability]
+\label{thm:continuity}
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item \textbf{Continuity from below.} If
+    $A_1 \subseteq A_2 \subseteq A_3 \subseteq \cdots$ (increasing), then
+    \[
+        \Prob\!\left(\bigcup_{n=1}^\infty A_n\right)
+        = \lim_{n \to \infty} \Prob(A_n).
+    \]
+    \item \textbf{Continuity from above.} If
+    $A_1 \supseteq A_2 \supseteq A_3 \supseteq \cdots$ (decreasing), then
+    \[
+        \Prob\!\left(\bigcap_{n=1}^\infty A_n\right)
+        = \lim_{n \to \infty} \Prob(A_n).
+    \]
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(a)} Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for
+$n \geq 2$. The events $B_1, B_2, \ldots$ are pairwise disjoint: if
+$i < j$, then $B_i \subseteq A_i \subseteq A_{j-1}$, but
+$B_j = A_j \setminus A_{j-1}$ is disjoint from $A_{j-1}$, so
+$B_i \cap B_j = \emptyset$. Moreover,
+$\bigcup_{n=1}^\infty B_n = \bigcup_{n=1}^\infty A_n$. By countable
+additivity (K3),
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right)
+    = \sum_{n=1}^\infty \Prob(B_n).
+\]
+The partial sums satisfy
+$\sum_{k=1}^n \Prob(B_k)
+= \Prob\!\left(\bigcup_{k=1}^n B_k\right)
+= \Prob(A_n)$,
+where the first equality uses finite additivity (the $B_k$ are disjoint)
+and the second uses
+$\bigcup_{k=1}^n B_k = A_n$ (proved by induction: $B_1 = A_1$, and
+adding $B_n = A_n \setminus A_{n-1}$ to $A_{n-1}$ gives $A_n$).
+Therefore
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right)
+    = \lim_{n \to \infty} \sum_{k=1}^n \Prob(B_k)
+    = \lim_{n \to \infty} \Prob(A_n).
+\]
+
+\textbf{(b)} If $A_1 \supseteq A_2 \supseteq \cdots$, then the complements
+$A_1^c \subseteq A_2^c \subseteq \cdots$ form an increasing sequence. By
+part (a),
+\[
+    \Prob\!\left(\bigcup_{n=1}^\infty A_n^c\right)
+    = \lim_{n \to \infty} \Prob(A_n^c)
+    = \lim_{n \to \infty} (1 - \Prob(A_n)).
+\]
+By De Morgan's law,
+$\bigcup_{n=1}^\infty A_n^c = \left(\bigcap_{n=1}^\infty A_n\right)^c$,
+so the left side equals
+$1 - \Prob\!\left(\bigcap_{n=1}^\infty A_n\right)$. Equating and
+simplifying:
+$\Prob\!\left(\bigcap_{n=1}^\infty A_n\right)
+= \lim_{n \to \infty} \Prob(A_n)$.
+\end{proof}
+
+\begin{example}[Continuity from Below]
+\label{ex:continuity_below}
+Let $\Omega = (0, 1]$ with the uniform distribution (Lebesgue measure).
+Define $A_n = (0, 1 - 1/n]$ for $n \geq 2$. Then $A_2 \subseteq A_3
+\subseteq \cdots$ and $\bigcup_{n=2}^\infty A_n = (0, 1)$. By continuity
+from below,
+$\Prob((0, 1)) = \lim_{n \to \infty} \Prob(A_n) = \lim_{n \to \infty}
+(1 - 1/n) = 1$.
+This confirms that $\Prob(\{1\}) = 0$ for a continuous uniform
+distribution.
+\end{example}
+
+\begin{rlconnection}[title={Continuity and Convergence in RL}]
+Continuity from above is essential for ``almost sure'' convergence
+statements in RL. The event ``the value estimate $V_t$ converges to the
+true value $V^\pi$'' is expressed as
+$\bigcap_{k=1}^\infty \bigcup_{N=1}^\infty
+\bigcap_{t=N}^\infty \{|V_t - V^\pi| < 1/k\}$. Computing the
+probability of such nested limits requires the continuity of $\Prob$
+along monotone sequences.
+\end{rlconnection}
+
+We have established the axiomatic framework and its basic consequences.
+The next section introduces conditional probability, which allows us to
+update probabilities given partial information.
+
+%% ============================================================
+%% SECTION 4: CONDITIONAL PROBABILITY
+%% ============================================================
+
+\section{Conditional Probability}
+\label{sec:cond_prob}
+
+In many situations we have partial information about the outcome of an
+experiment, and we wish to update our probability assignments accordingly.
+Conditional probability formalizes this update.
+
+\begin{definition}[Conditional Probability]
+\label{def:cond_prob}
+Let $(\Omega, \Prob)$ be a probability space and let $B$ be an event with
+$\Prob(B) > 0$. The \emph{conditional probability of $A$ given $B$} is
+\[
+    \Prob(A \mid B) = \frac{\Prob(A \cap B)}{\Prob(B)}.
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:cond_is_prob}
+For a fixed event $B$ with $\Prob(B) > 0$, the function
+$A \mapsto \Prob(A \mid B)$ is itself a probability measure on $\Omega$.
+Verification: (K1) $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B) \geq 0$;
+(K2) $\Prob(\Omega \mid B) = \Prob(B)/\Prob(B) = 1$; (K3) if
+$A_1, A_2, \ldots$ are pairwise disjoint, then
+$\Prob(\bigcup_n A_n \mid B)
+= \Prob((\bigcup_n A_n) \cap B)/\Prob(B)
+= \Prob(\bigcup_n (A_n \cap B))/\Prob(B)
+= \sum_n \Prob(A_n \cap B)/\Prob(B)
+= \sum_n \Prob(A_n \mid B)$.
+\end{remark}
+
+\begin{example}[Conditional Probability with Dice]
+\label{ex:cond_dice}
+Roll two fair dice. Let $A$ = ``the sum is 8'' and $B$ = ``the first die
+shows 3.'' The sample space has $|\Omega| = 36$ equally likely outcomes.
+We have $A \cap B = \{(3, 5)\}$, so $\Prob(A \cap B) = 1/36$, and
+$\Prob(B) = 6/36 = 1/6$. Thus
+$\Prob(A \mid B) = (1/36)/(1/6) = 1/6$.
+\end{example}
+
+\subsection{Multiplication Rule}
+
+The multiplication rule extends the definition of conditional probability
+to chains of events.
+
+\begin{theorem}[Multiplication Rule]
+\label{thm:mult_rule}
+For events $A_1, \ldots, A_n$ with
+$\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$,
+\[
+    \Prob(A_1 \cap \cdots \cap A_n)
+    = \Prob(A_1) \, \Prob(A_2 \mid A_1) \,
+    \Prob(A_3 \mid A_1 \cap A_2) \cdots
+    \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}).
+\]
+\end{theorem}
+
+\begin{proof}
+We proceed by induction on $n$.
+
+\emph{Base case} ($n = 2$): By definition of conditional probability,
+$\Prob(A_1 \cap A_2)
+= \Prob(A_1) \, \Prob(A_2 \mid A_1)$,
+since $\Prob(A_2 \mid A_1) = \Prob(A_1 \cap A_2)/\Prob(A_1)$ and
+$\Prob(A_1) \geq \Prob(A_1 \cap A_2) > 0$ by monotonicity (as
+$A_1 \cap A_2 \subseteq A_1 \cap \cdots \cap A_{n-1}$ and
+$\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$ implies
+$\Prob(A_1) > 0$).
+
+\emph{Inductive step.} Assume the formula holds for $n - 1$ events.
+Since $\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$, we can write
+\begin{align*}
+    \Prob(A_1 \cap \cdots \cap A_n)
+    &= \Prob(A_1 \cap \cdots \cap A_{n-1}) \cdot
+       \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}) \\
+    &= \Bigl[\Prob(A_1) \, \Prob(A_2 \mid A_1) \cdots
+       \Prob(A_{n-1} \mid A_1 \cap \cdots \cap A_{n-2})\Bigr] \\
+    &\qquad \cdot \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}),
+\end{align*}
+where the first line uses the definition of conditional probability and
+the second applies the inductive hypothesis to the $n - 1$ events
+$A_1, \ldots, A_{n-1}$.
+\end{proof}
+
+\begin{example}[Drawing Without Replacement]
+\label{ex:draw_without_replacement}
+An urn contains 5 red and 3 blue balls. We draw 3 balls without
+replacement. Let $A_i$ = ``the $i$-th ball drawn is red.'' By the
+multiplication rule,
+\begin{align*}
+    \Prob(A_1 \cap A_2 \cap A_3)
+    &= \Prob(A_1) \, \Prob(A_2 \mid A_1) \,
+       \Prob(A_3 \mid A_1 \cap A_2) \\
+    &= \frac{5}{8} \cdot \frac{4}{7} \cdot \frac{3}{6}
+    = \frac{60}{336} = \frac{5}{28}.
+\end{align*}
+\end{example}
+
+\subsection{Law of Total Probability}
+
+\begin{definition}[Partition]
+\label{def:partition}
+Events $B_1, B_2, \ldots, B_n$ form a \emph{partition} of $\Omega$ if
+they are pairwise disjoint and $\bigcup_{i=1}^n B_i = \Omega$.
+\end{definition}
+
+\begin{theorem}[Law of Total Probability]
+\label{thm:total_prob}
+Let $B_1, B_2, \ldots, B_n$ be a partition of $\Omega$ with
+$\Prob(B_i) > 0$ for all $i$. Then for any event $A$,
+\[
+    \Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i) \, \Prob(B_i).
+\]
+\end{theorem}
+
+\begin{proof}
+Since the $B_i$ partition $\Omega$,
+\[
+    A = A \cap \Omega = A \cap \left(\bigcup_{i=1}^n B_i\right)
+    = \bigcup_{i=1}^n (A \cap B_i).
+\]
+The events $A \cap B_1, \ldots, A \cap B_n$ are pairwise disjoint (since
+the $B_i$ are). By finite additivity,
+\[
+    \Prob(A) = \sum_{i=1}^n \Prob(A \cap B_i)
+    = \sum_{i=1}^n \Prob(A \mid B_i) \, \Prob(B_i),
+\]
+where the last equality uses
+$\Prob(A \cap B_i) = \Prob(A \mid B_i) \, \Prob(B_i)$ from the definition
+of conditional probability.
+\end{proof}
+
+\begin{example}[Medical Test -- Total Probability]
+\label{ex:medical_total}
+A disease affects 1\% of the population. A diagnostic test has a
+sensitivity (true positive rate) of 95\% and a specificity (true negative
+rate) of 90\%. Let $D$ = ``has disease'' and $T$ = ``tests positive.''
+The partition is $\{D, D^c\}$ with $\Prob(D) = 0.01$ and
+$\Prob(D^c) = 0.99$. By the law of total probability,
+\begin{align*}
+    \Prob(T) &= \Prob(T \mid D) \, \Prob(D)
+               + \Prob(T \mid D^c) \, \Prob(D^c) \\
+             &= 0.95 \times 0.01 + 0.10 \times 0.99 \\
+             &= 0.0095 + 0.099 = 0.1085.
+\end{align*}
+Despite the test's high sensitivity, most positive results are false
+positives because the disease is rare.
+\end{example}
+
+\subsection{Bayes' Theorem}
+
+\begin{keyresult}[title={Bayes' Theorem -- The Belief Update Rule}]
+Bayes' theorem inverts the direction of conditioning: given a partition
+into ``hypotheses'' $B_1, \ldots, B_n$ with prior probabilities
+$\Prob(B_j)$, observing event $A$ updates each hypothesis to the
+posterior $\Prob(B_j \mid A)$.
+\end{keyresult}
+
+\begin{theorem}[Bayes' Theorem]
+\label{thm:bayes}
+Let $B_1, \ldots, B_n$ be a partition of $\Omega$ with
+$\Prob(B_i) > 0$ for all $i$, and let $A$ be an event with
+$\Prob(A) > 0$. Then for each $j = 1, \ldots, n$,
+\[
+    \Prob(B_j \mid A)
+    = \frac{\Prob(A \mid B_j) \, \Prob(B_j)}
+           {\sum_{i=1}^n \Prob(A \mid B_i) \, \Prob(B_i)}.
+\]
+\end{theorem}
+
+\begin{proof}
+By the definition of conditional probability,
+\[
+    \Prob(B_j \mid A) = \frac{\Prob(A \cap B_j)}{\Prob(A)}.
+\]
+The numerator equals
+$\Prob(A \mid B_j) \, \Prob(B_j)$
+by the definition of $\Prob(A \mid B_j)$. The denominator equals
+$\sum_{i=1}^n \Prob(A \mid B_i) \, \Prob(B_i)$
+by the law of total probability (Theorem~\ref{thm:total_prob}).
+Substituting gives the result.
+\end{proof}
+
+\begin{example}[Medical Test -- Bayes' Theorem]
+\label{ex:medical_bayes}
+Continuing Example~\ref{ex:medical_total}, suppose a patient tests
+positive. What is the probability they actually have the disease?
+By Bayes' theorem,
+\[
+    \Prob(D \mid T)
+    = \frac{\Prob(T \mid D) \, \Prob(D)}{\Prob(T)}
+    = \frac{0.95 \times 0.01}{0.1085}
+    \approx 0.0876.
+\]
+Despite a positive test result, the probability of disease is only about
+8.8\%. This illustrates the \emph{base rate fallacy}: ignoring the low
+prior $\Prob(D)$ leads to grossly overestimating $\Prob(D \mid T)$.
+\end{example}
+
+\begin{example}[Urn Problem -- Bayesian Update]
+\label{ex:urn_bayes}
+There are two urns. Urn 1 has 7 red and 3 blue balls; Urn 2 has 4 red
+and 6 blue balls. One urn is chosen uniformly at random, and a ball is
+drawn. Let $U_i$ = ``Urn $i$ was chosen'' and $R$ = ``a red ball is
+drawn.'' The prior is $\Prob(U_1) = \Prob(U_2) = 1/2$. We have
+$\Prob(R \mid U_1) = 7/10$ and $\Prob(R \mid U_2) = 4/10$.
+
+Given that a red ball was drawn, Bayes' theorem gives
+\[
+    \Prob(U_1 \mid R)
+    = \frac{(7/10)(1/2)}{(7/10)(1/2) + (4/10)(1/2)}
+    = \frac{7/20}{11/20}
+    = \frac{7}{11} \approx 0.636.
+\]
+The observation of red shifts our belief toward Urn~1.
+\end{example}
+
+\begin{rlconnection}[title={Bayes' Theorem in RL/ML}]
+\begin{itemize}[nosep]
+    \item In \textbf{Bayesian reinforcement learning}, the agent maintains a
+    prior over transition models and updates it via Bayes' theorem after
+    each observed transition.
+    \item In \textbf{POMDPs}, the belief state
+    $b'(s') \propto \Prob(o \mid s') \sum_s \Prob(s' \mid s, a) \, b(s)$
+    is a direct application of the law of total probability and Bayes'
+    theorem.
+    \item In \textbf{naive Bayes classifiers}, the class posterior is
+    computed via Bayes' theorem with a conditional independence assumption
+    on features.
+\end{itemize}
+\end{rlconnection}
+
+We now turn to the concept of independence, which characterizes when
+knowledge of one event provides no information about another.
+
+%% ============================================================
+%% SECTION 5: INDEPENDENCE
+%% ============================================================
+
+\section{Independence}
+\label{sec:independence}
+
+\begin{definition}[Independence of Two Events]
+\label{def:indep_two}
+Events $A$ and $B$ are \emph{independent} if
+\[
+    \Prob(A \cap B) = \Prob(A) \, \Prob(B).
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:indep_conditional}
+When $\Prob(B) > 0$, independence is equivalent to
+$\Prob(A \mid B) = \Prob(A)$: learning that $B$ occurred does not change
+the probability of $A$. This follows directly from the definition:
+$\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B) = \Prob(A)\Prob(B)/\Prob(B)
+= \Prob(A)$.
+\end{remark}
+
+\begin{example}[Independent Events]
+\label{ex:indep_coins}
+Toss a fair coin twice. Let $A$ = ``first toss is heads'' and
+$B$ = ``second toss is heads.'' The sample space is
+$\Omega = \{HH, HT, TH, TT\}$ with each outcome having probability
+$1/4$. Then $\Prob(A) = 1/2$, $\Prob(B) = 1/2$, and
+$\Prob(A \cap B) = \Prob(\{HH\}) = 1/4 = (1/2)(1/2)
+= \Prob(A)\Prob(B)$. So $A$ and $B$ are independent.
+\end{example}
+
+\begin{warning}[title={Independent $\neq$ Disjoint}]
+A common mistake is to confuse independence with disjointness. If $A$ and
+$B$ are disjoint and both have positive probability, then
+$\Prob(A \cap B) = 0 \neq \Prob(A)\Prob(B) > 0$, so they are
+\emph{not} independent. Disjoint events are maximally dependent:
+knowing one occurred tells you the other did not.
+\end{warning}
+
+\begin{proposition}[Independence of Complements]
+\label{prop:indep_complement}
+If $A$ and $B$ are independent, then so are $A$ and $B^c$, $A^c$ and $B$,
+and $A^c$ and $B^c$.
+\end{proposition}
+
+\begin{proof}
+We prove that $A$ and $B^c$ are independent; the other cases follow by
+symmetry and iteration. Since $A = (A \cap B) \cup (A \cap B^c)$ with
+the two sets disjoint,
+\[
+    \Prob(A \cap B^c) = \Prob(A) - \Prob(A \cap B)
+    = \Prob(A) - \Prob(A)\Prob(B)
+    = \Prob(A)(1 - \Prob(B))
+    = \Prob(A)\Prob(B^c).
+\]
+For $A^c$ and $B^c$: since $A$ and $B^c$ are independent (just proved),
+applying the same argument with $A$ replaced by $A^c$ gives
+$\Prob(A^c \cap B^c) = \Prob(A^c)\Prob(B^c)$.
+\end{proof}
+
+\subsection{Mutual Independence}
+
+\begin{definition}[Mutual Independence]
+\label{def:mutual_indep}
+Events $A_1, \ldots, A_n$ are \emph{mutually independent} if for every
+subset $\{i_1, \ldots, i_k\} \subseteq \{1, \ldots, n\}$ with
+$k \geq 2$,
+\[
+    \Prob(A_{i_1} \cap \cdots \cap A_{i_k})
+    = \Prob(A_{i_1}) \cdots \Prob(A_{i_k}).
+\]
+This requires the product formula to hold for \emph{all}
+$\binom{n}{2} + \binom{n}{3} + \cdots + \binom{n}{n} = 2^n - n - 1$
+subsets of size $\geq 2$, not merely for the $\binom{n}{2}$ pairs.
+\end{definition}
+
+\begin{remark}
+\label{rem:pairwise_def}
+Events $A_1, \ldots, A_n$ are \emph{pairwise independent} if every pair
+is independent:
+$\Prob(A_i \cap A_j) = \Prob(A_i)\Prob(A_j)$
+for all $i \neq j$. Mutual independence implies pairwise independence
+(take $k = 2$ in the definition), but the converse is false.
+\end{remark}
+
+\begin{warning}[title={Pairwise $\neq$ Mutual Independence}]
+Pairwise independence does not imply mutual independence. The product
+rule can hold for every pair yet fail for a triple (or larger subset).
+This distinction matters in practice: many concentration inequalities
+(e.g., the variance of a sum) require only pairwise independence, while
+others (e.g., the strong law of large numbers) require mutual
+independence.
+\end{warning}
+
+\begin{example}[Pairwise but Not Mutually Independent]
+\label{ex:pairwise_not_mutual}
+Toss two fair coins. The sample space is
+$\Omega = \{HH, HT, TH, TT\}$, each outcome with probability $1/4$.
+Define:
+\begin{itemize}[nosep]
+    \item $A$ = ``the first coin is heads'' $= \{HH, HT\}$,
+    \item $B$ = ``the second coin is heads'' $= \{HH, TH\}$,
+    \item $C$ = ``exactly one head'' $= \{HT, TH\}$.
+\end{itemize}
+Each event has probability $1/2$. We check all pairs:
+\begin{itemize}[nosep]
+    \item $A \cap B = \{HH\}$, so
+    $\Prob(A \cap B) = 1/4 = (1/2)(1/2) = \Prob(A)\Prob(B)$. \checkmark
+    \item $A \cap C = \{HT\}$, so
+    $\Prob(A \cap C) = 1/4 = (1/2)(1/2) = \Prob(A)\Prob(C)$. \checkmark
+    \item $B \cap C = \{TH\}$, so
+    $\Prob(B \cap C) = 1/4 = (1/2)(1/2) = \Prob(B)\Prob(C)$. \checkmark
+\end{itemize}
+All three pairs are independent. However,
+$A \cap B \cap C = \emptyset$ (both heads is not exactly one head), so
+\[
+    \Prob(A \cap B \cap C) = 0
+    \neq \frac{1}{8}
+    = \Prob(A)\Prob(B)\Prob(C).
+\]
+Therefore $A$, $B$, $C$ are pairwise independent but \emph{not}
+mutually independent. Knowing $A$ and $B$ both occurred completely
+determines $C$ (it cannot occur), even though each pair individually
+reveals nothing.
+\end{example}
+
+\begin{example}[Mutual Independence in Repeated Trials]
+\label{ex:mutual_indep_trials}
+Toss a fair coin three times independently. The sample space has
+$|\Omega| = 8$ equally likely outcomes. Let $A_i$ = ``the $i$-th toss
+is heads'' for $i = 1, 2, 3$. Then $\Prob(A_i) = 1/2$ for each $i$.
+For pairs:
+$\Prob(A_i \cap A_j) = 2/8 = 1/4 = (1/2)(1/2)$ for each pair
+$i \neq j$ (two of the eight outcomes have heads on both specified
+positions). For the triple:
+$\Prob(A_1 \cap A_2 \cap A_3) = 1/8 = (1/2)^3$.
+All $2^3 - 3 - 1 = 4$ conditions are satisfied, confirming mutual
+independence.
+\end{example}
+
+\begin{rlconnection}[title={Independence and the Markov Property}]
+The Markov property is fundamentally a conditional independence statement:
+the future evolution of the process is conditionally independent of the
+past given the present state. Formally, in a Markov decision process,
+$\Prob(S_{t+1} \mid S_0, A_0, \ldots, S_t, A_t) = \Prob(S_{t+1} \mid S_t, A_t)$.
+Independence of noise terms across time steps justifies treating
+transition randomness as i.i.d., which is central to the convergence
+analysis of TD-learning and Q-learning.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Bonferroni Inequalities]
+\textnormal{(\(\ast\))} \\
+Using inclusion-exclusion (Theorem~\ref{thm:ie_n}), prove the
+\emph{first Bonferroni inequality}: for any events $A_1, \ldots, A_n$,
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right)
+    \leq \sum_{i=1}^n \Prob(A_i).
+\]
+Then prove the \emph{second Bonferroni inequality}:
+\[
+    \Prob\!\left(\bigcup_{i=1}^n A_i\right)
+    \geq \sum_{i=1}^n \Prob(A_i)
+    - \sum_{1 \leq i < j \leq n} \Prob(A_i \cap A_j).
+\]
+\textit{Hint:} For the first, use induction or monotonicity. For the
+second, use inclusion-exclusion truncated at $k = 2$ and show the
+remaining terms contribute non-negatively.
+\end{exercise}
+
+\begin{exercise}[Continuity from Above]
+\textnormal{(\(\ast\))} \\
+Let $A_1 \supseteq A_2 \supseteq \cdots$ with
+$\Prob(A_n) = 1/(n+1)$ for all $n \geq 1$. Compute
+$\Prob\!\left(\bigcap_{n=1}^\infty A_n\right)$ using the continuity of
+probability.
+\end{exercise}
+
+\begin{exercise}[Sequential Bayes Updates]
+\textnormal{(\(\ast\ast\))} \\
+A factory has two machines. Machine~1 produces 60\% of items and has a
+3\% defect rate; Machine~2 produces 40\% of items and has a 5\% defect
+rate. An item is selected at random.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute the probability that the item is defective.
+    \item Given the item is defective, compute the probability it came
+    from Machine~1.
+    \item A second item is drawn (independently) and is also defective.
+    Update the posterior for Machine~1 using Bayes' theorem applied
+    to both observations.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Independence Structure in MDPs]
+\textnormal{(\(\ast\ast\))} \\
+Consider a Markov decision process with state space
+$\mathcal{S} = \{s_1, s_2\}$, action space
+$\mathcal{A} = \{a_1, a_2\}$, and deterministic policy
+$\pi(s_1) = a_1$, $\pi(s_2) = a_2$. The transition probabilities are
+$\Prob(S_{t+1} = s_1 \mid S_t = s_1, A_t = a_1) = 0.7$ and
+$\Prob(S_{t+1} = s_1 \mid S_t = s_2, A_t = a_2) = 0.4$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\Prob(S_2 = s_1)$ given $\Prob(S_0 = s_1) = 1/2$
+    using the law of total probability (applied twice).
+    \item Are $\{S_0 = s_1\}$ and $\{S_2 = s_1\}$ independent? Compute
+    $\Prob(S_0 = s_1, S_2 = s_1)$ and compare with
+    $\Prob(S_0 = s_1) \Prob(S_2 = s_1)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Constructing Mutual Independence from Pairwise]
+\textnormal{(\(\ast\ast\ast\))} \\
+For $n = 4$, construct a finite probability space and events
+$A_1, A_2, A_3, A_4$ that are pairwise independent but not mutually
+independent. Verify all $\binom{4}{2} = 6$ pairwise conditions and
+exhibit at least one subset of size $\geq 3$ for which the product
+formula fails.
+
+\textit{Hint:} Consider a sample space with $2^3 = 8$ equally likely
+outcomes. Define each $A_i$ as a union of exactly 4 outcomes, chosen so
+that every pair of events intersects in exactly 2 outcomes.
+\end{exercise}
+
+\begin{exercise}[Conditional Probability as a Probability Measure]
+\textnormal{(\(\ast\ast\ast\))} \\
+Let $(\Omega, \Prob)$ be a probability space and $B$ an event with
+$\Prob(B) > 0$. Define $\Prob_B(A) = \Prob(A \mid B)$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Prove that $\Prob_B$ satisfies all three Kolmogorov axioms
+    (this was stated in Remark~\ref{rem:cond_is_prob}; provide the full
+    proof).
+    \item Prove that if $A_1 \subseteq A_2 \subseteq \cdots$, then
+    $\Prob_B(\bigcup_n A_n) = \lim_{n \to \infty} \Prob_B(A_n)$
+    (continuity of conditional probability from below).
+    \item Give an example showing that the continuity from above can fail
+    if we allow $\Prob(B) = 0$, motivating the need for measure-theoretic
+    conditional expectation (Phase~01).
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 7: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item A \emph{probability space} $(\Omega, \Prob)$ assigns
+    probabilities to events via three axioms: non-negativity,
+    normalization ($\Prob(\Omega) = 1$), and countable additivity.
+    \item The \emph{complement rule} ($\Prob(A^c) = 1 - \Prob(A)$) and
+    \emph{monotonicity} ($A \subseteq B \Rightarrow \Prob(A) \leq
+    \Prob(B)$) follow immediately from the axioms.
+    \item \emph{Inclusion-exclusion} computes $\Prob(\bigcup A_i)$ via an
+    alternating sum of intersection probabilities; truncating it gives the
+    union bound $\Prob(\bigcup A_i) \leq \sum \Prob(A_i)$.
+    \item \emph{Continuity of probability} extends the axioms to infinite
+    limits: $\Prob(\bigcup A_n) = \lim \Prob(A_n)$ for increasing
+    sequences and $\Prob(\bigcap A_n) = \lim \Prob(A_n)$ for decreasing
+    sequences.
+    \item \emph{Conditional probability}
+    $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B)$ formalizes how partial
+    information updates uncertainty; it is itself a probability measure.
+    \item \emph{Bayes' theorem} inverts the direction of conditioning:
+    $\Prob(B_j \mid A) \propto \Prob(A \mid B_j) \, \Prob(B_j)$,
+    combining prior beliefs with observed evidence.
+    \item Events $A$ and $B$ are \emph{independent} if
+    $\Prob(A \cap B) = \Prob(A)\Prob(B)$; \emph{mutual independence}
+    of $n$ events requires the product formula for all $2^n - n - 1$
+    subsets of size $\geq 2$.
+    \item Pairwise independence does not imply mutual independence:
+    the product rule can hold for every pair yet fail for larger subsets.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 8: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Lesson 10} introduces random variables, probability mass
+    functions, and expectation, building directly on the probability space
+    framework developed here.
+    \item \textbf{Lesson 11} develops common distributions (binomial,
+    geometric, Poisson) and their properties using the tools of conditional
+    probability and independence.
+    \item \textbf{Lesson 12} treats continuous random variables and
+    probability density functions, extending the discrete theory.
+    \item \textbf{Phase 01, Lesson 1} ($\sigma$-algebras) replaces the
+    power-set approach with $\sigma$-algebras, necessary for uncountable
+    sample spaces. Phase~01, Lesson~4 revisits probability spaces in the
+    measure-theoretic framework.
+    \item For a more combinatorial treatment of conditional probability, see
+    \citet[Chapter 2]{blitzstein2019}, which includes many worked examples
+    from genetics, medicine, and game theory.
+    \item The historical development of the Kolmogorov axioms (1933) and
+    their unification of discrete and continuous probability is discussed
+    in \citet[Chapter 1]{grimmett2020}. Earlier approaches by Laplace,
+    Bernoulli, and von Mises lacked the generality of the
+    measure-theoretic framework.
+\end{itemize}
+
+\bibliography{probability-refs}
+
+\end{document}

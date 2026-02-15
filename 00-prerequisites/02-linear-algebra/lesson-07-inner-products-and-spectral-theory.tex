@@ -1,0 +1,1000 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 7: Inner Products and Spectral Theory}}
+\fancyhead[R]{\thepage}
+\title{Lesson 7: Inner Products and Spectral Theory}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Suppose we wish to approximate a value function $V^\pi$ in reinforcement
+learning using a linear combination of $d$ basis functions
+$\phi_1, \ldots, \phi_d$.  Among all vectors in the subspace
+$U = \Span(\phi_1, \ldots, \phi_d)$, which one is closest to $V^\pi$?
+This question has no answer without a notion of ``distance,'' and distance
+requires an inner product.  Once we equip the space with an inner product,
+the best approximation is the \emph{orthogonal projection} of $V^\pi$ onto
+$U$ -- a result that underpins least-squares methods, principal component
+analysis, and the natural policy gradient.
+
+Beyond approximation, inner products unlock the most powerful structural
+theorem in finite-dimensional linear algebra: the \emph{spectral theorem}
+for real symmetric matrices.  This theorem guarantees that every real
+symmetric matrix has an orthonormal basis of eigenvectors with real
+eigenvalues -- a fact that is foundational for PCA, kernel methods,
+Hessian analysis, and the Fisher information matrix in natural gradient
+methods.  The tools developed in this lesson will let us define inner
+products, prove the spectral theorem, characterize positive definiteness,
+and establish the Rayleigh quotient bounds that govern convergence rates.
+
+\begin{rlconnection}[title={Where Inner Products and Spectral Theory Appear in RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Least squares and projection.}
+        Linear value function approximation finds $\hat{V} = \Phi w$
+        minimizing $\|V^\pi - \Phi w\|_2^2$; the solution is the
+        orthogonal projection of $V^\pi$ onto $\range(\Phi)$.
+  \item \textbf{PCA and spectral decomposition.}
+        Principal component analysis diagonalizes the covariance matrix
+        $\Sigma = \frac{1}{n}\sum_i x_i x_i^\top$ using the spectral
+        theorem to find the directions of maximum variance.
+  \item \textbf{Condition number and convergence.}
+        The condition number $\kappa(A) = \|A\| \cdot \|A^{-1}\|$
+        governs the convergence rate of iterative methods; for symmetric
+        positive definite $A$, $\kappa = \lambda_{\max}/\lambda_{\min}$.
+  \item \textbf{Natural policy gradient.}
+        The Fisher information matrix $F(\theta)$ defines an inner product
+        on the parameter space; the natural gradient
+        $\tilde{\nabla} J = F^{-1} \nabla J$ is the steepest ascent
+        direction in this geometry, computed via spectral decomposition.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Determinants, eigenvalues, characteristic polynomial, algebraic and
+geometric multiplicity, diagonalizability criterion, Cayley--Hamilton
+theorem (Lesson~6).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} inner products, norms, and orthogonality, and
+        verify the inner product axioms in concrete examples.
+  \item \textbf{Prove} the Cauchy--Schwarz inequality and apply the
+        Gram--Schmidt process to construct orthonormal bases.
+  \item \textbf{Derive} the orthogonal projection formula and prove
+        the best approximation theorem.
+  \item \textbf{Prove} the spectral theorem for real symmetric matrices:
+        every such matrix is orthogonally diagonalizable.
+  \item \textbf{Classify} symmetric matrices as positive definite,
+        positive semidefinite, or indefinite using eigenvalue criteria.
+  \item \textbf{Apply} the Rayleigh quotient and Courant--Fischer theorem
+        to characterize extreme eigenvalues.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 6--7]{axler2015} -- Inner product spaces,
+        orthonormal bases, the spectral theorem for self-adjoint operators.
+  \item \citet[Chapter 8]{hoffman1971} -- Inner product spaces and the
+        principal axis theorem with detailed proofs.
+  \item \citet[Chapters 6--7]{strang2016} -- Computational perspective
+        on orthogonality, Gram--Schmidt, and symmetric matrices.
+  \item \citet[Chapter 4]{horn2013} -- Spectral theory for Hermitian
+        matrices, Rayleigh quotient, Courant--Fischer, and Weyl
+        inequalities.
+  \item \citet[Chapter 8]{lax2007} -- Spectral theory with connections
+        to functional analysis and operator theory.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: INNER PRODUCT SPACES
+%% ============================================================
+\section{Inner Product Spaces}
+\label{sec:inner_products}
+
+\subsection{Definition and Examples}
+
+\begin{definition}[Inner Product]
+\label{def:inner_product}
+An \emph{inner product} on a real vector space $V$ is a function
+$\langle \cdot, \cdot \rangle\colon V \times V \to \R$ satisfying, for
+all $u, v, w \in V$ and $\alpha \in \R$:
+\begin{enumerate}[nosep]
+  \item \textbf{Symmetry:} $\langle u, v \rangle = \langle v, u \rangle$.
+  \item \textbf{Linearity in the first argument:}
+        $\langle \alpha u + v, w \rangle
+        = \alpha \langle u, w \rangle + \langle v, w \rangle$.
+  \item \textbf{Positive definiteness:}
+        $\langle v, v \rangle \geq 0$, with equality if and only if $v = 0$.
+\end{enumerate}
+A vector space equipped with an inner product is called an
+\emph{inner product space}.
+\end{definition}
+
+\begin{remark}
+\label{rem:bilinearity}
+Symmetry and linearity in the first argument together imply linearity in
+the second argument (bilinearity):
+$\langle u, \alpha v + w \rangle = \langle \alpha v + w, u \rangle
+= \alpha \langle v, u \rangle + \langle w, u \rangle
+= \alpha \langle u, v \rangle + \langle u, w \rangle$.
+\end{remark}
+
+\begin{example}[Standard Inner Products]
+\label{ex:standard_ips}
+\begin{enumerate}[nosep]
+  \item \textbf{Euclidean inner product on $\R^n$:}
+        $\langle x, y \rangle = \sum_{i=1}^n x_i y_i = x^\top y$.
+  \item \textbf{Weighted inner product on $\R^n$:}
+        For a symmetric positive definite matrix $M \in \R^{n \times n}$,
+        $\langle x, y \rangle_M = x^\top M y$ defines an inner product.
+  \item \textbf{$L^2$ inner product on $C[a,b]$:}
+        $\langle f, g \rangle = \int_a^b f(t) g(t)\, dt$ for continuous
+        functions $f, g\colon [a,b] \to \R$.
+\end{enumerate}
+\end{example}
+
+\begin{definition}[Norm Induced by an Inner Product]
+\label{def:norm}
+The \emph{norm} induced by an inner product is
+$\|v\| = \sqrt{\langle v, v \rangle}$.  The \emph{distance} between
+$u$ and $v$ is $\|u - v\|$.
+\end{definition}
+
+\subsection{Cauchy--Schwarz and Triangle Inequalities}
+
+\begin{theorem}[Cauchy--Schwarz Inequality]
+\label{thm:cauchy_schwarz}
+For all $u, v$ in an inner product space,
+\[
+  |\langle u, v \rangle| \leq \|u\| \cdot \|v\|.
+\]
+Equality holds if and only if $u$ and $v$ are linearly dependent.
+\end{theorem}
+
+\begin{proof}
+If $v = 0$, both sides are zero.  Assume $v \neq 0$.  For any $t \in \R$,
+\[
+  0 \leq \|u - tv\|^2
+  = \langle u - tv, u - tv \rangle
+  = \|u\|^2 - 2t\langle u, v \rangle + t^2 \|v\|^2.
+\]
+This is a quadratic in $t$ that is nonneg for all $t$.  Minimizing over
+$t$ at $t^* = \langle u, v \rangle / \|v\|^2$ gives
+\[
+  0 \leq \|u\|^2 - \frac{\langle u, v \rangle^2}{\|v\|^2},
+\]
+which rearranges to $\langle u, v \rangle^2 \leq \|u\|^2 \|v\|^2$.
+Taking square roots yields $|\langle u, v \rangle| \leq \|u\| \cdot \|v\|$.
+
+Equality holds iff $\|u - t^* v\| = 0$, i.e., $u = t^* v$ (linear dependence).
+\end{proof}
+
+\begin{corollary}[Triangle Inequality]
+\label{cor:triangle}
+For all $u, v$ in an inner product space, $\|u + v\| \leq \|u\| + \|v\|$.
+\end{corollary}
+
+\begin{proof}
+\begin{align*}
+  \|u + v\|^2
+  &= \|u\|^2 + 2\langle u, v \rangle + \|v\|^2
+   \leq \|u\|^2 + 2\|u\|\,\|v\| + \|v\|^2
+   = (\|u\| + \|v\|)^2. \qedhere
+\end{align*}
+\end{proof}
+
+With the Cauchy--Schwarz inequality established, we can develop the
+geometric structure of inner product spaces: orthogonality, projections,
+and orthonormal bases.
+
+%% ============================================================
+%% SECTION 4: ORTHOGONALITY AND ORTHONORMAL BASES
+%% ============================================================
+\section{Orthogonality and Orthonormal Bases}
+\label{sec:orthogonality}
+
+\subsection{Orthogonal and Orthonormal Lists}
+
+\begin{definition}[Orthogonality]
+\label{def:orthogonal}
+Two vectors $u, v$ in an inner product space are \emph{orthogonal},
+written $u \perp v$, if $\langle u, v \rangle = 0$.  A list of vectors
+$v_1, \ldots, v_m$ is \emph{orthogonal} if $\langle v_i, v_j \rangle = 0$
+for all $i \neq j$, and \emph{orthonormal} if additionally
+$\|v_i\| = 1$ for each $i$.
+\end{definition}
+
+\begin{theorem}[Pythagorean Theorem]
+\label{thm:pythagoras}
+If $v_1, \ldots, v_m$ are pairwise orthogonal, then
+\[
+  \|v_1 + \cdots + v_m\|^2 = \|v_1\|^2 + \cdots + \|v_m\|^2.
+\]
+\end{theorem}
+
+\begin{proof}
+$\|v_1 + \cdots + v_m\|^2 = \langle \sum_i v_i, \sum_j v_j \rangle
+= \sum_i \sum_j \langle v_i, v_j \rangle
+= \sum_i \|v_i\|^2$,
+since all cross terms vanish by orthogonality.
+\end{proof}
+
+\begin{proposition}[Orthogonal Lists Are Independent]
+\label{prop:orth_indep}
+Any orthogonal list of nonzero vectors is linearly independent.
+\end{proposition}
+
+\begin{proof}
+Let $v_1, \ldots, v_m$ be orthogonal and nonzero.  If
+$c_1 v_1 + \cdots + c_m v_m = 0$, take the inner product with $v_k$:
+$c_k \|v_k\|^2 = 0$.  Since $\|v_k\| \neq 0$, $c_k = 0$ for each $k$.
+\end{proof}
+
+\begin{example}[Orthonormal Basis of $\R^3$]
+\label{ex:onb_R3}
+The standard basis $e_1 = (1,0,0)$, $e_2 = (0,1,0)$, $e_3 = (0,0,1)$
+is orthonormal with respect to the Euclidean inner product.  For any
+$v = (a,b,c) \in \R^3$, the coordinates are recovered by inner products:
+$a = \langle v, e_1 \rangle$, $b = \langle v, e_2 \rangle$,
+$c = \langle v, e_3 \rangle$.
+\end{example}
+
+\subsection{The Gram--Schmidt Process}
+
+\begin{theorem}[Gram--Schmidt Orthogonalization]
+\label{thm:gram_schmidt}
+Let $v_1, \ldots, v_m$ be a linearly independent list in an inner product
+space $V$.  Then there exists an orthonormal list $e_1, \ldots, e_m$ such
+that
+\[
+  \Span(e_1, \ldots, e_k) = \Span(v_1, \ldots, v_k)
+  \quad \text{for each } k = 1, \ldots, m.
+\]
+The orthonormal list is constructed by:
+\begin{align*}
+  w_1 &= v_1, \quad e_1 = w_1 / \|w_1\|, \\
+  w_k &= v_k - \sum_{j=1}^{k-1} \langle v_k, e_j \rangle\, e_j,
+         \quad e_k = w_k / \|w_k\|,
+         \quad k = 2, \ldots, m.
+\end{align*}
+\end{theorem}
+
+\begin{proof}
+We proceed by induction.  \textbf{Base case:} $v_1 \neq 0$ (by
+independence), so $w_1 = v_1 \neq 0$ and $e_1 = v_1/\|v_1\|$ is a
+unit vector.  Clearly $\Span(e_1) = \Span(v_1)$.
+
+\textbf{Inductive step:} Assume $e_1, \ldots, e_{k-1}$ is orthonormal
+with $\Span(e_1, \ldots, e_{j}) = \Span(v_1, \ldots, v_j)$ for
+$j \leq k-1$.  Define
+$w_k = v_k - \sum_{j=1}^{k-1} \langle v_k, e_j \rangle\, e_j$.
+For each $i \leq k-1$:
+\[
+  \langle w_k, e_i \rangle
+  = \langle v_k, e_i \rangle
+    - \sum_{j=1}^{k-1} \langle v_k, e_j \rangle \langle e_j, e_i \rangle
+  = \langle v_k, e_i \rangle - \langle v_k, e_i \rangle = 0.
+\]
+Also $w_k \neq 0$: if $w_k = 0$, then
+$v_k = \sum_j \langle v_k, e_j \rangle\, e_j \in \Span(e_1, \ldots, e_{k-1})
+= \Span(v_1, \ldots, v_{k-1})$, contradicting the independence of the
+original list.  Set $e_k = w_k / \|w_k\|$.  Then $e_1, \ldots, e_k$ is
+orthonormal, and $\Span(e_1, \ldots, e_k) = \Span(v_1, \ldots, v_k)$
+(since $w_k$ is a combination of $v_k$ and $e_1, \ldots, e_{k-1}$, and
+$v_k$ can be recovered from $w_k$ and $e_1, \ldots, e_{k-1}$).
+\end{proof}
+
+\begin{example}[Gram--Schmidt in $\R^3$]
+\label{ex:gram_schmidt_R3}
+Apply Gram--Schmidt to $v_1 = (1, 1, 0)$, $v_2 = (1, 0, 1)$.
+
+\textbf{Step 1:} $w_1 = (1,1,0)$, $\|w_1\| = \sqrt{2}$,
+$e_1 = \frac{1}{\sqrt{2}}(1, 1, 0)$.
+
+\textbf{Step 2:} $\langle v_2, e_1 \rangle = 1/\sqrt{2}$.
+$w_2 = (1,0,1) - \frac{1}{2}(1,1,0) = (1/2, -1/2, 1)$.
+$\|w_2\| = \sqrt{3/2}$,
+$e_2 = \frac{1}{\sqrt{6}}(1, -1, 2)$.
+One verifies $\langle e_1, e_2 \rangle = 0$ and
+$\Span(e_1, e_2) = \Span(v_1, v_2)$.
+\end{example}
+
+\begin{corollary}
+\label{cor:onb_exists}
+Every finite-dimensional inner product space has an orthonormal basis.
+\end{corollary}
+
+\begin{proof}
+Start with any basis and apply the Gram--Schmidt process
+(Theorem~\ref{thm:gram_schmidt}).
+\end{proof}
+
+\subsection{Orthogonal Complement and Decomposition}
+
+\begin{definition}[Orthogonal Complement]
+\label{def:orth_complement}
+If $U$ is a subspace of an inner product space $V$, the \emph{orthogonal
+complement} of $U$ is
+\[
+  U^\perp = \{v \in V : \langle v, u \rangle = 0 \text{ for all } u \in U\}.
+\]
+\end{definition}
+
+\begin{proposition}
+\label{prop:orth_complement_subspace}
+$U^\perp$ is a subspace of $V$, and $U \cap U^\perp = \{0\}$.
+\end{proposition}
+
+\begin{proof}
+$U^\perp$ is a subspace: $0 \in U^\perp$, and closure under linear
+combinations follows from bilinearity.  If $v \in U \cap U^\perp$, then
+$\langle v, v \rangle = 0$, so $v = 0$.
+\end{proof}
+
+\begin{theorem}[Orthogonal Decomposition]
+\label{thm:orth_decomp}
+If $V$ is a finite-dimensional inner product space and $U$ is a subspace,
+then $V = U \oplus U^\perp$.  Equivalently, every $v \in V$ can be
+written uniquely as $v = u + w$ with $u \in U$ and $w \in U^\perp$.
+\end{theorem}
+
+\begin{proof}
+Let $e_1, \ldots, e_k$ be an orthonormal basis of $U$ (exists by
+Corollary~\ref{cor:onb_exists}).  For any $v \in V$, set
+\[
+  u = \sum_{j=1}^{k} \langle v, e_j \rangle\, e_j, \qquad
+  w = v - u.
+\]
+Then $u \in U$ and for each $i = 1, \ldots, k$:
+\[
+  \langle w, e_i \rangle
+  = \langle v, e_i \rangle - \sum_{j=1}^{k} \langle v, e_j \rangle
+    \langle e_j, e_i \rangle
+  = \langle v, e_i \rangle - \langle v, e_i \rangle = 0.
+\]
+Hence $w \perp e_i$ for each basis element of $U$, so $w \in U^\perp$.
+This shows $V = U + U^\perp$.  By Proposition~\ref{prop:orth_complement_subspace},
+$U \cap U^\perp = \{0\}$, so the sum is direct.
+\end{proof}
+
+\begin{corollary}[Dimension Formula]
+\label{cor:dim_orth}
+$\dim U + \dim U^\perp = \dim V$ and $(U^\perp)^\perp = U$.
+\end{corollary}
+
+\begin{proof}
+The first follows from $V = U \oplus U^\perp$.  For the second,
+$U \subseteq (U^\perp)^\perp$ is clear, and both have dimension $\dim U$.
+\end{proof}
+
+\subsection{Orthogonal Projection and Best Approximation}
+
+\begin{definition}[Orthogonal Projection]
+\label{def:projection}
+Let $U$ be a subspace of a finite-dimensional inner product space $V$.
+The \emph{orthogonal projection} onto $U$ is the map
+$\proj_U\colon V \to V$ defined by $\proj_U(v) = u$, where $v = u + w$
+is the orthogonal decomposition with $u \in U$ and $w \in U^\perp$.
+If $e_1, \ldots, e_k$ is an orthonormal basis of $U$, then
+\[
+  \proj_U(v) = \sum_{j=1}^{k} \langle v, e_j \rangle\, e_j.
+\]
+\end{definition}
+
+\begin{keyresult}[title={Orthogonal Projection and Best Approximation}]
+\begin{theorem}[Best Approximation]
+\label{thm:best_approx}
+Let $U$ be a subspace of a finite-dimensional inner product space $V$
+and let $v \in V$.  Then $\proj_U(v)$ is the unique element of $U$ that
+minimizes the distance to $v$:
+\[
+  \|v - \proj_U(v)\| < \|v - u\| \quad \text{for all } u \in U,
+  \; u \neq \proj_U(v).
+\]
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $\hat{u} = \proj_U(v)$, so $v - \hat{u} \in U^\perp$.  For any
+$u \in U$:
+\[
+  \|v - u\|^2 = \|(v - \hat{u}) + (\hat{u} - u)\|^2
+  = \|v - \hat{u}\|^2 + \|\hat{u} - u\|^2,
+\]
+where the cross term vanishes because $v - \hat{u} \in U^\perp$ and
+$\hat{u} - u \in U$ (Pythagorean theorem, Theorem~\ref{thm:pythagoras}).
+Hence $\|v - u\|^2 \geq \|v - \hat{u}\|^2$, with equality iff
+$u = \hat{u}$.
+\end{proof}
+
+\begin{example}[Projection onto a Line]
+\label{ex:proj_line}
+Let $U = \Span(a)$ for $a \neq 0$ in $\R^n$.  The orthonormal basis of
+$U$ is $e_1 = a/\|a\|$, so
+\[
+  \proj_U(v) = \frac{\langle v, a \rangle}{\|a\|^2}\, a
+  = \frac{a^\top v}{a^\top a}\, a.
+\]
+For $a = (1,1)^\top$ and $v = (3,1)^\top$ in $\R^2$:
+$\proj_U(v) = \frac{4}{2}(1,1)^\top = (2,2)^\top$.
+The residual $v - \proj_U(v) = (1,-1)^\top$ is orthogonal to $a$:
+$(1,-1) \cdot (1,1) = 0$.
+\end{example}
+
+\begin{rlconnection}[title={Least Squares and Linear Value Function Approximation}]
+In linear value function approximation, states are represented by feature
+vectors $\phi(s_i) \in \R^d$, forming a matrix $\Phi \in \R^{n \times d}$.
+The projected Bellman equation seeks $w^* \in \R^d$ such that
+$\Phi w^*$ is the orthogonal projection of $r + \gamma P V$ onto
+$\range(\Phi)$ under the inner product
+$\langle u, v \rangle_\mu = \sum_i \mu(s_i) u_i v_i$ weighted by the
+stationary distribution $\mu$.  By the best approximation theorem
+(Theorem~\ref{thm:best_approx}), this projection minimizes
+$\|V - \Phi w\|_\mu^2$ over all $w \in \R^d$.  The normal equations
+$\Phi^\top D_\mu \Phi\, w = \Phi^\top D_\mu (r + \gamma P V)$ are the
+concrete form of $v - \proj_U(v) \in U^\perp$.
+\end{rlconnection}
+
+\subsection{Bessel's Inequality}
+
+\begin{theorem}[Bessel's Inequality]
+\label{thm:bessel}
+Let $e_1, \ldots, e_m$ be an orthonormal list (not necessarily a basis)
+in an inner product space $V$.  For any $v \in V$,
+\[
+  \sum_{j=1}^{m} |\langle v, e_j \rangle|^2 \leq \|v\|^2.
+\]
+Equality holds if and only if $v \in \Span(e_1, \ldots, e_m)$.
+\end{theorem}
+
+\begin{proof}
+With $U = \Span(e_1, \ldots, e_m)$, the Pythagorean theorem gives
+$\|v\|^2 = \|\proj_U(v)\|^2 + \|v - \proj_U(v)\|^2
+= \sum_j |\langle v, e_j \rangle|^2 + \|v - \proj_U(v)\|^2
+\geq \sum_j |\langle v, e_j \rangle|^2$,
+with equality iff $v \in U$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 5: THE SPECTRAL THEOREM
+%% ============================================================
+\section{The Spectral Theorem for Real Symmetric Matrices}
+\label{sec:spectral}
+
+We now turn to the central result of this lesson.  Throughout this
+section, all matrices are real ($\F = \R$) and the inner product is
+the standard Euclidean inner product $\langle x, y \rangle = x^\top y$.
+
+\subsection{Eigenvalues of Symmetric Matrices Are Real}
+
+\begin{lemma}
+\label{lem:symmetric_real_eigen}
+Every eigenvalue of a real symmetric matrix $A \in \R^{n \times n}$ is
+real.
+\end{lemma}
+
+\begin{proof}
+We work over $\C$ temporarily.  Let $\lambda \in \C$ be an eigenvalue
+with eigenvector $v \in \C^n \setminus \{0\}$: $Av = \lambda v$.  Take
+the conjugate transpose: $\bar{v}^\top A^\top = \bar{\lambda} \bar{v}^\top$.
+Since $A = A^\top$ (and $A$ has real entries, so $\bar{A} = A$):
+\[
+  \bar{v}^\top A v = \bar{\lambda}\, \bar{v}^\top v.
+\]
+Also, $\bar{v}^\top A v = \bar{v}^\top (\lambda v) = \lambda\, \bar{v}^\top v$.
+Since $\bar{v}^\top v = \sum_i |v_i|^2 > 0$, we can divide to get
+$\lambda = \bar{\lambda}$, so $\lambda \in \R$.
+\end{proof}
+
+\subsection{Orthogonality of Eigenvectors}
+
+\begin{lemma}
+\label{lem:symmetric_orth_eigen}
+Let $A \in \R^{n \times n}$ be symmetric.  Eigenvectors corresponding to
+distinct eigenvalues are orthogonal.
+\end{lemma}
+
+\begin{proof}
+Let $Av_1 = \lambda_1 v_1$ and $Av_2 = \lambda_2 v_2$ with
+$\lambda_1 \neq \lambda_2$.  Then
+\[
+  \lambda_1 \langle v_1, v_2 \rangle
+  = \langle Av_1, v_2 \rangle
+  = v_1^\top A^\top v_2
+  = v_1^\top A v_2
+  = \langle v_1, Av_2 \rangle
+  = \lambda_2 \langle v_1, v_2 \rangle.
+\]
+Since $\lambda_1 \neq \lambda_2$, we must have
+$\langle v_1, v_2 \rangle = 0$.
+\end{proof}
+
+\subsection{Invariant Subspaces and the Spectral Theorem}
+
+\begin{lemma}[Symmetric Matrices Preserve Orthogonal Complements]
+\label{lem:symmetric_invariant}
+Let $A \in \R^{n \times n}$ be symmetric and let $U$ be an
+$A$-invariant subspace (i.e., $Au \in U$ for all $u \in U$).  Then
+$U^\perp$ is also $A$-invariant.
+\end{lemma}
+
+\begin{proof}
+Let $w \in U^\perp$.  For any $u \in U$, we have $Au \in U$ (by
+$A$-invariance) and
+\[
+  \langle Aw, u \rangle = \langle w, A^\top u \rangle
+  = \langle w, Au \rangle = 0,
+\]
+since $Au \in U$ and $w \in U^\perp$.  Hence $Aw \perp U$, i.e.,
+$Aw \in U^\perp$.
+\end{proof}
+
+\begin{keyresult}[title={The Spectral Theorem for Real Symmetric Matrices}]
+\begin{theorem}[Spectral Theorem]
+\label{thm:spectral}
+Let $A \in \R^{n \times n}$ be symmetric.  Then:
+\begin{enumerate}[nosep]
+  \item All eigenvalues of $A$ are real.
+  \item There exists an orthonormal basis of $\R^n$ consisting of
+        eigenvectors of $A$.
+  \item There exists an orthogonal matrix $Q$ (i.e., $Q^\top Q = I$)
+        such that $Q^\top A Q = \diag(\lambda_1, \ldots, \lambda_n)$.
+\end{enumerate}
+Equivalently, $A$ admits the \emph{spectral decomposition}
+$A = \sum_{i=1}^{n} \lambda_i\, q_i q_i^\top$, where
+$q_1, \ldots, q_n$ are orthonormal eigenvectors.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+(1) is Lemma~\ref{lem:symmetric_real_eigen}.
+
+(2) We prove by induction on $n$.  For $n = 1$, any nonzero vector is
+an eigenvector, and normalizing gives an orthonormal basis.
+
+For the inductive step, let $n \geq 2$.  Since the characteristic
+polynomial $p_A$ has degree $n$ and real coefficients, and all roots
+are real (by part (1)), $A$ has at least one real eigenvalue $\lambda_1$
+with unit eigenvector $q_1$.  Let $U = \Span(q_1)$.  Since
+$AU = \lambda_1 U \subseteq U$, the subspace $U$ is $A$-invariant.
+By Lemma~\ref{lem:symmetric_invariant}, $U^\perp$ is also $A$-invariant.
+
+Let $B = A|_{U^\perp}$ denote the restriction of $A$ to $U^\perp$.
+Since $U^\perp$ has dimension $n - 1$ and $B$ is symmetric (as the
+restriction of a symmetric operator to an invariant subspace), the
+inductive hypothesis provides an orthonormal basis
+$q_2, \ldots, q_n$ of $U^\perp$ consisting of eigenvectors of $B$
+(and hence of $A$).  Then $q_1, q_2, \ldots, q_n$ is an orthonormal
+basis of $\R^n = U \oplus U^\perp$ consisting of eigenvectors of $A$.
+
+(3) Setting $Q = (q_1 \mid q_2 \mid \cdots \mid q_n)$, the columns are
+orthonormal, so $Q^\top Q = I$.  The eigenvector equation
+$AQ = Q\diag(\lambda_1, \ldots, \lambda_n)$ gives
+$Q^\top A Q = \diag(\lambda_1, \ldots, \lambda_n)$.
+
+The spectral decomposition follows from $A = Q\Lambda Q^\top$ where
+$\Lambda = \diag(\lambda_i)$:
+$A = \sum_{i=1}^n \lambda_i\, q_i q_i^\top$.
+\end{proof}
+
+\begin{example}[Spectral Decomposition of a $2 \times 2$ Matrix]
+\label{ex:spectral_2x2}
+Let $A = \begin{pmatrix} 3 & 1 \\ 1 & 3 \end{pmatrix}$.  The
+characteristic polynomial is $\lambda^2 - 6\lambda + 8 = (\lambda-2)(\lambda-4)$.
+Eigenvalues: $\lambda_1 = 2$, $\lambda_2 = 4$.
+
+For $\lambda_1 = 2$: $q_1 = \frac{1}{\sqrt{2}}(1, -1)^\top$.
+For $\lambda_2 = 4$: $q_2 = \frac{1}{\sqrt{2}}(1, 1)^\top$.
+
+The spectral decomposition is
+$A = 2 q_1 q_1^\top + 4 q_2 q_2^\top
+= 2 \cdot \frac{1}{2}\begin{pmatrix} 1 & -1 \\ -1 & 1 \end{pmatrix}
++ 4 \cdot \frac{1}{2}\begin{pmatrix} 1 & 1 \\ 1 & 1 \end{pmatrix}
+= \begin{pmatrix} 3 & 1 \\ 1 & 3 \end{pmatrix}$.
+\end{example}
+
+\begin{example}[Spectral Decomposition of a $3 \times 3$ Matrix]
+\label{ex:spectral_3x3}
+Let $A = \begin{pmatrix} 2 & 1 & 0 \\ 1 & 2 & 1 \\ 0 & 1 & 2 \end{pmatrix}$.
+Expanding $\det(A - \lambda I) = (2-\lambda)[(2-\lambda)^2 - 2]$ gives
+eigenvalues $\lambda_1 = 2 - \sqrt{2}$, $\lambda_2 = 2$,
+$\lambda_3 = 2 + \sqrt{2}$ -- all real and distinct, confirming the
+spectral theorem.
+\end{example}
+
+\begin{rlconnection}[title={PCA and Spectral Decomposition}]
+In principal component analysis, given centered data
+$x_1, \ldots, x_m \in \R^n$, the sample covariance matrix is
+$S = \frac{1}{m}\sum_{i=1}^m x_i x_i^\top$.  Since $S$ is symmetric
+and positive semidefinite, the spectral theorem gives
+$S = \sum_{j=1}^n \lambda_j q_j q_j^\top$ with $\lambda_j \geq 0$.
+The top $k$ principal components are the eigenvectors
+$q_1, \ldots, q_k$ (ordered by $\lambda_1 \geq \cdots \geq \lambda_n$).
+The projection $\proj_U(x) = \sum_{j=1}^k \langle x, q_j \rangle q_j$
+onto $U = \Span(q_1, \ldots, q_k)$ is the best rank-$k$ approximation
+of the data by the Eckart--Young theorem.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: POSITIVE DEFINITENESS
+%% ============================================================
+\section{Positive Definiteness and Cholesky Factorization}
+\label{sec:positive_definite}
+
+\subsection{Characterizations of Positive Definiteness}
+
+\begin{definition}[Positive Definite and Positive Semidefinite]
+\label{def:pd}
+A symmetric matrix $A \in \R^{n \times n}$ is:
+\begin{itemize}[nosep]
+  \item \emph{Positive definite} (written $A \succ 0$) if
+        $x^\top A x > 0$ for all nonzero $x \in \R^n$.
+  \item \emph{Positive semidefinite} (written $A \succeq 0$) if
+        $x^\top A x \geq 0$ for all $x \in \R^n$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Characterizations of Positive Definiteness]
+\label{thm:pd_char}
+For a symmetric matrix $A \in \R^{n \times n}$, the following are
+equivalent:
+\begin{enumerate}[nosep]
+  \item $A \succ 0$ (positive definite).
+  \item All eigenvalues of $A$ are strictly positive.
+  \item $A = R^\top R$ for some invertible matrix $R$.
+  \item All leading principal minors of $A$ are strictly positive.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+$(1) \Rightarrow (2)$: If $Av = \lambda v$ with $v \neq 0$, then
+$0 < v^\top Av = \lambda \|v\|^2$, so $\lambda > 0$.
+
+$(2) \Rightarrow (3)$: By the spectral theorem, $A = Q\Lambda Q^\top$
+with $\lambda_i > 0$.  Set $R = \Lambda^{1/2}Q^\top$; then $R^\top R = A$
+and $R$ is invertible.
+
+$(3) \Rightarrow (1)$: $x^\top Ax = \|Rx\|^2 > 0$ for $x \neq 0$ since
+$R$ is invertible.
+
+$(1) \Leftrightarrow (4)$: See \citet[Theorem~7.2.5]{horn2013}; the key
+idea is that principal submatrices of positive definite matrices are
+positive definite.
+\end{proof}
+
+\begin{warning}[title={Positive Definiteness Requires Symmetry}]
+The non-symmetric matrix $A = \bigl(\begin{smallmatrix} 1 & 2 \\ 0 & 1 \end{smallmatrix}\bigr)$
+has eigenvalues $\{1,1\}$ (positive), yet
+$x^\top Ax = (x_1 + x_2)^2 = 0$ at $x = (1,-1)^\top$.  The eigenvalue
+characterization in Theorem~\ref{thm:pd_char} requires symmetry.
+\end{warning}
+
+\subsection{Cholesky Factorization}
+
+\begin{theorem}[Cholesky Factorization]
+\label{thm:cholesky}
+If $A \in \R^{n \times n}$ is symmetric positive definite, then there
+exists a unique lower triangular matrix $L$ with positive diagonal entries
+such that $A = LL^\top$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Existence} (by induction on $n$).  For $n = 1$, $L = (\sqrt{a_{11}})$.
+For $n \geq 2$, partition $A$ as
+$A = \bigl(\begin{smallmatrix} a_{11} & b^\top \\ b & C \end{smallmatrix}\bigr)$
+with $a_{11} > 0$.  Set $\ell_{11} = \sqrt{a_{11}}$ and
+$\ell = b/\ell_{11}$.  The Schur complement $S = C - \ell\ell^\top$ is
+symmetric positive definite, so by induction $S = L_1 L_1^\top$.  Then
+$L = \bigl(\begin{smallmatrix} \ell_{11} & 0 \\ \ell & L_1 \end{smallmatrix}\bigr)$
+satisfies $A = LL^\top$.
+
+\textbf{Uniqueness:} If $LL^\top = MM^\top$, then $Q = M^{-1}L$ satisfies
+$QQ^\top = I$.  Since $Q$ is lower triangular with positive diagonal
+(as a product of lower triangular matrices with positive diagonals), and
+orthogonal lower triangular matrices with positive diagonal must equal $I$,
+we get $L = M$.
+\end{proof}
+
+\begin{example}[Cholesky Factorization]
+\label{ex:cholesky}
+Let $A = \begin{pmatrix} 4 & 2 \\ 2 & 5 \end{pmatrix}$.  Since
+$\det A = 16 > 0$ and $a_{11} = 4 > 0$, $A$ is positive definite.
+$\ell_{11} = 2$, $\ell_{21} = 2/2 = 1$, $s_{22} = 5 - 1 = 4$,
+$\ell_{22} = 2$.  So
+$L = \begin{pmatrix} 2 & 0 \\ 1 & 2 \end{pmatrix}$ and
+$LL^\top = \begin{pmatrix} 4 & 2 \\ 2 & 5 \end{pmatrix} = A$.
+\end{example}
+
+\begin{rlconnection}[title={Condition Number and Convergence of Iterative Methods}]
+For a symmetric positive definite system $Ax = b$, the condition number
+$\kappa(A) = \lambda_{\max}(A)/\lambda_{\min}(A)$ determines the rate of
+convergence of gradient descent and conjugate gradient methods.
+Preconditioning replaces $Ax = b$ with $L^{-1}AL^{-\top}(L^\top x) = L^{-1}b$
+using the Cholesky factor $A \approx LL^\top$ of a preconditioner.
+A well-chosen preconditioner reduces $\kappa$ and accelerates convergence.
+In RL, the Fisher information matrix $F(\theta)$ is symmetric positive
+(semi)definite; its condition number affects the convergence of natural
+policy gradient methods.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: RAYLEIGH QUOTIENT AND COURANT-FISCHER
+%% ============================================================
+\section{Rayleigh Quotient and Courant--Fischer}
+\label{sec:rayleigh}
+
+\subsection{The Rayleigh Quotient}
+
+\begin{definition}[Rayleigh Quotient]
+\label{def:rayleigh}
+For a symmetric matrix $A \in \R^{n \times n}$, the \emph{Rayleigh
+quotient} is the function $R_A\colon \R^n \setminus \{0\} \to \R$ defined
+by
+\[
+  R_A(x) = \frac{x^\top A x}{x^\top x} = \frac{\langle Ax, x \rangle}{\|x\|^2}.
+\]
+\end{definition}
+
+\begin{theorem}[Extreme Values of the Rayleigh Quotient]
+\label{thm:rayleigh_bounds}
+Let $A \in \R^{n \times n}$ be symmetric with eigenvalues
+$\lambda_1 \leq \lambda_2 \leq \cdots \leq \lambda_n$.  Then
+\[
+  \lambda_1 = \min_{x \neq 0} R_A(x), \qquad
+  \lambda_n = \max_{x \neq 0} R_A(x).
+\]
+The minimum is attained at any eigenvector for $\lambda_1$, and the
+maximum at any eigenvector for $\lambda_n$.
+\end{theorem}
+
+\begin{proof}
+Substituting $y = Q^\top x$ in the spectral decomposition $A = Q\Lambda Q^\top$:
+$R_A(x) = \sum_i \lambda_i y_i^2 / \sum_i y_i^2$,
+a weighted average of eigenvalues with nonneg weights summing to 1.
+Hence $\lambda_1 \leq R_A(x) \leq \lambda_n$.  Equality is attained at
+the corresponding eigenvectors: $R_A(q_1) = \lambda_1$ and
+$R_A(q_n) = \lambda_n$.
+\end{proof}
+
+\subsection{The Courant--Fischer Minimax Theorem}
+
+\begin{theorem}[Courant--Fischer Minimax Theorem]
+\label{thm:courant_fischer}
+Let $A \in \R^{n \times n}$ be symmetric with eigenvalues
+$\lambda_1 \leq \cdots \leq \lambda_n$.  For each $k = 1, \ldots, n$,
+\[
+  \lambda_k = \min_{\substack{S \subseteq \R^n \\ \dim S = k}}
+              \max_{\substack{x \in S \\ x \neq 0}} R_A(x)
+            = \max_{\substack{S \subseteq \R^n \\ \dim S = n-k+1}}
+              \min_{\substack{x \in S \\ x \neq 0}} R_A(x).
+\]
+\end{theorem}
+
+\begin{proof}
+We prove $\lambda_k = \min_{\dim S = k} \max_{x \in S \setminus \{0\}} R_A(x)$.
+Let $q_1, \ldots, q_n$ be orthonormal eigenvectors with $Aq_i = \lambda_i q_i$.
+
+\textbf{Upper bound:} $S_0 = \Span(q_1, \ldots, q_k)$ has dimension $k$.
+For $x = \sum_{i=1}^k c_i q_i \neq 0$,
+$R_A(x) = \sum_i \lambda_i c_i^2 / \sum_i c_i^2 \leq \lambda_k$, with
+equality at $x = q_k$.
+
+\textbf{Lower bound:} For any $k$-dimensional $S$, let
+$T = \Span(q_k, \ldots, q_n)$ with $\dim T = n - k + 1$.  Since
+$\dim S + \dim T > n$, there exists $x \in S \cap T \setminus \{0\}$.
+Writing $x = \sum_{i=k}^n c_i q_i$ gives $R_A(x) \geq \lambda_k$.
+
+Combining: $\lambda_k = \min_{\dim S = k} \max_{x \in S} R_A(x)$.
+The max-min formula is proved analogously.
+\end{proof}
+
+\begin{example}[Rayleigh Quotient Bounds]
+\label{ex:rayleigh_bound}
+For $A = \begin{pmatrix} 4 & 1 \\ 1 & 2 \end{pmatrix}$, evaluating
+$R_A$ at $x = (0,1)^\top$ gives $R_A = 2$, so $\lambda_{\min} \leq 2$.
+At $x = (1,1)^\top$, $R_A = 4$, so $\lambda_{\max} \geq 4$.  The exact
+eigenvalues $3 \pm \sqrt{2} \approx 1.59, 4.41$ are consistent.
+\end{example}
+
+\begin{rlconnection}[title={Natural Policy Gradient and the Fisher Matrix}]
+In natural policy gradient methods, the update
+$\theta_{t+1} = \theta_t + \alpha F(\theta_t)^{-1} \nabla J(\theta_t)$
+uses the Fisher information matrix $F(\theta) \succeq 0$.  Its spectral
+decomposition enables efficient computation of $F^{-1}\nabla J$, and
+the Courant--Fischer theorem characterizes how the curvature of the
+KL-divergence landscape varies across parameter subspaces.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Inner Product Verification]
+\label{exer:ip_verify}
+\textnormal{(\(*\))} \\
+Let $V = \R^2$ and define $\langle x, y \rangle = 2x_1 y_1 + x_1 y_2 + x_2 y_1 + 3x_2 y_2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Verify that this is an inner product by checking all axioms.
+  \item Find the matrix $M$ such that $\langle x, y \rangle = x^\top M y$.
+  \item Compute $\|e_1\|$ and $\|e_2\|$ in this inner product.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Gram--Schmidt and Projection]
+\label{exer:gram_schmidt}
+\textnormal{(\(*\))} \\
+In $\R^3$ with the standard inner product:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Apply the Gram--Schmidt process to $v_1 = (1, 1, 1)$,
+        $v_2 = (1, 1, 0)$, $v_3 = (1, 0, 0)$ to produce an orthonormal
+        basis.
+  \item Compute the orthogonal projection of $w = (2, 3, 5)$ onto
+        $U = \Span(v_1, v_2)$.
+  \item Verify that $w - \proj_U(w)$ is orthogonal to both $v_1$ and $v_2$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Spectral Decomposition]
+\label{exer:spectral}
+\textnormal{(\(**\))} \\
+Let $A = \begin{pmatrix} 5 & 2 \\ 2 & 2 \end{pmatrix}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Find all eigenvalues and a corresponding orthonormal eigenbasis.
+  \item Write the spectral decomposition $A = \lambda_1 q_1 q_1^\top + \lambda_2 q_2 q_2^\top$.
+  \item Compute $A^{10}$ using the spectral decomposition.
+  \item Determine whether $A$ is positive definite.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[PCA Application]
+\label{exer:pca}
+\textnormal{(\(**\))} \\
+Consider centered data points $x_1 = (2, 1)^\top$, $x_2 = (-1, 1)^\top$,
+$x_3 = (-1, -2)^\top$ in $\R^2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Compute the sample covariance matrix
+        $S = \frac{1}{3}\sum_{i=1}^3 x_i x_i^\top$.
+  \item Find the eigenvalues and eigenvectors of $S$.
+  \item Identify the first principal component direction and compute the
+        projection of each data point onto it.
+  \item What fraction of the total variance is captured by the first
+        principal component?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Courant--Fischer Application]
+\label{exer:courant_fischer}
+\textnormal{(\(**\))} \\
+Let $A \in \R^{n \times n}$ be symmetric with eigenvalues
+$\lambda_1 \leq \cdots \leq \lambda_n$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Use the Courant--Fischer theorem to prove the \emph{interlacing
+        inequality}: if $B$ is the $(n-1) \times (n-1)$ principal submatrix
+        obtained by deleting the last row and column of $A$, and $B$ has
+        eigenvalues $\mu_1 \leq \cdots \leq \mu_{n-1}$, then
+        $\lambda_1 \leq \mu_1 \leq \lambda_2 \leq \mu_2 \leq \cdots
+        \leq \mu_{n-1} \leq \lambda_n$.
+  \item Apply this result: if $A \in \R^{3 \times 3}$ is symmetric with
+        eigenvalues $1, 3, 5$, what are the possible eigenvalues of the
+        $2 \times 2$ upper-left submatrix?
+\end{enumerate}
+\textit{Hint:} For (a), embed $(n-1)$-dimensional subspaces of
+$\R^{n-1}$ into $\R^n$ via $x \mapsto (x, 0)$.
+\end{exercise}
+
+\begin{exercise}[Positive Definiteness and Convexity]
+\label{exer:pd_proof}
+\textnormal{(\(***\))} \\
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Let $A, B \in \R^{n \times n}$ be symmetric with $A \succeq B$.
+        Use the Courant--Fischer theorem to prove $\lambda_k(A) \geq \lambda_k(B)$
+        for each $k$.
+  \item Let $A_0, A_1 \succ 0$ and $A(t) = (1-t)A_0 + tA_1$ for
+        $t \in [0,1]$.  Show that $A(t) \succ 0$ for all $t$ (the positive
+        definite cone is convex).
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item An \emph{inner product} on a real vector space is a symmetric,
+        bilinear, positive definite function $\langle \cdot, \cdot \rangle$.
+        It induces a norm $\|v\| = \sqrt{\langle v, v \rangle}$ and a
+        distance $d(u,v) = \|u - v\|$.
+
+  \item The \emph{Cauchy--Schwarz inequality}
+        $|\langle u, v \rangle| \leq \|u\| \cdot \|v\|$ is the most
+        fundamental inequality in inner product spaces, with equality iff
+        $u$ and $v$ are linearly dependent.
+
+  \item The \emph{Gram--Schmidt process} converts any linearly independent
+        list into an orthonormal list with the same successive spans.
+        Every finite-dimensional inner product space has an orthonormal
+        basis.
+
+  \item For any subspace $U$, the space decomposes as
+        $V = U \oplus U^\perp$.  The \emph{orthogonal projection}
+        $\proj_U(v) = \sum_j \langle v, e_j \rangle e_j$ gives the unique
+        closest point in $U$ to $v$ (best approximation theorem).
+
+  \item \emph{Bessel's inequality}:
+        $\sum_j |\langle v, e_j \rangle|^2 \leq \|v\|^2$ for any
+        orthonormal list, with equality iff $v$ lies in the span.
+
+  \item The \emph{spectral theorem} states that every real symmetric
+        matrix has an orthonormal basis of eigenvectors with real
+        eigenvalues: $A = Q\Lambda Q^\top$ with $Q$ orthogonal.
+
+  \item A symmetric matrix is \emph{positive definite} iff all eigenvalues
+        are positive, iff $x^\top Ax > 0$ for all $x \neq 0$, iff it admits
+        a Cholesky factorization $A = LL^\top$.
+
+  \item The \emph{Rayleigh quotient} $R_A(x) = x^\top Ax / x^\top x$
+        satisfies $\lambda_{\min} \leq R_A(x) \leq \lambda_{\max}$.  The
+        \emph{Courant--Fischer theorem} gives a minimax characterization
+        of every eigenvalue, enabling eigenvalue comparison between matrices
+        and submatrices.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 8} (SVD and Applications) extends the spectral
+        theorem to non-symmetric and non-square matrices via the singular
+        value decomposition $A = U\Sigma V^\top$.  The SVD is the most
+        widely used matrix factorization in machine learning.
+
+  \item \textbf{Phase 01, Functional Analysis} (Lessons on Hilbert spaces)
+        generalizes the finite-dimensional inner product theory to
+        infinite-dimensional spaces, with applications to kernel methods
+        and reproducing kernel Hilbert spaces (RKHS).
+
+  \item The complex analogue of the spectral theorem (for Hermitian
+        matrices) is developed in \citet[Chapter~4]{horn2013}, along with
+        Weyl's eigenvalue perturbation inequalities.
+
+  \item \citet[Chapter~6]{axler2015} presents inner product spaces
+        and the spectral theorem in the coordinate-free operator-theoretic
+        framework, avoiding matrices until the final step.
+
+  \item For the Cholesky factorization and its role in numerical linear
+        algebra, see \citet[Chapter~6]{strang2016}.  The factorization
+        is the computational backbone of Gaussian process inference in ML,
+        where the kernel matrix is symmetric positive definite.
+
+  \item \citet{petersen2012} provides a comprehensive collection of matrix
+        identities, including derivative formulas for determinants, traces,
+        and matrix inverses, which are essential for implementing gradient
+        computations in neural networks.
+\end{itemize}
+
+\bibliography{linear-algebra-refs}
+\end{document}

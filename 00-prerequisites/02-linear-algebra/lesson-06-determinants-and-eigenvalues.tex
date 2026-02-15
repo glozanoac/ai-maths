@@ -1,0 +1,880 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 6: Determinants and Eigenvalues}}
+\fancyhead[R]{\thepage}
+\title{Lesson 6: Determinants and Eigenvalues}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a Markov chain with $n$ states and transition matrix
+$P \in \R^{n \times n}$.  A fundamental question in reinforcement learning
+is: how quickly does the chain converge to its stationary distribution?
+The answer depends on the \emph{spectral gap} $1 - |\lambda_2|$, where
+$\lambda_2$ is the second-largest eigenvalue of $P$ in absolute value.
+But what exactly is an eigenvalue?  How do we know eigenvalues exist?
+And how do we compute them?
+
+The characteristic polynomial $\det(A - \lambda I) = 0$ is the bridge
+connecting eigenvalues to the determinant.  This single equation governs
+the convergence rate of iterative algorithms (value iteration, policy
+iteration), the stability of gradient descent (all eigenvalues of the
+Hessian must be positive for a local minimum), and the expressiveness of
+linear transformations (invertibility is equivalent to a nonzero determinant).
+The tools developed in this lesson will let us define determinants rigorously,
+establish the eigenvalue--eigenvector framework, and prove the
+diagonalizability criterion that underpins spectral methods throughout
+machine learning.
+
+\begin{rlconnection}[title={Where Determinants and Eigenvalues Appear in RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Spectral radius and Markov chain mixing.}
+        The rate at which a Markov chain mixes to stationarity is governed by
+        the spectral radius $\rho(P - \pi \mathbf{1}^\top)$; eigenvalue
+        analysis is the primary tool for bounding this quantity.
+  \item \textbf{Gradient descent convergence.}
+        For quadratic objectives $f(x) = \tfrac{1}{2} x^\top A x - b^\top x$,
+        the condition number $\kappa = \lambda_{\max}(A)/\lambda_{\min}(A)$
+        determines the convergence rate of gradient descent.
+  \item \textbf{Cayley--Hamilton and multi-step TD.}
+        The Cayley--Hamilton theorem shows that $A^n$ can be expressed as a
+        polynomial in $A$ of degree $< n$, which is used to analyze
+        multi-step temporal difference methods and truncated matrix powers.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Vector spaces, bases, dimension, linear maps, rank--nullity theorem,
+matrix representation, change of basis, and similarity (Lesson~5).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the determinant via cofactor expansion and the
+        Leibniz formula, and compute determinants of small matrices.
+  \item \textbf{Prove} the multiplicativity of determinants
+        ($\det(AB) = \det A \cdot \det B$) and the equivalence between
+        invertibility and nonzero determinant.
+  \item \textbf{Compute} eigenvalues and eigenvectors of matrices by
+        solving the characteristic polynomial.
+  \item \textbf{Derive} the relationship between algebraic and geometric
+        multiplicity and apply the diagonalizability criterion.
+  \item \textbf{State} and prove the Cayley--Hamilton theorem for
+        matrices over $\F$.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapter 10]{axler2015} -- Determinant theory developed after
+        eigenvalues; provides a clean proof of the Cayley--Hamilton theorem.
+  \item \citet[Chapter 5]{hoffman1971} -- Classical treatment of
+        determinants via multilinear alternating forms.
+  \item \citet[Chapter 5]{strang2016} -- Computational perspective on
+        determinants with cofactor expansion and applications.
+  \item \citet[Chapter 1]{horn2013} -- Eigenvalue theory, characteristic
+        polynomial, and matrix factorizations.
+  \item \citet[Chapter 6]{lax2007} -- Spectral theory with connections
+        to operator theory and applications.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: DETERMINANTS
+%% ============================================================
+\section{Determinants}
+\label{sec:determinants}
+
+Throughout this lesson, $\F$ denotes either $\R$ or $\C$, and all matrices
+are square unless stated otherwise.
+
+\subsection{Permutations and the Sign Function}
+
+\begin{definition}[Permutation and Sign]
+\label{def:permutation}
+A \emph{permutation} of $\{1, \ldots, n\}$ is a bijection
+$\sigma\colon \{1, \ldots, n\} \to \{1, \ldots, n\}$.  The set of all
+such permutations is denoted $S_n$.  A \emph{transposition} is a
+permutation that swaps exactly two elements.  Every permutation can be
+written as a composition of transpositions.  The \emph{sign} (or
+\emph{signature}) of $\sigma$ is
+\[
+  \sgn(\sigma) = (-1)^{k},
+\]
+where $k$ is the number of transpositions in any decomposition of $\sigma$.
+A permutation is \emph{even} if $\sgn(\sigma) = +1$ and \emph{odd} if
+$\sgn(\sigma) = -1$.
+\end{definition}
+
+\begin{remark}
+\label{rem:sign_well_defined}
+The sign is well-defined: although a permutation can be written as a
+product of transpositions in many ways, the parity of the number of
+transpositions is invariant.  One proof uses the identity
+$\sgn(\sigma) = \prod_{i < j} \frac{\sigma(j) - \sigma(i)}{j - i}$,
+which is manifestly well-defined \citep[Chapter~5]{hoffman1971}.
+\end{remark}
+
+\begin{example}[Permutations of $\{1,2,3\}$]
+\label{ex:S3}
+The group $S_3$ has $3! = 6$ elements.  The identity $e = (1)(2)(3)$
+has $\sgn(e) = +1$.  The transposition $\sigma = (1\;2)$ (swapping 1 and 2)
+has $\sgn(\sigma) = -1$.  The cyclic permutation $\tau = (1\;2\;3)$
+(mapping $1 \mapsto 2 \mapsto 3 \mapsto 1$) decomposes as
+$(1\;3)(1\;2)$, so $\sgn(\tau) = +1$.
+\end{example}
+
+\subsection{The Leibniz Formula}
+
+\begin{definition}[Determinant -- Leibniz Formula]
+\label{def:det_leibniz}
+Let $A = (a_{ij}) \in \F^{n \times n}$.  The \emph{determinant} of $A$ is
+\[
+  \det A = \sum_{\sigma \in S_n} \sgn(\sigma) \prod_{i=1}^{n} a_{i,\sigma(i)}.
+\]
+\end{definition}
+
+\begin{example}[Determinants of $2 \times 2$ and $3 \times 3$ Matrices]
+\label{ex:det_small}
+For $A = \bigl(\begin{smallmatrix} a & b \\ c & d \end{smallmatrix}\bigr)$,
+the two permutations of $\{1,2\}$ give
+$\det A = ad - bc$.
+
+For a $3 \times 3$ matrix $A = (a_{ij})$, expanding over all six
+permutations in $S_3$ yields
+\begin{align*}
+  \det A &= a_{11}a_{22}a_{33} + a_{12}a_{23}a_{31} + a_{13}a_{21}a_{32} \\
+         &\quad - a_{13}a_{22}a_{31} - a_{12}a_{21}a_{33} - a_{11}a_{23}a_{32}.
+\end{align*}
+\end{example}
+
+\subsection{Cofactor Expansion}
+
+\begin{definition}[Minor and Cofactor]
+\label{def:minor_cofactor}
+Let $A \in \F^{n \times n}$.  The \emph{$(i,j)$-minor} $M_{ij}$ is the
+determinant of the $(n-1) \times (n-1)$ matrix obtained by deleting row $i$
+and column $j$ of $A$.  The \emph{$(i,j)$-cofactor} is
+$C_{ij} = (-1)^{i+j} M_{ij}$.
+\end{definition}
+
+\begin{theorem}[Cofactor Expansion]
+\label{thm:cofactor_expansion}
+For any fixed row $i$ or column $j$,
+\[
+  \det A = \sum_{j=1}^{n} a_{ij}\, C_{ij}
+  \quad \text{(expansion along row $i$)},
+\]
+\[
+  \det A = \sum_{i=1}^{n} a_{ij}\, C_{ij}
+  \quad \text{(expansion along column $j$)}.
+\]
+\end{theorem}
+
+\begin{proof}
+We prove the row expansion.  In the Leibniz formula, fix row $i$ and
+group terms by the column index $\sigma(i) = j$.  For each $j$, the
+contribution from permutations with $\sigma(i) = j$ is
+$a_{ij} \cdot (-1)^{i+j} \det A^{(ij)}$, where $A^{(ij)}$ is the matrix
+with row $i$ and column $j$ deleted.  To verify the sign, note that
+moving the factor $a_{i,\sigma(i)}$ from position $i$ in the product
+to the front requires reindexing the remaining permutation on
+$\{1,\ldots,n\} \setminus \{i\}$ to columns
+$\{1,\ldots,n\} \setminus \{j\}$, which introduces a sign factor of
+$(-1)^{i+j}$.  Summing over $j = 1, \ldots, n$ recovers
+$\det A = \sum_j a_{ij} C_{ij}$.  The column expansion follows from
+the transpose property (Proposition~\ref{prop:det_transpose}).
+\end{proof}
+
+\begin{example}[Cofactor Expansion of a $3 \times 3$ Matrix]
+\label{ex:cofactor_3x3}
+Let $A = \begin{pmatrix} 2 & 1 & 3 \\ 0 & -1 & 4 \\ 5 & 2 & 1 \end{pmatrix}$.
+Expanding along row 1:
+\begin{align*}
+  \det A &= 2 \det\begin{pmatrix} -1 & 4 \\ 2 & 1 \end{pmatrix}
+          - 1 \det\begin{pmatrix} 0 & 4 \\ 5 & 1 \end{pmatrix}
+          + 3 \det\begin{pmatrix} 0 & -1 \\ 5 & 2 \end{pmatrix} \\
+         &= 2(-1-8) - 1(0-20) + 3(0+5)
+          = -18 + 20 + 15 = 17.
+\end{align*}
+\end{example}
+
+\subsection{Properties of Determinants}
+
+\begin{proposition}[Transpose]
+\label{prop:det_transpose}
+For any $A \in \F^{n \times n}$, $\det(A^\top) = \det A$.
+\end{proposition}
+
+\begin{proof}
+In the Leibniz formula, $\det(A^\top) = \sum_{\sigma \in S_n} \sgn(\sigma)
+\prod_{i=1}^n a_{\sigma(i),i}$.  Since $\sigma \mapsto \sigma^{-1}$ is a
+bijection on $S_n$ with $\sgn(\sigma^{-1}) = \sgn(\sigma)$, reindexing
+with $\tau = \sigma^{-1}$ gives
+$\sum_{\tau \in S_n} \sgn(\tau) \prod_{i=1}^n a_{i,\tau(i)} = \det A$.
+\end{proof}
+
+\begin{proposition}[Determinant and Row Operations]
+\label{prop:det_row_ops}
+Let $A \in \F^{n \times n}$.
+\begin{enumerate}[nosep]
+  \item \textbf{Multilinearity:} The determinant is linear in each row
+        (holding the other rows fixed).  That is, if row $i$ of $A$ is
+        $\alpha r + \beta r'$ and $B, C$ are obtained by replacing row $i$
+        with $r$ and $r'$ respectively, then $\det A = \alpha \det B + \beta \det C$.
+  \item \textbf{Alternating:} If two rows of $A$ are interchanged, the
+        determinant changes sign.  In particular, if two rows are equal,
+        $\det A = 0$.
+  \item \textbf{Row addition:} Adding a scalar multiple of one row to
+        another does not change the determinant.
+  \item \textbf{Row scaling:} Multiplying a single row by $\alpha \in \F$
+        multiplies the determinant by $\alpha$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(1) follows directly from the Leibniz formula: each term
+$\sgn(\sigma) \prod_i a_{i,\sigma(i)}$ is linear in the entries of any
+fixed row.
+
+(2) Let $A'$ be obtained from $A$ by swapping rows $i$ and $j$.  This is
+equivalent to composing each permutation $\sigma$ with the transposition
+$(i\;j)$, which changes the sign.  If rows $i$ and $j$ are equal, then
+$A = A'$ and $\det A = -\det A$, so $\det A = 0$.
+
+(3) Adding $\alpha$ times row $j$ to row $i$ gives, by multilinearity,
+$\det A' = \det A + \alpha \det B$, where $B$ has row $j$ appearing in
+both positions $i$ and $j$.  By (2), $\det B = 0$.
+
+(4) is immediate from (1) with $r' = 0$.
+\end{proof}
+
+\begin{example}[Determinant via Row Reduction]
+\label{ex:det_row_reduction}
+Let $A = \begin{pmatrix} 1 & 2 & 3 \\ 2 & 5 & 7 \\ 3 & 7 & 10 \end{pmatrix}$.
+Subtract 2 times row 1 from row 2, and 3 times row 1 from row 3:
+$\begin{pmatrix} 1 & 2 & 3 \\ 0 & 1 & 1 \\ 0 & 1 & 1 \end{pmatrix}$.
+Two rows are now equal, so $\det A = 0$.  By the criterion we will prove
+shortly, $A$ is not invertible.
+\end{example}
+
+\subsection{Multiplicativity of the Determinant}
+
+\begin{theorem}[Multiplicativity]
+\label{thm:det_mult}
+For $A, B \in \F^{n \times n}$,
+\[
+  \det(AB) = \det A \cdot \det B.
+\]
+\end{theorem}
+
+\begin{proof}
+\textbf{Case 1:} $A$ is not invertible.  Then $\rank(A) < n$, so
+$\rank(AB) \leq \rank(A) < n$.  Hence $AB$ is not invertible, and we
+will show in Theorem~\ref{thm:det_invertibility} that
+$\det(AB) = 0 = \det A \cdot \det B$.
+
+\textbf{Case 2:} $A$ is invertible.  Every invertible matrix is a product
+of elementary matrices (each representing a single row operation).
+An elementary matrix $E$ satisfies $\det(EB) = (\det E)(\det B)$ by
+Proposition~\ref{prop:det_row_ops}: swapping two rows multiplies the
+determinant by $-1 = \det E$; adding a multiple of one row to another
+multiplies by $1 = \det E$; scaling a row by $\alpha$ multiplies by
+$\alpha = \det E$.  Writing $A = E_1 \cdots E_k$, repeated application
+gives
+\[
+  \det(AB) = \det(E_1 \cdots E_k B)
+  = (\det E_1) \cdots (\det E_k)(\det B)
+  = \det(E_1 \cdots E_k) \det B
+  = \det A \cdot \det B. \qedhere
+\]
+\end{proof}
+
+\subsection{Determinants and Invertibility}
+
+\begin{keyresult}[title={Determinant--Invertibility Equivalence}]
+\begin{theorem}[Determinant and Invertibility]
+\label{thm:det_invertibility}
+A matrix $A \in \F^{n \times n}$ is invertible if and only if $\det A \neq 0$.
+When $A$ is invertible, $\det(A^{-1}) = (\det A)^{-1}$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+$(\Rightarrow)$\; If $A$ is invertible, then $AA^{-1} = I$, so by
+multiplicativity $\det A \cdot \det(A^{-1}) = \det I = 1$.  In particular,
+$\det A \neq 0$ and $\det(A^{-1}) = (\det A)^{-1}$.
+
+$(\Leftarrow)$\; If $A$ is not invertible, then $\rank(A) < n$, so the
+rows of $A$ are linearly dependent.  Row reduction (which preserves
+$\det = 0$ or $\det \neq 0$) produces at least one zero row.  A matrix
+with a zero row has determinant $0$ (every term in the Leibniz formula
+contains a factor from this row, which is $0$).  Hence $\det A = 0$.
+\end{proof}
+
+\begin{example}[Invertibility Check]
+\label{ex:invertibility}
+For $A = \begin{pmatrix} 1 & 2 \\ 3 & 6 \end{pmatrix}$, we have
+$\det A = 6 - 6 = 0$, so $A$ is singular.  Indeed, row 2 is 3 times row 1.
+For $B = \begin{pmatrix} 1 & 2 \\ 3 & 7 \end{pmatrix}$, we have
+$\det B = 7 - 6 = 1 \neq 0$, so $B$ is invertible.
+\end{example}
+
+The determinant provides a scalar invariant that detects invertibility.
+We now turn to the richer structure revealed by the eigenvalue problem.
+
+%% ============================================================
+%% SECTION 4: EIGENVALUES AND EIGENVECTORS
+%% ============================================================
+\section{Eigenvalues and Eigenvectors}
+\label{sec:eigenvalues}
+
+\subsection{Basic Definitions}
+
+\begin{definition}[Eigenvalue and Eigenvector]
+\label{def:eigenvalue}
+Let $A \in \F^{n \times n}$.  A scalar $\lambda \in \F$ is an
+\emph{eigenvalue} of $A$ if there exists a nonzero vector $v \in \F^n$
+such that $Av = \lambda v$.  Such a vector $v$ is called an
+\emph{eigenvector} of $A$ corresponding to $\lambda$.
+\end{definition}
+
+\begin{definition}[Eigenspace]
+\label{def:eigenspace}
+The \emph{eigenspace} of $A$ corresponding to eigenvalue $\lambda$ is
+\[
+  E_\lambda = \nullspace(A - \lambda I) = \{v \in \F^n : Av = \lambda v\}.
+\]
+This is a subspace of $\F^n$ (it is the null space of the linear map
+$A - \lambda I$).  The eigenspace includes the zero vector, but by
+convention eigenvectors are nonzero.
+\end{definition}
+
+\begin{example}[Eigenvalues of a $2 \times 2$ Matrix]
+\label{ex:eigen_2x2}
+Let $A = \begin{pmatrix} 4 & 1 \\ 2 & 3 \end{pmatrix}$.  If $Av = \lambda v$
+for nonzero $v$, then $(A - \lambda I)v = 0$ has a nontrivial solution,
+which requires $\det(A - \lambda I) = 0$.  We compute
+\[
+  \det(A - \lambda I)
+  = \det\begin{pmatrix} 4-\lambda & 1 \\ 2 & 3-\lambda \end{pmatrix}
+  = (4-\lambda)(3-\lambda) - 2 = \lambda^2 - 7\lambda + 10
+  = (\lambda - 2)(\lambda - 5).
+\]
+The eigenvalues are $\lambda_1 = 2$ and $\lambda_2 = 5$.  For $\lambda_1 = 2$:
+$(A - 2I)v = 0$ gives $2v_1 + v_2 = 0$, so $E_2 = \Span\{(1,-2)\}$.
+For $\lambda_2 = 5$: $-v_1 + v_2 = 0$, so $E_5 = \Span\{(1,1)\}$.
+\end{example}
+
+\subsection{The Characteristic Polynomial}
+
+\begin{definition}[Characteristic Polynomial]
+\label{def:char_poly}
+The \emph{characteristic polynomial} of $A \in \F^{n \times n}$ is
+\[
+  p_A(\lambda) = \det(A - \lambda I).
+\]
+This is a polynomial of degree $n$ in $\lambda$ with leading coefficient
+$(-1)^n$.  The eigenvalues of $A$ are precisely the roots of $p_A$.
+\end{definition}
+
+\begin{remark}
+\label{rem:char_poly_similarity}
+Similar matrices have the same characteristic polynomial: if $B = P^{-1}AP$,
+then $\det(B - \lambda I) = \det(P^{-1}(A - \lambda I)P)
+= \det(P^{-1}) \det(A - \lambda I) \det(P) = \det(A - \lambda I)$.
+Hence eigenvalues are invariants of the linear operator, not of a
+particular matrix representation.
+\end{remark}
+
+\begin{proposition}[Trace and Determinant from Eigenvalues]
+\label{prop:trace_det_eigen}
+If $A \in \F^{n \times n}$ has eigenvalues $\lambda_1, \ldots, \lambda_n$
+(counted with algebraic multiplicity, over the algebraic closure of $\F$),
+then
+\[
+  \tr(A) = \sum_{i=1}^{n} \lambda_i, \qquad
+  \det(A) = \prod_{i=1}^{n} \lambda_i.
+\]
+\end{proposition}
+
+\begin{proof}
+The characteristic polynomial factors (over the algebraic closure) as
+$p_A(\lambda) = (-1)^n(\lambda - \lambda_1) \cdots (\lambda - \lambda_n)$.
+Setting $\lambda = 0$: $\det A = p_A(0) = (-1)^n(-\lambda_1) \cdots (-\lambda_n)
+= \prod_i \lambda_i$.
+Comparing the coefficient of $\lambda^{n-1}$: in $\det(A - \lambda I)$,
+the $\lambda^{n-1}$ term arises only from the diagonal product
+$(a_{11} - \lambda) \cdots (a_{nn} - \lambda)$, giving coefficient
+$(-1)^{n-1}(a_{11} + \cdots + a_{nn}) = (-1)^{n-1} \tr(A)$.
+From the factored form, the $\lambda^{n-1}$ coefficient is
+$(-1)^{n-1}(\lambda_1 + \cdots + \lambda_n)$.  Equating gives
+$\tr(A) = \sum_i \lambda_i$.
+\end{proof}
+
+\begin{rlconnection}[title={Spectral Radius and Markov Chain Mixing}]
+For a stochastic matrix $P$ (rows sum to 1, nonneg entries), $\lambda_1 = 1$
+is always an eigenvalue.  The \emph{spectral radius} of $P$ restricted
+to the complement of the stationary distribution is
+$\rho = \max_{i \geq 2} |\lambda_i|$.  The mixing time satisfies
+$t_{\mathrm{mix}} = \Theta(1/(1-\rho))$.  In policy evaluation for RL,
+faster mixing means that Monte Carlo rollouts more quickly yield
+representative samples, reducing variance.
+\end{rlconnection}
+
+\subsection{Algebraic and Geometric Multiplicity}
+
+\begin{definition}[Algebraic and Geometric Multiplicity]
+\label{def:multiplicity}
+Let $\lambda$ be an eigenvalue of $A$.
+\begin{itemize}[nosep]
+  \item The \emph{algebraic multiplicity} $\mathrm{am}(\lambda)$ is the
+        multiplicity of $\lambda$ as a root of the characteristic polynomial
+        $p_A$.
+  \item The \emph{geometric multiplicity} $\mathrm{gm}(\lambda)$ is the
+        dimension of the eigenspace $E_\lambda = \nullspace(A - \lambda I)$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Multiplicity Inequality]
+\label{thm:multiplicity_ineq}
+For every eigenvalue $\lambda$ of $A \in \F^{n \times n}$,
+\[
+  1 \leq \mathrm{gm}(\lambda) \leq \mathrm{am}(\lambda).
+\]
+\end{theorem}
+
+\begin{proof}
+The lower bound $\mathrm{gm}(\lambda) \geq 1$ holds because the
+eigenspace contains at least one eigenvector (by definition of eigenvalue).
+
+For the upper bound, let $k = \mathrm{gm}(\lambda)$ and let
+$\{v_1, \ldots, v_k\}$ be a basis of $E_\lambda$.  Extend this to a basis
+$\{v_1, \ldots, v_k, v_{k+1}, \ldots, v_n\}$ of $\F^n$.  Let $P$ be the
+invertible matrix with columns $v_1, \ldots, v_n$.  Then
+\[
+  P^{-1}AP = \begin{pmatrix} \lambda I_k & * \\ 0 & C \end{pmatrix},
+\]
+because $Av_i = \lambda v_i$ for $i = 1, \ldots, k$.  The characteristic
+polynomial is
+\[
+  p_A(t) = \det(P^{-1}AP - tI)
+  = (\lambda - t)^k \det(C - tI).
+\]
+Hence $(\lambda - t)^k$ divides $p_A(t)$, so
+$\mathrm{am}(\lambda) \geq k = \mathrm{gm}(\lambda)$.
+\end{proof}
+
+\begin{example}[Strict Inequality of Multiplicities]
+\label{ex:strict_mult}
+Consider $A = \begin{pmatrix} 2 & 1 \\ 0 & 2 \end{pmatrix}$.  The
+characteristic polynomial is $(2 - \lambda)^2$, so $\lambda = 2$ has
+$\mathrm{am}(2) = 2$.  But $A - 2I = \begin{pmatrix} 0 & 1 \\ 0 & 0 \end{pmatrix}$,
+which has $\nullity = 1$, so $\mathrm{gm}(2) = 1 < 2 = \mathrm{am}(2)$.
+\end{example}
+
+\subsection{Independence of Eigenvectors for Distinct Eigenvalues}
+
+\begin{theorem}[Eigenvectors for Distinct Eigenvalues Are Independent]
+\label{thm:distinct_eigen_indep}
+Let $\lambda_1, \ldots, \lambda_k$ be distinct eigenvalues of
+$A \in \F^{n \times n}$ with corresponding eigenvectors $v_1, \ldots, v_k$.
+Then $v_1, \ldots, v_k$ are linearly independent.
+\end{theorem}
+
+\begin{proof}
+We proceed by induction on $k$.  The base case $k = 1$ is immediate:
+a single eigenvector is nonzero, hence independent.
+
+For the inductive step, suppose the result holds for $k - 1$ distinct
+eigenvalues.  Assume
+\begin{equation}
+\label{eq:eigen_dep}
+  c_1 v_1 + c_2 v_2 + \cdots + c_k v_k = 0.
+\end{equation}
+Apply $A$ to both sides:
+\begin{equation}
+\label{eq:eigen_dep_A}
+  c_1 \lambda_1 v_1 + c_2 \lambda_2 v_2 + \cdots + c_k \lambda_k v_k = 0.
+\end{equation}
+Multiply \eqref{eq:eigen_dep} by $\lambda_k$ and subtract from
+\eqref{eq:eigen_dep_A}:
+\[
+  c_1(\lambda_1 - \lambda_k) v_1 + c_2(\lambda_2 - \lambda_k) v_2
+  + \cdots + c_{k-1}(\lambda_{k-1} - \lambda_k) v_{k-1} = 0.
+\]
+By the inductive hypothesis, $v_1, \ldots, v_{k-1}$ are independent.
+Since all $\lambda_i - \lambda_k \neq 0$ for $i < k$, we conclude
+$c_i = 0$ for $i = 1, \ldots, k-1$.  Substituting back into
+\eqref{eq:eigen_dep} gives $c_k v_k = 0$, and since $v_k \neq 0$,
+$c_k = 0$.
+\end{proof}
+
+\begin{rlconnection}[title={Eigenvalues and Gradient Descent Convergence}]
+For a quadratic objective $f(x) = \frac{1}{2}x^\top A x - b^\top x$ with
+$A$ symmetric positive definite, gradient descent with step size $\alpha$
+has update $x_{k+1} = (I - \alpha A)x_k + \alpha b$.  The error
+$e_k = x_k - x^*$ satisfies $e_k = (I - \alpha A)^k e_0$.  Since the
+eigenvectors of $A$ (which are real and independent by
+Theorem~\ref{thm:distinct_eigen_indep} when eigenvalues are distinct)
+form a basis, each component of $e_k$ in this eigenbasis decays as
+$(1 - \alpha \lambda_i)^k$.  Convergence requires
+$|1 - \alpha \lambda_i| < 1$ for all $i$, optimized by
+$\alpha^* = 2/(\lambda_{\min} + \lambda_{\max})$ with rate
+$(\kappa - 1)/(\kappa + 1)$ where $\kappa = \lambda_{\max}/\lambda_{\min}$.
+\end{rlconnection}
+
+Having established when eigenvalues exist and that eigenvectors for
+distinct eigenvalues are independent, we now ask: when can we find a
+basis of eigenvectors for the entire space?
+
+%% ============================================================
+%% SECTION 5: DIAGONALIZABILITY
+%% ============================================================
+\section{Diagonalizability}
+\label{sec:diagonalizability}
+
+\begin{definition}[Diagonalizable Matrix]
+\label{def:diagonalizable}
+A matrix $A \in \F^{n \times n}$ is \emph{diagonalizable} if there exists
+an invertible matrix $P \in \F^{n \times n}$ such that $P^{-1}AP$ is
+diagonal.  Equivalently, $A$ is diagonalizable if and only if $\F^n$ has a
+basis consisting of eigenvectors of $A$.
+\end{definition}
+
+\begin{keyresult}[title={Diagonalizability Criterion}]
+\begin{theorem}[Diagonalizability Criterion]
+\label{thm:diag_criterion}
+A matrix $A \in \F^{n \times n}$ is diagonalizable if and only if both
+of the following conditions hold:
+\begin{enumerate}[nosep]
+  \item The characteristic polynomial $p_A$ splits completely over $\F$
+        (i.e., all eigenvalues lie in $\F$).
+  \item For every eigenvalue $\lambda$,
+        $\mathrm{gm}(\lambda) = \mathrm{am}(\lambda)$.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+$(\Rightarrow)$\; Suppose $A$ is diagonalizable: $P^{-1}AP = D$ where
+$D = \diag(\lambda_1, \ldots, \lambda_n)$ with $\lambda_i \in \F$.  Then
+$p_A(\lambda) = p_D(\lambda) = \prod_{i=1}^n (\lambda_i - \lambda)$,
+which splits over $\F$.  If $\mu$ appears $m$ times on the diagonal of $D$,
+then $\mathrm{am}(\mu) = m$.  The columns of $P$ corresponding to diagonal
+entries equal to $\mu$ are $m$ linearly independent eigenvectors for $\mu$,
+so $\mathrm{gm}(\mu) \geq m = \mathrm{am}(\mu)$.  Combined with
+Theorem~\ref{thm:multiplicity_ineq}, $\mathrm{gm}(\mu) = \mathrm{am}(\mu)$.
+
+$(\Leftarrow)$\; Let $\lambda_1, \ldots, \lambda_r$ be the distinct
+eigenvalues of $A$ with algebraic multiplicities $m_1, \ldots, m_r$
+summing to $n$.  By assumption, each eigenspace $E_{\lambda_i}$ has
+dimension $m_i$.  We claim the union of bases of all eigenspaces forms a
+basis of $\F^n$.
+
+The total count is $m_1 + \cdots + m_r = n$, so it suffices to show
+linear independence.  Suppose
+$\sum_{i=1}^r w_i = 0$ where $w_i \in E_{\lambda_i}$.  Write each $w_i$
+as a combination of a basis of $E_{\lambda_i}$.  The vectors from
+different eigenspaces lie in distinct eigenspaces; by an extension of the
+argument in Theorem~\ref{thm:distinct_eigen_indep} (eigenvectors from
+distinct eigenspaces are independent), each $w_i = 0$.  Since the basis
+vectors within each $E_{\lambda_i}$ are independent, all coefficients
+vanish.  Hence these $n$ eigenvectors form a basis of $\F^n$, and $A$ is
+diagonalizable.
+\end{proof}
+
+\begin{corollary}
+\label{cor:distinct_diag}
+If $A \in \F^{n \times n}$ has $n$ distinct eigenvalues in $\F$, then
+$A$ is diagonalizable.
+\end{corollary}
+
+\begin{proof}
+Each eigenvalue has algebraic multiplicity 1, and geometric multiplicity
+is at least 1 by Theorem~\ref{thm:multiplicity_ineq}.  Hence
+$\mathrm{gm}(\lambda_i) = 1 = \mathrm{am}(\lambda_i)$ for each $i$,
+and the criterion is satisfied.
+\end{proof}
+
+\begin{warning}[title={Not Every Matrix Is Diagonalizable}]
+The matrix $A = \begin{pmatrix} 0 & 1 \\ 0 & 0 \end{pmatrix}$ has
+characteristic polynomial $\lambda^2$, so $\lambda = 0$ is the only
+eigenvalue with $\mathrm{am}(0) = 2$.  But $\rank(A - 0 \cdot I) = 1$,
+so $\mathrm{gm}(0) = 1 < 2$.  Hence $A$ is not diagonalizable.
+
+Over $\R$, even $2 \times 2$ matrices may fail: the rotation matrix
+$R = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$ has characteristic
+polynomial $\lambda^2 + 1$, which has no real roots.  Over $\C$, the
+eigenvalues are $\pm i$ (distinct), so $R$ is diagonalizable over $\C$
+but not over $\R$.
+\end{warning}
+
+\begin{example}[Diagonalization Procedure]
+\label{ex:diagonalization}
+Let $A = \begin{pmatrix} 1 & 2 \\ 0 & 3 \end{pmatrix}$.  The
+characteristic polynomial is $(1 - \lambda)(3 - \lambda)$, giving
+distinct eigenvalues $\lambda_1 = 1$ and $\lambda_2 = 3$.
+
+For $\lambda_1 = 1$: $(A - I)v = 0$ gives
+$\begin{pmatrix} 0 & 2 \\ 0 & 2 \end{pmatrix}v = 0$, so
+$v_1 = (1, 0)^\top$.
+
+For $\lambda_2 = 3$: $(A - 3I)v = 0$ gives
+$\begin{pmatrix} -2 & 2 \\ 0 & 0 \end{pmatrix}v = 0$, so
+$v_2 = (1, 1)^\top$.
+
+Setting $P = \begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}$, we get
+$P^{-1}AP = \begin{pmatrix} 1 & 0 \\ 0 & 3 \end{pmatrix}$.
+\end{example}
+
+With diagonalizability understood, we conclude with the Cayley--Hamilton
+theorem, which provides a universal polynomial identity satisfied by every
+square matrix.
+
+%% ============================================================
+%% SECTION 6: THE CAYLEY-HAMILTON THEOREM
+%% ============================================================
+\section{The Cayley--Hamilton Theorem}
+\label{sec:cayley_hamilton}
+
+\begin{theorem}[Cayley--Hamilton]
+\label{thm:cayley_hamilton}
+Let $A \in \F^{n \times n}$ and let $p_A(\lambda) = \det(A - \lambda I)$
+be its characteristic polynomial.  Then $p_A(A) = 0$ (the zero matrix).
+That is, if $p_A(\lambda) = c_0 + c_1 \lambda + \cdots + c_{n-1}\lambda^{n-1}
++ (-1)^n \lambda^n$, then
+\[
+  c_0 I + c_1 A + \cdots + c_{n-1} A^{n-1} + (-1)^n A^n = 0.
+\]
+\end{theorem}
+
+\begin{proof}
+Let $\mathrm{adj}(A - \lambda I) = B_0 + B_1 \lambda + \cdots + B_{n-1} \lambda^{n-1}$
+be the adjugate, whose entries are cofactors (polynomials of degree
+$\leq n-1$ in $\lambda$).  The cofactor-adjugate identity gives
+\[
+  (A - \lambda I)(B_0 + B_1 \lambda + \cdots + B_{n-1}\lambda^{n-1})
+  = p_A(\lambda) \cdot I.
+\]
+Write $p_A(\lambda) = c_0 + c_1\lambda + \cdots + (-1)^n \lambda^n$.
+Equating coefficients of $\lambda^k$ for $k = 0, \ldots, n$ yields
+$n+1$ matrix equations.  Multiplying the $k$-th equation on the left
+by $A^k$ and summing, the left side telescopes (each $A^k B_{k-1}$
+appears once with $+1$ and once with $-1$), giving
+\[
+  0 = c_0 I + c_1 A + c_2 A^2 + \cdots + (-1)^n A^n = p_A(A). \qedhere
+\]
+\end{proof}
+
+\begin{example}[Cayley--Hamilton for $2 \times 2$]
+\label{ex:cayley_hamilton_2x2}
+Let $A = \begin{pmatrix} 1 & 3 \\ 2 & 4 \end{pmatrix}$.  The characteristic
+polynomial is $p_A(\lambda) = \lambda^2 - 5\lambda - 2$.  The theorem
+asserts $A^2 - 5A - 2I = 0$.  We verify:
+\[
+  A^2 = \begin{pmatrix} 7 & 15 \\ 10 & 22 \end{pmatrix}, \quad
+  5A = \begin{pmatrix} 5 & 15 \\ 10 & 20 \end{pmatrix}, \quad
+  A^2 - 5A - 2I = \begin{pmatrix} 0 & 0 \\ 0 & 0 \end{pmatrix}. \quad \checkmark
+\]
+\end{example}
+
+\begin{example}[Expressing $A^{-1}$ via Cayley--Hamilton]
+\label{ex:ch_inverse}
+If $A$ is invertible and $p_A(\lambda) = c_0 + c_1\lambda + \cdots + (-1)^n\lambda^n$
+with $c_0 = \det A \neq 0$, then $p_A(A) = 0$ gives
+\[
+  c_0 I + c_1 A + \cdots + (-1)^n A^n = 0.
+\]
+Multiplying by $A^{-1}$ and solving:
+\[
+  A^{-1} = -\frac{1}{c_0}\bigl(c_1 I + c_2 A + \cdots + (-1)^n A^{n-1}\bigr).
+\]
+This expresses $A^{-1}$ as a polynomial in $A$ of degree $n-1$.
+\end{example}
+
+\begin{rlconnection}[title={Cayley--Hamilton in Multi-Step TD}]
+In temporal difference learning with eligibility traces, the
+$\lambda$-return involves the matrix geometric series
+$\sum_{k=0}^{\infty} (\gamma P^\pi)^k$ where $P^\pi$ is the transition
+matrix.  By the Cayley--Hamilton theorem, $A^n$ (and all higher powers)
+can be expressed as linear combinations of $I, A, \ldots, A^{n-1}$.
+This means the effective ``memory'' of the matrix powers is at most $n$
+steps, and in practice, truncated sums at horizon $n$ capture the full
+behavior.  This observation justifies efficient implementations of
+multi-step TD methods in finite-state MDPs.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Determinant Computation]
+\label{exer:det_computation}
+\textnormal{(\(*\))} \\
+Compute the determinant of each matrix:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $A = \begin{pmatrix} 3 & 1 & -2 \\ 0 & 4 & 5 \\ 1 & 0 & 3 \end{pmatrix}$.
+  \item $B = \begin{pmatrix} 1 & 2 & 3 & 4 \\ 0 & 1 & 2 & 3 \\
+        0 & 0 & 1 & 2 \\ 0 & 0 & 0 & 1 \end{pmatrix}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Eigenvalue Analysis]
+\label{exer:eigenvalue_analysis}
+\textnormal{(\(*\))} \\
+Let $A = \begin{pmatrix} 2 & 1 & 0 \\ 0 & 2 & 0 \\ 0 & 0 & 3 \end{pmatrix}$.
+Find all eigenvalues, their algebraic and geometric multiplicities, and
+determine whether $A$ is diagonalizable.
+\end{exercise}
+
+\begin{exercise}[Determinant Identities]
+\label{exer:det_identities}
+\textnormal{(\(**\))} \\
+Let $A, B \in \F^{n \times n}$ with $A$ invertible.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Prove that $\det(A^{-1}BA) = \det B$.
+  \item Prove that $A$ and $A^\top$ have the same eigenvalues.
+  \item Show by example that $A$ and $A^\top$ can have different
+        eigenvectors.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Markov Chain Spectral Analysis]
+\label{exer:markov_spectral}
+\textnormal{(\(**\))} \\
+A Markov chain on states $\{1, 2, 3\}$ has transition matrix
+$P = \begin{pmatrix} 0.5 & 0.3 & 0.2 \\ 0.2 & 0.5 & 0.3 \\
+0.3 & 0.2 & 0.5 \end{pmatrix}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Verify that $\lambda_1 = 1$ is an eigenvalue and find a
+        corresponding left eigenvector (the stationary distribution).
+  \item Compute all eigenvalues of $P$ and determine the spectral gap
+        $1 - |\lambda_2|$.
+  \item Use the spectral gap to bound the number of steps needed for the
+        distribution to be within $\epsilon = 0.01$ of stationarity.
+\end{enumerate}
+\textit{Hint:} Row sums equal 1, so $(1,1,1)^\top$ is always an
+eigenvector for $\lambda = 1$.
+\end{exercise}
+
+\begin{exercise}[Cayley--Hamilton Application]
+\label{exer:cayley_hamilton}
+\textnormal{(\(**\))} \\
+Let $A = \begin{pmatrix} 1 & 1 \\ 0 & 2 \end{pmatrix}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Compute the characteristic polynomial $p_A(\lambda)$.
+  \item Verify $p_A(A) = 0$ by direct computation.
+  \item Use the Cayley--Hamilton theorem to express $A^{-1}$ as
+        $\alpha I + \beta A$ for explicit $\alpha, \beta$.
+  \item Use the result to compute $A^5$ as $\gamma I + \delta A$
+        for explicit $\gamma, \delta$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Diagonalizability Proof]
+\label{exer:diag_proof}
+\textnormal{(\(***\))} \\
+Let $A, B \in \F^{n \times n}$ be diagonalizable.  Prove or disprove:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $A + B$ is diagonalizable.
+  \item $AB$ is diagonalizable.
+  \item If $A$ and $B$ are \emph{simultaneously} diagonalizable (i.e.,
+        there exists a single invertible $P$ such that both $P^{-1}AP$ and
+        $P^{-1}BP$ are diagonal), then $AB = BA$.  Prove this and state the
+        converse.
+\end{enumerate}
+\textit{Hint:} For (a) and (b), consider $2 \times 2$ counterexamples.
+For (c), use the fact that diagonal matrices commute.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \emph{determinant} $\det A$ is defined by the Leibniz formula
+        $\sum_{\sigma \in S_n} \sgn(\sigma) \prod_i a_{i,\sigma(i)}$ and
+        can be computed recursively via cofactor expansion along any row or
+        column.
+
+  \item The determinant is \emph{multilinear} and \emph{alternating} in
+        the rows; it is invariant under row addition and changes sign under
+        row swaps.
+
+  \item $\det(AB) = \det A \cdot \det B$ (multiplicativity), and $A$ is
+        invertible if and only if $\det A \neq 0$.
+
+  \item An \emph{eigenvalue} $\lambda$ of $A$ satisfies $Av = \lambda v$
+        for some nonzero $v$; equivalently, $\lambda$ is a root of the
+        \emph{characteristic polynomial} $p_A(\lambda) = \det(A - \lambda I)$.
+
+  \item The \emph{trace} equals the sum of eigenvalues and the
+        \emph{determinant} equals the product of eigenvalues.
+
+  \item For each eigenvalue, $1 \leq \mathrm{gm}(\lambda) \leq
+        \mathrm{am}(\lambda)$.  Eigenvectors for distinct eigenvalues
+        are linearly independent.
+
+  \item $A$ is \emph{diagonalizable} if and only if $p_A$ splits over
+        $\F$ and $\mathrm{gm}(\lambda) = \mathrm{am}(\lambda)$ for every
+        eigenvalue $\lambda$.  A sufficient condition is that $A$ has $n$
+        distinct eigenvalues.
+
+  \item The \emph{Cayley--Hamilton theorem} states $p_A(A) = 0$: every
+        matrix satisfies its own characteristic polynomial.  This allows
+        expressing high powers $A^k$ (for $k \geq n$) as polynomials
+        in $A$ of degree at most $n - 1$.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 7} (Inner Products and Spectral Theory) introduces
+        inner product structure and proves the spectral theorem for real
+        symmetric matrices: every such matrix is orthogonally
+        diagonalizable.  This strengthens the diagonalizability criterion
+        by providing an orthonormal eigenbasis.
+
+  \item \textbf{Lesson 8} (SVD and Applications) combines eigenvalue theory
+        with inner products to derive the singular value decomposition,
+        the most important matrix factorization in data science and ML.
+
+  \item The Jordan normal form (not covered here) provides a canonical
+        form for non-diagonalizable matrices.  See \citet[Chapter~8]{hoffman1971}
+        or \citet[Chapter~3]{horn2013}.
+
+  \item \citet[Chapter~1]{horn2013} gives a thorough treatment of
+        eigenvalue inequalities (Weyl, Cauchy interlacing) used in
+        matrix perturbation theory, which underlies the analysis of
+        approximate methods in RL.
+
+  \item For the historical development of determinants and eigenvalue
+        theory, see \citet{lax2007}, which traces the ideas from Cayley
+        and Sylvester through modern operator theory.
+\end{itemize}
+
+\bibliography{linear-algebra-refs}
+\end{document}

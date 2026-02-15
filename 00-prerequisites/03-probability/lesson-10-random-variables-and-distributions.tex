@@ -1,0 +1,1018 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 10: Random Variables and Distributions}}
+\fancyhead[R]{\thepage}
+\title{Lesson 10: Random Variables and Distributions}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+A reinforcement learning agent interacting with an environment receives
+numerical rewards at each time step. The reward after pulling arm $k$ of a
+multi-armed bandit might be $+1$ (success) or $0$ (failure); the total
+number of successes in $n$ pulls could be any integer from $0$ to $n$; the
+time until the first success is a positive integer; and the noise added to
+a policy gradient estimate is often modeled as a continuous bell-shaped
+quantity. Each of these quantities is a function that assigns a real number
+to every possible experimental outcome. How should we formalize such
+numerical summaries of random experiments? What tools let us compute the
+probability that a random quantity falls in a given range, and what
+standard families of distributions arise repeatedly in practice?
+
+The tools developed in this lesson will let us formalize random variables
+as measurable functions from a sample space to the real line, describe
+their distributions through probability mass functions, probability
+density functions, and cumulative distribution functions, and catalog the
+discrete and continuous distributions most important for reinforcement
+learning and machine learning.
+
+\begin{rlconnection}[title={Why Random Variables and Distributions
+    Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Bandit rewards}: Each arm of a multi-armed bandit
+    produces Bernoulli-distributed rewards; the agent must estimate the
+    mean of each arm's distribution.
+    \item \textbf{Event counting in RL}: The number of times a rare event
+    occurs in $n$ episodes is approximately Poisson-distributed, relevant
+    for safety monitoring and anomaly detection.
+    \item \textbf{Policy gradient noise}: The REINFORCE estimator adds
+    Gaussian noise to gradient estimates; understanding the normal
+    distribution is essential for variance analysis and confidence
+    intervals.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Probability spaces, Kolmogorov axioms, conditional probability, Bayes'
+theorem, and independence (Lesson~9). Familiarity with sequences, series,
+and basic integral calculus (Lessons~2--4).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} random variables, probability mass functions,
+    probability density functions, and cumulative distribution functions.
+    \item \emph{Derive} the PMF, expectation, and variance of the
+    Bernoulli, Binomial, Geometric, and Poisson distributions.
+    \item \emph{Prove} the Poisson limit theorem (Poisson approximation to
+    the Binomial).
+    \item \emph{Compute} the PDF, CDF, expectation, and variance of the
+    Uniform, Exponential, and Normal distributions.
+    \item \emph{Prove} the Gaussian integral formula using polar
+    coordinates.
+    \item \emph{Explain} why $\Prob(X = x) = 0$ for continuous random
+    variables and why density values are not probabilities.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 3--5]{ross2019} -- Random variables, discrete
+    and continuous distributions with many worked examples.
+    \item \citet[Chapters 3--5]{blitzstein2019} -- Random variables and
+    their distributions with a storytelling approach and extensive
+    exercises.
+    \item \citet[Chapters 2--4]{feller1968} -- Classical treatment of
+    discrete distributions and generating functions.
+    \item \citet[Chapter 2]{grimmett2020} -- Random variables, distribution
+    functions, and density functions in a rigorous framework.
+    \item \citet[Chapter 2]{bertsekas2008} -- Discrete and continuous
+    random variables with engineering applications.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: RANDOM VARIABLES AND DISTRIBUTION FUNCTIONS
+%% ============================================================
+
+\section{Random Variables and Distribution Functions}
+\label{sec:rv_cdf}
+
+We begin by formalizing the notion of a numerical quantity determined by
+the outcome of a random experiment.
+
+\begin{definition}[Random Variable]
+\label{def:random_variable}
+Let $(\Omega, \Prob)$ be a probability space. A \emph{random variable} is
+a function $X \colon \Omega \to \R$ that assigns a real number $X(\omega)$
+to each outcome $\omega \in \Omega$.
+\end{definition}
+
+\begin{remark}
+\label{rem:measurability}
+In this lesson we work with discrete or ``well-behaved'' continuous sample
+spaces where every function $X \colon \Omega \to \R$ is automatically
+measurable. For uncountable sample spaces equipped with a
+$\sigma$-algebra $\mathcal{F}$, one must additionally require that
+$\{\omega : X(\omega) \leq x\} \in \mathcal{F}$ for every $x \in \R$;
+this refinement is treated in Phase~01 (Lesson~1, measurable functions).
+\end{remark}
+
+\begin{definition}[Cumulative Distribution Function]
+\label{def:cdf}
+The \emph{cumulative distribution function} (CDF) of a random variable
+$X$ is the function $F_X \colon \R \to [0,1]$ defined by
+\[
+    F_X(x) = \Prob(X \leq x) \quad \text{for all } x \in \R.
+\]
+\end{definition}
+
+\begin{proposition}[Properties of the CDF]
+\label{prop:cdf_properties}
+For any random variable $X$, the CDF $F_X$ satisfies:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $F_X$ is non-decreasing: if $x \leq y$, then
+    $F_X(x) \leq F_X(y)$.
+    \item $\lim_{x \to -\infty} F_X(x) = 0$ and
+    $\lim_{x \to +\infty} F_X(x) = 1$.
+    \item $F_X$ is right-continuous: $\lim_{h \to 0^+} F_X(x+h) = F_X(x)$
+    for all $x \in \R$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(i)} If $x \leq y$, then
+$\{X \leq x\} \subseteq \{X \leq y\}$, so by monotonicity of $\Prob$,
+$F_X(x) = \Prob(X \leq x) \leq \Prob(X \leq y) = F_X(y)$.
+
+\textbf{(ii)} The events $A_n = \{X \leq -n\}$ satisfy
+$A_1 \supseteq A_2 \supseteq \cdots$ and
+$\bigcap_{n=1}^\infty A_n = \emptyset$. By continuity from above
+(Lesson~9, Theorem~3.5),
+$\lim_{n \to \infty} F_X(-n) = \Prob(\emptyset) = 0$.
+Since $F_X$ is non-decreasing, $\lim_{x \to -\infty} F_X(x) = 0$.
+Similarly, $B_n = \{X \leq n\}$ gives an increasing sequence with
+$\bigcup B_n = \Omega$, so
+$\lim_{x \to +\infty} F_X(x) = 1$ by continuity from below.
+
+\textbf{(iii)} Let $h_n \downarrow 0$. Then
+$\{X \leq x + h_n\} \downarrow \{X \leq x\}$ (since any $\omega$ with
+$X(\omega) \leq x$ is in every $\{X \leq x + h_n\}$, and any $\omega$
+with $X(\omega) > x$ satisfies $X(\omega) > x + h_n$ for $n$ large
+enough). By continuity from above,
+$\lim_n F_X(x + h_n) = F_X(x)$.
+\end{proof}
+
+\begin{example}[CDF of a Coin Flip]
+\label{ex:cdf_coin}
+Toss a fair coin. Define $X = 1$ if heads, $X = 0$ if tails. Then
+\[
+    F_X(x) = \begin{cases}
+        0 & \text{if } x < 0, \\
+        1/2 & \text{if } 0 \leq x < 1, \\
+        1 & \text{if } x \geq 1.
+    \end{cases}
+\]
+The CDF has jumps of size $1/2$ at $x = 0$ and $x = 1$.
+\end{example}
+
+We now distinguish two fundamental types of random variables: discrete and
+continuous.
+
+%% ============================================================
+%% SECTION 4: DISCRETE RANDOM VARIABLES AND PMF
+%% ============================================================
+
+\section{Discrete Random Variables}
+\label{sec:discrete}
+
+\begin{definition}[Discrete Random Variable and PMF]
+\label{def:discrete_rv}
+A random variable $X$ is \emph{discrete} if it takes values in a
+countable set $\{x_1, x_2, \ldots\}$. Its \emph{probability mass
+function} (PMF) is
+\[
+    p_X(x) = \Prob(X = x) \quad \text{for each } x \in \R.
+\]
+The PMF satisfies $p_X(x) \geq 0$ for all $x$, $p_X(x) = 0$ for
+$x \notin \{x_1, x_2, \ldots\}$, and $\sum_i p_X(x_i) = 1$.
+\end{definition}
+
+\begin{definition}[Expectation of a Discrete Random Variable]
+\label{def:discrete_expectation}
+Let $X$ be a discrete random variable with PMF $p_X$. The
+\emph{expectation} (or \emph{mean}) of $X$ is
+\[
+    \E[X] = \sum_{x} x \, p_X(x),
+\]
+provided the sum converges absolutely, i.e.,
+$\sum_x |x| \, p_X(x) < \infty$.
+\end{definition}
+
+\begin{definition}[Variance of a Discrete Random Variable]
+\label{def:discrete_variance}
+The \emph{variance} of a discrete random variable $X$ with
+$\E[X^2] < \infty$ is
+\[
+    \Var(X) = \E\bigl[(X - \E[X])^2\bigr]
+    = \sum_x (x - \E[X])^2 \, p_X(x).
+\]
+The \emph{standard deviation} is $\sigma_X = \sqrt{\Var(X)}$.
+\end{definition}
+
+\begin{proposition}[Computational Formula for Variance]
+\label{prop:var_formula}
+For any random variable $X$ with finite second moment,
+\[
+    \Var(X) = \E[X^2] - (\E[X])^2.
+\]
+\end{proposition}
+
+\begin{proof}
+Let $\mu = \E[X]$. Then
+\begin{align*}
+    \Var(X) &= \E[(X - \mu)^2]
+    = \E[X^2 - 2\mu X + \mu^2] \\
+    &= \E[X^2] - 2\mu \E[X] + \mu^2
+    = \E[X^2] - 2\mu^2 + \mu^2
+    = \E[X^2] - \mu^2. \qedhere
+\end{align*}
+\end{proof}
+
+We now catalog the most important discrete distributions.
+
+\subsection{Bernoulli Distribution}
+
+\begin{definition}[Bernoulli Distribution]
+\label{def:bernoulli}
+A random variable $X$ has a \emph{Bernoulli distribution} with parameter
+$p \in [0,1]$, written $X \sim \mathrm{Bernoulli}(p)$, if $X$ takes
+values in $\{0, 1\}$ with PMF
+\[
+    p_X(k) = p^k (1-p)^{1-k}, \quad k \in \{0,1\}.
+\]
+That is, $\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$.
+\end{definition}
+
+\begin{proposition}[Bernoulli Moments]
+\label{prop:bernoulli_moments}
+If $X \sim \mathrm{Bernoulli}(p)$, then $\E[X] = p$ and
+$\Var(X) = p(1-p)$.
+\end{proposition}
+
+\begin{proof}
+Since $X \in \{0,1\}$, we have $X^2 = X$, so
+$\E[X] = 0 \cdot (1-p) + 1 \cdot p = p$ and
+$\E[X^2] = \E[X] = p$. By
+Proposition~\ref{prop:var_formula},
+$\Var(X) = p - p^2 = p(1-p)$.
+\end{proof}
+
+\begin{rlconnection}[title={Bernoulli Rewards in Multi-Armed Bandits}]
+In a $K$-armed Bernoulli bandit, pulling arm $k$ yields a reward
+$R_k \sim \mathrm{Bernoulli}(p_k)$. The agent's goal is to maximize the
+total expected reward $\sum_{t=1}^T \E[R_{A_t}]$ where $A_t$ is the arm
+selected at time $t$. The regret analysis of algorithms like UCB and
+Thompson sampling relies on the Bernoulli mean $p_k$ and variance
+$p_k(1 - p_k)$ to quantify the difficulty of distinguishing near-optimal
+arms.
+\end{rlconnection}
+
+\begin{example}[Bernoulli Variance]
+\label{ex:bernoulli_var}
+The variance $p(1-p)$ is maximized at $p = 1/2$ (most uncertain case)
+and equals zero at $p = 0$ or $p = 1$ (deterministic outcomes). This is
+why a fair coin flip is the ``hardest'' Bernoulli trial to predict: it
+has the largest spread.
+\end{example}
+
+\subsection{Binomial Distribution}
+
+\begin{definition}[Binomial Distribution]
+\label{def:binomial}
+A random variable $X$ has a \emph{Binomial distribution} with parameters
+$n \in \N$ and $p \in [0,1]$, written $X \sim \mathrm{Bin}(n, p)$, if
+\[
+    p_X(k) = \binom{n}{k} p^k (1-p)^{n-k}, \quad k = 0, 1, \ldots, n.
+\]
+\end{definition}
+
+\begin{proposition}[Binomial PMF is Valid]
+\label{prop:binomial_valid}
+The Binomial PMF sums to $1$.
+\end{proposition}
+
+\begin{proof}
+By the binomial theorem,
+\[
+    \sum_{k=0}^n \binom{n}{k} p^k (1-p)^{n-k}
+    = \bigl(p + (1-p)\bigr)^n = 1^n = 1. \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Binomial Moments via Indicator Decomposition]
+\label{thm:binomial_moments}
+If $X \sim \mathrm{Bin}(n, p)$, then $\E[X] = np$ and
+$\Var(X) = np(1-p)$.
+\end{theorem}
+
+\begin{proof}
+Write $X = X_1 + X_2 + \cdots + X_n$ where each
+$X_i \sim \mathrm{Bernoulli}(p)$ independently represents the outcome of
+the $i$-th trial. Since expectation is additive (regardless of
+independence; see Lesson~11),
+\[
+    \E[X] = \sum_{i=1}^n \E[X_i] = np.
+\]
+For the variance, independence gives
+$\Var(X) = \sum_{i=1}^n \Var(X_i) = n \cdot p(1-p)$.
+(The variance of a sum of independent random variables equals the sum of
+variances; this is proved in Lesson~11, Theorem~4.3.)
+\end{proof}
+
+\begin{example}[Quality Control]
+\label{ex:binomial_quality}
+A production line has a $2\%$ defect rate. In a batch of $n = 100$ items,
+the number of defectives $X \sim \mathrm{Bin}(100, 0.02)$ has
+$\E[X] = 2$ and $\Var(X) = 100 \cdot 0.02 \cdot 0.98 = 1.96$, so
+$\sigma_X \approx 1.40$. Most batches will have between 0 and 5 defects.
+\end{example}
+
+\subsection{Geometric Distribution}
+
+\begin{definition}[Geometric Distribution]
+\label{def:geometric}
+A random variable $X$ has a \emph{Geometric distribution} with parameter
+$p \in (0, 1]$, written $X \sim \mathrm{Geom}(p)$, if $X$ counts the
+number of the trial on which the first success occurs in a sequence of
+independent Bernoulli$(p)$ trials. Its PMF is
+\[
+    p_X(k) = (1-p)^{k-1} p, \quad k = 1, 2, 3, \ldots
+\]
+\end{definition}
+
+\begin{proposition}[Geometric PMF is Valid]
+\label{prop:geometric_valid}
+The Geometric PMF sums to $1$.
+\end{proposition}
+
+\begin{proof}
+Let $q = 1 - p$. Then
+\[
+    \sum_{k=1}^\infty q^{k-1} p
+    = p \sum_{j=0}^\infty q^j
+    = p \cdot \frac{1}{1 - q}
+    = \frac{p}{p} = 1,
+\]
+where the geometric series converges since $0 \leq q < 1$.
+\end{proof}
+
+\begin{proposition}[Geometric Moments]
+\label{prop:geometric_moments}
+If $X \sim \mathrm{Geom}(p)$, then $\E[X] = 1/p$ and
+$\Var(X) = (1 - p)/p^2$.
+\end{proposition}
+
+\begin{proof}
+Let $q = 1 - p$. For the expectation, we differentiate the geometric
+series. Recall $\sum_{k=0}^\infty q^k = 1/(1-q)$. Differentiating both
+sides with respect to $q$:
+$\sum_{k=1}^\infty k q^{k-1} = 1/(1-q)^2 = 1/p^2$.
+Therefore
+\[
+    \E[X] = \sum_{k=1}^\infty k \, q^{k-1} p
+    = p \cdot \frac{1}{p^2} = \frac{1}{p}.
+\]
+
+For the second moment, differentiate $\sum_{k=1}^\infty k q^{k-1} =
+1/p^2$ with respect to $q$:
+$\sum_{k=2}^\infty k(k-1) q^{k-2} = 2/p^3$.
+Then
+\begin{align*}
+    \E[X(X-1)] &= \sum_{k=1}^\infty k(k-1) q^{k-1} p
+    = p \cdot q \cdot \frac{2}{p^3} = \frac{2q}{p^2}.
+\end{align*}
+So $\E[X^2] = \E[X(X-1)] + \E[X] = 2q/p^2 + 1/p = (2q + p)/p^2
+= (q + 1)/p^2$. Using Proposition~\ref{prop:var_formula},
+\[
+    \Var(X) = \frac{q + 1}{p^2} - \frac{1}{p^2}
+    = \frac{q}{p^2} = \frac{1-p}{p^2}. \qedhere
+\]
+\end{proof}
+
+\begin{example}[Expected Waiting Time]
+\label{ex:geometric_waiting}
+A server processes requests, each succeeding independently with
+probability $p = 0.3$. The expected number of attempts until the first
+success is $\E[X] = 1/0.3 \approx 3.33$, with standard deviation
+$\sigma_X = \sqrt{0.7/0.09} \approx 2.79$.
+\end{example}
+
+\subsection{Poisson Distribution}
+
+\begin{definition}[Poisson Distribution]
+\label{def:poisson}
+A random variable $X$ has a \emph{Poisson distribution} with parameter
+$\lambda > 0$, written $X \sim \mathrm{Poisson}(\lambda)$, if
+\[
+    p_X(k) = \frac{\lambda^k e^{-\lambda}}{k!}, \quad k = 0, 1, 2, \ldots
+\]
+\end{definition}
+
+\begin{proposition}[Poisson PMF is Valid]
+\label{prop:poisson_valid}
+The Poisson PMF sums to $1$.
+\end{proposition}
+
+\begin{proof}
+Using the Taylor series $e^\lambda = \sum_{k=0}^\infty \lambda^k / k!$,
+\[
+    \sum_{k=0}^\infty \frac{\lambda^k e^{-\lambda}}{k!}
+    = e^{-\lambda} \sum_{k=0}^\infty \frac{\lambda^k}{k!}
+    = e^{-\lambda} \cdot e^\lambda = 1. \qedhere
+\]
+\end{proof}
+
+\begin{proposition}[Poisson Moments]
+\label{prop:poisson_moments}
+If $X \sim \mathrm{Poisson}(\lambda)$, then $\E[X] = \lambda$ and
+$\Var(X) = \lambda$.
+\end{proposition}
+
+\begin{proof}
+For the expectation:
+\[
+    \E[X] = \sum_{k=0}^\infty k \frac{\lambda^k e^{-\lambda}}{k!}
+    = \sum_{k=1}^\infty \frac{\lambda^k e^{-\lambda}}{(k-1)!}
+    = \lambda e^{-\lambda} \sum_{j=0}^\infty \frac{\lambda^j}{j!}
+    = \lambda e^{-\lambda} \cdot e^\lambda = \lambda.
+\]
+
+For $\E[X(X-1)]$:
+\[
+    \E[X(X-1)] = \sum_{k=2}^\infty \frac{k(k-1) \lambda^k e^{-\lambda}}{k!}
+    = \lambda^2 e^{-\lambda} \sum_{j=0}^\infty \frac{\lambda^j}{j!}
+    = \lambda^2.
+\]
+Therefore $\E[X^2] = \lambda^2 + \lambda$, and
+$\Var(X) = \E[X^2] - (\E[X])^2 = \lambda^2 + \lambda - \lambda^2
+= \lambda$.
+\end{proof}
+
+\begin{keyresult}[title={Poisson Limit Theorem}]
+The Poisson distribution arises as the limit of the Binomial distribution
+when $n \to \infty$ and $p \to 0$ such that $np \to \lambda$. This
+justifies using the Poisson as an approximation for counting rare events
+in many independent trials.
+\end{keyresult}
+
+\begin{theorem}[Poisson Limit Theorem]
+\label{thm:poisson_limit}
+Let $X_n \sim \mathrm{Bin}(n, p_n)$ where $p_n = \lambda / n$ for a
+fixed $\lambda > 0$. Then for every $k = 0, 1, 2, \ldots$,
+\[
+    \lim_{n \to \infty} \Prob(X_n = k)
+    = \frac{\lambda^k e^{-\lambda}}{k!}.
+\]
+\end{theorem}
+
+\begin{proof}
+We have
+\[
+    \Prob(X_n = k) = \binom{n}{k} \left(\frac{\lambda}{n}\right)^k
+    \left(1 - \frac{\lambda}{n}\right)^{n-k}.
+\]
+Write $\binom{n}{k} = n(n-1)\cdots(n-k+1)/k!$ and factor:
+\begin{align*}
+    \Prob(X_n = k)
+    &= \frac{n(n-1)\cdots(n-k+1)}{k!} \cdot \frac{\lambda^k}{n^k}
+       \cdot \left(1 - \frac{\lambda}{n}\right)^{n-k} \\
+    &= \frac{\lambda^k}{k!} \cdot
+       \underbrace{\frac{n}{n} \cdot \frac{n-1}{n}
+       \cdots \frac{n-k+1}{n}}_{\to 1 \text{ as } n \to \infty}
+       \cdot \underbrace{\left(1 - \frac{\lambda}{n}\right)^n}_{%
+       \to e^{-\lambda}}
+       \cdot \underbrace{\left(1 - \frac{\lambda}{n}\right)^{-k}}_{%
+       \to 1}.
+\end{align*}
+The first underbraced factor is a product of $k$ terms each tending to
+$1$. The second factor converges to $e^{-\lambda}$ by the well-known
+limit $\lim_{n \to \infty} (1 - \lambda/n)^n = e^{-\lambda}$. The third
+factor tends to $1$ since $k$ is fixed and
+$(1 - \lambda/n) \to 1$. Combining:
+$\lim_{n \to \infty} \Prob(X_n = k) = \lambda^k e^{-\lambda} / k!$.
+\end{proof}
+
+\begin{rlconnection}[title={Poisson Processes in RL Event Counting}]
+In safety-critical RL applications, an agent may need to monitor the
+occurrence of rare failure events across many episodes. If each episode
+independently has a small failure probability $p$, the total failure
+count across $n$ episodes is approximately $\mathrm{Poisson}(np)$ by the
+Poisson limit theorem. This approximation simplifies the computation of
+tail probabilities for alarm thresholds and risk-sensitive objectives.
+\end{rlconnection}
+
+\begin{example}[Poisson Approximation]
+\label{ex:poisson_approx}
+A website receives $n = 10{,}000$ visitors per hour, each clicking a
+specific ad with probability $p = 0.0003$. The exact distribution of
+clicks is $\mathrm{Bin}(10000, 0.0003)$, but the Poisson approximation
+gives $\lambda = np = 3$. Then $\Prob(X = 0) \approx e^{-3} \approx
+0.050$ and $\Prob(X \leq 2) \approx e^{-3}(1 + 3 + 9/2) \approx 0.423$.
+\end{example}
+
+Having covered the key discrete distributions, we now turn to continuous
+random variables.
+
+%% ============================================================
+%% SECTION 5: CONTINUOUS RANDOM VARIABLES
+%% ============================================================
+
+\section{Continuous Random Variables}
+\label{sec:continuous}
+
+\begin{definition}[Continuous Random Variable and PDF]
+\label{def:continuous_rv}
+A random variable $X$ is \emph{continuous} if there exists a non-negative
+function $f_X \colon \R \to [0, \infty)$, called the \emph{probability
+density function} (PDF), such that for every interval $[a, b]$,
+\[
+    \Prob(a \leq X \leq b) = \int_a^b f_X(x) \, dx.
+\]
+The PDF satisfies $f_X(x) \geq 0$ for all $x$ and
+$\int_{-\infty}^{\infty} f_X(x) \, dx = 1$.
+\end{definition}
+
+\begin{proposition}[CDF-PDF Relationship]
+\label{prop:cdf_pdf}
+If $X$ is a continuous random variable with PDF $f_X$, then
+\[
+    F_X(x) = \int_{-\infty}^x f_X(t) \, dt,
+\]
+and at every point where $f_X$ is continuous,
+$f_X(x) = F_X'(x)$.
+\end{proposition}
+
+\begin{proof}
+By definition,
+$F_X(x) = \Prob(X \leq x) = \int_{-\infty}^x f_X(t) \, dt$.
+By the Fundamental Theorem of Calculus, at points of continuity of $f_X$,
+the derivative of this integral equals $f_X(x)$.
+\end{proof}
+
+\begin{warning}[title={$\Prob(X = x) = 0$ for Continuous Random Variables}]
+For a continuous random variable, $\Prob(X = x) = 0$ for every
+$x \in \R$. This is because
+$\Prob(X = x) = \Prob(x \leq X \leq x) = \int_x^x f_X(t)\,dt = 0$.
+In particular, $f_X(x)$ is \emph{not} the probability that $X$ equals
+$x$; rather, $f_X(x)\,dx$ represents an infinitesimal probability.
+Density values can exceed $1$ (e.g., the PDF of
+$\mathrm{Uniform}(0, 1/2)$ equals $2$ on $(0, 1/2)$).
+\end{warning}
+
+\begin{definition}[Expectation and Variance of Continuous Random Variables]
+\label{def:continuous_expectation}
+If $X$ is continuous with PDF $f_X$, then
+\[
+    \E[X] = \int_{-\infty}^{\infty} x \, f_X(x) \, dx
+\]
+provided the integral converges absolutely, and
+\[
+    \Var(X) = \int_{-\infty}^{\infty} (x - \E[X])^2 \, f_X(x) \, dx
+    = \E[X^2] - (\E[X])^2.
+\]
+\end{definition}
+
+\subsection{Uniform Distribution}
+
+\begin{definition}[Continuous Uniform Distribution]
+\label{def:uniform}
+A random variable $X$ has a \emph{Uniform distribution} on $[a, b]$ with
+$a < b$, written $X \sim \mathrm{Uniform}(a, b)$, if its PDF is
+\[
+    f_X(x) = \begin{cases}
+        \frac{1}{b - a} & \text{if } a \leq x \leq b, \\
+        0 & \text{otherwise}.
+    \end{cases}
+\]
+\end{definition}
+
+\begin{proposition}[Uniform Moments]
+\label{prop:uniform_moments}
+If $X \sim \mathrm{Uniform}(a, b)$, then $\E[X] = (a + b)/2$ and
+$\Var(X) = (b - a)^2/12$.
+\end{proposition}
+
+\begin{proof}
+\[
+    \E[X] = \int_a^b \frac{x}{b-a} \, dx
+    = \frac{1}{b-a} \cdot \frac{x^2}{2}\bigg|_a^b
+    = \frac{b^2 - a^2}{2(b-a)}
+    = \frac{a + b}{2}.
+\]
+For the second moment,
+\[
+    \E[X^2] = \int_a^b \frac{x^2}{b-a} \, dx
+    = \frac{1}{b-a} \cdot \frac{x^3}{3}\bigg|_a^b
+    = \frac{b^3 - a^3}{3(b-a)}
+    = \frac{a^2 + ab + b^2}{3}.
+\]
+Therefore
+\begin{align*}
+    \Var(X) &= \E[X^2] - (\E[X])^2
+    = \frac{a^2 + ab + b^2}{3} - \frac{(a+b)^2}{4} \\
+    &= \frac{4(a^2 + ab + b^2) - 3(a^2 + 2ab + b^2)}{12}
+    = \frac{a^2 - 2ab + b^2}{12}
+    = \frac{(b-a)^2}{12}. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{example}[Uniform Random Number Generator]
+\label{ex:uniform_rng}
+For $X \sim \mathrm{Uniform}(0, 1)$, we have $\E[X] = 1/2$ and
+$\Var(X) = 1/12 \approx 0.083$. The CDF is $F_X(x) = x$ for
+$x \in [0,1]$, which is the basis for the inverse transform method:
+if $U \sim \mathrm{Uniform}(0,1)$ and $F$ is any CDF, then
+$X = F^{-1}(U)$ has CDF $F$.
+\end{example}
+
+\subsection{Exponential Distribution}
+
+\begin{definition}[Exponential Distribution]
+\label{def:exponential}
+A random variable $X$ has an \emph{Exponential distribution} with rate
+parameter $\lambda > 0$, written $X \sim \mathrm{Exp}(\lambda)$, if its
+PDF is
+\[
+    f_X(x) = \begin{cases}
+        \lambda e^{-\lambda x} & \text{if } x \geq 0, \\
+        0 & \text{if } x < 0.
+    \end{cases}
+\]
+\end{definition}
+
+\begin{proposition}[Exponential Moments]
+\label{prop:exponential_moments}
+If $X \sim \mathrm{Exp}(\lambda)$, then $\E[X] = 1/\lambda$ and
+$\Var(X) = 1/\lambda^2$.
+\end{proposition}
+
+\begin{proof}
+Using integration by parts with $u = x$, $dv = \lambda e^{-\lambda x}dx$:
+\[
+    \E[X] = \int_0^\infty x \lambda e^{-\lambda x} \, dx
+    = \left[-x e^{-\lambda x}\right]_0^\infty
+    + \int_0^\infty e^{-\lambda x} \, dx
+    = 0 + \frac{1}{\lambda}
+    = \frac{1}{\lambda}.
+\]
+For $\E[X^2]$, integrate by parts twice:
+\[
+    \E[X^2] = \int_0^\infty x^2 \lambda e^{-\lambda x} \, dx
+    = \frac{2}{\lambda^2}.
+\]
+(Alternatively, $\E[X^2] = \E[X(X-1)] + \E[X]$; using the substitution
+$j = k-2$ in the factorial moment computation gives the same result.)
+Therefore $\Var(X) = 2/\lambda^2 - 1/\lambda^2 = 1/\lambda^2$.
+\end{proof}
+
+\begin{theorem}[Memoryless Property of the Exponential Distribution]
+\label{thm:memoryless}
+Let $X \sim \mathrm{Exp}(\lambda)$. Then for all $s, t \geq 0$,
+\[
+    \Prob(X > s + t \mid X > s) = \Prob(X > t).
+\]
+Moreover, the Exponential distribution is the unique continuous
+distribution with the memoryless property.
+\end{theorem}
+
+\begin{proof}
+The CDF is $F_X(x) = 1 - e^{-\lambda x}$ for $x \geq 0$, so
+$\Prob(X > x) = e^{-\lambda x}$. By the definition of conditional
+probability,
+\[
+    \Prob(X > s + t \mid X > s)
+    = \frac{\Prob(X > s + t)}{\Prob(X > s)}
+    = \frac{e^{-\lambda(s+t)}}{e^{-\lambda s}}
+    = e^{-\lambda t}
+    = \Prob(X > t).
+\]
+
+For uniqueness, suppose $X$ is a continuous non-negative random variable
+satisfying $\Prob(X > s + t) = \Prob(X > s)\Prob(X > t)$ for all
+$s, t \geq 0$. Let $g(t) = \Prob(X > t)$. Then $g(s + t) = g(s)g(t)$,
+$g(0) = 1$, and $g$ is non-increasing and right-continuous (since
+$F_X = 1 - g$ is a CDF). The only non-increasing solutions to
+Cauchy's functional equation $g(s+t) = g(s)g(t)$ with $g(0) = 1$ that
+are measurable (guaranteed by monotonicity) are $g(t) = e^{-\lambda t}$
+for some $\lambda \geq 0$. Since $g(t) \to 0$ as $t \to \infty$
+(because $X$ is a proper random variable), we need $\lambda > 0$.
+This gives $X \sim \mathrm{Exp}(\lambda)$.
+\end{proof}
+
+\begin{example}[Exponential Waiting Time]
+\label{ex:exponential_waiting}
+A light bulb has an exponentially distributed lifetime with mean
+$1/\lambda = 1000$ hours. Given that it has survived 500 hours, the
+memoryless property says the conditional distribution of the remaining
+lifetime is still $\mathrm{Exp}(\lambda)$ with mean 1000 hours. The
+bulb's past survival provides no information about its future.
+\end{example}
+
+\subsection{Normal (Gaussian) Distribution}
+
+\begin{definition}[Normal Distribution]
+\label{def:normal}
+A random variable $X$ has a \emph{Normal} (or \emph{Gaussian})
+distribution with parameters $\mu \in \R$ and $\sigma^2 > 0$, written
+$X \sim \mathcal{N}(\mu, \sigma^2)$, if its PDF is
+\[
+    f_X(x) = \frac{1}{\sqrt{2\pi\sigma^2}}
+    \exp\!\left(-\frac{(x - \mu)^2}{2\sigma^2}\right),
+    \quad x \in \R.
+\]
+The case $\mu = 0$, $\sigma^2 = 1$ is the \emph{standard normal}
+distribution.
+\end{definition}
+
+To verify that this is a valid PDF, we must show that the integral over
+$\R$ equals $1$. It suffices to evaluate the integral for the standard
+normal.
+
+\begin{keyresult}[title={The Gaussian Integral}]
+The integral $\int_{-\infty}^{\infty} e^{-x^2/2}\,dx = \sqrt{2\pi}$
+is the foundational identity that normalizes the Gaussian density. It
+cannot be evaluated by elementary antiderivatives; the proof uses a
+change to polar coordinates.
+\end{keyresult}
+
+\begin{theorem}[Gaussian Integral via Polar Coordinates]
+\label{thm:gaussian_integral}
+\[
+    I = \int_{-\infty}^{\infty} e^{-x^2/2} \, dx = \sqrt{2\pi}.
+\]
+\end{theorem}
+
+\begin{proof}
+Since $e^{-x^2/2} > 0$, the integral $I$ is positive (and converges
+because $e^{-x^2/2}$ decays faster than any polynomial). We compute
+$I^2$ instead:
+\[
+    I^2 = \left(\int_{-\infty}^{\infty} e^{-x^2/2} \, dx\right)
+    \left(\int_{-\infty}^{\infty} e^{-y^2/2} \, dy\right)
+    = \int_{-\infty}^{\infty} \int_{-\infty}^{\infty}
+    e^{-(x^2 + y^2)/2} \, dx \, dy.
+\]
+Switch to polar coordinates $x = r\cos\theta$, $y = r\sin\theta$ with
+Jacobian $r$:
+\begin{align*}
+    I^2 &= \int_0^{2\pi} \int_0^{\infty} e^{-r^2/2} \, r \, dr \, d\theta
+    = 2\pi \int_0^{\infty} r \, e^{-r^2/2} \, dr.
+\end{align*}
+Substitute $u = r^2/2$, $du = r\,dr$:
+\[
+    \int_0^{\infty} r \, e^{-r^2/2} \, dr
+    = \int_0^{\infty} e^{-u} \, du
+    = \left[-e^{-u}\right]_0^{\infty} = 1.
+\]
+Therefore $I^2 = 2\pi$, and since $I > 0$, we conclude
+$I = \sqrt{2\pi}$.
+\end{proof}
+
+\begin{corollary}
+\label{cor:normal_valid}
+The standard normal PDF $f(x) = (2\pi)^{-1/2} e^{-x^2/2}$ integrates
+to $1$ over $\R$. For general $\mathcal{N}(\mu, \sigma^2)$, the
+substitution $z = (x - \mu)/\sigma$ with $dx = \sigma \, dz$ gives
+\[
+    \int_{-\infty}^{\infty} \frac{1}{\sqrt{2\pi\sigma^2}}
+    e^{-(x-\mu)^2/(2\sigma^2)} dx
+    = \int_{-\infty}^{\infty} \frac{1}{\sqrt{2\pi}} e^{-z^2/2} \, dz
+    = 1.
+\]
+\end{corollary}
+
+\begin{theorem}[Normal Moments via Standardization]
+\label{thm:normal_moments}
+If $X \sim \mathcal{N}(\mu, \sigma^2)$, then $\E[X] = \mu$ and
+$\Var(X) = \sigma^2$.
+\end{theorem}
+
+\begin{proof}
+\emph{Standard normal first.} Let $Z \sim \mathcal{N}(0,1)$. Since
+$z \, e^{-z^2/2}$ is an odd function and $e^{-z^2/2}$ decays rapidly,
+\[
+    \E[Z] = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{\infty}
+    z \, e^{-z^2/2} \, dz = 0.
+\]
+For the second moment, integrate by parts with $u = z$,
+$dv = z \, e^{-z^2/2}\,dz$ (so $v = -e^{-z^2/2}$):
+\begin{align*}
+    \E[Z^2] &= \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{\infty}
+    z^2 e^{-z^2/2} \, dz
+    = \frac{1}{\sqrt{2\pi}}
+    \left(\left[-z \, e^{-z^2/2}\right]_{-\infty}^{\infty}
+    + \int_{-\infty}^{\infty} e^{-z^2/2} \, dz\right) \\
+    &= \frac{1}{\sqrt{2\pi}} \left(0 + \sqrt{2\pi}\right) = 1.
+\end{align*}
+Thus $\Var(Z) = \E[Z^2] - (\E[Z])^2 = 1 - 0 = 1$.
+
+\emph{General case.} Write $X = \mu + \sigma Z$ where
+$Z \sim \mathcal{N}(0,1)$. Then
+$\E[X] = \mu + \sigma \E[Z] = \mu$ and
+$\Var(X) = \sigma^2 \Var(Z) = \sigma^2$ (using the affine
+transformation rule $\Var(aZ + b) = a^2 \Var(Z)$, proved in Lesson~11).
+\end{proof}
+
+\begin{rlconnection}[title={Gaussian Noise in Policy Gradient Methods}]
+In continuous-action policy gradient methods such as REINFORCE, the
+policy $\pi_\theta(a \mid s)$ is typically a Gaussian
+$\mathcal{N}(\mu_\theta(s), \sigma_\theta^2(s))$. The gradient estimate
+\[
+    \nabla_\theta J(\theta)
+    \approx \frac{1}{N} \sum_{i=1}^N
+    \nabla_\theta \log \pi_\theta(a_i \mid s_i) \, G_i
+\]
+involves the log-density of the normal distribution. Understanding the
+Gaussian PDF, its mean, and variance is essential for computing
+$\nabla_\theta \log \pi_\theta$, analyzing estimator variance, and
+designing variance reduction baselines.
+\end{rlconnection}
+
+\begin{example}[Standard Normal Tail Probabilities]
+\label{ex:normal_tails}
+For $Z \sim \mathcal{N}(0,1)$, the ``68-95-99.7 rule'' states
+\[
+    \Prob(|Z| \leq 1) \approx 0.683, \quad
+    \Prob(|Z| \leq 2) \approx 0.954, \quad
+    \Prob(|Z| \leq 3) \approx 0.997.
+\]
+This means observations more than $3\sigma$ from the mean are extremely
+rare under Gaussian models, a fact used in outlier detection and
+confidence interval construction.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Binomial Probabilities]
+\textnormal{(\(\ast\))} \\
+A fair coin is tossed $n = 6$ times. Let $X$ be the number of heads.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\Prob(X = 3)$.
+    \item Compute $\Prob(X \geq 5)$.
+    \item Compute $\E[X]$ and $\Var(X)$ using the Binomial formulas.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Geometric Distribution and the Memoryless Property]
+\textnormal{(\(\ast\))} \\
+Let $X \sim \mathrm{Geom}(p)$ count the trial of the first success.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Prove that the Geometric distribution has the discrete
+    memoryless property: $\Prob(X > m + n \mid X > m) = \Prob(X > n)$
+    for all $m, n \geq 0$.
+    \item Is the Geometric distribution the unique discrete distribution
+    with this property? Prove or disprove.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Poisson Approximation Error]
+\textnormal{(\(\ast\ast\))} \\
+Let $X \sim \mathrm{Bin}(n, \lambda/n)$ and $Y \sim
+\mathrm{Poisson}(\lambda)$ with $\lambda = 2$ and $n = 20$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\Prob(X = 0)$, $\Prob(X = 1)$, and $\Prob(X = 2)$
+    exactly using the Binomial PMF.
+    \item Compute the corresponding Poisson approximations
+    $\Prob(Y = 0)$, $\Prob(Y = 1)$, $\Prob(Y = 2)$.
+    \item Quantify the approximation error for each value.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Exponential CDF and Quantiles]
+\textnormal{(\(\ast\ast\))} \\
+Let $X \sim \mathrm{Exp}(\lambda)$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Derive the CDF $F_X(x)$ from the PDF.
+    \item Find the median of $X$ (i.e., the value $m$ such that
+    $F_X(m) = 1/2$).
+    \item Show that the median is always less than the mean $1/\lambda$.
+    What does this tell us about the shape of the exponential
+    distribution?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Gaussian Moments via Differentiation]
+\textnormal{(\(\ast\ast\ast\))} \\
+Define $I(\alpha) = \int_{-\infty}^{\infty} e^{-\alpha x^2} \, dx$
+for $\alpha > 0$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Using the Gaussian integral (Theorem~\ref{thm:gaussian_integral}
+    with the substitution $u = \sqrt{2\alpha}\,x$), show that
+    $I(\alpha) = \sqrt{\pi / \alpha}$.
+    \item Differentiate $I(\alpha)$ with respect to $\alpha$ under the
+    integral sign to derive $\int_{-\infty}^{\infty} x^2
+    e^{-\alpha x^2}\,dx = \frac{1}{2}\sqrt{\pi/\alpha^3}$.
+    \item Use parts (a) and (b) with $\alpha = 1/2$ to re-derive
+    $\E[Z^2] = 1$ for $Z \sim \mathcal{N}(0,1)$.
+\end{enumerate}
+\textit{Hint:} Differentiation under the integral sign is justified by
+dominated convergence, since $x^2 e^{-\alpha x^2}$ is integrable for
+$\alpha > 0$.
+\end{exercise}
+
+\begin{exercise}[Bandit Reward Distributions]
+\textnormal{(\(\ast\ast\ast\))} \\
+A two-armed bandit has arm~1 with reward
+$R_1 \sim \mathrm{Bernoulli}(0.6)$ and arm~2 with reward
+$R_2 \sim \mathcal{N}(0.5, 0.25)$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\E[R_1]$, $\Var(R_1)$, $\E[R_2]$, and $\Var(R_2)$.
+    \item Which arm has the higher expected reward?
+    \item Suppose you pull arm~2 and observe $r_2 = 1.3$. Compare the
+    density $f_{R_2}(1.3)$ with the probability $\Prob(R_1 = 1) = 0.6$.
+    Explain why comparing a density value with a probability is
+    invalid, even though both are numbers associated with the observation.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 7: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item A \emph{random variable} $X \colon \Omega \to \R$ assigns a
+    numerical value to each outcome; its distribution is fully
+    characterized by the CDF $F_X(x) = \Prob(X \leq x)$.
+    \item A \emph{discrete} random variable takes countably many values;
+    its distribution is described by the PMF
+    $p_X(k) = \Prob(X = k)$.
+    \item The \emph{Bernoulli}$(p)$ distribution models a single trial
+    with success probability $p$; $\E[X] = p$, $\Var(X) = p(1-p)$.
+    \item The \emph{Binomial}$(n, p)$ distribution counts successes in
+    $n$ independent trials; the indicator decomposition
+    $X = \sum X_i$ gives $\E[X] = np$ and $\Var(X) = np(1-p)$.
+    \item The \emph{Geometric}$(p)$ distribution counts the trial of the
+    first success; $\E[X] = 1/p$ and $\Var(X) = (1-p)/p^2$.
+    \item The \emph{Poisson}$(\lambda)$ distribution models rare event
+    counts; it arises as the limit of $\mathrm{Bin}(n, \lambda/n)$ as
+    $n \to \infty$, and satisfies $\E[X] = \Var(X) = \lambda$.
+    \item A \emph{continuous} random variable has
+    $\Prob(X = x) = 0$ for every $x$; its distribution is described by
+    a PDF $f_X$ with
+    $\Prob(a \leq X \leq b) = \int_a^b f_X(x)\,dx$.
+    \item The \emph{Exponential}$(\lambda)$ distribution is the unique
+    continuous memoryless distribution; $\E[X] = 1/\lambda$ and
+    $\Var(X) = 1/\lambda^2$.
+    \item The \emph{Normal}$(\mu, \sigma^2)$ distribution has the
+    bell-shaped density normalized by the Gaussian integral
+    $\int e^{-x^2/2}\,dx = \sqrt{2\pi}$; $\E[X] = \mu$ and
+    $\Var(X) = \sigma^2$.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 8: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Lesson 11} develops expectation, variance, covariance,
+    and joint distributions in full generality, including the linearity
+    of expectation and the tower property of conditional expectation.
+    \item \textbf{Lesson 12} covers the law of large numbers and the
+    central limit theorem, explaining why sample means converge and why
+    the normal distribution arises so ubiquitously.
+    \item \textbf{Phase 01, Lesson 4} (probability foundations) revisits
+    random variables, expectation, and distributions in the
+    measure-theoretic framework using Lebesgue integration.
+    \item For a comprehensive catalog of over one hundred univariate
+    distributions and their relationships, see
+    \citet[Appendix A]{blitzstein2019}.
+    \item The Poisson distribution was introduced by Sim\'{e}on Denis
+    Poisson in 1837 to model wrongful convictions in court; the Gaussian
+    distribution was discovered independently by de Moivre (1733), Gauss
+    (1809), and Laplace (1812).
+    \item \citet[Chapter 4]{feller1968} provides a deep treatment of
+    generating functions for discrete distributions, including elegant
+    proofs of the Poisson limit theorem and moment calculations.
+\end{itemize}
+
+\bibliography{probability-refs}
+
+\end{document}

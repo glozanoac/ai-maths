@@ -1,0 +1,1339 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 8: SVD, Norms, and Matrix Calculus}}
+\fancyhead[R]{\thepage}
+\title{Lesson 8: SVD, Norms, and Matrix Calculus}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+How does a neural network learn?  At each training step, the algorithm
+computes the gradient of a scalar loss function with respect to a
+matrix of weights, updates the weights by a small step in the negative
+gradient direction, and repeats.  Unpacking this single sentence
+reveals three distinct mathematical needs.  First, the weight matrix
+$W \in \R^{m \times n}$ transforms input features, and understanding
+its action -- which directions it amplifies, which it suppresses, and
+what its effective rank is -- requires the \emph{singular value
+decomposition} (SVD).  Second, bounding the sensitivity of the network
+output to perturbations in $W$ requires \emph{matrix norms}, and the
+relationship between the operator norm and the Frobenius norm governs
+both the stability of the forward pass and the explosion or vanishing
+of gradients during backpropagation.  Third, computing the gradient
+itself -- a derivative of a scalar with respect to a matrix -- belongs
+to \emph{matrix calculus}, the systematic extension of multivariable
+calculus to matrix-valued arguments.
+
+This capstone lesson of the Linear Algebra subdomain assembles
+these three pillars: SVD, matrix norms, and matrix calculus.  Along
+the way, we develop quadratic forms (the local shape of any smooth loss
+near a critical point), the matrix exponential (the bridge to
+continuous-time dynamics), and the derivative formulas that underpin
+every gradient computation in deep learning and reinforcement learning.
+
+\begin{rlconnection}[title={Where SVD, Norms, and Matrix Calculus Appear in RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{PCA and dimensionality reduction.}
+        Principal component analysis computes the top singular vectors
+        of the centered data matrix; the Eckart--Young theorem guarantees
+        this is the best low-rank approximation in both operator and
+        Frobenius norm.
+  \item \textbf{Backpropagation and gradient computation.}
+        Every step of backpropagation applies the chain rule for
+        matrix-valued functions; the formulas $\nabla_x(x^\top A x)
+        = (A + A^\top)x$ and $\partial \tr(AX)/\partial X = A^\top$
+        appear in nearly every derivation.
+  \item \textbf{Condition number and optimization convergence.}
+        The condition number $\kappa(A) = \sigma_1/\sigma_n$ controls
+        the convergence rate of gradient descent; ill-conditioned
+        Hessians cause slow training, motivating preconditioning and
+        adaptive methods like Adam.
+  \item \textbf{Policy gradient and natural gradient.}
+        The natural policy gradient requires differentiating the
+        KL-divergence with respect to parameters, which involves
+        quadratic forms in the Fisher information matrix and the
+        matrix calculus chain rule.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Vector spaces, bases, dimension, linear maps, rank--nullity theorem
+(Lesson~5).  Determinants, eigenvalues, characteristic polynomial,
+diagonalizability criterion, Cayley--Hamilton theorem (Lesson~6).
+Inner products, orthonormal bases, Gram--Schmidt, orthogonal
+projection, spectral theorem for real symmetric matrices, positive
+definiteness, Rayleigh quotient (Lesson~7).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Classify} quadratic forms by the eigenvalues of the
+        associated symmetric matrix and connect them to second-order
+        optimality conditions.
+  \item \textbf{Prove} the SVD theorem from the spectral decomposition
+        of $A^\top A$ and derive the Eckart--Young low-rank approximation
+        theorem.
+  \item \textbf{Compute} the operator norm and Frobenius norm of a matrix
+        in terms of singular values and prove their key relationships.
+  \item \textbf{Derive} the matrix exponential and its fundamental
+        properties, including the connection to linear ODEs.
+  \item \textbf{Apply} the rules of matrix calculus -- gradient,
+        Jacobian, Hessian, trace derivatives, and the chain rule --
+        to compute derivatives arising in optimization and machine
+        learning.
+  \item \textbf{Construct} complete gradient derivations for quadratic
+        objectives and trace-based loss functions using the tools of
+        this lesson.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapter 7]{axler2015} -- Singular value decomposition
+        from the operator-theoretic perspective, polar decomposition.
+  \item \citet[Sections 3.1--3.3, 7.4]{horn2013} -- Comprehensive
+        treatment of SVD, matrix norms, condition numbers, and the
+        Eckart--Young theorem.
+  \item \citet[Chapters 6--7]{strang2016} -- Computational perspective
+        on SVD, least squares, pseudoinverse, and matrix norms.
+  \item \citet[Chapters 1--6]{magnus2019} -- Rigorous development of
+        matrix differential calculus with applications.
+  \item \citet{petersen2012} -- Extensive catalog of matrix derivative
+        identities organized by matrix structure.
+  \item \citet[Chapter 6]{lax2007} -- Matrix exponential, linear ODEs,
+        and the connection to semigroup theory.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: QUADRATIC FORMS
+%% ============================================================
+\section{Quadratic Forms}
+\label{sec:quadratic_forms}
+
+\subsection{Definition and Canonical Representation}
+
+\begin{definition}[Quadratic Form]
+\label{def:quadratic_form}
+Let $A \in \R^{n \times n}$ be a symmetric matrix.  The
+\emph{quadratic form} associated with $A$ is the function
+$Q_A\colon \R^n \to \R$ defined by
+\[
+  Q_A(x) = x^\top A x = \sum_{i=1}^n \sum_{j=1}^n a_{ij} x_i x_j.
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:symmetrize}
+Any matrix $B \in \R^{n \times n}$ (not necessarily symmetric) gives
+a quadratic form $x^\top B x = x^\top \bigl(\frac{B + B^\top}{2}\bigr) x$,
+since $x^\top B x$ is a scalar and therefore equals its own transpose
+$x^\top B^\top x$.  Hence every quadratic form can be represented by a
+unique symmetric matrix $A = (B + B^\top)/2$.
+\end{remark}
+
+\begin{definition}[Classification of Quadratic Forms]
+\label{def:classification_qf}
+A quadratic form $Q_A$ (equivalently, its symmetric matrix $A$) is:
+\begin{itemize}[nosep]
+  \item \emph{positive definite} if $Q_A(x) > 0$ for all $x \neq 0$,
+  \item \emph{positive semidefinite} if $Q_A(x) \geq 0$ for all $x$,
+  \item \emph{negative definite} if $Q_A(x) < 0$ for all $x \neq 0$,
+  \item \emph{negative semidefinite} if $Q_A(x) \leq 0$ for all $x$,
+  \item \emph{indefinite} if $Q_A$ takes both positive and negative values.
+\end{itemize}
+\end{definition}
+
+\begin{proposition}[Eigenvalue Classification]
+\label{prop:eigenvalue_classification}
+Let $A \in \R^{n \times n}$ be symmetric with eigenvalues
+$\lambda_1, \ldots, \lambda_n$.  Then:
+\begin{enumerate}[nosep]
+  \item $A \succ 0$ if and only if $\lambda_i > 0$ for all $i$.
+  \item $A \succeq 0$ if and only if $\lambda_i \geq 0$ for all $i$.
+  \item $A$ is indefinite if and only if $A$ has both positive and
+        negative eigenvalues.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+By the spectral theorem (Lesson~7, Theorem~5.3), $A = Q \Lambda Q^\top$
+where $Q$ is orthogonal and $\Lambda = \diag(\lambda_1, \ldots, \lambda_n)$.
+Setting $y = Q^\top x$ (a bijection since $Q$ is invertible):
+\[
+  Q_A(x) = x^\top Q \Lambda Q^\top x = y^\top \Lambda y
+  = \sum_{i=1}^n \lambda_i y_i^2.
+\]
+If all $\lambda_i > 0$, then $\sum_i \lambda_i y_i^2 > 0$ for $y \neq 0$.
+Conversely, if $\lambda_k \leq 0$ for some $k$, then $x = q_k$ gives
+$Q_A(q_k) = \lambda_k \leq 0$.  This proves (1).  Parts (2) and (3)
+follow by the same argument.
+\end{proof}
+
+\begin{example}[Classifying a Quadratic Form]
+\label{ex:classify_qf}
+Let $A = \begin{pmatrix} 2 & -1 \\ -1 & 2 \end{pmatrix}$.  The
+eigenvalues are $\lambda = 2 \pm 1$, i.e., $\lambda_1 = 1$ and
+$\lambda_2 = 3$.  Since both are positive, $A \succ 0$ and the
+quadratic form $Q_A(x) = 2x_1^2 - 2x_1 x_2 + 2x_2^2$ is positive
+definite.
+\end{example}
+
+\subsection{Quadratic Approximation and Second-Order Conditions}
+
+\begin{theorem}[Second-Order Taylor Expansion]
+\label{thm:taylor_second_order}
+Let $f\colon \R^n \to \R$ be twice continuously differentiable.  At a
+point $x_0 \in \R^n$, for any $h \in \R^n$:
+\[
+  f(x_0 + h) = f(x_0) + \nabla f(x_0)^\top h
+  + \frac{1}{2} h^\top H_f(x_0)\, h + o(\|h\|^2),
+\]
+where $H_f(x_0) \in \R^{n \times n}$ is the Hessian matrix with entries
+$[H_f(x_0)]_{ij} = \frac{\partial^2 f}{\partial x_i \partial x_j}(x_0)$.
+\end{theorem}
+
+\begin{proof}
+Apply the one-dimensional Taylor expansion to $g(t) = f(x_0 + th)$
+at $t = 0$: $g(1) = g(0) + g'(0) + \frac{1}{2}g''(0) + o(1)$ as
+$\|h\| \to 0$.  By the chain rule, $g'(0) = \nabla f(x_0)^\top h$
+and $g''(0) = h^\top H_f(x_0)\, h$.
+\end{proof}
+
+\begin{corollary}[Second-Order Optimality Conditions]
+\label{cor:second_order_opt}
+Let $f\colon \R^n \to \R$ be twice continuously differentiable and let
+$x_0$ be a critical point ($\nabla f(x_0) = 0$).  Then:
+\begin{enumerate}[nosep]
+  \item If $H_f(x_0) \succ 0$, then $x_0$ is a strict local minimum.
+  \item If $H_f(x_0) \prec 0$, then $x_0$ is a strict local maximum.
+  \item If $H_f(x_0)$ is indefinite, then $x_0$ is a saddle point.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+At a critical point, $f(x_0 + h) - f(x_0) = \frac{1}{2}h^\top H_f(x_0)\,h
++ o(\|h\|^2)$.  If $H_f(x_0) \succ 0$, the quadratic term dominates
+for small $\|h\|$ and is positive for $h \neq 0$, giving a strict local
+minimum.  Similarly for the other cases.
+\end{proof}
+
+\begin{example}[Quadratic Approximation Near a Minimum]
+\label{ex:quad_approx}
+Let $f(x_1, x_2) = x_1^4 + x_1^2 + x_2^2$.  At $x_0 = (0,0)$:
+$\nabla f(0) = (0, 0)^\top$ and
+$H_f(0) = \begin{pmatrix} 2 & 0 \\ 0 & 2 \end{pmatrix} = 2I$.
+Since $H_f(0) \succ 0$, the origin is a strict local minimum.
+The quadratic approximation is $f(h) \approx h_1^2 + h_2^2 = \|h\|^2$.
+\end{example}
+
+\begin{rlconnection}[title={Newton's Method and the Natural Policy Gradient}]
+At a critical point, Newton's method for minimization updates
+$x \leftarrow x - H_f(x)^{-1}\nabla f(x)$, effectively using the
+quadratic form $h^\top H_f(x)\,h$ to determine both the direction and
+step size.  In policy optimization, the natural policy gradient replaces
+the Euclidean Hessian with the Fisher information matrix
+$F(\theta) \succeq 0$, yielding the update
+$\theta \leftarrow \theta + \alpha F(\theta)^{-1}\nabla J(\theta)$.
+The Fisher matrix defines a quadratic form $h^\top F(\theta)\, h$
+that measures the local curvature of the KL-divergence between nearby
+policies.  The classification of $F(\theta)$ as positive semidefinite
+guarantees that this curvature measure is well-defined.
+\end{rlconnection}
+
+With quadratic forms providing the local geometry of smooth functions,
+we now turn to a factorization that reveals the global geometry of
+any linear map: the singular value decomposition.
+
+%% ============================================================
+%% SECTION 4: SINGULAR VALUE DECOMPOSITION
+%% ============================================================
+\section{Singular Value Decomposition}
+\label{sec:svd}
+
+\subsection{Statement and Proof}
+
+\begin{definition}[Singular Values]
+\label{def:singular_values}
+Let $A \in \R^{m \times n}$.  The \emph{singular values} of $A$ are
+$\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_{\min(m,n)} \geq 0$,
+defined as the square roots of the eigenvalues of $A^\top A \in \R^{n \times n}$
+(or equivalently of the nonzero eigenvalues of $AA^\top \in \R^{m \times m}$).
+\end{definition}
+
+\begin{remark}
+\label{rem:ata_psd}
+The matrix $A^\top A$ is symmetric and positive semidefinite, since
+$x^\top(A^\top A)x = \|Ax\|^2 \geq 0$ for all $x$.  Therefore all
+eigenvalues of $A^\top A$ are nonneg, and the singular values are
+well-defined real numbers.
+\end{remark}
+
+\begin{keyresult}[title={The Singular Value Decomposition}]
+\begin{theorem}[SVD Theorem]
+\label{thm:svd}
+Let $A \in \R^{m \times n}$ with $\rank(A) = r$.  There exist an
+orthogonal matrix $U \in \R^{m \times m}$, an orthogonal matrix
+$V \in \R^{n \times n}$, and a matrix $\Sigma \in \R^{m \times n}$
+with $\Sigma_{ii} = \sigma_i$ for $i = 1, \ldots, \min(m,n)$ and all
+other entries zero, such that
+\[
+  A = U \Sigma V^\top.
+\]
+The singular values satisfy
+$\sigma_1 \geq \cdots \geq \sigma_r > 0 = \sigma_{r+1} = \cdots = \sigma_{\min(m,n)}$.
+The columns $u_1, \ldots, u_m$ of $U$ are called the
+\emph{left singular vectors}, and the columns $v_1, \ldots, v_n$
+of $V$ are called the \emph{right singular vectors}.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Since $A^\top A \in \R^{n \times n}$ is symmetric positive semidefinite,
+the spectral theorem (Lesson~7, Theorem~5.3) provides an orthogonal
+matrix $V = (v_1 \mid \cdots \mid v_n)$ and eigenvalues
+$\mu_1 \geq \cdots \geq \mu_n \geq 0$ such that
+\[
+  A^\top A = V \diag(\mu_1, \ldots, \mu_n) V^\top.
+\]
+Set $\sigma_i = \sqrt{\mu_i}$ for each $i$.  Since
+$\rank(A^\top A) = \rank(A) = r$ (the rank of $A^\top A$ equals the
+rank of $A$, as $\nullspace(A^\top A) = \nullspace(A)$), we have
+$\sigma_1 \geq \cdots \geq \sigma_r > 0$ and
+$\sigma_{r+1} = \cdots = \sigma_n = 0$.
+
+\textbf{Step 1: Construct the left singular vectors for nonzero
+singular values.}  For $i = 1, \ldots, r$, define
+\[
+  u_i = \frac{1}{\sigma_i} A v_i.
+\]
+We verify orthonormality: for $1 \leq i, j \leq r$,
+\[
+  u_i^\top u_j = \frac{1}{\sigma_i \sigma_j} v_i^\top A^\top A v_j
+  = \frac{1}{\sigma_i \sigma_j} v_i^\top (\sigma_j^2 v_j)
+  = \frac{\sigma_j}{\sigma_i} v_i^\top v_j
+  = \frac{\sigma_j}{\sigma_i} \delta_{ij} = \delta_{ij},
+\]
+where we used $A^\top A v_j = \sigma_j^2 v_j$ and the orthonormality
+of the $v_j$.
+
+\textbf{Step 2: Extend to an orthonormal basis of $\R^m$.}
+The vectors $u_1, \ldots, u_r$ are orthonormal in $\R^m$.  If $r < m$,
+extend them to an orthonormal basis $u_1, \ldots, u_m$ of $\R^m$
+(possible by the Gram--Schmidt process applied to any completion).
+Set $U = (u_1 \mid \cdots \mid u_m)$.
+
+\textbf{Step 3: Verify $A = U\Sigma V^\top$.}  It suffices to check
+$AV = U\Sigma$.  For $i = 1, \ldots, r$:
+$Av_i = \sigma_i u_i = (U\Sigma)_{\cdot, i}$.
+For $i = r+1, \ldots, n$: $\|Av_i\|^2 = v_i^\top A^\top A v_i
+= \sigma_i^2 \|v_i\|^2 = 0$, so $Av_i = 0 = (U\Sigma)_{\cdot, i}$
+(since $\sigma_i = 0$).  Thus $AV = U\Sigma$, giving
+$A = U\Sigma V^\top$.
+\end{proof}
+
+\subsection{Geometric Interpretation}
+
+The SVD reveals that every linear map $A\colon \R^n \to \R^m$ acts
+by three steps: (1) rotate/reflect by $V^\top$ in the domain, (2) scale
+by $\sigma_i$ along each coordinate axis (and embed or project if
+$m \neq n$), (3) rotate/reflect by $U$ in the codomain.  In particular,
+the image of the unit sphere $\{x : \|x\| = 1\}$ under $A$ is an
+ellipsoid in $\R^m$ with semi-axes $\sigma_1 u_1, \ldots, \sigma_r u_r$.
+
+\begin{example}[SVD of a $2 \times 2$ Matrix]
+\label{ex:svd_2x2}
+Let $A = \begin{pmatrix} 3 & 0 \\ 0 & 2 \end{pmatrix}$.
+Then $A^\top A = \begin{pmatrix} 9 & 0 \\ 0 & 4 \end{pmatrix}$, with
+eigenvalues $\mu_1 = 9$, $\mu_2 = 4$ and eigenvectors $v_1 = e_1$,
+$v_2 = e_2$.  So $\sigma_1 = 3$, $\sigma_2 = 2$, $u_1 = Av_1/3 = e_1$,
+$u_2 = Av_2/2 = e_2$.  The SVD is $A = I \cdot \diag(3,2) \cdot I^\top$,
+which is the matrix itself -- diagonal matrices are already in SVD form.
+\end{example}
+
+\begin{example}[SVD of a Non-Square Matrix]
+\label{ex:svd_nonsquare}
+Let $A = \begin{pmatrix} 1 & 1 \\ 0 & 0 \end{pmatrix}$.
+Then $A^\top A = \begin{pmatrix} 1 & 1 \\ 1 & 1 \end{pmatrix}$,
+with eigenvalues $\mu_1 = 2$, $\mu_2 = 0$ and eigenvectors
+$v_1 = \frac{1}{\sqrt{2}}(1,1)^\top$,
+$v_2 = \frac{1}{\sqrt{2}}(1,-1)^\top$.
+So $\sigma_1 = \sqrt{2}$, $\sigma_2 = 0$, and
+$u_1 = Av_1/\sqrt{2} = (1, 0)^\top = e_1$.
+Extending: $u_2 = e_2$.  The SVD is
+$A = \begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix}
+\begin{pmatrix} \sqrt{2} & 0 \\ 0 & 0 \end{pmatrix}
+\frac{1}{\sqrt{2}}\begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}^\top$.
+The rank is $r = 1$, confirmed by $\sigma_1 > 0 = \sigma_2$.
+\end{example}
+
+\begin{proposition}[Rank from SVD]
+\label{prop:rank_svd}
+$\rank(A)$ equals the number of nonzero singular values of $A$.
+\end{proposition}
+
+\begin{proof}
+From the SVD, $\rank(A) = \rank(U\Sigma V^\top) = \rank(\Sigma)$
+(since $U$ and $V$ are invertible), and $\rank(\Sigma)$ is the number
+of nonzero diagonal entries.
+\end{proof}
+
+\subsection{The Eckart--Young Theorem}
+
+\begin{keyresult}[title={Best Low-Rank Approximation}]
+\begin{theorem}[Eckart--Young]
+\label{thm:eckart_young}
+Let $A \in \R^{m \times n}$ have SVD $A = \sum_{i=1}^r \sigma_i u_i v_i^\top$.
+For any $k \leq r$, define $A_k = \sum_{i=1}^k \sigma_i u_i v_i^\top$.
+Then $A_k$ is the best rank-$k$ approximation to $A$ in both the
+operator norm and the Frobenius norm:
+\begin{align}
+  \min_{\rank(B) \leq k} \|A - B\|_{\mathrm{op}} &= \|A - A_k\|_{\mathrm{op}} = \sigma_{k+1},
+  \label{eq:eckart_young_op} \\
+  \min_{\rank(B) \leq k} \|A - B\|_{F} &= \|A - A_k\|_{F}
+  = \Bigl(\sum_{i=k+1}^r \sigma_i^2\Bigr)^{1/2}.
+  \label{eq:eckart_young_frob}
+\end{align}
+(The norms $\|\cdot\|_{\mathrm{op}}$ and $\|\cdot\|_F$ are defined
+formally in Section~\ref{sec:norms}.)
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove the operator norm case; the Frobenius norm case follows by a
+similar argument.
+
+\textbf{Achievability:} $A - A_k = \sum_{i=k+1}^r \sigma_i u_i v_i^\top$,
+which has singular values $\sigma_{k+1} \geq \cdots \geq \sigma_r$.
+Hence $\|A - A_k\|_{\mathrm{op}} = \sigma_{k+1}$ (by
+Proposition~\ref{prop:op_norm_sigma} below).
+
+\textbf{Lower bound:} Let $B \in \R^{m \times n}$ with
+$\rank(B) \leq k$.  Then $\nullspace(B)$ has dimension
+$\geq n - k$.  Let $S = \Span(v_1, \ldots, v_{k+1})$, which has
+dimension $k + 1$.  Since $\dim(\nullspace(B)) + \dim(S) \geq
+(n - k) + (k + 1) = n + 1 > n$, there exists a unit vector
+$z \in \nullspace(B) \cap S$.
+
+Write $z = \sum_{i=1}^{k+1} c_i v_i$ with $\sum_{i=1}^{k+1} c_i^2 = 1$.
+Then $Bz = 0$ and
+\[
+  \|A - B\|_{\mathrm{op}} \geq \|(A - B)z\| = \|Az\|
+  = \Bigl\|\sum_{i=1}^{k+1} c_i \sigma_i u_i\Bigr\|
+  = \Bigl(\sum_{i=1}^{k+1} c_i^2 \sigma_i^2\Bigr)^{1/2}
+  \geq \sigma_{k+1},
+\]
+where the last inequality uses $\sigma_i \geq \sigma_{k+1}$ for
+$i \leq k+1$ and $\sum c_i^2 = 1$.
+
+For the Frobenius norm, a similar dimension argument applied to each
+singular direction establishes $\|A - B\|_F^2 \geq \sum_{i=k+1}^r \sigma_i^2$
+for any rank-$k$ matrix $B$, with equality at $B = A_k$.
+\end{proof}
+
+\subsection{The Moore--Penrose Pseudoinverse}
+
+\begin{definition}[Moore--Penrose Pseudoinverse]
+\label{def:pseudoinverse}
+Let $A \in \R^{m \times n}$ have SVD
+$A = \sum_{i=1}^r \sigma_i u_i v_i^\top$.  The \emph{Moore--Penrose
+pseudoinverse} of $A$ is
+\[
+  A^+ = \sum_{i=1}^r \frac{1}{\sigma_i} v_i u_i^\top \in \R^{n \times m}.
+\]
+Equivalently, if $A = U\Sigma V^\top$, then
+$A^+ = V\Sigma^+ U^\top$, where $\Sigma^+$ is obtained from $\Sigma$
+by transposing and inverting all nonzero entries.
+\end{definition}
+
+\begin{theorem}[Penrose Conditions]
+\label{thm:penrose}
+The pseudoinverse $A^+$ is the unique matrix $X \in \R^{n \times m}$
+satisfying:
+\begin{enumerate}[nosep]
+  \item $AXA = A$,
+  \item $XAX = X$,
+  \item $(AX)^\top = AX$,
+  \item $(XA)^\top = XA$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{$A^+$ satisfies the four conditions.}
+Using $A = U\Sigma V^\top$ and $X = V\Sigma^+ U^\top$:
+$AX = U\Sigma\Sigma^+ U^\top$ and $XA = V\Sigma^+\Sigma V^\top$.
+Both $\Sigma\Sigma^+$ and $\Sigma^+\Sigma$ are diagonal with $1$'s
+in the first $r$ positions and $0$'s elsewhere.  Hence $AX$ and $XA$
+are symmetric (conditions 3--4), and $AXA = U(\Sigma\Sigma^+\Sigma)V^\top
+= U\Sigma V^\top = A$ (condition 1), $XAX = V(\Sigma^+\Sigma\Sigma^+)U^\top
+= V\Sigma^+ U^\top = X$ (condition 2).
+
+\textbf{Uniqueness.}
+Let $X$ and $Y$ both satisfy conditions 1--4.  Then
+\begin{align*}
+  X &= XAX = X(AX)^\top = XX^\top A^\top = XX^\top(AYA)^\top
+  = XX^\top A^\top Y^\top A^\top \\
+  &= (AX)^\top (AY)^\top A^\top = (AX)^\top [(AY)A]^\top
+  = (AX)^\top A^\top Y^\top \\
+  &= (AAX)^\top Y^\top = (A)^\top Y^\top = (YA)^\top Y^\top \cdot\,\text{?}
+\end{align*}
+A cleaner route: from condition 1, $AXA = A$ and $AYA = A$.  Then
+$AX$ and $AY$ are both orthogonal projections onto $\range(A)$ (symmetric
+and idempotent by conditions 1, 3), so $AX = AY$.  Similarly, $XA = YA$
+(projections onto $\range(A^\top)$).  Then
+$X = XAX = XAY = (XA)Y = (YA)Y = YAY = Y$.
+\end{proof}
+
+\begin{theorem}[Pseudoinverse and Least Squares]
+\label{thm:pseudo_ls}
+For any $A \in \R^{m \times n}$ and $b \in \R^m$, $x^* = A^+ b$ is
+the minimum-norm least-squares solution: among all vectors minimizing
+$\|Ax - b\|$, the vector $x^*$ has the smallest $\|x\|$.
+\end{theorem}
+
+\begin{proof}
+The least-squares problem minimizes $\|Ax - b\|^2$, which is equivalent
+to solving the normal equations $A^\top A x = A^\top b$.  The solution
+set is $\{x : Ax = \proj_{\range(A)} b\} = \{A^+ b + z : z \in \nullspace(A)\}$.
+
+To see that $x^* = A^+ b$ has minimum norm among all solutions,
+note that $A^+ b \in \range(A^\top) = \range(V_r)$ where
+$V_r = (v_1 \mid \cdots \mid v_r)$, since
+$A^+ b = \sum_{i=1}^r \frac{u_i^\top b}{\sigma_i} v_i$.
+Any other solution is $x = x^* + z$ with $z \in \nullspace(A)$.
+Since $\range(A^\top) \perp \nullspace(A)$
+(the fundamental theorem of linear algebra), the Pythagorean theorem
+gives $\|x\|^2 = \|x^*\|^2 + \|z\|^2 \geq \|x^*\|^2$.
+\end{proof}
+
+\begin{example}[Pseudoinverse of a Rank-1 Matrix]
+\label{ex:pseudo_rank1}
+Let $A = \begin{pmatrix} 1 \\ 2 \end{pmatrix} \in \R^{2 \times 1}$.
+The SVD is $A = u_1 \sigma_1 v_1^\top$ with $\sigma_1 = \sqrt{5}$,
+$u_1 = \frac{1}{\sqrt{5}}(1,2)^\top$, $v_1 = 1$.  So
+$A^+ = v_1 \frac{1}{\sigma_1} u_1^\top = \frac{1}{5}(1, 2)
+= \frac{A^\top}{A^\top A}$.  For $b = (3, 1)^\top$, the least-squares
+solution is $x^* = A^+ b = (3 + 2)/5 = 1$, and
+$Ax^* = (1, 2)^\top$ is the projection of $b$ onto $\range(A)$.
+\end{example}
+
+\begin{rlconnection}[title={SVD in Dimensionality Reduction and Linear Function Approximation}]
+In reinforcement learning with linear function approximation,
+the value function is approximated as $\hat{V} = \Phi w$ where
+$\Phi \in \R^{|\mathcal{S}| \times d}$ is a feature matrix.
+The least-squares solution $w^* = \Phi^+ V^\pi$ uses the
+pseudoinverse.  When $d$ is large, the SVD of $\Phi$ reveals which
+feature directions carry the most information (large singular values)
+and which are redundant (small singular values).  Truncating to the
+top $k$ singular values gives the best rank-$k$ feature approximation
+by the Eckart--Young theorem, which is precisely what PCA computes
+when $\Phi$ contains centered data.
+\end{rlconnection}
+
+With the SVD established, we can now define and analyze the matrix
+norms that measure the ``size'' of a linear map.
+
+%% ============================================================
+%% SECTION 5: TRACE AND MATRIX NORMS
+%% ============================================================
+\section{Trace and Matrix Norms}
+\label{sec:norms}
+
+\subsection{Trace: Definition and Properties}
+
+\begin{definition}[Trace]
+\label{def:trace}
+The \emph{trace} of a square matrix $A \in \R^{n \times n}$ is
+$\tr(A) = \sum_{i=1}^n a_{ii}$.
+\end{definition}
+
+\begin{proposition}[Properties of the Trace]
+\label{prop:trace_properties}
+For matrices $A, B \in \R^{n \times n}$, $C \in \R^{m \times n}$,
+$D \in \R^{n \times m}$, and $\alpha \in \R$:
+\begin{enumerate}[nosep]
+  \item \textbf{Linearity:} $\tr(\alpha A + B) = \alpha \tr(A) + \tr(B)$.
+  \item \textbf{Cyclic property:} $\tr(CD) = \tr(DC)$.
+  \item \textbf{Similarity invariance:} If $P$ is invertible, then
+        $\tr(P^{-1}AP) = \tr(A)$.
+  \item \textbf{Eigenvalue sum:} $\tr(A) = \sum_{i=1}^n \lambda_i$
+        where $\lambda_i$ are the eigenvalues of $A$ (counted with
+        algebraic multiplicity).
+  \item \textbf{Frobenius inner product:}
+        $\tr(A^\top B) = \sum_{i,j} a_{ij} b_{ij}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(1) Direct from the definition:
+$\tr(\alpha A + B) = \sum_i (\alpha a_{ii} + b_{ii})
+= \alpha \sum_i a_{ii} + \sum_i b_{ii}$.
+
+(2) Let $C = (c_{ik}) \in \R^{m \times n}$, $D = (d_{kj}) \in \R^{n \times m}$.
+Then $\tr(CD) = \sum_{i=1}^m \sum_{k=1}^n c_{ik} d_{ki}
+= \sum_{k=1}^n \sum_{i=1}^m d_{ki} c_{ik} = \tr(DC)$.
+
+(3) Follows from (2): $\tr(P^{-1}AP) = \tr(APP^{-1}) = \tr(A)$.
+
+(4) Over $\C$, every matrix is similar to an upper triangular matrix $T$
+(Schur decomposition; see Lesson~6).  Then $\tr(A) = \tr(T) = \sum_i t_{ii}
+= \sum_i \lambda_i$.
+
+(5) $\tr(A^\top B) = \sum_i (A^\top B)_{ii} = \sum_i \sum_j a_{ji} b_{ji}
+= \sum_{i,j} a_{ij} b_{ij}$.
+\end{proof}
+
+\begin{example}[Trace as an Inner Product on Matrices]
+\label{ex:trace_inner_product}
+The \emph{Frobenius inner product} on $\R^{m \times n}$ is
+$\langle A, B \rangle_F = \tr(A^\top B)$.  It satisfies all inner
+product axioms: symmetry ($\tr(A^\top B) = \tr(B^\top A)$),
+bilinearity (from linearity of trace), and positive definiteness
+($\tr(A^\top A) = \sum_{ij} a_{ij}^2 \geq 0$, with equality iff
+$A = 0$).  This turns $\R^{m \times n}$ into an inner product space
+of dimension $mn$.
+\end{example}
+
+\subsection{Operator Norm}
+
+\begin{definition}[Operator Norm]
+\label{def:op_norm}
+For $A \in \R^{m \times n}$, the \emph{operator norm} (or
+\emph{spectral norm}, or \emph{induced 2-norm}) is
+\[
+  \|A\|_{\mathrm{op}} = \max_{\|x\| = 1} \|Ax\|
+  = \max_{x \neq 0} \frac{\|Ax\|}{\|x\|},
+\]
+where $\|\cdot\|$ denotes the Euclidean norm on $\R^n$ and $\R^m$.
+\end{definition}
+
+\begin{proposition}[Operator Norm Equals $\sigma_1$]
+\label{prop:op_norm_sigma}
+$\|A\|_{\mathrm{op}} = \sigma_1(A)$, the largest singular value of $A$.
+\end{proposition}
+
+\begin{proof}
+For any unit vector $x$, write $x = \sum_j c_j v_j$ with
+$\sum_j c_j^2 = 1$ (in the right singular vector basis).  Then
+$Ax = \sum_{j=1}^r c_j \sigma_j u_j$ and
+$\|Ax\|^2 = \sum_{j=1}^r c_j^2 \sigma_j^2 \leq \sigma_1^2 \sum_j c_j^2
+= \sigma_1^2$.
+Equality holds at $x = v_1$.
+\end{proof}
+
+\subsection{Frobenius Norm}
+
+\begin{definition}[Frobenius Norm]
+\label{def:frobenius_norm}
+The \emph{Frobenius norm} of $A \in \R^{m \times n}$ is
+\[
+  \|A\|_F = \sqrt{\sum_{i=1}^m \sum_{j=1}^n a_{ij}^2}
+  = \sqrt{\tr(A^\top A)}.
+\]
+\end{definition}
+
+\begin{proposition}[Frobenius Norm from Singular Values]
+\label{prop:frob_singular}
+$\|A\|_F = \sqrt{\sigma_1^2 + \cdots + \sigma_r^2}$ where
+$\sigma_1, \ldots, \sigma_r$ are the nonzero singular values of $A$.
+\end{proposition}
+
+\begin{proof}
+$\|A\|_F^2 = \tr(A^\top A) = \tr(V\Sigma^\top\Sigma V^\top)
+= \tr(\Sigma^\top\Sigma) = \sum_i \sigma_i^2$,
+using the cyclic property of trace and the fact that
+$\Sigma^\top \Sigma = \diag(\sigma_1^2, \ldots, \sigma_n^2)$.
+\end{proof}
+
+\begin{example}[Computing Both Norms]
+\label{ex:norms_computation}
+Let $A = \begin{pmatrix} 1 & 2 \\ 0 & 1 \end{pmatrix}$.
+The Frobenius norm is $\|A\|_F = \sqrt{1 + 4 + 0 + 1} = \sqrt{6}$.
+For the operator norm, $A^\top A = \begin{pmatrix} 1 & 2 \\ 2 & 5 \end{pmatrix}$
+with eigenvalues $\mu = 3 \pm \sqrt{5}$.  So
+$\sigma_1 = \sqrt{3 + \sqrt{5}} \approx 2.29$ and
+$\|A\|_{\mathrm{op}} = \sigma_1$.  We verify:
+$\sigma_1^2 + \sigma_2^2 = (3 + \sqrt{5}) + (3 - \sqrt{5}) = 6 = \|A\|_F^2$.
+\end{example}
+
+\subsection{Norm Relationships}
+
+\begin{theorem}[Norm Inequalities]
+\label{thm:norm_ineq}
+For $A \in \R^{m \times n}$ with $\rank(A) = r$:
+\[
+  \|A\|_{\mathrm{op}} \leq \|A\|_F \leq \sqrt{r}\,\|A\|_{\mathrm{op}}.
+\]
+\end{theorem}
+
+\begin{proof}
+For the left inequality:
+$\|A\|_{\mathrm{op}}^2 = \sigma_1^2 \leq \sigma_1^2 + \cdots + \sigma_r^2
+= \|A\|_F^2$.
+
+For the right inequality:
+$\|A\|_F^2 = \sum_{i=1}^r \sigma_i^2 \leq r \cdot \sigma_1^2
+= r \cdot \|A\|_{\mathrm{op}}^2$.
+
+Both bounds are tight: the left is tight when $\rank(A) = 1$
+(all but one singular value is zero), and the right is tight when
+$\sigma_1 = \cdots = \sigma_r$ (e.g., $A = I_r$ padded with zeros).
+\end{proof}
+
+\subsection{Submultiplicativity}
+
+\begin{theorem}[Submultiplicativity]
+\label{thm:submult}
+For $A \in \R^{m \times p}$ and $B \in \R^{p \times n}$:
+\begin{enumerate}[nosep]
+  \item $\|AB\|_{\mathrm{op}} \leq \|A\|_{\mathrm{op}} \cdot \|B\|_{\mathrm{op}}$.
+  \item $\|AB\|_F \leq \|A\|_{\mathrm{op}} \cdot \|B\|_F$.
+  \item $\|AB\|_F \leq \|A\|_F \cdot \|B\|_F$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(1) For any unit vector $x$:
+$\|ABx\| \leq \|A\|_{\mathrm{op}} \|Bx\|
+\leq \|A\|_{\mathrm{op}} \|B\|_{\mathrm{op}} \|x\|
+= \|A\|_{\mathrm{op}} \|B\|_{\mathrm{op}}$.
+Taking the maximum over $\|x\| = 1$ gives the result.
+
+(2) Let $b_1, \ldots, b_n$ be the columns of $B$.  Then
+$\|AB\|_F^2 = \sum_{j=1}^n \|Ab_j\|^2
+\leq \|A\|_{\mathrm{op}}^2 \sum_{j=1}^n \|b_j\|^2
+= \|A\|_{\mathrm{op}}^2 \|B\|_F^2$.
+
+(3) By the Cauchy--Schwarz inequality on the Frobenius inner product:
+$(AB)_{ij} = \sum_k a_{ik} b_{kj}$, so
+$\|AB\|_F^2 = \sum_{i,j} \bigl(\sum_k a_{ik} b_{kj}\bigr)^2$.
+Alternatively, from (2): $\|AB\|_F \leq \|A\|_{\mathrm{op}} \|B\|_F
+\leq \|A\|_F \|B\|_F$ using
+$\|A\|_{\mathrm{op}} \leq \|A\|_F$ (Theorem~\ref{thm:norm_ineq}).
+\end{proof}
+
+\subsection{Condition Number}
+
+\begin{definition}[Condition Number]
+\label{def:condition_number}
+For an invertible matrix $A \in \R^{n \times n}$, the
+\emph{condition number} (with respect to the operator norm) is
+\[
+  \kappa(A) = \|A\|_{\mathrm{op}} \cdot \|A^{-1}\|_{\mathrm{op}}
+  = \frac{\sigma_1(A)}{\sigma_n(A)}.
+\]
+\end{definition}
+
+\begin{theorem}[Sensitivity of Linear Systems]
+\label{thm:sensitivity}
+Let $A \in \R^{n \times n}$ be invertible and let $Ax = b$.  If
+$b$ is perturbed to $b + \delta b$ with solution $x + \delta x$, then
+\[
+  \frac{\|\delta x\|}{\|x\|}
+  \leq \kappa(A)\, \frac{\|\delta b\|}{\|b\|}.
+\]
+\end{theorem}
+
+\begin{proof}
+From $A(x + \delta x) = b + \delta b$, we get $A\,\delta x = \delta b$,
+so $\delta x = A^{-1}\delta b$.  Hence
+$\|\delta x\| \leq \|A^{-1}\|_{\mathrm{op}} \|\delta b\|$.
+Also $\|b\| = \|Ax\| \leq \|A\|_{\mathrm{op}} \|x\|$, so
+$1/\|x\| \leq \|A\|_{\mathrm{op}}/\|b\|$.  Combining:
+\[
+  \frac{\|\delta x\|}{\|x\|}
+  \leq \|A^{-1}\|_{\mathrm{op}} \|A\|_{\mathrm{op}}
+       \frac{\|\delta b\|}{\|b\|}
+  = \kappa(A) \frac{\|\delta b\|}{\|b\|}. \qedhere
+\]
+\end{proof}
+
+\begin{example}[Condition Number and Sensitivity]
+\label{ex:condition}
+The matrix $A = \begin{pmatrix} 1 & 0 \\ 0 & 0.001 \end{pmatrix}$
+has $\sigma_1 = 1$, $\sigma_2 = 0.001$, so $\kappa(A) = 1000$.
+A $0.1\%$ perturbation in $b$ can cause up to a $100\%$ change in $x$.
+In contrast, $A = I$ has $\kappa = 1$ (perfectly conditioned).
+\end{example}
+
+\begin{warning}[title={Condition Number and Numerical Stability}]
+The condition number $\kappa(A)$ is an intrinsic property of the
+problem $Ax = b$, not of any particular algorithm.  A large condition
+number means the problem is inherently sensitive to perturbations.
+In machine learning, the condition number of the Hessian
+$\kappa(H_f)$ determines the convergence rate of gradient descent:
+the number of iterations scales as $O(\kappa \log(1/\varepsilon))$.
+This motivates preconditioning techniques and adaptive methods that
+implicitly rescale the problem to reduce $\kappa$.
+\end{warning}
+
+With norms providing quantitative measures of matrix size and
+sensitivity, we now develop the matrix exponential, which connects
+linear algebra to continuous-time dynamics.
+
+%% ============================================================
+%% SECTION 6: MATRIX EXPONENTIAL
+%% ============================================================
+\section{Matrix Exponential}
+\label{sec:matrix_exp}
+
+\subsection{Definition and Convergence}
+
+\begin{definition}[Matrix Exponential]
+\label{def:matrix_exp}
+For $A \in \R^{n \times n}$, the \emph{matrix exponential} is
+\[
+  e^A = \exp(A) = \sum_{k=0}^{\infty} \frac{A^k}{k!}
+  = I + A + \frac{A^2}{2!} + \frac{A^3}{3!} + \cdots.
+\]
+\end{definition}
+
+\begin{proposition}[Convergence of the Matrix Exponential]
+\label{prop:exp_convergence}
+The series $\sum_{k=0}^\infty A^k / k!$ converges absolutely (in
+any matrix norm) for every $A \in \R^{n \times n}$.
+\end{proposition}
+
+\begin{proof}
+Using submultiplicativity (Theorem~\ref{thm:submult}),
+$\|A^k/k!\|_{\mathrm{op}} \leq \|A\|_{\mathrm{op}}^k / k!$.
+The scalar series $\sum_k \|A\|_{\mathrm{op}}^k / k!
+= e^{\|A\|_{\mathrm{op}}} < \infty$ converges, so the matrix
+series converges absolutely.  (Absolute convergence in a complete normed
+space implies convergence.)
+\end{proof}
+
+\subsection{Properties}
+
+\begin{theorem}[Properties of the Matrix Exponential]
+\label{thm:exp_properties}
+Let $A, B \in \R^{n \times n}$.
+\begin{enumerate}[nosep]
+  \item $e^{0} = I$.
+  \item If $AB = BA$, then $e^{A+B} = e^A e^B$.
+  \item $e^A$ is always invertible, with $(e^A)^{-1} = e^{-A}$.
+  \item $\frac{d}{dt} e^{tA} = A e^{tA} = e^{tA} A$.
+  \item If $A = PDP^{-1}$ (diagonalizable), then
+        $e^A = P\, \diag(e^{\lambda_1}, \ldots, e^{\lambda_n})\, P^{-1}$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(1) $e^0 = \sum_k 0^k/k! = I$ (where $0^0 = I$ by convention).
+
+(2) When $AB = BA$, the binomial theorem applies:
+$(A + B)^k = \sum_{j=0}^k \binom{k}{j} A^j B^{k-j}$.  Then
+\begin{align*}
+  e^{A+B} &= \sum_{k=0}^\infty \frac{(A+B)^k}{k!}
+  = \sum_{k=0}^\infty \sum_{j=0}^k \frac{A^j}{j!} \frac{B^{k-j}}{(k-j)!}
+  = \Bigl(\sum_{j=0}^\infty \frac{A^j}{j!}\Bigr)
+    \Bigl(\sum_{\ell=0}^\infty \frac{B^\ell}{\ell!}\Bigr)
+  = e^A e^B,
+\end{align*}
+where the rearrangement is justified by absolute convergence.
+
+(3) Since $A$ commutes with $-A$, part (2) gives
+$e^A e^{-A} = e^{A-A} = e^0 = I$.
+
+(4) Differentiating term by term (justified by uniform convergence on
+compact intervals):
+\[
+  \frac{d}{dt} e^{tA} = \frac{d}{dt} \sum_{k=0}^\infty \frac{t^k A^k}{k!}
+  = \sum_{k=1}^\infty \frac{t^{k-1} A^k}{(k-1)!}
+  = A \sum_{k=1}^\infty \frac{t^{k-1} A^{k-1}}{(k-1)!}
+  = A e^{tA}.
+\]
+The identity $e^{tA} A$ follows since $A$ commutes with $e^{tA}$
+(each term $t^k A^k / k!$ commutes with $A$).
+
+(5) $A^k = PD^kP^{-1}$, so
+$e^A = P\bigl(\sum_k D^k/k!\bigr)P^{-1}
+= P\,\diag(e^{\lambda_1}, \ldots, e^{\lambda_n})\,P^{-1}$.
+\end{proof}
+
+\begin{example}[Matrix Exponential of a Diagonal Matrix]
+\label{ex:exp_diagonal}
+If $A = \diag(-1, 2)$, then
+$e^{tA} = \diag(e^{-t}, e^{2t})$.  As $t \to \infty$, the first
+component decays to $0$ and the second grows without bound.  The
+eigenvalues $\{-1, 2\}$ determine the long-time behavior.
+\end{example}
+
+\begin{example}[Matrix Exponential and Rotation]
+\label{ex:exp_rotation}
+Let $A = \begin{pmatrix} 0 & -\theta \\ \theta & 0 \end{pmatrix}$
+for $\theta \in \R$.  Since $A$ is skew-symmetric ($A^\top = -A$),
+$e^A$ is orthogonal.  Using $A^2 = -\theta^2 I$, the series groups as
+\[
+  e^A = I \cos\theta + \frac{A}{\theta}\sin\theta
+  = \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix},
+\]
+which is a rotation by angle $\theta$.
+\end{example}
+
+\begin{example}[Linear ODE Solution]
+\label{ex:ode_solution}
+The system $\dot{x}(t) = Ax(t)$ with initial condition $x(0) = x_0$
+has the unique solution $x(t) = e^{tA} x_0$.  This follows from
+property (4): $\frac{d}{dt}(e^{tA}x_0) = Ae^{tA}x_0 = Ax(t)$.
+In continuous-time Markov chains, the transition rate matrix $Q$
+(with $q_{ij} \geq 0$ for $i \neq j$ and row sums zero) gives the
+transition probability matrix $P(t) = e^{tQ}$.
+\end{example}
+
+We now develop the final topic: the systematic computation of
+derivatives of matrix-valued expressions.
+
+%% ============================================================
+%% SECTION 7: MATRIX CALCULUS
+%% ============================================================
+\section{Matrix Calculus}
+\label{sec:matrix_calculus}
+
+\subsection{Gradient, Jacobian, and Hessian}
+
+\begin{definition}[Gradient]
+\label{def:gradient}
+Let $f\colon \R^n \to \R$ be differentiable at $x$.  The
+\emph{gradient} of $f$ at $x$ is the unique vector
+$\nabla f(x) \in \R^n$ satisfying
+\[
+  f(x + h) = f(x) + \nabla f(x)^\top h + o(\|h\|)
+  \quad \text{as } \|h\| \to 0.
+\]
+In coordinates, $[\nabla f(x)]_i = \partial f / \partial x_i$.
+\end{definition}
+
+\begin{definition}[Jacobian]
+\label{def:jacobian}
+Let $g\colon \R^n \to \R^m$ be differentiable at $x$.  The
+\emph{Jacobian} of $g$ at $x$ is the matrix $J_g(x) \in \R^{m \times n}$
+with $[J_g(x)]_{ij} = \partial g_i / \partial x_j$, satisfying
+\[
+  g(x + h) = g(x) + J_g(x)\, h + o(\|h\|).
+\]
+When $m = 1$, $J_g(x) = \nabla g(x)^\top$.
+\end{definition}
+
+\begin{definition}[Hessian]
+\label{def:hessian}
+Let $f\colon \R^n \to \R$ be twice differentiable at $x$.  The
+\emph{Hessian} of $f$ at $x$ is $H_f(x) \in \R^{n \times n}$ with
+$[H_f(x)]_{ij} = \frac{\partial^2 f}{\partial x_i \partial x_j}$.
+If the second partial derivatives are continuous, $H_f(x)$ is symmetric.
+The Hessian is the Jacobian of the gradient: $H_f(x) = J_{\nabla f}(x)$.
+\end{definition}
+
+\subsection{Fundamental Vector Derivative Formulas}
+
+\begin{theorem}[Basic Gradient Formulas]
+\label{thm:basic_gradients}
+Let $a \in \R^n$, $A \in \R^{n \times n}$, and $x \in \R^n$.
+\begin{enumerate}[nosep]
+  \item $\nabla_x(a^\top x) = a$.
+  \item $\nabla_x(x^\top A x) = (A + A^\top) x$.
+        If $A$ is symmetric, this simplifies to $2Ax$.
+  \item $\nabla_x(\|x\|^2) = 2x$.
+  \item $\nabla_x(\|Ax - b\|^2) = 2A^\top(Ax - b)$ for $b \in \R^m$,
+        $A \in \R^{m \times n}$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(1) $f(x + h) = a^\top(x + h) = a^\top x + a^\top h = f(x) + a^\top h$.
+Comparing with $f(x) + \nabla f(x)^\top h + o(\|h\|)$ gives
+$\nabla f(x) = a$.
+
+(2) $f(x + h) = (x + h)^\top A (x + h)
+= x^\top Ax + x^\top Ah + h^\top Ax + h^\top Ah$.
+The linear term in $h$ is $x^\top Ah + h^\top Ax = (A^\top x)^\top h + (Ax)^\top h
+= (A^\top x + Ax)^\top h = [(A + A^\top)x]^\top h$.  The term $h^\top Ah$
+is $o(\|h\|)$.  Hence $\nabla f(x) = (A + A^\top)x$.
+
+(3) $\|x\|^2 = x^\top I x$.  Apply (2) with $A = I$:
+$\nabla_x(x^\top x) = 2Ix = 2x$.
+
+(4) Set $g(x) = \|Ax - b\|^2 = (Ax - b)^\top(Ax - b)
+= x^\top A^\top A x - 2b^\top Ax + b^\top b$.  By (1) and (2):
+$\nabla g(x) = (A^\top A + A^\top A)x - 2A^\top b
+= 2A^\top A x - 2A^\top b = 2A^\top(Ax - b)$.
+\end{proof}
+
+\begin{example}[Gradient of a Quadratic Loss]
+\label{ex:quadratic_loss}
+The least-squares loss $L(w) = \frac{1}{2}\|Xw - y\|^2$ with
+$X \in \R^{m \times n}$ and $y \in \R^m$ has gradient
+$\nabla L(w) = X^\top(Xw - y)$
+(by Theorem~\ref{thm:basic_gradients}(4) with a factor of $1/2$).
+Setting $\nabla L = 0$ gives the normal equations
+$X^\top X w = X^\top y$, whose minimum-norm solution is $w^* = X^+ y$.
+\end{example}
+
+\begin{example}[Gradient of a Regularized Loss]
+\label{ex:ridge}
+Ridge regression adds an $\ell_2$ penalty:
+$L(w) = \frac{1}{2}\|Xw - y\|^2 + \frac{\lambda}{2}\|w\|^2$.
+Using Theorem~\ref{thm:basic_gradients}:
+$\nabla L(w) = X^\top(Xw - y) + \lambda w$.
+Setting to zero: $(X^\top X + \lambda I)w = X^\top y$,
+so $w^* = (X^\top X + \lambda I)^{-1} X^\top y$.  The regularization
+term $\lambda I$ improves the condition number of $X^\top X$.
+\end{example}
+
+\subsection{Trace Derivative Formulas}
+
+When the variable is a matrix $X \in \R^{m \times n}$, the gradient
+$\nabla_X f$ is the matrix of partial derivatives
+$[\nabla_X f]_{ij} = \partial f / \partial x_{ij}$, characterized by
+\[
+  f(X + H) = f(X) + \tr(\nabla_X f(X)^\top H) + o(\|H\|_F).
+\]
+
+\begin{theorem}[Trace Derivative Formulas]
+\label{thm:trace_derivs}
+Let $A \in \R^{n \times m}$, $B \in \R^{m \times n}$,
+$X \in \R^{m \times n}$.
+\begin{enumerate}[nosep]
+  \item $\frac{\partial}{\partial X} \tr(AX) = A^\top$.
+  \item $\frac{\partial}{\partial X} \tr(X^\top A) = A$.
+  \item $\frac{\partial}{\partial X} \tr(X^\top A X)
+        = (A + A^\top) X$ \quad (for $X \in \R^{n \times p}$,
+        $A \in \R^{n \times n}$).
+  \item $\frac{\partial}{\partial X} \tr(AXB) = A^\top B^\top$ \quad
+        (for $A \in \R^{p \times m}$, $B \in \R^{n \times p}$).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(1) $\tr(A(X+H)) = \tr(AX) + \tr(AH)$.  Since
+$\tr(AH) = \tr(A^\top{}^\top H) = \sum_{ij} [A^\top]_{ij} h_{ij}
+= \tr((A^\top)^\top H)$, the gradient is $A^\top$.
+
+(2) $\tr((X+H)^\top A) = \tr(X^\top A) + \tr(H^\top A)$.
+Now $\tr(H^\top A) = \sum_{ij} h_{ij} a_{ij} = \tr(A^\top H)$, so
+the gradient is $A$.
+
+(3) $\tr((X+H)^\top A(X+H)) = \tr(X^\top AX) + \tr(H^\top AX)
++ \tr(X^\top AH) + \tr(H^\top AH)$.  The linear part is
+$\tr(H^\top AX) + \tr(X^\top AH)
+= \tr(H^\top AX) + \tr(H^\top A^\top X)
+= \tr(H^\top (A + A^\top)X)$, giving gradient $(A + A^\top)X$.
+
+(4) $\tr(A(X+H)B) = \tr(AXB) + \tr(AHB)$.  Using the cyclic property:
+$\tr(AHB) = \tr(BAHB \cdot B^{-1}) = \tr(BAH)$ -- more directly,
+$\tr(AHB) = \tr(B A H) = \tr((A^\top B^\top)^\top H)$, so the gradient
+is $A^\top B^\top$.
+\end{proof}
+
+\begin{example}[Gradient of $\|AX - B\|_F^2$]
+\label{ex:matrix_ls}
+Let $f(X) = \|AX - B\|_F^2 = \tr((AX - B)^\top(AX - B))$.  Expanding:
+$f(X) = \tr(X^\top A^\top A X) - 2\tr(B^\top AX) + \tr(B^\top B)$.
+Using Theorem~\ref{thm:trace_derivs}:
+$\nabla_X f = 2A^\top A X - 2A^\top B = 2A^\top(AX - B)$.
+This extends the vector least-squares gradient to the matrix case.
+\end{example}
+
+\subsection{The Chain Rule}
+
+\begin{theorem}[Chain Rule for Compositions]
+\label{thm:chain_rule}
+Let $g\colon \R^n \to \R^m$ be differentiable at $x$ and
+$f\colon \R^m \to \R$ be differentiable at $g(x)$.  Then the
+composition $h = f \circ g\colon \R^n \to \R$ is differentiable at $x$
+with
+\[
+  \nabla h(x) = J_g(x)^\top \nabla f(g(x)).
+\]
+More generally, if $f\colon \R^m \to \R^p$, then $J_{f \circ g}(x) = J_f(g(x))\, J_g(x)$.
+\end{theorem}
+
+\begin{proof}
+By differentiability of $g$ and $f$:
+\begin{align*}
+  h(x + \delta) &= f(g(x + \delta))
+  = f(g(x) + J_g(x)\delta + o(\|\delta\|)) \\
+  &= f(g(x)) + \nabla f(g(x))^\top [J_g(x)\delta + o(\|\delta\|)]
+     + o(\|J_g(x)\delta + o(\|\delta\|)\|) \\
+  &= f(g(x)) + \nabla f(g(x))^\top J_g(x)\delta + o(\|\delta\|) \\
+  &= h(x) + [J_g(x)^\top \nabla f(g(x))]^\top \delta + o(\|\delta\|).
+\end{align*}
+Hence $\nabla h(x) = J_g(x)^\top \nabla f(g(x))$.  The general case
+follows by applying this to each component of $f$.
+\end{proof}
+
+\begin{keyresult}[title={Matrix Calculus Toolbox for Gradient Computation}]
+The results of this section provide the complete toolbox for computing
+gradients in machine learning:
+\begin{enumerate}[nosep]
+  \item \textbf{Vector derivatives:} $\nabla(a^\top x) = a$,
+        $\nabla(x^\top Ax) = (A + A^\top)x$ (Theorem~\ref{thm:basic_gradients}).
+  \item \textbf{Trace derivatives:} $\partial \tr(AX)/\partial X = A^\top$,
+        $\partial \tr(X^\top AX)/\partial X = (A + A^\top)X$
+        (Theorem~\ref{thm:trace_derivs}).
+  \item \textbf{Chain rule:} $\nabla(f \circ g)(x)
+        = J_g(x)^\top \nabla f(g(x))$ (Theorem~\ref{thm:chain_rule}).
+\end{enumerate}
+Every gradient computation in backpropagation is an iterated application
+of these three rules.  The chain rule composes the Jacobians of
+individual layers, while the vector and trace formulas compute the
+Jacobian of each layer.
+\end{keyresult}
+
+\begin{example}[Softmax Cross-Entropy Gradient]
+\label{ex:softmax}
+In a classification network, the final layer computes logits
+$z = Wx + b \in \R^K$, then $p = \mathrm{softmax}(z)$ with
+$p_k = e^{z_k}/\sum_j e^{z_j}$, and the loss is
+$L = -\log p_y$ (cross-entropy for true class $y$).  By the chain
+rule: $\nabla_z L = p - e_y$ (where $e_y$ is the $y$-th standard
+basis vector), and then $\nabla_W L = (p - e_y)x^\top$ (a rank-1
+outer product).  Each step uses the chain rule
+(Theorem~\ref{thm:chain_rule}) applied to the composition of the
+linear layer, softmax, and log-loss.
+\end{example}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Quadratic Form Classification]
+\label{exer:qf}
+\textnormal{(\(*\))} \\
+For each matrix, classify the associated quadratic form as positive
+definite, positive semidefinite, negative definite, negative
+semidefinite, or indefinite:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $A = \begin{pmatrix} 5 & 2 \\ 2 & 1 \end{pmatrix}$.
+  \item $B = \begin{pmatrix} -3 & 0 \\ 0 & -1 \end{pmatrix}$.
+  \item $C = \begin{pmatrix} 1 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & -1 \end{pmatrix}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[SVD Computation]
+\label{exer:svd}
+\textnormal{(\(*\))} \\
+Compute the full SVD of $A = \begin{pmatrix} 1 & 1 \\ 1 & -1 \\ 0 & 0 \end{pmatrix}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Find $A^\top A$ and its eigenvalues and eigenvectors.
+  \item Determine the singular values and right singular vectors.
+  \item Construct the left singular vectors and verify $A = U\Sigma V^\top$.
+  \item Find the pseudoinverse $A^+$ and verify $A A^+ A = A$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Low-Rank Approximation in RL]
+\label{exer:eckart_young}
+\textnormal{(\(**\))} \\
+In a reinforcement learning problem with $|\mathcal{S}| = 100$ states
+and $d = 10$ features, the feature matrix $\Phi \in \R^{100 \times 10}$
+has singular values
+$\sigma_1 = 5, \sigma_2 = 4, \sigma_3 = 3, \sigma_4 = 2, \sigma_5 = 1,
+\sigma_6 = \cdots = \sigma_{10} = 0.01$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Compute $\kappa(\Phi^\top \Phi)$ and interpret its meaning
+        for the least-squares problem $\Phi w \approx V^\pi$.
+  \item If we truncate $\Phi$ to rank $k = 5$, what is the Frobenius
+        norm of the approximation error $\|\Phi - \Phi_5\|_F$?
+  \item What fraction of $\|\Phi\|_F^2$ is captured by the rank-5
+        approximation?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Matrix Exponential Computation]
+\label{exer:exp}
+\textnormal{(\(**\))} \\
+Let $A = \begin{pmatrix} 1 & 1 \\ 0 & 2 \end{pmatrix}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Find $P$ and $D$ such that $A = PDP^{-1}$.
+  \item Compute $e^{tA}$ for all $t \in \R$.
+  \item Verify that $\frac{d}{dt}e^{tA}\big|_{t=0} = A$.
+  \item Solve the ODE $\dot{x} = Ax$ with $x(0) = (1, 0)^\top$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Trace Derivative Derivation]
+\label{exer:trace_deriv}
+\textnormal{(\(**\))} \\
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Prove that $\frac{\partial}{\partial X} \tr(AX^\top BX)
+        = A^\top X B^\top + BXA$ for $X \in \R^{m \times n}$,
+        $A \in \R^{m \times m}$, $B \in \R^{n \times n}$.
+  \item Using part (a) and the identity $\|AX - B\|_F^2 = \tr((AX-B)^\top(AX-B))$,
+        re-derive $\nabla_X \|AX - B\|_F^2 = 2A^\top(AX - B)$.
+\end{enumerate}
+\textit{Hint:} For (a), expand $\tr(A(X+H)^\top B(X+H))$ and isolate
+the terms linear in $H$.
+\end{exercise}
+
+\begin{exercise}[Gradient of the Log-Determinant]
+\label{exer:logdet}
+\textnormal{(\(***\))} \\
+Let $f(X) = \log\det(X)$ for symmetric positive definite
+$X \in \R^{n \times n}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Show that $\det(X + tH) = \det(X)\det(I + tX^{-1}H)$
+        for small $t$.
+  \item Using $\det(I + tM) = 1 + t\,\tr(M) + O(t^2)$, prove that
+        $\frac{d}{dt}\big|_{t=0} \log\det(X + tH) = \tr(X^{-1}H)$.
+  \item Conclude that $\nabla_X \log\det(X) = X^{-1}$ (in the sense
+        of the Frobenius inner product: $\tr((\nabla f)^\top H) = \tr(X^{-1}H)$).
+  \item Discuss the relevance of this result to Gaussian distributions,
+        where the log-likelihood involves $\log\det(\Sigma)$ for the
+        covariance matrix $\Sigma$.
+\end{enumerate}
+\textit{Hint:} For (b), recall that $\log(1 + \varepsilon) = \varepsilon + O(\varepsilon^2)$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A \emph{quadratic form} $Q_A(x) = x^\top Ax$ is classified
+        by the eigenvalues of the symmetric matrix $A$: positive definite
+        iff all $\lambda_i > 0$, positive semidefinite iff all
+        $\lambda_i \geq 0$, indefinite iff $A$ has eigenvalues of
+        both signs.  At a critical point, the Hessian quadratic form
+        determines the local nature of the extremum.
+
+  \item The \emph{singular value decomposition} $A = U\Sigma V^\top$
+        factors any $m \times n$ matrix into orthogonal rotations and
+        a diagonal scaling.  The singular values are the square roots
+        of the eigenvalues of $A^\top A$, and $\rank(A)$ equals the
+        number of nonzero singular values.
+
+  \item The \emph{Eckart--Young theorem} guarantees that truncating the
+        SVD at rank $k$ gives the best rank-$k$ approximation in both
+        operator and Frobenius norm.  This is the theoretical
+        foundation of PCA.
+
+  \item The \emph{Moore--Penrose pseudoinverse} $A^+$ is the unique
+        matrix satisfying the four Penrose conditions.  The vector
+        $A^+ b$ is the minimum-norm least-squares solution to $Ax = b$.
+
+  \item The \emph{operator norm} $\|A\|_{\mathrm{op}} = \sigma_1$ and
+        the \emph{Frobenius norm} $\|A\|_F = (\sum \sigma_i^2)^{1/2}$
+        satisfy $\|A\|_{\mathrm{op}} \leq \|A\|_F \leq \sqrt{r}\,\|A\|_{\mathrm{op}}$.
+        Both are submultiplicative.
+
+  \item The \emph{condition number} $\kappa(A) = \sigma_1/\sigma_n$
+        bounds the relative amplification of perturbations in linear
+        systems.  Large $\kappa$ means the system is ill-conditioned.
+
+  \item The \emph{matrix exponential} $e^A = \sum_{k=0}^\infty A^k/k!$
+        converges for every square matrix.  It satisfies
+        $\frac{d}{dt}e^{tA} = Ae^{tA}$, solving the linear ODE
+        $\dot{x} = Ax$ with $x(t) = e^{tA}x_0$.
+
+  \item \emph{Matrix calculus} provides systematic rules:
+        $\nabla(a^\top x) = a$,
+        $\nabla(x^\top Ax) = (A + A^\top)x$,
+        $\partial\tr(AX)/\partial X = A^\top$,
+        and the chain rule $\nabla(f \circ g) = J_g^\top \nabla f$.
+
+  \item The trace function defines an inner product on matrices
+        ($\langle A, B \rangle_F = \tr(A^\top B)$) and provides a
+        unified framework for expressing matrix derivatives.
+\end{itemize}
+
+\paragraph{Capstone summary: Linear Algebra subdomain (Lessons 5--8).}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{} c l p{7.2cm} @{}}
+\toprule
+\textbf{Lesson} & \textbf{Title} & \textbf{Key Results} \\
+\midrule
+5 & Vector Spaces and Linear Maps &
+    Vector space axioms, subspaces, bases and dimension,
+    linear maps, rank--nullity theorem, matrix representation,
+    change of basis \\
+6 & Determinants and Eigenvalues &
+    Determinant (cofactor, Leibniz), multiplicativity,
+    eigenvalues, characteristic polynomial, algebraic and
+    geometric multiplicity, diagonalization, Cayley--Hamilton \\
+7 & Inner Products and Spectral Theory &
+    Inner products, Cauchy--Schwarz, Gram--Schmidt,
+    orthogonal projection and best approximation, spectral
+    theorem (real symmetric), positive definiteness, Cholesky,
+    Rayleigh quotient, Courant--Fischer \\
+8 & SVD, Norms, and Matrix Calculus &
+    Quadratic forms, SVD theorem, Eckart--Young, pseudoinverse,
+    operator and Frobenius norms, condition number, matrix
+    exponential, gradient/Jacobian/Hessian, trace derivatives,
+    chain rule \\
+\bottomrule
+\end{tabular}
+\caption{Linear Algebra subdomain arc: Lessons 5--8.}
+\label{tab:la_summary}
+\end{table}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Phase 01, Functional Analysis} (Lessons on metric,
+        normed, and Hilbert spaces) generalizes the finite-dimensional
+        theory of this lesson to infinite dimensions.  Inner products
+        become Hilbert space inner products, the spectral theorem
+        extends to compact self-adjoint operators, and the operator norm
+        becomes the fundamental tool for analyzing bounded linear maps
+        between Banach spaces.
+
+  \item \textbf{Phase 01, Convex Analysis and Optimization} uses
+        positive definiteness and matrix calculus extensively.
+        The Hessian condition $H_f(x) \succ 0$ characterizes strict
+        convexity, and gradient formulas derived here are the starting
+        point for convergence analysis of first-order methods.
+
+  \item \citet{magnus2019} is the definitive reference for matrix
+        differential calculus, developing the theory via the
+        \emph{vec operator} and Kronecker products.  Chapters 8--13
+        cover derivatives of eigenvalues, determinants, and matrix
+        inverses.
+
+  \item \citet{petersen2012} (the ``Matrix Cookbook'') provides a
+        comprehensive catalog of matrix identities, derivatives, and
+        decompositions organized for quick reference.  It is an
+        indispensable resource for implementing gradient computations
+        in neural networks and RL algorithms.
+
+  \item \citet[Chapters 5--7]{horn2013} develops the SVD, matrix
+        norms, and perturbation theory (Weyl inequalities, Davis--Kahan
+        theorem) in far greater depth, with applications to
+        low-rank matrix completion and spectral clustering.
+
+  \item \textbf{Historical note.}  The singular value decomposition was
+        independently discovered by Beltrami (1873) and Jordan (1874)
+        for bilinear forms, and later placed in modern matrix form by
+        Eckart and Young (1936).  The name ``singular values'' was
+        coined by Smithies (1937) in the context of integral equations.
+        Matrix calculus was systematized by \citet{magnus2019}
+        (first edition 1988), building on earlier work by
+        Dwyer and Macphail (1948).
+\end{itemize}
+
+\bibliography{linear-algebra-refs}
+\end{document}

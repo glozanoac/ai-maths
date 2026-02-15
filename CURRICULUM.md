@@ -1,6 +1,6 @@
 # Lesson-by-Lesson Curriculum
 
-This curriculum breaks the six-phase learning path into **114 individual lessons**, each
+This curriculum breaks the seven-phase learning path into **126 individual lessons**, each
 representing a focused study session of roughly 2--3 hours. It is derived from
 `curriculum.pdf` and maps every lesson to its corresponding repository document.
 
@@ -8,11 +8,117 @@ representing a focused study session of roughly 2--3 hours. It is derived from
 verify claims, solve exercises. A single chapter deeply understood is worth more than
 ten chapters skimmed.
 
-**Estimated total duration:** 14--20 months.
+**Estimated total duration:** 15--22 months.
 
 **How to read the lesson specifications.** Each lesson lists the document sections to
 study, the definitions to learn, and the key results to master. Results in **bold** are
 the most important -- you should be able to state and prove these from memory.
+
+---
+
+## Phase 00: Prerequisites Review (12 lessons, 1--2 months)
+
+### 0.1 Real Analysis (Lessons 1--4)
+
+**Primary text:** Rudin, W. *Principles of Mathematical Analysis* (3rd ed., 1976)
+**Supplementary:** Abbott, S. *Understanding Analysis* (2nd ed., 2015)
+
+#### Lesson 1: Real Numbers, Sequences, and Series
+
+> [lesson-01](00-prerequisites/01-real-analysis/lesson-01-real-numbers-sequences-series.pdf)
+
+- **Definitions:** 3.1 ordered field, 3.3 supremum/infimum, 3.7 Archimedean property, 4.1 convergence, 4.6 Cauchy sequence, 5.1 series convergence
+- **Key results:** **Thm 3.4 completeness of R**, **Thm 4.4 Monotone Convergence Theorem**, **Thm 4.5 Bolzano-Weierstrass theorem**, Thm 4.8 Cauchy completeness, **Thm 5.3 comparison test**, Thm 5.5 ratio test, Thm 5.6 root test
+
+#### Lesson 2: Topology and Continuity
+
+> [lesson-02](00-prerequisites/01-real-analysis/lesson-02-topology-and-continuity.pdf)
+
+- **Definitions:** 2.1 open/closed sets, 3.1 compact set, 4.1 continuity, 4.6 uniform continuity
+- **Key results:** **Thm 3.2 Heine-Borel theorem**, **Thm 3.4 Bolzano-Weierstrass (compact sets)**, **Thm 4.3 Intermediate Value Theorem**, **Thm 4.4 Extreme Value Theorem**, Thm 4.7 uniform continuity on compact sets
+
+#### Lesson 3: Differentiation and Integration
+
+> [lesson-03](00-prerequisites/01-real-analysis/lesson-03-differentiation-and-integration.pdf)
+
+- **Definitions:** 2.1 derivative, 4.1 Riemann integral, 4.3 integrability
+- **Key results:** Thm 2.3 chain rule, **Thm 3.1 Mean Value Theorem**, **Thm 3.3 Taylor's theorem**, **Thm 4.5 Fundamental Theorem of Calculus** (parts I and II)
+
+#### Lesson 4: Function Sequences and Metric Spaces (Capstone)
+
+> [lesson-04](00-prerequisites/01-real-analysis/lesson-04-function-sequences-and-metric-spaces.pdf)
+
+- **Definitions:** 2.1 pointwise convergence, 2.2 uniform convergence, 4.1 metric space, 4.5 completeness
+- **Key results:** **Thm 2.4 uniform limit of continuous functions is continuous**, Thm 3.1 Weierstrass M-test, **Thm 5.1 Banach fixed-point theorem**
+- **Review:** Capstone summary table of Lessons 1--4
+
+### 0.2 Linear Algebra (Lessons 5--8)
+
+**Primary text:** Axler, S. *Linear Algebra Done Right* (3rd ed., 2015)
+**Supplementary:** Strang, G. *Introduction to Linear Algebra* (5th ed., 2016)
+
+#### Lesson 5: Vector Spaces and Linear Maps
+
+> [lesson-05](00-prerequisites/02-linear-algebra/lesson-05-vector-spaces-and-linear-maps.pdf)
+
+- **Definitions:** 2.1 vector space, 2.5 subspace, 3.1 linear independence, 3.4 basis, 3.6 dimension, 4.1 linear map, 4.3 null space, 4.4 range
+- **Key results:** Thm 3.3 every spanning set contains a basis, **Thm 4.5 Rank-Nullity theorem**, Thm 5.1 matrix representation of linear maps
+
+#### Lesson 6: Determinants and Eigenvalues
+
+> [lesson-06](00-prerequisites/02-linear-algebra/lesson-06-determinants-and-eigenvalues.pdf)
+
+- **Definitions:** 2.1 determinant, 3.1 eigenvalue, 3.2 eigenvector, 3.4 characteristic polynomial, 4.1 diagonalizable matrix
+- **Key results:** Thm 2.4 cofactor expansion, Thm 2.6 multiplicativity of determinants, **Thm 4.3 diagonalizability criterion** (n distinct eigenvalues), **Thm 5.1 Cayley-Hamilton theorem**
+
+#### Lesson 7: Inner Products and Spectral Theory
+
+> [lesson-07](00-prerequisites/02-linear-algebra/lesson-07-inner-products-and-spectral-theory.pdf)
+
+- **Definitions:** 2.1 inner product, 3.3 orthogonal projection, 4.1 orthonormal basis
+- **Key results:** **Thm 2.3 Cauchy-Schwarz inequality**, Thm 4.2 Gram-Schmidt process, **Thm 5.1 Real Spectral Theorem** (symmetric matrices are orthogonally diagonalizable), Thm 6.1 positive definiteness criteria
+
+#### Lesson 8: SVD, Norms, and Matrix Calculus (Capstone)
+
+> [lesson-08](00-prerequisites/02-linear-algebra/lesson-08-svd-norms-and-matrix-calculus.pdf)
+
+- **Definitions:** 3.1 singular value decomposition, 4.1 matrix norm, 5.1 matrix exponential, 6.1 matrix gradient, 6.3 Jacobian, 6.4 Hessian
+- **Key results:** **Thm 3.2 SVD existence**, **Thm 3.4 Eckart-Young theorem** (best low-rank approximation), Thm 5.2 matrix exponential properties, Thm 6.5 chain rule for matrix calculus
+- **Review:** Capstone summary table of Lessons 5--8
+
+### 0.3 Probability (Lessons 9--12)
+
+**Primary text:** Ross, S.M. *A First Course in Probability* (10th ed., 2019)
+**Supplementary:** Blitzstein, J.K. & Hwang, J. *Introduction to Probability* (2nd ed., 2019)
+
+#### Lesson 9: Probability Spaces and Conditioning
+
+> [lesson-09](00-prerequisites/03-probability/lesson-09-probability-spaces-and-conditioning.pdf)
+
+- **Definitions:** 2.1 sample space, 2.3 sigma-algebra, 2.5 probability measure (Kolmogorov axioms), 3.1 conditional probability, 4.1 independence
+- **Key results:** Thm 2.6 inclusion-exclusion, Thm 2.7 continuity of probability, **Thm 3.3 law of total probability**, **Thm 3.4 Bayes' theorem**
+
+#### Lesson 10: Random Variables and Distributions
+
+> [lesson-10](00-prerequisites/03-probability/lesson-10-random-variables-and-distributions.pdf)
+
+- **Definitions:** 2.1 random variable, 2.2 PMF, 2.3 CDF, 3.1 PDF, discrete distributions (Bernoulli, binomial, geometric, Poisson), continuous distributions (uniform, exponential, normal)
+- **Key results:** Thm 2.7 Poisson limit theorem, **Thm 3.5 memoryless property of exponential**, Thm 3.8 Gaussian integral evaluation
+
+#### Lesson 11: Expectation, Variance, and Joint Distributions
+
+> [lesson-11](00-prerequisites/03-probability/lesson-11-expectation-variance-joint-distributions.pdf)
+
+- **Definitions:** 2.1 expectation, 3.1 variance, 3.3 covariance, 4.1 joint distribution, 5.1 conditional expectation
+- **Key results:** **Thm 2.3 LOTUS**, **Thm 2.4 linearity of expectation**, Thm 3.2 computational formula for variance, **Thm 5.3 law of total expectation (tower property)**, Thm 5.5 law of total variance
+
+#### Lesson 12: Inequalities and Limit Theorems (Capstone)
+
+> [lesson-12](00-prerequisites/03-probability/lesson-12-inequalities-and-limit-theorems.pdf)
+
+- **Definitions:** 2.1 moment-generating function, 5.1 convergence in probability, 5.2 almost sure convergence, 5.3 convergence in distribution
+- **Key results:** **Thm 3.1 Markov's inequality**, **Thm 3.3 Chebyshev's inequality**, **Thm 4.1 Hoeffding's inequality**, **Thm 5.4 Weak Law of Large Numbers**, Thm 5.5 Strong Law of Large Numbers, **Thm 5.6 Central Limit Theorem**, Cor 6.2 sample complexity bound
+- **Review:** Capstone summary table of Lessons 9--12
 
 ---
 

@@ -1,0 +1,844 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 2: Topology and Continuity}}
+\fancyhead[R]{\thepage}
+\title{Lesson 2: Topology and Continuity}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider training a neural network $f_\theta \colon \R^d \to \R$ to minimize
+a loss function $L(\theta)$ over a parameter space $\Theta \subseteq \R^d$.
+A natural question is: does the minimum of $L$ over $\Theta$ actually
+exist, or could the infimum be a value that is never attained? In finite
+dimensions, the \emph{extreme value theorem} guarantees that a continuous
+function on a \emph{compact} set attains its maximum and minimum. But what
+exactly is compactness, and why does it work? Understanding this requires
+the topology of the real line---open sets, closed sets, and the
+Heine--Borel characterization of compact subsets of $\R^n$---together
+with the precise $\varepsilon$-$\delta$ definition of continuity. The tools
+developed in this lesson will let us prove that continuous functions on
+closed bounded sets attain their extreme values, that the intermediate
+value theorem provides existence of roots and fixed points, and that
+uniform continuity gives the quantitative control needed for approximation
+arguments throughout optimization and reinforcement learning.
+
+\begin{rlconnection}[title={Why RL/ML needs topology and continuity}]
+\begin{itemize}[nosep]
+  \item \textbf{Existence of optimal solutions.} The extreme value theorem
+    guarantees that a continuous loss function attains its minimum on a
+    compact parameter set---a foundational assumption in optimization.
+  \item \textbf{Value function continuity.} In MDPs with continuous state
+    spaces, the value function $V^\pi$ is often shown to be continuous;
+    this enables function approximation and ensures nearby states have
+    similar values.
+  \item \textbf{Compactness in function approximation.} The
+    Arzel\`{a}--Ascoli theorem (a compactness criterion for function
+    spaces) underpins universal approximation results for neural networks.
+  \item \textbf{Fixed-point existence.} Brouwer's fixed-point theorem
+    (every continuous map from a compact convex set to itself has a fixed
+    point) is used to prove existence of Nash equilibria and optimal
+    policies.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Completeness of $\R$ (the least upper bound property), convergence of
+sequences (the $\varepsilon$-$N$ definition), the algebraic limit theorems,
+the Bolzano--Weierstrass theorem (Lesson~1, Theorem~4.7), and the Cauchy
+criterion for convergence (Lesson~1, Theorem~4.10).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} open sets, closed sets, closure, interior, and
+    boundary in $\R$, and \textbf{classify} sets using these concepts.
+  \item \textbf{State} and \textbf{prove} the Heine--Borel theorem
+    characterizing compact subsets of $\R$.
+  \item \textbf{Prove} that sequential compactness and open-cover
+    compactness are equivalent in $\R$.
+  \item \textbf{Define} continuity via $\varepsilon$-$\delta$ and via
+    sequences, and \textbf{prove} their equivalence.
+  \item \textbf{Derive} the extreme value theorem and the intermediate
+    value theorem from compactness and continuity.
+  \item \textbf{Prove} that a continuous function on a compact set is
+    uniformly continuous.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 2 and 4]{rudin1976} --- Topology of the real line,
+    compactness, and continuity with complete proofs.
+  \item \citet[Chapters 3--4]{abbott2015} --- An accessible treatment of
+    open and closed sets, compact sets, and the extreme value theorem.
+  \item \citet[Chapter 4]{bartle2011} --- Detailed development of
+    continuity with many worked examples and exercises.
+  \item \citet[Chapters 2--3]{pugh2015} --- A geometric perspective on
+    topology and continuity in $\R$ and $\R^n$.
+  \item \citet[Chapter 1]{folland1999} --- Point-set topology foundations
+    as preparation for measure theory.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: OPEN AND CLOSED SETS
+%% ============================================================
+\section{Open and Closed Sets}
+\label{sec:open_closed}
+
+\begin{definition}[$\varepsilon$-Neighborhood]
+\label{def:neighborhood}
+For $x \in \R$ and $\varepsilon > 0$, the \emph{$\varepsilon$-neighborhood}
+of $x$ is the open interval
+$V_\varepsilon(x) = (x - \varepsilon, x + \varepsilon) = \{y \in \R :
+|y - x| < \varepsilon\}$.
+\end{definition}
+
+\begin{definition}[Open Set]
+\label{def:open}
+A set $O \subseteq \R$ is \emph{open} if for every $x \in O$ there exists
+$\varepsilon > 0$ such that $V_\varepsilon(x) \subseteq O$.
+\end{definition}
+
+\begin{example}
+\label{ex:open_interval}
+Every open interval $(a, b)$ is an open set. If $x \in (a, b)$, take
+$\varepsilon = \min(x - a, b - x) > 0$. Then
+$V_\varepsilon(x) \subseteq (a, b)$.
+\end{example}
+
+\begin{example}
+\label{ex:R_open}
+The entire real line $\R$ is open (take any $\varepsilon > 0$), and the
+empty set $\emptyset$ is open (the condition holds vacuously).
+\end{example}
+
+\begin{theorem}[Properties of Open Sets]
+\label{thm:open_props}
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The union of any collection of open sets is open.
+  \item The intersection of finitely many open sets is open.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) Let $\{O_\alpha\}_{\alpha \in A}$ be a collection of open sets and
+$O = \bigcup_{\alpha \in A} O_\alpha$. If $x \in O$, then $x \in O_\beta$
+for some $\beta \in A$. Since $O_\beta$ is open, there exists
+$\varepsilon > 0$ with $V_\varepsilon(x) \subseteq O_\beta \subseteq O$.
+
+(ii) Let $O_1, \ldots, O_n$ be open and $x \in O_1 \cap \cdots \cap O_n$.
+For each $k$, there exists $\varepsilon_k > 0$ with
+$V_{\varepsilon_k}(x) \subseteq O_k$. Set
+$\varepsilon = \min(\varepsilon_1, \ldots, \varepsilon_n) > 0$. Then
+$V_\varepsilon(x) \subseteq O_k$ for all $k$, so
+$V_\varepsilon(x) \subseteq O_1 \cap \cdots \cap O_n$.
+\end{proof}
+
+\begin{warning}[title={Infinite intersections of open sets need not be open}]
+The finite intersection condition in Theorem~\ref{thm:open_props}(ii)
+cannot be extended to infinite intersections.  For example,
+$\bigcap_{n=1}^\infty (-1/n, 1/n) = \{0\}$, which is not open.
+\end{warning}
+
+\begin{definition}[Closed Set]
+\label{def:closed}
+A set $F \subseteq \R$ is \emph{closed} if its complement
+$F^c = \R \setminus F$ is open.
+\end{definition}
+
+\begin{example}
+\label{ex:closed_interval}
+The closed interval $[a, b]$ is closed: its complement
+$(-\infty, a) \cup (b, \infty)$ is a union of open sets, hence open by
+Theorem~\ref{thm:open_props}(i).
+\end{example}
+
+\begin{theorem}[Sequential Characterization of Closed Sets]
+\label{thm:closed_seq}
+A set $F \subseteq \R$ is closed if and only if every convergent sequence
+$(x_n)$ with $x_n \in F$ for all $n$ has its limit in $F$.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $F$ is closed and $x_n \to L$ with $x_n \in F$.
+Assume for contradiction that $L \notin F$. Then $L \in F^c$, which is
+open, so there exists $\varepsilon > 0$ with
+$V_\varepsilon(L) \subseteq F^c$. But $x_n \to L$ means there exists $N$
+with $|x_n - L| < \varepsilon$ for $n \ge N$, giving $x_N \in F^c$, a
+contradiction since $x_N \in F$.
+
+$(\Leftarrow)$ Suppose $F$ satisfies the sequential condition. We show
+$F^c$ is open. Let $x \in F^c$. If no $\varepsilon$-neighborhood of $x$
+is contained in $F^c$, then for each $n \in \N$ there exists
+$x_n \in F \cap V_{1/n}(x)$. Then $x_n \to x$ with $x_n \in F$, so
+$x \in F$ by hypothesis, contradicting $x \in F^c$. Hence some
+$V_\varepsilon(x) \subseteq F^c$, and $F^c$ is open.
+\end{proof}
+
+\begin{definition}[Interior, Closure, Boundary]
+\label{def:int_cl_bd}
+Let $A \subseteq \R$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The \emph{interior} of $A$ is
+    $\interior(A) = \{x \in A : \exists\, \varepsilon > 0,\;
+    V_\varepsilon(x) \subseteq A\}$. It is the largest open set contained
+    in $A$.
+  \item The \emph{closure} of $A$ is
+    $\cl(A) = \{x \in \R : \text{every } V_\varepsilon(x)
+    \text{ intersects } A\}$. Equivalently, $\cl(A)$ is the smallest
+    closed set containing $A$.
+  \item The \emph{boundary} of $A$ is
+    $\partial A = \cl(A) \setminus \interior(A)$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Sequential Characterization of Closure]
+\label{prop:closure_seq}
+$x \in \cl(A)$ if and only if there exists a sequence $(a_n)$ in $A$
+with $a_n \to x$.
+\end{proposition}
+
+\begin{proof}
+$(\Rightarrow)$ If $x \in \cl(A)$, then for each $n \in \N$,
+$V_{1/n}(x) \cap A \neq \emptyset$, so we can choose
+$a_n \in V_{1/n}(x) \cap A$. Then $|a_n - x| < 1/n$, so $a_n \to x$.
+
+$(\Leftarrow)$ If $a_n \to x$ with $a_n \in A$, then for any
+$\varepsilon > 0$, there exists $N$ with $a_N \in V_\varepsilon(x) \cap A$.
+Hence $V_\varepsilon(x) \cap A \neq \emptyset$ for every $\varepsilon > 0$,
+so $x \in \cl(A)$.
+\end{proof}
+
+\begin{example}
+\label{ex:closure_Q}
+The closure $\cl(\Q) = \R$, since every real number is the limit of a
+sequence of rationals (by the density of $\Q$ in $\R$, Lesson~1,
+Theorem~3.11). Similarly, $\interior(\Q) = \emptyset$, since no open
+interval is contained in $\Q$ (every interval contains irrationals).
+Hence $\partial \Q = \R$.
+\end{example}
+
+With the basic notions of open and closed sets in place, we now turn to
+compactness, the property that makes topology most useful for analysis.
+
+%% ============================================================
+%% SECTION 4: COMPACTNESS
+%% ============================================================
+\section{Compactness}
+\label{sec:compactness}
+
+\begin{definition}[Open Cover, Compactness]
+\label{def:compact}
+Let $K \subseteq \R$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item An \emph{open cover} of $K$ is a collection
+    $\{O_\alpha\}_{\alpha \in A}$ of open sets whose union contains $K$:
+    $K \subseteq \bigcup_{\alpha \in A} O_\alpha$.
+  \item A \emph{finite subcover} is a finite subcollection
+    $\{O_{\alpha_1}, \ldots, O_{\alpha_n}\}$ that still covers $K$.
+  \item $K$ is \emph{compact} if every open cover of $K$ has a finite
+    subcover.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Sequential Compactness]
+\label{def:seq_compact}
+A set $K \subseteq \R$ is \emph{sequentially compact} if every sequence
+$(x_n)$ in $K$ has a subsequence that converges to a point in $K$.
+\end{definition}
+
+\begin{theorem}[Characterization of Compact Sets in $\R$]
+\label{thm:compact_equiv}
+For $K \subseteq \R$, the following are equivalent:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $K$ is compact (every open cover has a finite subcover).
+  \item $K$ is sequentially compact.
+  \item $K$ is closed and bounded.
+\end{enumerate}
+\end{theorem}
+
+We prove this theorem through a sequence of implications.
+
+\begin{lemma}
+\label{lem:compact_closed_bounded}
+If $K$ is compact, then $K$ is closed and bounded.
+\end{lemma}
+
+\begin{proof}
+\emph{Bounded:} The collection $\{(-n, n) : n \in \N\}$ is an open cover
+of $K$ (since $\R = \bigcup_{n=1}^\infty (-n, n)$). By compactness,
+finitely many suffice: $K \subseteq (-n_1, n_1) \cup \cdots \cup
+(-n_m, n_m) = (-N, N)$ where $N = \max(n_1, \ldots, n_m)$. Hence $K$ is
+bounded.
+
+\emph{Closed:} We show $K^c$ is open. Let $y \in K^c$. For each
+$x \in K$, let $\varepsilon_x = |x - y|/2 > 0$ (since $y \neq x$). The
+open intervals $V_{\varepsilon_x}(x)$ cover $K$. By compactness, finitely
+many suffice: $K \subseteq V_{\varepsilon_{x_1}}(x_1) \cup \cdots \cup
+V_{\varepsilon_{x_m}}(x_m)$. Set
+$\delta = \min(\varepsilon_{x_1}, \ldots, \varepsilon_{x_m}) > 0$. Then
+$V_\delta(y) \cap V_{\varepsilon_{x_k}}(x_k) = \emptyset$ for each $k$
+(since $|y - x_k| = 2\varepsilon_{x_k} \ge 2\delta$, and if $z$ were in
+both then $|x_k - y| \le |x_k - z| + |z - y| < \varepsilon_{x_k} + \delta
+\le 2\varepsilon_{x_k} = |x_k - y|$, a contradiction). Hence
+$V_\delta(y) \subseteq K^c$, so $K^c$ is open.
+\end{proof}
+
+\begin{lemma}
+\label{lem:closed_bounded_seq}
+If $K$ is closed and bounded, then $K$ is sequentially compact.
+\end{lemma}
+
+\begin{proof}
+Let $(x_n)$ be a sequence in $K$. Since $K$ is bounded, $(x_n)$ is
+bounded. By the Bolzano--Weierstrass theorem (Lesson~1, Theorem~4.7),
+$(x_n)$ has a convergent subsequence $x_{n_k} \to L$. Since $K$ is
+closed, $L \in K$ by Theorem~\ref{thm:closed_seq}. Hence $K$ is
+sequentially compact.
+\end{proof}
+
+\begin{lemma}
+\label{lem:seq_compact_implies_compact}
+If $K$ is sequentially compact, then $K$ is compact.
+\end{lemma}
+
+\begin{proof}
+Let $\{O_\alpha\}_{\alpha \in A}$ be an open cover of $K$. We proceed in
+two steps.
+
+\textbf{Step 1 (Lebesgue number).} We claim there exists $\delta > 0$
+such that for every $x \in K$, the interval $(x - \delta, x + \delta)$ is
+contained in some $O_\alpha$. Suppose not: for each $n \in \N$, there
+exists $x_n \in K$ such that $(x_n - 1/n, x_n + 1/n)$ is not contained
+in any single $O_\alpha$. By sequential compactness, $(x_n)$ has a
+subsequence $x_{n_k} \to L \in K$. Since $L \in K$ and
+$\{O_\alpha\}$ covers $K$, there exists $\beta \in A$ with
+$L \in O_\beta$. Since $O_\beta$ is open, there exists $\varepsilon > 0$
+with $(L - \varepsilon, L + \varepsilon) \subseteq O_\beta$. Choose $k$
+large enough that $|x_{n_k} - L| < \varepsilon/2$ and $1/n_k <
+\varepsilon/2$. Then
+$(x_{n_k} - 1/n_k, x_{n_k} + 1/n_k) \subseteq
+(L - \varepsilon, L + \varepsilon) \subseteq O_\beta$,
+contradicting the choice of $x_{n_k}$.
+
+\textbf{Step 2 (Finite subcover).} Since $K$ is sequentially compact, it
+is bounded (otherwise, choosing $x_n \in K$ with $|x_n| > n$ would give
+a sequence with no convergent subsequence). Say $K \subseteq [-M, M]$.
+Partition $[-M, M]$ into subintervals of length less than $\delta$; this
+requires at most $N = \lceil 2M/\delta \rceil$ subintervals. Each
+subinterval that intersects $K$ has diameter less than $\delta$, so it
+fits inside some $O_\alpha$ (by Step~1, applied to any point of $K$ in
+that subinterval). Selecting one such $O_\alpha$ for each of the at most
+$N$ subintervals gives a finite subcover.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:compact_equiv}]
+Lemma~\ref{lem:compact_closed_bounded} gives (i)$\Rightarrow$(iii),
+Lemma~\ref{lem:closed_bounded_seq} gives (iii)$\Rightarrow$(ii), and
+Lemma~\ref{lem:seq_compact_implies_compact} gives (ii)$\Rightarrow$(i).
+\end{proof}
+
+\begin{keyresult}[title={Heine--Borel Theorem}]
+\begin{corollary}[Heine--Borel]
+\label{cor:heine_borel}
+A subset of $\R$ is compact if and only if it is closed and bounded.
+\end{corollary}
+This is the equivalence (i)$\Leftrightarrow$(iii) of
+Theorem~\ref{thm:compact_equiv}. In $\R^n$, the same characterization
+holds: $K \subseteq \R^n$ is compact if and only if $K$ is closed and
+bounded.
+\end{keyresult}
+
+\begin{rlconnection}[title={Compactness in optimization and function approximation}]
+Compactness ensures that optimization problems have solutions. When we
+write $\min_{\theta \in \Theta} L(\theta)$ with $\Theta$ compact and $L$
+continuous, the extreme value theorem (proved below) guarantees the minimum
+is attained. In RL, compact action spaces ensure that
+$\max_a Q(s,a)$ is achieved; without compactness, the supremum might not be
+attained, and greedy policies might not exist. In function approximation,
+the Arzel\`{a}--Ascoli theorem uses compactness (of the domain and of
+function families) to extract uniformly convergent subsequences from bounded
+equicontinuous families.
+\end{rlconnection}
+
+\begin{example}
+\label{ex:compact_sets}
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $[0, 1]$ is compact (closed and bounded).
+  \item $(0, 1)$ is not compact (not closed: $1/n \to 0 \notin (0,1)$).
+  \item $[0, \infty)$ is not compact (not bounded).
+  \item $\{1/n : n \in \N\} \cup \{0\}$ is compact (closed and bounded).
+  \item $\{1/n : n \in \N\}$ is not compact (not closed: $1/n \to 0$
+    but $0$ is not in the set).
+\end{enumerate}
+\end{example}
+
+\begin{proposition}[Closed Subsets of Compact Sets]
+\label{prop:closed_subset_compact}
+Every closed subset of a compact set is compact.
+\end{proposition}
+
+\begin{proof}
+Let $F \subseteq K$ with $F$ closed and $K$ compact. Then $K$ is closed
+and bounded (Heine--Borel). Since $F \subseteq K$, $F$ is bounded. Since
+$F$ is closed and bounded, $F$ is compact by Heine--Borel.
+\end{proof}
+
+With compactness established, we now develop continuity and show how
+these two concepts interact to produce the central theorems of analysis.
+
+%% ============================================================
+%% SECTION 5: CONTINUITY
+%% ============================================================
+\section{Continuity}
+\label{sec:continuity}
+
+\begin{definition}[Continuity at a Point]
+\label{def:continuity}
+Let $f \colon A \to \R$ with $A \subseteq \R$, and let $c \in A$. Then
+$f$ is \emph{continuous at $c$} if for every $\varepsilon > 0$ there
+exists $\delta > 0$ such that $|f(x) - f(c)| < \varepsilon$ whenever
+$x \in A$ and $|x - c| < \delta$. We say $f$ is \emph{continuous on $A$}
+if it is continuous at every point of $A$.
+\end{definition}
+
+\begin{theorem}[Sequential Characterization of Continuity]
+\label{thm:seq_cont}
+Let $f \colon A \to \R$ and $c \in A$. Then $f$ is continuous at $c$ if
+and only if for every sequence $(x_n)$ in $A$ with $x_n \to c$, we have
+$f(x_n) \to f(c)$.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ Suppose $f$ is continuous at $c$ and $x_n \to c$. Given
+$\varepsilon > 0$, choose $\delta > 0$ from the definition of continuity.
+Since $x_n \to c$, there exists $N$ with $|x_n - c| < \delta$ for
+$n \ge N$. Then $|f(x_n) - f(c)| < \varepsilon$ for $n \ge N$, so
+$f(x_n) \to f(c)$.
+
+$(\Leftarrow)$ Suppose $f$ is not continuous at $c$. Then there exists
+$\varepsilon_0 > 0$ such that for every $\delta > 0$ there exists
+$x \in A$ with $|x - c| < \delta$ but $|f(x) - f(c)| \ge \varepsilon_0$.
+Taking $\delta = 1/n$ for each $n \in \N$ yields a sequence $(x_n)$ in
+$A$ with $x_n \to c$ but $|f(x_n) - f(c)| \ge \varepsilon_0$ for all
+$n$, so $f(x_n) \not\to f(c)$.
+\end{proof}
+
+\begin{example}
+\label{ex:cont_polynomial}
+Every polynomial $p(x) = a_0 + a_1 x + \cdots + a_d x^d$ is continuous
+on $\R$. By the algebraic limit theorems (Lesson~1, Theorem~4.4), if
+$x_n \to c$ then $x_n^k \to c^k$ for each $k$ (by induction on $k$,
+using the product rule), and
+$p(x_n) = a_0 + a_1 x_n + \cdots + a_d x_n^d \to p(c)$ (by the sum
+rule). The sequential characterization
+(Theorem~\ref{thm:seq_cont}) then gives continuity.
+\end{example}
+
+\begin{theorem}[Algebraic Properties of Continuous Functions]
+\label{thm:cont_algebra}
+Let $f, g \colon A \to \R$ be continuous at $c \in A$. Then:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $f + g$ is continuous at $c$.
+  \item $f \cdot g$ is continuous at $c$.
+  \item $f / g$ is continuous at $c$, provided $g(c) \neq 0$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+All three follow immediately from Theorem~\ref{thm:seq_cont} and the
+algebraic limit theorems (Lesson~1, Theorem~4.4): if $x_n \to c$, then
+$f(x_n) \to f(c)$ and $g(x_n) \to g(c)$, so
+$(f + g)(x_n) = f(x_n) + g(x_n) \to f(c) + g(c)$, and similarly for
+products and quotients.
+\end{proof}
+
+\begin{theorem}[Composition of Continuous Functions]
+\label{thm:cont_composition}
+Let $f \colon A \to \R$ be continuous at $c$, and let $g \colon B \to \R$
+be continuous at $f(c)$, where $f(A) \subseteq B$. Then $g \circ f$ is
+continuous at $c$.
+\end{theorem}
+
+\begin{proof}
+Let $x_n \to c$ with $x_n \in A$. Continuity of $f$ at $c$ gives
+$f(x_n) \to f(c)$. Since $f(x_n) \in B$ and $g$ is continuous at $f(c)$,
+we get $g(f(x_n)) \to g(f(c))$. By the sequential characterization,
+$g \circ f$ is continuous at $c$.
+\end{proof}
+
+\begin{example}
+\label{ex:cont_composition}
+The function $h(x) = \sqrt{1 + x^2}$ is continuous on $\R$: it is the
+composition of $f(x) = 1 + x^2$ (continuous, being a polynomial) and
+$g(y) = \sqrt{y}$ (continuous on $[0, \infty)$).
+\end{example}
+
+\begin{theorem}[Preservation of Closed and Open Sets]
+\label{thm:cont_preimage}
+Let $f \colon A \to \R$ be continuous on $A$.
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item If $O \subseteq \R$ is open, then
+    $f^{-1}(O) = \{x \in A : f(x) \in O\}$ is open relative to $A$.
+  \item If $F \subseteq \R$ is closed, then $f^{-1}(F)$ is closed
+    relative to $A$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) Let $c \in f^{-1}(O)$, so $f(c) \in O$. Since $O$ is open, there
+exists $\varepsilon > 0$ with $(f(c) - \varepsilon,
+f(c) + \varepsilon) \subseteq O$. By continuity, there exists $\delta > 0$
+with $|f(x) - f(c)| < \varepsilon$ whenever $x \in A$ and
+$|x - c| < \delta$. Hence $\{x \in A : |x - c| < \delta\} \subseteq
+f^{-1}(O)$.
+
+(ii) $f^{-1}(F) = A \setminus f^{-1}(F^c)$, and $F^c$ is open, so
+$f^{-1}(F^c)$ is open relative to $A$ by~(i). Hence $f^{-1}(F)$ is closed
+relative to $A$.
+\end{proof}
+
+We now combine continuity with compactness to obtain the most powerful
+results of this lesson.
+
+%% ============================================================
+%% SECTION 6: EXTREME VALUE THEOREM AND IVT
+%% ============================================================
+\section{Extreme Value Theorem and Intermediate Value Theorem}
+\label{sec:evt_ivt}
+
+\begin{theorem}[Image of Compact Set is Compact]
+\label{thm:cont_compact}
+Let $f \colon K \to \R$ be continuous and $K$ compact. Then $f(K)$ is
+compact.
+\end{theorem}
+
+\begin{proof}
+We use sequential compactness. Let $(y_n)$ be a sequence in $f(K)$.
+For each $n$, choose $x_n \in K$ with $f(x_n) = y_n$. Since $K$ is
+compact (hence sequentially compact), there exists a subsequence
+$x_{n_k} \to x \in K$. By continuity, $y_{n_k} = f(x_{n_k}) \to f(x)
+\in f(K)$. Hence $f(K)$ is sequentially compact, therefore compact.
+\end{proof}
+
+\begin{keyresult}[title={Extreme Value Theorem and Intermediate Value Theorem}]
+\begin{theorem}[Extreme Value Theorem (EVT)]
+\label{thm:evt}
+If $f \colon [a, b] \to \R$ is continuous, then $f$ attains its maximum
+and minimum: there exist $x_M, x_m \in [a, b]$ with
+\[
+  f(x_m) \le f(x) \le f(x_M) \quad \text{for all } x \in [a, b].
+\]
+\end{theorem}
+
+\begin{theorem}[Intermediate Value Theorem (IVT)]
+\label{thm:ivt}
+If $f \colon [a, b] \to \R$ is continuous and $L$ is any value between
+$f(a)$ and $f(b)$ (i.e., $f(a) \le L \le f(b)$ or
+$f(b) \le L \le f(a)$), then there exists $c \in [a, b]$ with $f(c) = L$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}[Proof of the EVT]
+By Theorem~\ref{thm:cont_compact}, $f([a,b])$ is compact, hence closed
+and bounded (Heine--Borel, Corollary~\ref{cor:heine_borel}). Since
+$f([a,b])$ is bounded, $M = \sup f([a,b])$ exists. Since $f([a,b])$ is
+closed and $M \in \cl(f([a,b]))$ (as the supremum of a bounded set is in
+its closure), we have $M \in f([a,b])$. Hence there exists $x_M \in [a,b]$
+with $f(x_M) = M$. The argument for the minimum is analogous, using
+$m = \inf f([a,b])$.
+\end{proof}
+
+\begin{proof}[Proof of the IVT]
+Assume without loss of generality that $f(a) < L < f(b)$ (if $L = f(a)$
+or $L = f(b)$, take $c = a$ or $c = b$). Define
+$S = \{x \in [a, b] : f(x) < L\}$. Then $S$ is nonempty (since
+$a \in S$) and bounded above (by $b$). Let $c = \sup S$.
+
+Since $f(a) < L$ and $f$ is continuous at $a$, we have $f(x) < L$ for
+$x$ near $a$, so $c > a$. Similarly, $f(b) > L$ and continuity at $b$
+give $c < b$. Hence $c \in (a, b)$.
+
+Since $c = \sup S$, there exists a sequence $(x_n)$ in $S$ with
+$x_n \to c$ (by the $\varepsilon$-characterization of the supremum,
+Lesson~1, Remark~3.6). Since $f(x_n) < L$ and $f$ is continuous,
+$f(c) = \lim f(x_n) \le L$.
+
+If $f(c) < L$, then by continuity there exists $\delta > 0$ with
+$f(x) < L$ for $x \in (c, c + \delta) \cap [a, b]$, contradicting
+$c = \sup S$. Hence $f(c) = L$.
+\end{proof}
+
+\begin{rlconnection}[title={EVT in optimization and the IVT in root-finding}]
+The extreme value theorem guarantees that continuous loss functions attain
+their minima on compact feasible sets. This is the theoretical foundation
+for constrained optimization: when we write
+$\theta^* = \argmin_{\theta \in \Theta} L(\theta)$ with $\Theta$ compact
+and $L$ continuous, the EVT ensures $\theta^*$ exists. The intermediate
+value theorem provides fixed-point existence: if $g \colon [0,1] \to [0,1]$
+is continuous, then $h(x) = g(x) - x$ satisfies $h(0) = g(0) \ge 0$ and
+$h(1) = g(1) - 1 \le 0$, so the IVT gives $c$ with $h(c) = 0$, i.e.,
+$g(c) = c$. This one-dimensional Brouwer fixed-point theorem underlies
+existence proofs for Nash equilibria.
+\end{rlconnection}
+
+\begin{example}
+\label{ex:ivt_fixed_point}
+Let $g(x) = (e^x - 1)/(e - 1)$ on $[0, 1]$. Then $g(0) = 0$ and
+$g(1) = 1$, and $g$ is continuous. The function $h(x) = g(x) - x$
+satisfies $h(0) = 0$, so $x = 0$ is a fixed point. To find another,
+note $g'(0) = 1/(e-1) < 1$, so $g(x) < x$ for small positive $x$, while
+$g(1) = 1$. The IVT applied to $h$ on a suitable subinterval confirms
+$x = 0$ is the unique fixed point.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: UNIFORM CONTINUITY
+%% ============================================================
+\section{Uniform Continuity}
+\label{sec:uniform_cont}
+
+\begin{definition}[Uniform Continuity]
+\label{def:uniform_cont}
+A function $f \colon A \to \R$ is \emph{uniformly continuous on $A$} if
+for every $\varepsilon > 0$ there exists $\delta > 0$ such that
+$|f(x) - f(y)| < \varepsilon$ whenever $x, y \in A$ and
+$|x - y| < \delta$.
+\end{definition}
+
+\begin{remark}
+\label{rem:cont_vs_uniform}
+The key distinction: in ordinary continuity, $\delta$ may depend on both
+$\varepsilon$ and the point $c$; in uniform continuity, $\delta$ depends
+only on $\varepsilon$ and works for \emph{all} pairs of points
+simultaneously.
+\end{remark}
+
+\begin{example}
+\label{ex:not_uniform}
+The function $f(x) = x^2$ is continuous on $\R$ but not uniformly
+continuous on $\R$. Indeed, for any $\delta > 0$, choose $x = 1/\delta$
+and $y = x + \delta/2$. Then $|x - y| = \delta/2 < \delta$ but
+$|f(x) - f(y)| = |y^2 - x^2| = |y - x||y + x| =
+(\delta/2)(2/\delta + \delta/2) \ge 1$,
+so taking $\varepsilon = 1$ shows uniform continuity fails.
+\end{example}
+
+\begin{example}
+\label{ex:lipschitz_uniform}
+If $f$ is Lipschitz on $A$, i.e., there exists $L > 0$ with
+$|f(x) - f(y)| \le L|x - y|$ for all $x, y \in A$, then $f$ is
+uniformly continuous: given $\varepsilon > 0$, take $\delta =
+\varepsilon / L$. For instance, $f(x) = \sin(x)$ satisfies
+$|\sin(x) - \sin(y)| \le |x - y|$ (Lipschitz constant $1$), hence is
+uniformly continuous on $\R$.
+\end{example}
+
+\begin{theorem}[Compact Domain Implies Uniform Continuity]
+\label{thm:compact_uniform}
+If $f \colon K \to \R$ is continuous and $K \subseteq \R$ is compact,
+then $f$ is uniformly continuous on $K$.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that $f$ is continuous on $K$ but not uniformly
+continuous. Then there exists $\varepsilon_0 > 0$ such that for every
+$n \in \N$, there exist $x_n, y_n \in K$ with $|x_n - y_n| < 1/n$ but
+$|f(x_n) - f(y_n)| \ge \varepsilon_0$.
+
+Since $K$ is compact (hence sequentially compact), $(x_n)$ has a
+subsequence $x_{n_k} \to c \in K$. Since $|x_{n_k} - y_{n_k}| < 1/n_k
+\to 0$, we also have $y_{n_k} \to c$.
+
+By continuity of $f$ at $c$: $f(x_{n_k}) \to f(c)$ and
+$f(y_{n_k}) \to f(c)$. Hence
+$|f(x_{n_k}) - f(y_{n_k})| \to 0$,
+contradicting $|f(x_{n_k}) - f(y_{n_k})| \ge \varepsilon_0 > 0$.
+\end{proof}
+
+\begin{example}
+\label{ex:uniform_interval}
+The function $f(x) = x^2$ is uniformly continuous on $[0, 10]$ (by
+Theorem~\ref{thm:compact_uniform}, since $[0,10]$ is compact), even
+though it fails to be uniformly continuous on all of $\R$
+(Example~\ref{ex:not_uniform}).
+\end{example}
+
+\begin{rlconnection}[title={Uniform continuity in value function approximation}]
+In RL with continuous state spaces, value functions $V^\pi(s)$ are often
+shown to be Lipschitz or uniformly continuous on compact state spaces.
+Uniform continuity guarantees that if we approximate $V^\pi$ on a finite
+grid of states with spacing $\delta$, the approximation error is bounded
+by $\varepsilon$ uniformly---there are no ``bad'' states where the error
+blows up. This is essential for the correctness of discretization-based
+solvers and for bounding the approximation error of neural network
+function approximators on bounded domains.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Classifying sets]
+\textnormal{(\(*\))} \\
+For each of the following subsets of $\R$, determine whether it is open,
+closed, both, or neither. Find its interior, closure, and boundary.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $A = [0, 1)$
+  \item $B = \Z$
+  \item $C = \{1/n : n \in \N\}$
+  \item $D = (0, 1) \cup (1, 2)$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Compactness verification]
+\textnormal{(\(*\))} \\
+Determine which of the following sets are compact, and justify your answers
+using the Heine--Borel theorem (Corollary~\ref{cor:heine_borel}):
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $\{x \in \R : x^2 \le 4\}$
+  \item $\Q \cap [0, 1]$
+  \item $\{1 - 1/n : n \in \N\} \cup \{1\}$
+  \item $(0, 1]$
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Continuity proof from the definition]
+\textnormal{(\(*\))} \\
+Prove directly from Definition~\ref{def:continuity} (the
+$\varepsilon$-$\delta$ definition) that $f(x) = 3x + 7$ is continuous at
+every $c \in \R$.
+\end{exercise}
+
+\begin{exercise}[IVT application in RL]
+\textnormal{(\(**\))} \\
+Let $V \colon [0, 1] \to \R$ be a continuous function with $V(0) = -1$ and
+$V(1) = 5$. Let $\lambda \in (-1, 5)$ be a threshold value.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Use the IVT to prove there exists $s^* \in (0, 1)$ with
+    $V(s^*) = \lambda$.
+  \item If $V$ is additionally assumed to be strictly increasing, prove
+    that $s^*$ is unique.
+\end{enumerate}
+\textit{Hint:} For uniqueness, assume two distinct roots and derive a
+contradiction with strict monotonicity.
+\end{exercise}
+
+\begin{exercise}[Uniform continuity failure]
+\textnormal{(\(**\))} \\
+Prove that $f(x) = 1/x$ is continuous but not uniformly continuous on
+$(0, 1)$. Then explain why this does not contradict
+Theorem~\ref{thm:compact_uniform}.
+\end{exercise}
+
+\begin{exercise}[Compactness from first principles]
+\textnormal{(\(***\))} \\
+Prove directly from the open-cover definition (without using Heine--Borel)
+that $[0, 1]$ is compact.
+
+\textit{Hint:} Let $\{O_\alpha\}$ be an open cover of $[0,1]$. Define
+$S = \{x \in [0,1] : [0,x] \text{ is covered by finitely many }
+O_\alpha\}$. Show $S$ is nonempty, $\sup S = 1$, and $1 \in S$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A set $O \subseteq \R$ is \emph{open} if every point has an
+    $\varepsilon$-neighborhood contained in $O$; a set is \emph{closed}
+    if its complement is open, equivalently if it contains all limits of
+    convergent sequences from the set.
+
+  \item Arbitrary unions of open sets are open; finite intersections of
+    open sets are open. The dual statements hold for closed sets.
+
+  \item The \emph{closure} $\cl(A)$ consists of all limits of sequences
+    in $A$; the \emph{interior} $\interior(A)$ is the largest open
+    subset of $A$; the \emph{boundary} $\partial A = \cl(A) \setminus
+    \interior(A)$.
+
+  \item A set $K \subseteq \R$ is \emph{compact} if and only if it is
+    closed and bounded (\emph{Heine--Borel theorem}), which is
+    equivalent to sequential compactness: every sequence in $K$ has a
+    subsequence converging to a point in $K$.
+
+  \item Continuity at $c$ means $|f(x) - f(c)| < \varepsilon$ for
+    $|x - c| < \delta$; equivalently, $x_n \to c$ implies
+    $f(x_n) \to f(c)$. Continuous functions preserve sums, products,
+    quotients, and compositions.
+
+  \item The \emph{extreme value theorem}: a continuous function on a
+    compact set attains its maximum and minimum.
+
+  \item The \emph{intermediate value theorem}: a continuous function on
+    $[a,b]$ takes every value between $f(a)$ and $f(b)$, which gives
+    existence of roots and fixed points.
+
+  \item A function is \emph{uniformly continuous} if $\delta$ depends
+    only on $\varepsilon$, not on the point. Every continuous function
+    on a compact set is uniformly continuous.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 3} (Differentiation and Integration) builds on
+    continuity to develop differentiability, the mean value theorem,
+    Taylor's theorem, and Riemann integration. The extreme value theorem
+    proved here is used in the proof of Rolle's theorem, and uniform
+    continuity is used to prove that continuous functions are Riemann
+    integrable.
+
+  \item In Phase~01 (Functional Analysis, Lesson~5), the concepts of
+    open sets, closed sets, and compactness are generalized from $\R$ to
+    arbitrary metric spaces and then to normed spaces. The Heine--Borel
+    characterization fails in infinite-dimensional spaces, making
+    compactness significantly harder to verify.
+
+  \item The Arzel\`{a}--Ascoli theorem, which characterizes compact
+    subsets of $C([a,b])$ (the space of continuous functions), extends
+    the ideas of this lesson to function spaces and is treated in
+    Phase~01.
+
+  \item For topology in $\R^n$ and general metric spaces, see
+    \citet[Chapter 2]{rudin1976}. For a more abstract topological
+    perspective, see \citet[Chapter 4]{folland1999}.
+
+  \item \citet[Chapters 3--4]{abbott2015} offers an exceptionally clear
+    treatment of compactness and the extreme value theorem, with
+    illuminating discussion of why each hypothesis is needed.
+
+  \item Students proceeding to measure theory will find that open and
+    closed sets generate the Borel $\sigma$-algebra $\Borel(\R)$, which
+    is the natural domain for probability measures on $\R$.
+\end{itemize}
+
+\bibliography{real-analysis-refs}
+
+\end{document}

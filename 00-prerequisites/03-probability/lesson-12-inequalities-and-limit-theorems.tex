@@ -1,0 +1,1350 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 12: Inequalities and Limit Theorems}}
+\fancyhead[R]{\thepage}
+\title{Lesson 12: Inequalities and Limit Theorems}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Suppose a reinforcement learning agent uses Monte Carlo rollouts to estimate
+the value of a policy: it runs $n$ independent episodes starting from a
+fixed state $s$, collects the discounted returns
+$G^{(1)}, \ldots, G^{(n)}$, and forms the sample mean
+$\bar{G}_n = \frac{1}{n}\sum_{i=1}^n G^{(i)}$. The true value
+$V^\pi(s) = \E[G^{(i)}]$ is unknown. Three fundamental questions arise:
+\begin{enumerate}[nosep]
+    \item Does $\bar{G}_n$ converge to $V^\pi(s)$ as $n \to \infty$,
+    and in what sense?
+    \item How quickly does $\bar{G}_n$ concentrate around $V^\pi(s)$ --
+    that is, how large must $n$ be so that
+    $|\bar{G}_n - V^\pi(s)| < \varepsilon$ with probability at least
+    $1 - \delta$?
+    \item What is the approximate distribution of the estimation error
+    $\bar{G}_n - V^\pi(s)$ for large $n$?
+\end{enumerate}
+The first question is answered by the law of large numbers, the second by
+concentration inequalities (Chebyshev and Hoeffding), and the third by the
+central limit theorem. The tools developed in this lesson will let us
+prove these results, derive explicit sample complexity bounds for Monte
+Carlo estimation, and understand why the normal distribution appears as
+a universal limit.
+
+\begin{rlconnection}[title={Why Inequalities and Limit Theorems
+    Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Monte Carlo policy evaluation}: The law of large
+    numbers guarantees that averaging returns converges to the true
+    value function; concentration inequalities quantify how many
+    episodes are needed for a given accuracy.
+    \item \textbf{TD-learning convergence rates}: Stochastic
+    approximation convergence proofs rely on Markov's and Chebyshev's
+    inequalities to control the error at each iteration (Phase~01,
+    Lesson on Stochastic Approximation).
+    \item \textbf{PAC-MDP bounds}: Sample complexity results in
+    PAC-MDP theory use Hoeffding's inequality to bound the
+    probability of inaccurate value estimates.
+    \item \textbf{Bandit confidence intervals}: UCB algorithms
+    construct confidence bounds for arm means using Hoeffding's
+    inequality; the central limit theorem justifies Gaussian
+    approximations for large sample sizes.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Probability spaces and the Kolmogorov axioms (Lesson~9). Random
+variables, PMFs, PDFs, CDFs, and standard distributions -- in
+particular the Bernoulli, Poisson, and Normal distributions
+(Lesson~10). Expectation, variance, covariance, independence of
+random variables, the law of the unconscious statistician (LOTUS),
+linearity of expectation, and the tower property (Lesson~11).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} the moment generating function and \emph{derive}
+    moments from it by differentiation.
+    \item \emph{Prove} Markov's, Chebyshev's, Cauchy-Schwarz, and
+    Jensen's inequalities.
+    \item \emph{State} the definitions of convergence in probability
+    and convergence in distribution, and \emph{prove} the weak law of
+    large numbers via Chebyshev's inequality.
+    \item \emph{State} the strong law of large numbers and the central
+    limit theorem, and \emph{apply} them in worked examples.
+    \item \emph{Prove} Hoeffding's lemma and Hoeffding's inequality,
+    and \emph{derive} sample complexity bounds for Monte Carlo
+    estimation.
+    \item \emph{Compare} the sample complexity guarantees provided by
+    Chebyshev's inequality versus Hoeffding's inequality.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 7--8]{ross2019} -- Moment generating
+    functions, limit theorems, and concentration inequalities.
+    \item \citet[Chapter 10]{blitzstein2019} -- Inequalities and
+    limit theorems with extensive worked examples and RL-relevant
+    applications.
+    \item \citet[Chapters 8--10]{feller1968} -- Classical treatment
+    of the law of large numbers and the central limit theorem.
+    \item \citet[Sections 2.2--2.3]{durrett2019} -- Rigorous
+    treatment of the weak and strong laws of large numbers and the
+    central limit theorem via characteristic functions.
+    \item \citet[Sections 5.1--5.4]{grimmett2020} -- Generating
+    functions, moment generating functions, and convergence of random
+    variables.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: MOMENT GENERATING FUNCTIONS
+%% ============================================================
+
+\section{Moment Generating Functions}
+\label{sec:mgf}
+
+Moment generating functions (MGFs) provide a powerful technique for
+computing moments, identifying distributions, and establishing the
+distribution of sums of independent random variables.
+
+\begin{definition}[Moment Generating Function]
+\label{def:mgf}
+Let $X$ be a random variable. The \emph{moment generating function}
+(MGF) of $X$ is the function $M_X \colon \R \to [0, \infty]$ defined by
+\[
+    M_X(t) = \E[e^{tX}],
+\]
+provided the expectation exists. We say the MGF exists in a
+neighborhood of the origin if there exists $h > 0$ such that
+$M_X(t) < \infty$ for all $|t| < h$.
+\end{definition}
+
+\begin{remark}
+\label{rem:mgf_exists}
+Note that $M_X(0) = \E[e^0] = 1$ always holds. The MGF may fail to
+exist for $t \neq 0$; for instance, the Cauchy distribution has no
+finite moments beyond order zero, so its MGF is infinite for all
+$t \neq 0$. When we say ``the MGF exists,'' we mean it is finite in
+some open interval containing the origin.
+\end{remark}
+
+\begin{theorem}[Moments from the MGF]
+\label{thm:moments_from_mgf}
+If the MGF $M_X(t)$ exists in a neighborhood of the origin, then
+$\E[|X|^n] < \infty$ for all $n \geq 1$ and
+\[
+    \E[X^n] = M_X^{(n)}(0),
+\]
+where $M_X^{(n)}$ denotes the $n$-th derivative of $M_X$.
+\end{theorem}
+
+\begin{proof}
+Since $M_X(t) = \E[e^{tX}]$ is finite for $|t| < h$, we can
+differentiate under the expectation sign (justified by the dominated
+convergence theorem, since $|X^n e^{tX}|$ is dominated by a sum of
+exponentials that are integrable for $|t|$ sufficiently small). We
+have
+\[
+    M_X'(t) = \frac{d}{dt} \E[e^{tX}] = \E\!\left[\frac{d}{dt} e^{tX}\right]
+    = \E[X e^{tX}].
+\]
+Evaluating at $t = 0$: $M_X'(0) = \E[X \cdot 1] = \E[X]$.
+
+More generally, by induction, the $n$-th derivative is
+\[
+    M_X^{(n)}(t) = \E[X^n e^{tX}],
+\]
+and evaluating at $t = 0$ gives $M_X^{(n)}(0) = \E[X^n]$.
+
+For the base case $n = 1$, we have shown $M_X'(t) = \E[Xe^{tX}]$.
+Assume $M_X^{(k)}(t) = \E[X^k e^{tX}]$ for some $k \geq 1$. Then
+\[
+    M_X^{(k+1)}(t) = \frac{d}{dt} \E[X^k e^{tX}]
+    = \E\!\left[X^k \frac{d}{dt} e^{tX}\right]
+    = \E[X^{k+1} e^{tX}],
+\]
+completing the induction.
+\end{proof}
+
+\begin{example}[First Two Moments via the MGF]
+\label{ex:moments_via_mgf}
+The first two moments are $\E[X] = M_X'(0)$ and
+$\E[X^2] = M_X''(0)$. The variance can then be computed as
+\[
+    \Var(X) = \E[X^2] - (\E[X])^2 = M_X''(0) - (M_X'(0))^2.
+\]
+\end{example}
+
+\subsection{MGF of a Sum of Independent Random Variables}
+
+\begin{theorem}[MGF of a Sum of Independents]
+\label{thm:mgf_sum}
+If $X$ and $Y$ are independent random variables whose MGFs exist,
+then
+\[
+    M_{X+Y}(t) = M_X(t) \cdot M_Y(t).
+\]
+More generally, if $X_1, \ldots, X_n$ are independent, then
+$M_{X_1 + \cdots + X_n}(t) = \prod_{i=1}^n M_{X_i}(t)$.
+\end{theorem}
+
+\begin{proof}
+By definition,
+\[
+    M_{X+Y}(t) = \E[e^{t(X+Y)}] = \E[e^{tX} e^{tY}].
+\]
+Since $X$ and $Y$ are independent, $e^{tX}$ and $e^{tY}$ are also
+independent (as they are functions of independent random variables;
+see Lesson~11, Proposition~\ref*{prop:indep_uncorrelated}). Therefore
+\[
+    \E[e^{tX} e^{tY}] = \E[e^{tX}] \cdot \E[e^{tY}]
+    = M_X(t) \cdot M_Y(t).
+\]
+The general case follows by induction on $n$.
+\end{proof}
+
+\begin{remark}
+\label{rem:mgf_uniqueness}
+A fundamental result from the theory of Laplace transforms (see,
+e.g., \citet[Theorem 2.3.6]{grimmett2020}) states that if the MGF
+of $X$ exists in a neighborhood of the origin, then it uniquely
+determines the distribution of $X$. That is, if $M_X(t) = M_Y(t)$
+for all $t$ in some interval $(-h, h)$ with $h > 0$, then $X$ and
+$Y$ have the same distribution. We state this without proof, as it
+requires complex analysis (the inversion formula for Laplace
+transforms).
+\end{remark}
+
+\subsection{MGFs of Standard Distributions}
+
+\begin{proposition}[MGF of the Bernoulli Distribution]
+\label{prop:mgf_bernoulli}
+If $X \sim \mathrm{Bernoulli}(p)$, then
+\[
+    M_X(t) = 1 - p + pe^t \quad \text{for all } t \in \R.
+\]
+\end{proposition}
+
+\begin{proof}
+Since $X$ takes value $1$ with probability $p$ and $0$ with
+probability $1-p$,
+\[
+    M_X(t) = \E[e^{tX}] = e^{t \cdot 0}(1-p) + e^{t \cdot 1} p
+    = (1-p) + pe^t. \qedhere
+\]
+\end{proof}
+
+\begin{proposition}[MGF of the Poisson Distribution]
+\label{prop:mgf_poisson}
+If $X \sim \mathrm{Poisson}(\lambda)$, then
+\[
+    M_X(t) = e^{\lambda(e^t - 1)} \quad \text{for all } t \in \R.
+\]
+\end{proposition}
+
+\begin{proof}
+Using the PMF $\Prob(X = k) = e^{-\lambda} \lambda^k / k!$,
+\begin{align*}
+    M_X(t) &= \E[e^{tX}] = \sum_{k=0}^\infty e^{tk}
+    \frac{e^{-\lambda} \lambda^k}{k!}
+    = e^{-\lambda} \sum_{k=0}^\infty \frac{(\lambda e^t)^k}{k!}
+    = e^{-\lambda} \cdot e^{\lambda e^t}
+    = e^{\lambda(e^t - 1)},
+\end{align*}
+where we recognized the Taylor series
+$\sum_{k=0}^\infty z^k / k! = e^z$ with $z = \lambda e^t$.
+\end{proof}
+
+\begin{proposition}[MGF of the Normal Distribution]
+\label{prop:mgf_normal}
+If $X \sim \mathcal{N}(\mu, \sigma^2)$, then
+\[
+    M_X(t) = e^{\mu t + \sigma^2 t^2 / 2}
+    \quad \text{for all } t \in \R.
+\]
+\end{proposition}
+
+\begin{proof}
+First consider $Z \sim \mathcal{N}(0, 1)$. Then
+\begin{align*}
+    M_Z(t) &= \E[e^{tZ}]
+    = \int_{-\infty}^{\infty} e^{tz} \frac{1}{\sqrt{2\pi}}
+    e^{-z^2/2} \, dz
+    = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{\infty}
+    e^{tz - z^2/2} \, dz.
+\end{align*}
+Complete the square in the exponent:
+$tz - z^2/2 = -(z^2 - 2tz)/2 = -((z-t)^2 - t^2)/2
+= -(z-t)^2/2 + t^2/2$.
+Therefore
+\begin{align*}
+    M_Z(t) &= \frac{e^{t^2/2}}{\sqrt{2\pi}}
+    \int_{-\infty}^{\infty} e^{-(z-t)^2/2} \, dz
+    = e^{t^2/2},
+\end{align*}
+since $\int_{-\infty}^{\infty} e^{-(z-t)^2/2}\,dz = \sqrt{2\pi}$
+by the Gaussian integral (Lesson~10) with a shift of variable
+$u = z - t$.
+
+For general $X = \mu + \sigma Z$ where $Z \sim \mathcal{N}(0,1)$,
+\[
+    M_X(t) = \E[e^{t(\mu + \sigma Z)}]
+    = e^{\mu t} \E[e^{(t\sigma) Z}]
+    = e^{\mu t} M_Z(t\sigma)
+    = e^{\mu t} e^{\sigma^2 t^2/2}
+    = e^{\mu t + \sigma^2 t^2/2}. \qedhere
+\]
+\end{proof}
+
+\subsection{Applications of the MGF}
+
+\begin{example}[Sum of Independent Poissons]
+\label{ex:sum_poisson}
+Let $X_1 \sim \mathrm{Poisson}(\lambda_1)$ and
+$X_2 \sim \mathrm{Poisson}(\lambda_2)$ be independent. By
+Theorem~\ref{thm:mgf_sum},
+\[
+    M_{X_1 + X_2}(t) = M_{X_1}(t) M_{X_2}(t)
+    = e^{\lambda_1(e^t - 1)} e^{\lambda_2(e^t - 1)}
+    = e^{(\lambda_1 + \lambda_2)(e^t - 1)}.
+\]
+This is the MGF of $\mathrm{Poisson}(\lambda_1 + \lambda_2)$.
+By the uniqueness of the MGF (Remark~\ref{rem:mgf_uniqueness}),
+$X_1 + X_2 \sim \mathrm{Poisson}(\lambda_1 + \lambda_2)$.
+\end{example}
+
+\begin{example}[Sum of Independent Normals]
+\label{ex:sum_normal}
+Let $X_1 \sim \mathcal{N}(\mu_1, \sigma_1^2)$ and
+$X_2 \sim \mathcal{N}(\mu_2, \sigma_2^2)$ be independent. Then
+\begin{align*}
+    M_{X_1 + X_2}(t) &= e^{\mu_1 t + \sigma_1^2 t^2/2}
+    \cdot e^{\mu_2 t + \sigma_2^2 t^2/2}
+    = e^{(\mu_1 + \mu_2)t + (\sigma_1^2 + \sigma_2^2)t^2/2}.
+\end{align*}
+This is the MGF of
+$\mathcal{N}(\mu_1 + \mu_2, \sigma_1^2 + \sigma_2^2)$. By
+uniqueness, $X_1 + X_2 \sim
+\mathcal{N}(\mu_1 + \mu_2, \sigma_1^2 + \sigma_2^2)$.
+\end{example}
+
+\begin{rlconnection}[title={MGFs and Reward Distributions}]
+In RL, rewards are often modeled as sums of independent random
+variables. The MGF factorization theorem
+(Theorem~\ref{thm:mgf_sum}) immediately identifies the distribution
+of cumulative rewards when individual rewards are independent. For
+instance, if each of $n$ independent episodes yields a Poisson-distributed
+count of some event with parameter $\lambda$, the total count across
+all episodes is $\mathrm{Poisson}(n\lambda)$. Similarly, if reward
+noise is Gaussian, the average reward over $n$ episodes remains
+Gaussian with variance shrinking as $1/n$.
+\end{rlconnection}
+
+We now turn to probability inequalities, which provide deterministic
+upper bounds on tail probabilities without requiring knowledge of the
+full distribution.
+
+%% ============================================================
+%% SECTION 4: PROBABILITY INEQUALITIES
+%% ============================================================
+
+\section{Probability Inequalities}
+\label{sec:inequalities}
+
+Probability inequalities bound the probability that a random variable
+deviates from its mean. These bounds are essential for establishing
+convergence rates and deriving sample complexity results.
+
+\subsection{Markov's Inequality}
+
+\begin{theorem}[Markov's Inequality]
+\label{thm:markov}
+Let $X$ be a non-negative random variable with finite expectation.
+Then for any $a > 0$,
+\[
+    \Prob(X \geq a) \leq \frac{\E[X]}{a}.
+\]
+\end{theorem}
+
+\begin{proof}
+Define the indicator $\indicator_{\{X \geq a\}}$. Since $X \geq 0$,
+we have the pointwise inequality
+\[
+    X \geq a \cdot \indicator_{\{X \geq a\}},
+\]
+because when $X \geq a$ the right side equals $a \leq X$, and when
+$X < a$ the right side equals $0 \leq X$. Taking expectations and
+using linearity:
+\[
+    \E[X] \geq a \cdot \E[\indicator_{\{X \geq a\}}]
+    = a \cdot \Prob(X \geq a).
+\]
+Dividing both sides by $a > 0$ gives
+$\Prob(X \geq a) \leq \E[X]/a$.
+\end{proof}
+
+\begin{example}[Markov Applied to a Uniform Variable]
+\label{ex:markov_uniform}
+Let $X \sim \mathrm{Uniform}(0, 1)$, so $\E[X] = 1/2$. For
+$a = 3/4$, Markov gives
+$\Prob(X \geq 3/4) \leq (1/2)/(3/4) = 2/3$.
+The exact probability is $\Prob(X \geq 3/4) = 1/4$, so the bound
+is loose but valid. Markov's inequality uses only the mean, so its
+generality comes at the cost of tightness.
+\end{example}
+
+\subsection{Chebyshev's Inequality}
+
+\begin{theorem}[Chebyshev's Inequality]
+\label{thm:chebyshev}
+Let $X$ be a random variable with finite mean $\mu = \E[X]$ and
+finite variance $\sigma^2 = \Var(X)$. Then for any $k > 0$,
+\[
+    \Prob(|X - \mu| \geq k) \leq \frac{\sigma^2}{k^2}.
+\]
+\end{theorem}
+
+\begin{proof}
+Apply Markov's inequality (Theorem~\ref{thm:markov}) to the
+non-negative random variable $Y = (X - \mu)^2$ with threshold
+$a = k^2$:
+\[
+    \Prob(|X - \mu| \geq k)
+    = \Prob((X - \mu)^2 \geq k^2)
+    \leq \frac{\E[(X - \mu)^2]}{k^2}
+    = \frac{\Var(X)}{k^2}
+    = \frac{\sigma^2}{k^2}. \qedhere
+\]
+\end{proof}
+
+\begin{example}[Chebyshev for a Poisson Variable]
+\label{ex:chebyshev_poisson}
+Let $X \sim \mathrm{Poisson}(\lambda)$ with $\E[X] = \lambda$ and
+$\Var(X) = \lambda$ (Lesson~10). Chebyshev gives
+\[
+    \Prob(|X - \lambda| \geq k) \leq \frac{\lambda}{k^2}.
+\]
+For $\lambda = 100$ and $k = 20$:
+$\Prob(|X - 100| \geq 20) \leq 100/400 = 1/4$.
+\end{example}
+
+\begin{example}[Chebyshev for a Sample Mean]
+\label{ex:chebyshev_mean}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with mean $\mu$ and variance
+$\sigma^2$. The sample mean $\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$
+has $\E[\bar{X}_n] = \mu$ and
+$\Var(\bar{X}_n) = \sigma^2/n$ (by independence and the variance
+of a sum; see Lesson~11, Corollary~4.9).
+Chebyshev gives
+\[
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon)
+    \leq \frac{\sigma^2}{n \varepsilon^2}.
+\]
+This bound decreases as $O(1/n)$, confirming that sample means
+concentrate around the population mean.
+\end{example}
+
+\subsection{Cauchy-Schwarz Inequality for Expectations}
+
+\begin{theorem}[Cauchy-Schwarz Inequality]
+\label{thm:cauchy_schwarz}
+For any random variables $X$ and $Y$ with finite second moments,
+\[
+    |\E[XY]|^2 \leq \E[X^2] \, \E[Y^2].
+\]
+Equality holds if and only if $Y = cX$ almost surely for some
+constant $c \in \R$ (or $X = 0$ a.s.).
+\end{theorem}
+
+\begin{proof}
+If $\E[X^2] = 0$, then $X = 0$ a.s., so $\E[XY] = 0$ and the
+inequality holds trivially. Assume $\E[X^2] > 0$.
+
+For any $t \in \R$, the random variable $(tX + Y)^2$ is non-negative,
+so
+\[
+    0 \leq \E[(tX + Y)^2] = t^2 \E[X^2] + 2t \E[XY] + \E[Y^2].
+\]
+This is a quadratic in $t$ that is non-negative for all $t$. A
+real quadratic $at^2 + bt + c \geq 0$ for all $t$ if and only if
+its discriminant satisfies $b^2 - 4ac \leq 0$. Here
+$a = \E[X^2]$, $b = 2\E[XY]$, $c = \E[Y^2]$, so
+\[
+    4(\E[XY])^2 - 4\E[X^2]\E[Y^2] \leq 0,
+\]
+which gives $(\E[XY])^2 \leq \E[X^2]\E[Y^2]$.
+
+Equality holds if and only if the discriminant is zero, meaning
+the quadratic has a real root $t_0$ with $\E[(t_0 X + Y)^2] = 0$,
+so $Y = -t_0 X$ almost surely.
+\end{proof}
+
+\begin{remark}
+\label{rem:cs_correlation}
+The Cauchy-Schwarz inequality immediately implies the correlation
+bound $|\rho(X,Y)| \leq 1$ (Lesson~11, Proposition~4.14). It also
+appears in Phase~01 (Lesson~7) as a fundamental property of inner
+product spaces, where $\E[XY]$ plays the role of the inner product
+on $L^2$.
+\end{remark}
+
+\subsection{Jensen's Inequality}
+
+\begin{definition}[Convex Function]
+\label{def:convex}
+A function $g \colon \R \to \R$ is \emph{convex} if for all
+$x, y \in \R$ and $\lambda \in [0, 1]$,
+\[
+    g(\lambda x + (1 - \lambda) y) \leq \lambda g(x)
+    + (1 - \lambda) g(y).
+\]
+\end{definition}
+
+\begin{theorem}[Jensen's Inequality]
+\label{thm:jensen}
+Let $X$ be a random variable with finite expectation and
+$g \colon \R \to \R$ a convex function. Then
+\[
+    g(\E[X]) \leq \E[g(X)],
+\]
+provided $\E[|g(X)|] < \infty$.
+\end{theorem}
+
+\begin{proof}
+We prove the result for a discrete random variable $X$ taking
+finitely many values, using induction on the number of values.
+
+\textbf{Base case} ($n = 1$): If $X = x_1$ with probability $1$,
+then $g(\E[X]) = g(x_1) = \E[g(X)]$, so equality holds.
+
+\textbf{Base case} ($n = 2$): If $X$ takes values $x_1, x_2$ with
+probabilities $p_1, p_2$ where $p_1 + p_2 = 1$, then
+$\E[X] = p_1 x_1 + p_2 x_2$ and
+\[
+    g(\E[X]) = g(p_1 x_1 + p_2 x_2)
+    \leq p_1 g(x_1) + p_2 g(x_2) = \E[g(X)],
+\]
+by the definition of convexity with $\lambda = p_1$.
+
+\textbf{Inductive step}: Assume the result holds for random variables
+taking at most $n - 1$ values. Suppose $X$ takes values
+$x_1, \ldots, x_n$ with probabilities $p_1, \ldots, p_n$, where
+$p_n < 1$ (otherwise $X$ is constant and the result is trivial).
+Let $q = 1 - p_n > 0$. Then
+\[
+    \E[X] = \sum_{i=1}^n p_i x_i
+    = q \underbrace{\left(\sum_{i=1}^{n-1} \frac{p_i}{q} x_i\right)}_{=: \,\mu}
+    + p_n x_n.
+\]
+Since $\sum_{i=1}^{n-1} p_i/q = 1$, the quantity $\mu$ is the
+expectation of a random variable $Y$ taking values
+$x_1, \ldots, x_{n-1}$ with probabilities $p_1/q, \ldots, p_{n-1}/q$.
+By convexity of $g$ (with $\lambda = q$):
+\[
+    g(\E[X]) = g(q\mu + p_n x_n)
+    \leq q \, g(\mu) + p_n \, g(x_n).
+\]
+By the inductive hypothesis applied to $Y$:
+$g(\mu) = g(\E[Y]) \leq \E[g(Y)]
+= \sum_{i=1}^{n-1} (p_i/q) g(x_i)$.
+Therefore
+\[
+    g(\E[X]) \leq q \sum_{i=1}^{n-1} \frac{p_i}{q} g(x_i)
+    + p_n g(x_n)
+    = \sum_{i=1}^n p_i g(x_i) = \E[g(X)]. \qedhere
+\]
+\end{proof}
+
+\begin{example}[Jensen Applied to Common Functions]
+\label{ex:jensen_examples}
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Since $g(x) = x^2$ is convex, Jensen gives
+    $(\E[X])^2 \leq \E[X^2]$, which is equivalent to $\Var(X) \geq 0$.
+    \item Since $g(x) = e^x$ is convex, Jensen gives
+    $e^{\E[X]} \leq \E[e^X] = M_X(1)$.
+    \item Since $g(x) = -\ln x$ is convex on $(0, \infty)$,
+    Jensen gives $-\ln(\E[X]) \leq \E[-\ln X]$, i.e.,
+    $\ln(\E[X]) \geq \E[\ln X]$. This is the AM-GM inequality
+    in its probabilistic form.
+\end{enumerate}
+\end{example}
+
+\begin{keyresult}[title={Probability Inequalities Summary}]
+\begin{itemize}[nosep]
+    \item \textbf{Markov}: $\Prob(X \geq a) \leq \E[X]/a$ for
+    $X \geq 0$, $a > 0$. Uses only the first moment.
+    \item \textbf{Chebyshev}: $\Prob(|X - \mu| \geq k) \leq
+    \sigma^2/k^2$. Uses first two moments.
+    \item \textbf{Cauchy-Schwarz}: $|\E[XY]|^2 \leq \E[X^2]\E[Y^2]$.
+    \item \textbf{Jensen}: $g(\E[X]) \leq \E[g(X)]$ for convex $g$.
+\end{itemize}
+These inequalities form a hierarchy: Chebyshev follows from Markov,
+and each successive result incorporates more information about the
+distribution, yielding tighter bounds.
+\end{keyresult}
+
+\begin{rlconnection}[title={Concentration Inequalities and
+    Convergence Rates in RL}]
+Concentration inequalities translate directly into convergence rate
+guarantees for RL algorithms. Chebyshev's inequality applied to the
+sample mean gives an $O(1/n)$ bound on the probability of
+$\varepsilon$-deviation, leading to $O(1/(\varepsilon^2 \delta))$
+sample complexity (Section~\ref{sec:tail_bounds}). Exponential
+inequalities such as Hoeffding's (Section~\ref{sec:tail_bounds})
+improve this to $O(\ln(1/\delta)/\varepsilon^2)$, which is the
+standard dependence in PAC-MDP theory and bandit algorithms.
+\end{rlconnection}
+
+With the fundamental inequalities in hand, we now study the asymptotic
+behavior of sample means through the law of large numbers and the
+central limit theorem.
+
+%% ============================================================
+%% SECTION 5: CONVERGENCE CONCEPTS AND THE LAW OF LARGE NUMBERS
+%% ============================================================
+
+\section{Convergence Concepts and the Law of Large Numbers}
+\label{sec:lln}
+
+\subsection{Modes of Convergence}
+
+\begin{definition}[Convergence in Probability]
+\label{def:conv_prob}
+A sequence of random variables $(X_n)_{n \geq 1}$ \emph{converges in
+probability} to a random variable $X$, written $X_n \cprob X$, if
+for every $\varepsilon > 0$,
+\[
+    \lim_{n \to \infty} \Prob(|X_n - X| \geq \varepsilon) = 0.
+\]
+\end{definition}
+
+\begin{definition}[Almost Sure Convergence]
+\label{def:conv_as}
+A sequence $(X_n)_{n \geq 1}$ \emph{converges almost surely} to $X$,
+written $X_n \cas X$, if
+\[
+    \Prob\!\left(\lim_{n \to \infty} X_n = X\right) = 1.
+\]
+\end{definition}
+
+\begin{definition}[Convergence in Distribution]
+\label{def:conv_dist}
+A sequence $(X_n)_{n \geq 1}$ \emph{converges in distribution} to $X$,
+written $X_n \cdist X$, if
+\[
+    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
+\]
+at every point $x$ where $F_X$ is continuous. Here $F_{X_n}$ and
+$F_X$ are the CDFs of $X_n$ and $X$, respectively.
+\end{definition}
+
+\begin{remark}
+\label{rem:convergence_hierarchy}
+Almost sure convergence implies convergence in probability, which in
+turn implies convergence in distribution:
+\[
+    X_n \cas X \;\Longrightarrow\; X_n \cprob X
+    \;\Longrightarrow\; X_n \cdist X.
+\]
+The converses are generally false. We will not prove these
+implications here; they are established rigorously in Phase~01
+(measure-theoretic probability).
+\end{remark}
+
+\subsection{Weak Law of Large Numbers}
+
+\begin{theorem}[Weak Law of Large Numbers (WLLN)]
+\label{thm:wlln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ random variables with finite mean
+$\mu = \E[X_1]$ and finite variance $\sigma^2 = \Var(X_1)$. Define
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$. Then
+\[
+    \bar{X}_n \cprob \mu,
+\]
+i.e., for every $\varepsilon > 0$,
+$\lim_{n \to \infty} \Prob(|\bar{X}_n - \mu| \geq \varepsilon) = 0$.
+\end{theorem}
+
+\begin{proof}
+By Example~\ref{ex:chebyshev_mean} (Chebyshev's inequality applied
+to $\bar{X}_n$),
+\[
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon)
+    \leq \frac{\Var(\bar{X}_n)}{\varepsilon^2}
+    = \frac{\sigma^2}{n\varepsilon^2}.
+\]
+For fixed $\varepsilon > 0$, the right side tends to $0$ as
+$n \to \infty$. Therefore $\bar{X}_n \cprob \mu$.
+\end{proof}
+
+\begin{keyresult}[title={The Law of Large Numbers}]
+The weak law of large numbers guarantees that sample averages
+converge in probability to the population mean. This is the
+theoretical foundation for Monte Carlo estimation: averaging
+i.i.d.\ samples from any distribution with finite variance yields
+a consistent estimator of the mean. In RL, this justifies computing
+$V^\pi(s) \approx \frac{1}{n}\sum_{i=1}^n G^{(i)}$ where the
+$G^{(i)}$ are i.i.d.\ returns from state $s$.
+\end{keyresult}
+
+\begin{example}[WLLN for a Biased Coin]
+\label{ex:wlln_coin}
+Toss a coin with $\Prob(\text{heads}) = p$ independently $n$ times.
+Let $X_i = \indicator_{\{\text{heads on toss } i\}}$, so each
+$X_i \sim \mathrm{Bernoulli}(p)$ with $\mu = p$ and
+$\sigma^2 = p(1-p) \leq 1/4$. The sample mean
+$\bar{X}_n = (\text{number of heads})/n$ is the empirical frequency
+of heads. By the WLLN, $\bar{X}_n \cprob p$: the observed
+frequency converges (in probability) to the true probability.
+Chebyshev gives the quantitative bound
+$\Prob(|\bar{X}_n - p| \geq \varepsilon) \leq 1/(4n\varepsilon^2)$.
+\end{example}
+
+\subsection{Strong Law of Large Numbers}
+
+\begin{theorem}[Strong Law of Large Numbers (SLLN)]
+\label{thm:slln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ random variables with finite mean
+$\mu = \E[X_1]$. Then
+\[
+    \bar{X}_n \cas \mu.
+\]
+\end{theorem}
+
+The SLLN strengthens the WLLN in two ways: it requires only finite
+mean (not finite variance), and it gives almost sure convergence
+rather than convergence in probability. The proof requires
+measure-theoretic tools -- specifically the Borel-Cantelli lemma and
+truncation arguments -- and is deferred to Phase~01
+(Lesson~5, probability foundations).
+
+\begin{warning}[title={WLLN vs.\ SLLN: Finite Variance is Not
+    Always Needed}]
+The WLLN proof above requires finite variance. This is a
+limitation of the Chebyshev-based approach, not of the WLLN itself.
+A more refined proof using truncation (see \citet[Section 2.2]{durrett2019})
+establishes the WLLN under the weaker condition $\E[|X_1|] < \infty$
+alone. The SLLN also requires only $\E[|X_1|] < \infty$.
+For the purpose of this course, we state the SLLN without proof
+and note that in RL applications, bounded rewards automatically
+guarantee finite moments of all orders.
+\end{warning}
+
+%% ============================================================
+%% SECTION 6: THE CENTRAL LIMIT THEOREM
+%% ============================================================
+
+\section{The Central Limit Theorem}
+\label{sec:clt}
+
+The law of large numbers tells us that $\bar{X}_n \to \mu$; the
+central limit theorem describes the \emph{rate} and \emph{shape} of
+the fluctuations around $\mu$.
+
+\begin{theorem}[Central Limit Theorem (CLT)]
+\label{thm:clt}
+Let $X_1, X_2, \ldots$ be i.i.d.\ random variables with finite mean
+$\mu = \E[X_1]$ and finite variance $\sigma^2 = \Var(X_1) > 0$. Then
+\[
+    \frac{\bar{X}_n - \mu}{\sigma / \sqrt{n}} \cdist
+    \mathcal{N}(0, 1),
+\]
+i.e., $\sqrt{n}(\bar{X}_n - \mu)/\sigma$ converges in distribution
+to a standard normal random variable.
+\end{theorem}
+
+The proof uses characteristic functions (or equivalently, MGFs when
+they exist) and is deferred to Phase~01. We focus here on
+understanding and applying the CLT.
+
+\begin{remark}
+\label{rem:clt_interpretation}
+The CLT says that for large $n$, the sample mean is approximately
+normal:
+\[
+    \bar{X}_n \;\dot\sim\; \mathcal{N}\!\left(\mu,
+    \frac{\sigma^2}{n}\right).
+\]
+This approximation improves as $n$ increases and holds regardless of
+the distribution of the $X_i$ (provided $\sigma^2$ is finite).
+\end{remark}
+
+\begin{example}[CLT for Polling]
+\label{ex:clt_polling}
+A pollster surveys $n = 1000$ voters, each independently supporting
+candidate $A$ with probability $p = 0.52$. Let $\hat{p} = \bar{X}_n$
+be the sample proportion. By the CLT,
+\[
+    \hat{p} \;\dot\sim\; \mathcal{N}\!\left(0.52,
+    \frac{0.52 \times 0.48}{1000}\right)
+    = \mathcal{N}(0.52, 0.0002496).
+\]
+The standard deviation of $\hat{p}$ is
+$\sigma/\sqrt{n} = \sqrt{0.0002496} \approx 0.0158$.
+The probability that the poll shows candidate $A$ trailing
+($\hat{p} < 0.5$) is approximately
+\[
+    \Prob(\hat{p} < 0.5) \approx \Prob\!\left(Z < \frac{0.5 - 0.52}{0.0158}\right)
+    = \Prob(Z < -1.27) \approx 0.102,
+\]
+where $Z \sim \mathcal{N}(0,1)$.
+\end{example}
+
+\begin{example}[CLT for Dice Sums]
+\label{ex:clt_dice}
+Roll a fair six-sided die $n = 100$ times and let
+$S_{100} = \sum_{i=1}^{100} X_i$ be the total. Each $X_i$ has
+$\mu = 7/2$ and $\sigma^2 = 35/12$ (Lesson~10). By the CLT,
+\[
+    S_{100} \;\dot\sim\; \mathcal{N}(350, 100 \cdot 35/12)
+    = \mathcal{N}(350, 291.67).
+\]
+The probability that $S_{100}$ exceeds $375$ is approximately
+\[
+    \Prob(S_{100} > 375) \approx \Prob\!\left(Z > \frac{375 - 350}{\sqrt{291.67}}\right)
+    = \Prob(Z > 1.464) \approx 0.072.
+\]
+Despite the discrete, non-Gaussian distribution of each $X_i$, the
+sum is well-approximated by a normal distribution.
+\end{example}
+
+\begin{rlconnection}[title={CLT and Confidence Intervals for
+    Policy Evaluation}]
+In Monte Carlo policy evaluation, the CLT provides confidence
+intervals for the estimated value function. If $G^{(1)}, \ldots,
+G^{(n)}$ are i.i.d.\ returns with mean $V^\pi(s)$ and variance
+$\sigma^2$, then by the CLT an approximate $95\%$ confidence
+interval for $V^\pi(s)$ is
+\[
+    \bar{G}_n \pm 1.96 \cdot \frac{\hat{\sigma}}{\sqrt{n}},
+\]
+where $\hat{\sigma}$ is the sample standard deviation. This is how
+practitioners assess the precision of value estimates and decide
+when to stop collecting episodes.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: TAIL BOUNDS AND SAMPLE COMPLEXITY
+%% ============================================================
+
+\section{Tail Bounds and Sample Complexity}
+\label{sec:tail_bounds}
+
+The Chebyshev bound provides a polynomial ($1/n$) rate of
+concentration. For bounded random variables, we can obtain much
+tighter exponential bounds via the Chernoff method and Hoeffding's
+inequality.
+
+\subsection{Chebyshev Confidence Interval}
+
+Before developing Hoeffding's inequality, let us formalize the sample
+complexity implied by Chebyshev's inequality.
+
+\begin{proposition}[Chebyshev Sample Complexity]
+\label{prop:chebyshev_sample}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with mean $\mu$ and variance
+$\sigma^2$. To ensure
+$\Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \delta$,
+it suffices to take
+\[
+    n \geq \frac{\sigma^2}{\varepsilon^2 \delta}.
+\]
+\end{proposition}
+
+\begin{proof}
+From Chebyshev's inequality
+(Example~\ref{ex:chebyshev_mean}),
+$\Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \sigma^2/(n\varepsilon^2)$.
+Setting $\sigma^2/(n\varepsilon^2) \leq \delta$ and solving for $n$
+gives $n \geq \sigma^2/(\varepsilon^2 \delta)$.
+\end{proof}
+
+\begin{example}[Chebyshev Sample Size]
+\label{ex:chebyshev_sample}
+For i.i.d.\ Bernoulli rewards with $\sigma^2 \leq 1/4$, to estimate
+the mean within $\varepsilon = 0.05$ with probability at least
+$1 - \delta = 0.95$ ($\delta = 0.05$), Chebyshev requires
+\[
+    n \geq \frac{1/4}{0.05^2 \cdot 0.05} = \frac{0.25}{0.000125} = 2000.
+\]
+\end{example}
+
+\subsection{The Chernoff Method}
+
+The key idea for obtaining exponential tail bounds is the
+\emph{Chernoff method}: apply Markov's inequality to $e^{tX}$ for
+an optimally chosen $t > 0$.
+
+\begin{proposition}[Chernoff Bound -- Upper Tail]
+\label{prop:chernoff}
+For any random variable $X$ and $a \in \R$,
+\[
+    \Prob(X \geq a) \leq \inf_{t > 0} e^{-ta} M_X(t),
+\]
+provided the MGF $M_X(t)$ exists.
+\end{proposition}
+
+\begin{proof}
+For any $t > 0$, the event $\{X \geq a\}$ is equivalent to
+$\{e^{tX} \geq e^{ta}\}$. Since $e^{tX} \geq 0$, Markov's
+inequality gives
+\[
+    \Prob(X \geq a) = \Prob(e^{tX} \geq e^{ta})
+    \leq \frac{\E[e^{tX}]}{e^{ta}} = e^{-ta} M_X(t).
+\]
+This holds for every $t > 0$, so we can take the infimum over $t > 0$.
+\end{proof}
+
+\subsection{Hoeffding's Lemma}
+
+\begin{lemma}[Hoeffding's Lemma]
+\label{lem:hoeffding}
+Let $X$ be a random variable with $\E[X] = 0$ and $a \leq X \leq b$
+almost surely. Then for all $t \in \R$,
+\[
+    \E[e^{tX}] \leq \exp\!\left(\frac{t^2(b-a)^2}{8}\right).
+\]
+\end{lemma}
+
+\begin{proof}
+Since $a \leq X \leq b$, the random variable $X$ can be written as
+a convex combination of the endpoints. For any $x \in [a, b]$,
+\[
+    x = \frac{b - x}{b - a} \cdot a + \frac{x - a}{b - a} \cdot b.
+\]
+Since $e^{tx}$ is convex in $x$ (it is the exponential function
+composed with a linear function), we have
+\[
+    e^{tx} \leq \frac{b - x}{b - a} e^{ta} + \frac{x - a}{b - a} e^{tb}.
+\]
+Taking expectations (and using $\E[X] = 0$):
+\begin{align}
+    \E[e^{tX}] &\leq \frac{b - \E[X]}{b - a} e^{ta}
+    + \frac{\E[X] - a}{b - a} e^{tb} \nonumber \\
+    &= \frac{b}{b - a} e^{ta} + \frac{-a}{b - a} e^{tb}. \label{eq:hoeffding_step1}
+\end{align}
+Define $p = -a/(b-a)$ (note $p \in [0,1]$ since $a \leq 0 \leq b$,
+which follows from $\E[X] = 0$ and $a \leq X \leq b$) and
+$u = t(b-a)$. Then \eqref{eq:hoeffding_step1} becomes
+\[
+    \E[e^{tX}] \leq (1-p) e^{-pu} + p \, e^{(1-p)u}
+    = e^{\varphi(u)},
+\]
+where $\varphi(u) = -pu + \ln(1 - p + pe^u)$.
+
+We claim that $\varphi(u) \leq u^2/8$ for all $u \in \R$. To
+verify this, note $\varphi(0) = 0$ and $\varphi'(0) = 0$:
+\[
+    \varphi'(u) = -p + \frac{pe^u}{1 - p + pe^u},
+    \qquad
+    \varphi'(0) = -p + \frac{p}{1} = 0.
+\]
+The second derivative is
+\[
+    \varphi''(u) = \frac{pe^u(1 - p + pe^u) - (pe^u)^2}{(1-p+pe^u)^2}
+    = \frac{pe^u(1-p)}{(1-p+pe^u)^2}.
+\]
+Let $q = pe^u / (1 - p + pe^u) \in (0,1)$. Then
+$\varphi''(u) = q(1-q) \leq 1/4$
+(since $q(1-q)$ achieves its maximum of $1/4$ at $q = 1/2$).
+
+By Taylor's theorem with Lagrange remainder, there exists $\xi$
+between $0$ and $u$ such that
+\[
+    \varphi(u) = \varphi(0) + \varphi'(0)u + \frac{1}{2}\varphi''(\xi)u^2
+    = \frac{1}{2}\varphi''(\xi)u^2
+    \leq \frac{u^2}{8}.
+\]
+Since $u = t(b-a)$, we conclude
+$\E[e^{tX}] \leq e^{t^2(b-a)^2/8}$.
+\end{proof}
+
+\subsection{Hoeffding's Inequality}
+
+\begin{theorem}[Hoeffding's Inequality]
+\label{thm:hoeffding}
+Let $X_1, \ldots, X_n$ be independent random variables with
+$a_i \leq X_i \leq b_i$ almost surely for each $i$. Let
+$S_n = \sum_{i=1}^n X_i$ and $\mu = \E[S_n]$. Then for any
+$t > 0$,
+\[
+    \Prob(S_n - \mu \geq t)
+    \leq \exp\!\left(-\frac{2t^2}{\sum_{i=1}^n (b_i - a_i)^2}\right)
+\]
+and
+\[
+    \Prob(|S_n - \mu| \geq t)
+    \leq 2\exp\!\left(-\frac{2t^2}{\sum_{i=1}^n (b_i - a_i)^2}\right).
+\]
+\end{theorem}
+
+\begin{proof}
+Define $Y_i = X_i - \E[X_i]$, so $\E[Y_i] = 0$ and
+$a_i - \E[X_i] \leq Y_i \leq b_i - \E[X_i]$. The width of the
+interval for $Y_i$ is still $b_i - a_i$. Also,
+$S_n - \mu = \sum_{i=1}^n Y_i$.
+
+For any $s > 0$, by the Chernoff method
+(Proposition~\ref{prop:chernoff}):
+\begin{align*}
+    \Prob(S_n - \mu \geq t)
+    &= \Prob\!\left(e^{s(S_n - \mu)} \geq e^{st}\right)
+    \leq e^{-st} \, \E\!\left[e^{s \sum_{i=1}^n Y_i}\right].
+\end{align*}
+Since the $Y_i$ are independent,
+\[
+    \E\!\left[e^{s \sum_i Y_i}\right]
+    = \prod_{i=1}^n \E[e^{sY_i}].
+\]
+By Hoeffding's lemma (Lemma~\ref{lem:hoeffding}), each factor
+satisfies $\E[e^{sY_i}] \leq \exp(s^2(b_i - a_i)^2/8)$.
+Therefore
+\[
+    \Prob(S_n - \mu \geq t)
+    \leq e^{-st} \prod_{i=1}^n \exp\!\left(\frac{s^2(b_i-a_i)^2}{8}\right)
+    = \exp\!\left(-st + \frac{s^2}{8}\sum_{i=1}^n (b_i-a_i)^2\right).
+\]
+Minimizing over $s > 0$: the exponent
+$h(s) = -st + \frac{s^2}{8}\sum_i (b_i - a_i)^2$ is a quadratic in
+$s$ with minimum at
+\[
+    s^* = \frac{4t}{\sum_{i=1}^n (b_i - a_i)^2}.
+\]
+Substituting:
+\[
+    h(s^*) = -\frac{4t^2}{\sum_i(b_i-a_i)^2}
+    + \frac{16t^2}{8(\sum_i(b_i-a_i)^2)}
+    = -\frac{4t^2}{\sum_i(b_i-a_i)^2}
+    + \frac{2t^2}{\sum_i(b_i-a_i)^2}
+    = -\frac{2t^2}{\sum_i(b_i-a_i)^2}.
+\]
+This gives the one-sided bound. For the two-sided bound, apply the
+same argument to $-Y_i$ (which has the same width) to get
+$\Prob(S_n - \mu \leq -t) \leq
+\exp(-2t^2/\sum_i(b_i-a_i)^2)$,
+then use the union bound.
+\end{proof}
+
+\begin{corollary}[Hoeffding for i.i.d.\ Bounded Variables]
+\label{cor:hoeffding_iid}
+If $X_1, \ldots, X_n$ are i.i.d.\ with $a \leq X_i \leq b$ and
+$\mu = \E[X_1]$, then for the sample mean
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$,
+\[
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon)
+    \leq 2\exp\!\left(-\frac{2n\varepsilon^2}{(b-a)^2}\right).
+\]
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:hoeffding} to $S_n = n\bar{X}_n$ with
+$t = n\varepsilon$ and $b_i - a_i = b - a$ for all $i$:
+\[
+    \Prob(|n\bar{X}_n - n\mu| \geq n\varepsilon)
+    \leq 2\exp\!\left(-\frac{2n^2\varepsilon^2}{n(b-a)^2}\right)
+    = 2\exp\!\left(-\frac{2n\varepsilon^2}{(b-a)^2}\right). \qedhere
+\]
+\end{proof}
+
+\subsection{Sample Complexity via Hoeffding}
+
+\begin{proposition}[Hoeffding Sample Complexity]
+\label{prop:hoeffding_sample}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with $a \leq X_i \leq b$. To
+ensure $\Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \delta$,
+it suffices to take
+\[
+    n \geq \frac{(b-a)^2}{2\varepsilon^2} \ln\frac{2}{\delta}.
+\]
+\end{proposition}
+
+\begin{proof}
+By Corollary~\ref{cor:hoeffding_iid}, we need
+$2\exp(-2n\varepsilon^2/(b-a)^2) \leq \delta$. Solving:
+\[
+    \exp\!\left(-\frac{2n\varepsilon^2}{(b-a)^2}\right)
+    \leq \frac{\delta}{2},
+    \quad\text{so}\quad
+    \frac{2n\varepsilon^2}{(b-a)^2} \geq \ln\frac{2}{\delta},
+    \quad\text{i.e.,}\quad
+    n \geq \frac{(b-a)^2}{2\varepsilon^2}\ln\frac{2}{\delta}. \qedhere
+\]
+\end{proof}
+
+\begin{example}[Hoeffding vs.\ Chebyshev Sample Size]
+\label{ex:hoeffding_vs_chebyshev}
+Consider the same setting as Example~\ref{ex:chebyshev_sample}:
+i.i.d.\ Bernoulli rewards with $a = 0$, $b = 1$,
+$\varepsilon = 0.05$, and $\delta = 0.05$. Hoeffding requires
+\[
+    n \geq \frac{(1-0)^2}{2 \cdot 0.05^2}\ln\frac{2}{0.05}
+    = \frac{1}{0.005} \ln(40)
+    = 200 \cdot 3.689 \approx 738.
+\]
+Compare with Chebyshev's requirement of $n \geq 2000$. Hoeffding
+gives a nearly $2.7\times$ reduction in sample size. This
+improvement comes from exploiting the bounded range of the variable,
+not just its variance.
+\end{example}
+
+\begin{keyresult}[title={Sample Complexity: Chebyshev vs.\ Hoeffding}]
+For estimating the mean of bounded i.i.d.\ random variables
+$X_i \in [a, b]$ within accuracy $\varepsilon$ and confidence
+$1 - \delta$:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Method} & \textbf{Sample complexity} & \textbf{Dependence on $\delta$} \\
+\midrule
+Chebyshev & $n \geq \sigma^2 / (\varepsilon^2 \delta)$
+    & Polynomial: $O(1/\delta)$ \\
+Hoeffding & $n \geq \frac{(b-a)^2}{2\varepsilon^2}\ln(2/\delta)$
+    & Logarithmic: $O(\ln(1/\delta))$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+For high-confidence estimates (small $\delta$), Hoeffding's
+logarithmic dependence on $1/\delta$ vastly outperforms Chebyshev's
+polynomial dependence. This is why exponential tail bounds are
+essential in PAC learning theory.
+\end{keyresult}
+
+\begin{rlconnection}[title={Monte Carlo Policy Evaluation Sample
+    Complexity}]
+Consider estimating $V^\pi(s)$ by averaging $n$ i.i.d.\ returns
+$G^{(1)}, \ldots, G^{(n)}$. If rewards are bounded in $[0, R_{\max}]$
+and the discount factor is $\gamma < 1$, each return satisfies
+$0 \leq G^{(i)} \leq R_{\max}/(1 - \gamma)$. By
+Proposition~\ref{prop:hoeffding_sample},
+\[
+    n \geq \frac{R_{\max}^2}{2(1-\gamma)^2 \varepsilon^2}
+    \ln\frac{2}{\delta}
+\]
+episodes suffice to ensure
+$|\bar{G}_n - V^\pi(s)| < \varepsilon$ with probability at least
+$1 - \delta$. This is the basic sample complexity of Monte Carlo
+policy evaluation. Note the dependence on $(1-\gamma)^{-2}$: as the
+discount factor approaches $1$, the effective horizon grows and far
+more episodes are needed.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[MGF Computations]
+\textnormal{(\(\ast\))} \\
+Let $X \sim \mathrm{Geometric}(p)$ with
+$\Prob(X = k) = (1-p)^{k-1}p$ for $k = 1, 2, \ldots$
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute the MGF $M_X(t)$ and determine the values of $t$
+    for which it is finite.
+    \item Use the MGF to compute $\E[X]$ and $\Var(X)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Jensen's Inequality Applications]
+\textnormal{(\(\ast\))} \\
+Let $X$ be a positive random variable with finite expectation.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Use Jensen's inequality with $g(x) = 1/x$ (which is convex
+    on $(0, \infty)$) to prove that $\E[1/X] \geq 1/\E[X]$.
+    \item Use Jensen with $g(x) = -\ln x$ to prove that
+    $\E[\ln X] \leq \ln(\E[X])$.
+    \item Let $X \sim \mathrm{Uniform}(1, 3)$. Verify part (a)
+    numerically by computing both $\E[1/X]$ and $1/\E[X]$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Chebyshev Sharpness]
+\textnormal{(\(\ast\ast\))} \\
+Construct a random variable $X$ with $\E[X] = 0$ and $\Var(X) = 1$
+such that $\Prob(|X| \geq 2) = 1/4$, showing that Chebyshev's
+bound $\Prob(|X| \geq 2) \leq 1/4$ is tight for $k = 2$.
+\\
+\textit{Hint:} Consider a three-point distribution.
+\end{exercise}
+
+\begin{exercise}[WLLN Does Not Require Identical Distributions]
+\textnormal{(\(\ast\ast\))} \\
+Let $X_1, X_2, \ldots$ be independent (but not necessarily
+identically distributed) random variables with $\E[X_i] = \mu$ for
+all $i$ and $\Var(X_i) \leq C$ for some constant $C < \infty$.
+Use Chebyshev's inequality to prove that
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i \cprob \mu$.
+\end{exercise}
+
+\begin{exercise}[Monte Carlo Sample Complexity]
+\textnormal{(\(\ast\ast\))} \\
+An RL agent estimates $V^\pi(s)$ using Monte Carlo rollouts. Rewards
+are bounded in $[0, 1]$ and $\gamma = 0.99$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute the range $[0, R_{\max}/(1-\gamma)]$ of a single
+    discounted return.
+    \item Using Hoeffding's inequality, how many episodes are needed
+    to ensure the estimate is within $\varepsilon = 0.5$ of the true
+    value with probability at least $0.95$?
+    \item How does the answer change if $\gamma = 0.9$?
+    \item Compare the Hoeffding sample complexity with the Chebyshev
+    sample complexity, using the bound
+    $\Var(G) \leq (b-a)^2/4$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Proving Hoeffding via Symmetrization]
+\textnormal{(\(\ast\ast\ast\))} \\
+Let $X$ be a random variable with $\E[X] = 0$ and $a \leq X \leq b$.
+An alternative route to Hoeffding's lemma uses the following steps:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Let $X'$ be an independent copy of $X$. Show that
+    $\E[e^{t(X - X')}] \leq \E[e^{tX}]^2$.
+
+    \textit{Hint:} Use Jensen's inequality applied to the conditional
+    expectation $\E[e^{-tX'} \mid X]$.
+    \item The symmetric variable $X - X'$ satisfies
+    $|X - X'| \leq b - a$. Using the fact that a symmetric bounded
+    random variable $Y$ with $|Y| \leq c$ satisfies
+    $\E[e^{tY}] \leq e^{t^2 c^2 / 2}$ (which can be shown via the
+    Taylor series of $\cosh$), conclude that
+    $\E[e^{tX}] \leq e^{t^2(b-a)^2/8}$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{moment generating function} $M_X(t) = \E[e^{tX}]$
+    encodes all moments via $\E[X^n] = M_X^{(n)}(0)$ and, when it
+    exists in a neighborhood of the origin, uniquely determines the
+    distribution.
+    \item The MGF of a sum of independent random variables factorizes:
+    $M_{X+Y}(t) = M_X(t) M_Y(t)$. This immediately shows that sums
+    of independent Poissons are Poisson and sums of independent
+    normals are normal.
+    \item \emph{Markov's inequality}
+    $\Prob(X \geq a) \leq \E[X]/a$ requires only non-negativity and
+    a finite first moment.
+    \item \emph{Chebyshev's inequality}
+    $\Prob(|X - \mu| \geq k) \leq \sigma^2/k^2$ uses the first
+    two moments and gives polynomial tail decay.
+    \item \emph{Cauchy-Schwarz}
+    $|\E[XY]|^2 \leq \E[X^2]\E[Y^2]$ and \emph{Jensen's inequality}
+    $g(\E[X]) \leq \E[g(X)]$ (for convex $g$) are workhorse tools
+    throughout probability and optimization.
+    \item The \emph{weak law of large numbers} states
+    $\bar{X}_n \cprob \mu$ (proved via Chebyshev); the \emph{strong
+    law} strengthens this to $\bar{X}_n \cas \mu$ (proof deferred to
+    Phase~01).
+    \item The \emph{central limit theorem} states
+    $\sqrt{n}(\bar{X}_n - \mu)/\sigma \cdist \mathcal{N}(0,1)$:
+    sample means are approximately normal for large $n$, regardless
+    of the underlying distribution.
+    \item \emph{Hoeffding's inequality} provides exponential
+    concentration for bounded random variables:
+    $\Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq
+    2e^{-2n\varepsilon^2/(b-a)^2}$.
+    \item The Hoeffding sample complexity
+    $n \geq \frac{(b-a)^2}{2\varepsilon^2}\ln(2/\delta)$
+    depends logarithmically on $1/\delta$, vastly outperforming
+    Chebyshev's polynomial dependence for high-confidence estimation.
+\end{itemize}
+
+\bigskip
+
+As the capstone lesson of the Probability subdomain, we now review
+the arc of Lessons~9--12.
+
+\begin{center}
+\begin{tabular}{@{}clp{7.5cm}@{}}
+\toprule
+\textbf{Lesson} & \textbf{Title} & \textbf{Core Contribution} \\
+\midrule
+9 & Probability Spaces and Conditioning
+  & Kolmogorov axioms, conditional probability, Bayes' theorem,
+    independence. Provides the foundational language. \\
+10 & Random Variables and Distributions
+  & Random variables, PMF/PDF/CDF, Bernoulli, Binomial, Geometric,
+    Poisson, Uniform, Exponential, Normal distributions.
+    Introduces the objects we compute with. \\
+11 & Expectation, Variance, and Joint Distributions
+  & Linearity of expectation, LOTUS, variance, covariance, joint
+    and conditional distributions, tower property, law of total
+    variance. Provides the computational machinery. \\
+12 & Inequalities and Limit Theorems
+  & MGFs, Markov/Chebyshev/Cauchy-Schwarz/Jensen inequalities,
+    WLLN, CLT, Hoeffding's inequality, sample complexity bounds.
+    Provides the asymptotic and finite-sample guarantees. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Phase 01, Lesson 4} (Measure Spaces) provides the
+    measure-theoretic foundations that make the definitions in
+    Lessons~9--12 fully rigorous, replacing finite sums and integrals
+    with Lebesgue integration.
+    \item \textbf{Phase 01, Lesson 5} (Probability Foundations)
+    revisits convergence concepts, proves the strong law of large
+    numbers using the Borel-Cantelli lemma, establishes the CLT via
+    characteristic functions, and develops martingale theory.
+    \item \textbf{Phase 01, Lesson 5} also covers the
+    \emph{Azuma-Hoeffding inequality} for martingale difference
+    sequences, which generalizes Hoeffding's inequality to dependent
+    random variables -- essential for analyzing online RL algorithms
+    where successive observations are correlated.
+    \item \textbf{Phase 02} (Core RL) uses the law of large numbers
+    to justify Monte Carlo estimation, Chebyshev and Hoeffding
+    inequalities for finite-sample convergence bounds, and the CLT
+    for asymptotic confidence intervals in policy evaluation.
+    \item For a comprehensive treatment of concentration inequalities
+    beyond Hoeffding (including Bernstein, Bennett, and
+    McDiarmid's inequalities), see
+    \citet[Chapter 2]{durrett2019} and \citet[Appendix A]{grimmett2020}.
+    \item The Chernoff bound technique (optimizing over $t$ in
+    Markov's inequality applied to $e^{tX}$) is a special case of
+    the \emph{exponential tilting} method, which plays a central
+    role in large deviations theory; see \citet[Chapter 8]{feller1968}
+    for an introduction.
+    \item Historically, the law of large numbers was first proved by
+    Jakob Bernoulli (1713) in a special case (Bernoulli trials).
+    Chebyshev (1867) gave the first general proof using
+    his inequality. The central limit theorem was established by
+    Lindeberg (1922) and Feller (1935) under progressively weaker
+    conditions.
+\end{itemize}
+
+\bibliography{probability-refs}
+
+\end{document}
