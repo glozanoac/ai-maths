@@ -1,332 +1,424 @@
 \documentclass[11pt,a4paper]{article}
-
-% --- Encoding and fonts ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-
-% --- Mathematics ---
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-
-% --- Page geometry ---
-\usepackage[margin=1in,headheight=14pt]{geometry}
-
-% --- Hyperlinks ---
-\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
-
-% --- Lists ---
-\usepackage{enumitem}
-
-% --- Colors and boxes ---
-\usepackage{xcolor}
-\usepackage[theorems,skins,breakable]{tcolorbox}
-
-% --- Header/Footer ---
-\usepackage{fancyhdr}
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textsc{Lesson 8: Convex Analysis}}
+\fancyhead[L]{\textsc{Lesson 23: Convex Sets}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% --- Tables ---
-\usepackage{booktabs}
-
-% --------------------------------------------------------------------------
-% Theorem environments
-% --------------------------------------------------------------------------
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{definition}
-\newtheorem{definition}[theorem]{Definition}
-\newtheorem{example}[theorem]{Example}
-\newtheorem{exercise}[theorem]{Exercise}
-
-\theoremstyle{remark}
-\newtheorem{remark}[theorem]{Remark}
-
-% --------------------------------------------------------------------------
-% Colored boxes
-% --------------------------------------------------------------------------
-\newtcolorbox{keyresult}[1][]{%
-  colback=green!5!white,
-  colframe=green!50!black,
-  fonttitle=\bfseries,
-  title={Key Result},
-  breakable,
-  #1
-}
-
-\newtcolorbox{rlconnection}[1][]{%
-  colback=blue!5!white,
-  colframe=blue!50!black,
-  fonttitle=\bfseries,
-  title={RL/ML Connection},
-  breakable,
-  #1
-}
-
-\newtcolorbox{warning}[1][]{%
-  colback=red!5!white,
-  colframe=red!50!black,
-  fonttitle=\bfseries,
-  title={Warning},
-  breakable,
-  #1
-}
-
-% --------------------------------------------------------------------------
-% Custom commands
-% --------------------------------------------------------------------------
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\epi}{epi}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\relint}{relint}
-\DeclareMathOperator{\aff}{aff}
-\DeclareMathOperator{\interior}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\tr}{tr}
-\DeclareMathOperator{\diag}{diag}
-\DeclareMathOperator{\rank}{rank}
-\DeclareMathOperator{\sgn}{sgn}
-
-% --------------------------------------------------------------------------
+\title{Lesson 23: Convex Sets}
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{0}
+%% ========================================================================
+%% SECTION 1: MOTIVATION
+%% ========================================================================
 
-\section{Introduction: Why Convex Analysis for RL/ML}
+\section{Motivation}
 
-Convex analysis provides the geometric and analytic foundation for optimization, which
-in turn underlies virtually every learning algorithm. This document develops the theory
-of convex sets and convex functions from first principles, with complete proofs,
-following the treatment in Boyd \& Vandenberghe Chapters 2--3.
-
-\textbf{What we cover.}
-\begin{enumerate}[label=(\roman*)]
-  \item \textbf{Convex sets}: definitions, key examples, operations preserving convexity,
-        and the supporting/separating hyperplane theorems.
-  \item \textbf{Convex functions}: first- and second-order characterizations with full
-        proofs, Jensen's inequality, and the epigraph connection.
-  \item \textbf{Operations preserving convexity} of functions: pointwise suprema,
-        composition rules, and perspective transforms.
-  \item \textbf{Conjugate functions}: the Fenchel conjugate, worked examples, and
-        Fenchel's inequality.
-  \item \textbf{Sublevel sets and quasiconvexity}: definitions and basic properties.
-  \item \textbf{Log-concave and log-convex functions}: closure properties with
-        applications to probability.
-\end{enumerate}
+Convex sets form the geometric foundation of optimization theory.  The
+distinction between convex and non-convex feasible regions determines whether an
+optimization problem is tractable (solvable in polynomial time with global
+guarantees) or fundamentally hard (NP-hard in general).  Every algorithm we
+study in later lessons---gradient descent, interior-point methods, proximal
+operators---relies on structural properties of convex sets established here.
 
 \begin{rlconnection}
-Convexity appears throughout machine learning and reinforcement learning:
+Convex sets appear throughout reinforcement learning and machine learning:
 \begin{itemize}
-  \item \textbf{Loss functions}: Most supervised learning objectives (squared error,
-        cross-entropy, hinge loss) are convex in the model parameters for linear models.
-  \item \textbf{Policy optimization}: The KL-divergence constraint in TRPO/PPO defines a
-        convex trust region. Understanding convex duality clarifies why the constrained
-        policy update admits an efficient solution.
-  \item \textbf{Value function geometry}: The Bellman optimality operator preserves
-        concavity of the value function in certain state-action structures.
-  \item \textbf{Fenchel duality}: Conjugate functions connect primal and dual
-        optimization formulations, central to regularized MDPs and inverse RL.
-  \item \textbf{Jensen's inequality}: Foundational for bounding expectations, variance
-        reduction, and importance sampling analysis.
+  \item \textbf{LP formulation of MDPs.}  The set of valid occupancy measures
+        for a Markov decision process is a polyhedron (intersection of finitely
+        many halfspaces), and solving the MDP reduces to a linear program over
+        this convex set.
+  \item \textbf{Trust regions.}  In TRPO and PPO the policy update is
+        constrained to a KL-divergence ball around the current policy.  This
+        trust region is a convex set in the space of distributions.
+  \item \textbf{Constraint sets.}  Safety constraints in constrained MDPs
+        (e.g., cost budgets) define convex feasible regions whose geometry
+        governs dual decomposition methods.
+  \item \textbf{Positive semidefinite cone.}  Covariance matrices,
+        kernel matrices, and semidefinite relaxations all live in the PSD cone,
+        a fundamental convex cone.
 \end{itemize}
 \end{rlconnection}
 
-\textbf{Prerequisites.} Familiarity with real analysis (limits, continuity,
-differentiability), linear algebra (eigenvalues, positive semidefiniteness), and basic
-probability.
+\textbf{Prerequisites.}  Familiarity with real analysis (limits, continuity,
+compactness) and linear algebra (inner products, eigenvalues, positive
+semidefiniteness) from Phases 00--01.
+
+\textbf{References.}  Boyd and Vandenberghe~\cite{boyd2004}, Chapter~2;
+Rockafellar~\cite{rockafellar1970}, Chapters~1--11.
 
 %% ========================================================================
-%% SECTION 2: CONVEX SETS
+%% SECTION 2: AFFINE AND CONVEX SETS
 %% ========================================================================
 
-\section{Convex Sets}
+\section{Affine and Convex Sets}
 
-\subsection{Basic Definitions}
+\subsection{Lines and Affine Sets}
+
+\begin{definition}[Affine Combination]
+\label{def:affine-combination}
+An \emph{affine combination} of points $x_1, \ldots, x_k \in \R^n$ is any
+point of the form $\sum_{i=1}^k \theta_i x_i$ where $\sum_{i=1}^k \theta_i =
+1$ (the weights $\theta_i$ may be negative).
+\end{definition}
 
 \begin{definition}[Affine Set]
 \label{def:affine-set}
-A set $C \subseteq \R^n$ is \emph{affine} if for every $x_1, x_2 \in C$ and every
-$\theta \in \R$, the point $\theta x_1 + (1-\theta) x_2 \in C$. Equivalently, $C$
-contains the entire line through any two of its points.
+A set $C \subseteq \R^n$ is \emph{affine} if for every $x_1, x_2 \in C$ and
+every $\theta \in \R$, the point $\theta x_1 + (1-\theta) x_2 \in C$.
+Equivalently, $C$ contains the entire line through any two of its points.
 \end{definition}
+
+\begin{remark}
+Every affine set can be written as $C = \{x_0 + v : v \in V\}$ for some
+subspace $V \subseteq \R^n$ and a point $x_0 \in C$.  The subspace $V$ is
+uniquely determined and equals $\{x - y : x, y \in C\}$.  The \emph{affine
+dimension} of $C$ is $\dim V$.
+\end{remark}
+
+\subsection{Convex Sets}
 
 \begin{definition}[Convex Set]
 \label{def:convex-set}
-A set $C \subseteq \R^n$ is \emph{convex} if for every $x_1, x_2 \in C$ and every
-$\theta \in [0,1]$, we have
+A set $C \subseteq \R^n$ is \emph{convex} if for every $x_1, x_2 \in C$ and
+every $\theta \in [0,1]$:
 \[
   \theta x_1 + (1-\theta) x_2 \in C.
 \]
+Geometrically, the line segment between any two points of $C$ lies entirely
+in $C$.
 \end{definition}
+
+\begin{remark}
+Every affine set is convex (since $[0,1] \subset \R$), but the converse fails:
+for example, the closed unit ball is convex but not affine.
+\end{remark}
+
+\subsection{Convex Combinations and the Convex Hull}
 
 \begin{definition}[Convex Combination and Convex Hull]
 \label{def:convex-hull}
-A \emph{convex combination} of points $x_1, \ldots, x_k$ is any point of the form
-$\sum_{i=1}^k \theta_i x_i$ where $\theta_i \ge 0$ and $\sum_{i=1}^k \theta_i = 1$.
-The \emph{convex hull} of a set $S$ is
+A \emph{convex combination} of points $x_1, \ldots, x_k$ is any point of the
+form $\sum_{i=1}^k \theta_i x_i$ where $\theta_i \ge 0$ and $\sum_{i=1}^k
+\theta_i = 1$.  The \emph{convex hull} of a set $S$ is
 \[
   \conv(S) = \left\{ \sum_{i=1}^k \theta_i x_i \;\middle|\;
-    x_i \in S, \; \theta_i \ge 0, \;
-    \sum_{i=1}^k \theta_i = 1, \; k \in \N \right\}.
+    x_i \in S,\; \theta_i \ge 0,\;
+    \sum_{i=1}^k \theta_i = 1,\; k \in \N \right\}.
 \]
 \end{definition}
 
-\begin{proposition}[Convex Hull is the Smallest Convex Set]
+\begin{proposition}[Convex Hull is the Smallest Convex Superset]
 \label{prop:convex-hull-smallest}
-For any $S \subseteq \R^n$, $\conv(S)$ is convex, and $\conv(S) \subseteq C$ for every
-convex set $C$ containing $S$.
+For any $S \subseteq \R^n$, the set $\conv(S)$ is convex, and $\conv(S)
+\subseteq C$ for every convex set $C$ containing $S$.
 \end{proposition}
 
 \begin{proof}
-Let $x = \sum_{i=1}^k \alpha_i x_i$ and $y = \sum_{j=1}^m \beta_j y_j$ be two elements
-of $\conv(S)$, with $\alpha_i, \beta_j \ge 0$, $\sum \alpha_i = 1$, $\sum \beta_j = 1$.
-For $\theta \in [0,1]$,
+\textbf{Step 1: $\conv(S)$ is convex.}
+Let $x = \sum_{i=1}^k \alpha_i x_i$ and $y = \sum_{j=1}^m \beta_j y_j$ be
+two elements of $\conv(S)$, with $\alpha_i, \beta_j \ge 0$,
+$\sum_i \alpha_i = 1$, $\sum_j \beta_j = 1$.  For $\theta \in [0,1]$,
 \[
-  \theta x + (1-\theta) y = \sum_{i=1}^k \theta \alpha_i x_i
-    + \sum_{j=1}^m (1-\theta) \beta_j y_j.
+  \theta x + (1-\theta) y
+  = \sum_{i=1}^k \theta \alpha_i\, x_i
+    + \sum_{j=1}^m (1-\theta) \beta_j\, y_j.
 \]
-The coefficients $\theta \alpha_i$ and $(1-\theta)\beta_j$ are nonnegative and sum to
-$\theta + (1-\theta) = 1$, so this is a convex combination of points in $S$. Hence
-$\theta x + (1-\theta)y \in \conv(S)$, proving convexity.
+The coefficients $\theta \alpha_i$ and $(1-\theta)\beta_j$ are nonnegative and
+sum to $\theta \cdot 1 + (1-\theta) \cdot 1 = 1$, so this is a convex
+combination of points in $S$.  Hence $\theta x + (1-\theta) y \in \conv(S)$.
 
-Now let $C$ be any convex set with $S \subseteq C$. By induction on $k$, every convex
-combination of points in $S$ lies in $C$ (the base case $k=1$ is immediate; for the
-inductive step, write $\sum_{i=1}^{k+1} \theta_i x_i = \theta_{k+1} x_{k+1} +
-(1-\theta_{k+1}) \sum_{i=1}^k \frac{\theta_i}{1-\theta_{k+1}} x_i$, which is a convex
-combination of $x_{k+1} \in C$ and a point in $C$ by the inductive hypothesis). Thus
-$\conv(S) \subseteq C$.
+\textbf{Step 2: $\conv(S)$ is contained in every convex superset.}
+Let $C$ be any convex set with $S \subseteq C$.  We prove by induction on $k$
+that every convex combination of $k$ points in $S$ lies in $C$.
+
+\emph{Base case} ($k = 1$): $x_1 \in S \subseteq C$.
+
+\emph{Inductive step}: Given $\sum_{i=1}^{k+1} \theta_i x_i$ with
+$\theta_i \ge 0$, $\sum_i \theta_i = 1$.  If $\theta_{k+1} = 1$ the point
+equals $x_{k+1} \in C$.  Otherwise $\theta_{k+1} < 1$ and
+\[
+  \sum_{i=1}^{k+1} \theta_i x_i
+  = (1 - \theta_{k+1}) \sum_{i=1}^k
+    \frac{\theta_i}{1-\theta_{k+1}}\, x_i
+    \;+\; \theta_{k+1}\, x_{k+1}.
+\]
+The inner sum is a convex combination of $k$ points in $S$, hence in $C$ by
+the inductive hypothesis.  The outer expression is a convex combination of
+two points in $C$, hence in $C$ by convexity.  Therefore $\conv(S) \subseteq C$.
 \end{proof}
 
-\begin{definition}[Cone]
+\subsection{Cones}
+
+\begin{definition}[Cone and Convex Cone]
 \label{def:cone}
-A set $C$ is a \emph{cone} if for every $x \in C$ and $\theta \ge 0$, we have
-$\theta x \in C$. A set that is both convex and a cone is called a \emph{convex cone}.
-Equivalently, $C$ is a convex cone if and only if for all $x_1, x_2 \in C$ and
-$\theta_1, \theta_2 \ge 0$, we have $\theta_1 x_1 + \theta_2 x_2 \in C$.
+A set $C \subseteq \R^n$ is a \emph{cone} if for every $x \in C$ and every
+$\theta \ge 0$, we have $\theta x \in C$.  A set that is both convex and a cone
+is called a \emph{convex cone}.  Equivalently, $C$ is a convex cone if and only
+if for all $x_1, x_2 \in C$ and all $\theta_1, \theta_2 \ge 0$:
+\[
+  \theta_1 x_1 + \theta_2 x_2 \in C.
+\]
 \end{definition}
 
-\subsection{Important Examples}
+\begin{proof}[Proof of the equivalence]
+($\Rightarrow$) Let $C$ be a convex cone, $x_1, x_2 \in C$, and
+$\theta_1, \theta_2 \ge 0$.  If $\theta_1 + \theta_2 = 0$ the result is
+trivial ($0 \in C$ since $0 = 0 \cdot x_1$).  Otherwise set
+$\lambda = \theta_1 + \theta_2 > 0$.  Then $\theta_1 x_1 + \theta_2 x_2 =
+\lambda\bigl(\tfrac{\theta_1}{\lambda} x_1 + \tfrac{\theta_2}{\lambda}
+x_2\bigr)$.  The inner term is a convex combination of $x_1, x_2 \in C$,
+hence in $C$.  Scaling by $\lambda \ge 0$ preserves membership since $C$ is a
+cone.
+
+($\Leftarrow$) The cone property follows by setting $\theta_2 = 0$.
+Convexity follows because for $\theta \in [0,1]$, $\theta x_1 + (1-\theta)
+x_2$ has nonneg coefficients summing to 1.
+\end{proof}
+
+%% ========================================================================
+%% SECTION 3: IMPORTANT EXAMPLES
+%% ========================================================================
+
+\section{Important Examples}
 
 \begin{example}[Hyperplanes and Halfspaces]
 \label{ex:hyperplane}
-A \emph{hyperplane} is a set $\{x \in \R^n : a^T x = b\}$ for some $a \ne 0$. It is
-affine (hence convex). A \emph{halfspace} is $\{x : a^T x \le b\}$, which is convex.
+A \emph{hyperplane} is a set of the form
+$\{x \in \R^n : a^T x = b\}$ for some $a \ne 0$ and $b \in \R$.  Every
+hyperplane is affine (hence convex).  A \emph{halfspace} is
+$\{x \in \R^n : a^T x \le b\}$, which is convex but not affine (unless
+$a = 0$).
 \end{example}
 
 \begin{example}[Euclidean Balls and Ellipsoids]
 \label{ex:ball-ellipsoid}
-The Euclidean ball $B(x_c, r) = \{x : \|x - x_c\|_2 \le r\}$ is convex. More generally,
-an \emph{ellipsoid} is $\mathcal{E} = \{x : (x - x_c)^T P^{-1} (x - x_c) \le 1\}$
-where $P \succ 0$. Both are convex since the $\ell_2$-norm (and any norm) is a convex
-function, and sublevel sets of convex functions are convex (Proposition~\ref{prop:sublevel}).
+The (closed) \emph{Euclidean ball} centered at $x_c$ with radius $r > 0$ is
+\[
+  B(x_c, r) = \{x \in \R^n : \|x - x_c\|_2 \le r\}.
+\]
+It is convex: for $x, y \in B(x_c, r)$ and $\theta \in [0,1]$,
+\[
+  \|\theta x + (1-\theta) y - x_c\|_2
+  = \|\theta(x - x_c) + (1-\theta)(y - x_c)\|_2
+  \le \theta\|x - x_c\|_2 + (1-\theta)\|y - x_c\|_2
+  \le r.
+\]
+More generally, an \emph{ellipsoid} is
+$\mathcal{E} = \{x : (x - x_c)^T P^{-1} (x - x_c) \le 1\}$ where $P \succ 0$.
+This equals $\{x_c + Pu : \|u\|_2 \le 1\}$ (the affine image of the unit
+ball under $u \mapsto x_c + P^{1/2} u$), hence convex.
 \end{example}
 
 \begin{example}[Polyhedra]
 \label{ex:polyhedra}
-A \emph{polyhedron} is the intersection of finitely many halfspaces and hyperplanes:
-$\mathcal{P} = \{x : Ax \le b, \; Cx = d\}$. Every polyhedron is convex.
+A \emph{polyhedron} is the intersection of finitely many halfspaces and
+hyperplanes:
+\[
+  \mathcal{P} = \{x \in \R^n : Ax \le b,\; Cx = d\},
+\]
+where inequalities are componentwise.  Since each halfspace and hyperplane is
+convex, and the intersection of convex sets is convex
+(Proposition~\ref{prop:intersection} below), every polyhedron is convex.
+Bounded polyhedra are called \emph{polytopes}.
 \end{example}
 
-\begin{example}[Positive Semidefinite Cone]
+\begin{example}[The Positive Semidefinite Cone]
 \label{ex:psd-cone}
-The set $\mathbb{S}^n_+ = \{X \in \R^{n \times n} : X = X^T, \; X \succeq 0\}$ is a
-convex cone. Indeed, if $A, B \succeq 0$ and $\theta_1, \theta_2 \ge 0$, then for any
-$v \in \R^n$:
+Let $\mathbb{S}^n$ denote the set of real $n \times n$ symmetric matrices.
+The \emph{positive semidefinite (PSD) cone} is
 \[
-  v^T(\theta_1 A + \theta_2 B)v = \theta_1 v^T A v + \theta_2 v^T B v \ge 0.
+  \mathbb{S}^n_+ = \{X \in \mathbb{S}^n : X \succeq 0\}
+  = \{X \in \mathbb{S}^n : v^T X v \ge 0 \text{ for all } v \in \R^n\}.
 \]
+This is a convex cone.  Indeed, if $A, B \succeq 0$ and $\theta_1, \theta_2
+\ge 0$, then for any $v \in \R^n$:
+\[
+  v^T(\theta_1 A + \theta_2 B)v = \theta_1\, v^T A v + \theta_2\, v^T B v
+  \ge 0.
+\]
+Alternatively, $\mathbb{S}^n_+ = \bigcap_{v \in \R^n} \{X \in \mathbb{S}^n :
+v^T X v \ge 0\}$, an intersection of halfspaces in the space $\mathbb{S}^n
+\cong \R^{n(n+1)/2}$.
 \end{example}
 
 \begin{rlconnection}
-The PSD cone $\mathbb{S}^n_+$ appears in covariance matrix estimation (the covariance
-matrix is always PSD) and in semidefinite relaxations used for robust control and
-multi-agent coordination problems.
+The PSD cone $\mathbb{S}^n_+$ appears in covariance estimation (covariance
+matrices are PSD), in semidefinite programming relaxations for combinatorial
+problems, and in robust control for multi-agent systems where Lyapunov
+stability certificates require $P \succ 0$.
 \end{rlconnection}
 
-\subsection{Operations Preserving Convexity of Sets}
+%% ========================================================================
+%% SECTION 4: OPERATIONS PRESERVING CONVEXITY
+%% ========================================================================
 
-\begin{proposition}[Intersection]
+\section{Operations Preserving Convexity}
+
+\subsection{Intersection}
+
+\begin{proposition}[Intersection Preserves Convexity]
 \label{prop:intersection}
-If $\{C_\alpha\}_{\alpha \in A}$ is any (possibly infinite) family of convex sets, then
-$\bigcap_{\alpha \in A} C_\alpha$ is convex.
+If $\{C_\alpha\}_{\alpha \in A}$ is any (possibly infinite) family of convex
+sets, then $\bigcap_{\alpha \in A} C_\alpha$ is convex.
 \end{proposition}
 
 \begin{proof}
-Let $x, y \in \bigcap_\alpha C_\alpha$ and $\theta \in [0,1]$. Then $x, y \in C_\alpha$
-for every $\alpha$, so $\theta x + (1-\theta) y \in C_\alpha$ for every $\alpha$ (by
-convexity of each $C_\alpha$). Hence $\theta x + (1-\theta) y \in \bigcap_\alpha
-C_\alpha$.
+Let $x, y \in \bigcap_\alpha C_\alpha$ and $\theta \in [0,1]$.  For every
+$\alpha$, $x, y \in C_\alpha$, so $\theta x + (1-\theta) y \in C_\alpha$
+by convexity of $C_\alpha$.  Since this holds for all $\alpha$,
+$\theta x + (1-\theta) y \in \bigcap_\alpha C_\alpha$.
 \end{proof}
 
-\begin{proposition}[Affine Image and Preimage]
+\begin{remark}
+The intersection rule is extremely useful: it allows us to show convexity of
+complicated sets by writing them as intersections of simple convex sets.  For
+instance, the PSD cone was expressed as an intersection of halfspaces in
+Example~\ref{ex:psd-cone}.
+\end{remark}
+
+\begin{warning}
+Unions of convex sets are \textbf{not} convex in general.  For example,
+$\{0\} \cup \{1\} \subset \R$ is not convex.
+\end{warning}
+
+\subsection{Affine Image and Preimage}
+
+\begin{proposition}[Affine Image and Preimage Preserve Convexity]
 \label{prop:affine-image}
-Let $f(x) = Ax + b$ be an affine map. If $C$ is convex, then $f(C) = \{Ax + b : x \in
-C\}$ is convex. If $D$ is convex, then $f^{-1}(D) = \{x : Ax + b \in D\}$ is convex.
+Let $f : \R^n \to \R^m$ be an affine map, $f(x) = Ax + b$.
+\begin{enumerate}[label=(\alph*)]
+  \item If $C \subseteq \R^n$ is convex, then $f(C) = \{Ax + b : x \in C\}$
+        is convex.
+  \item If $D \subseteq \R^m$ is convex, then $f^{-1}(D) = \{x : Ax + b \in
+        D\}$ is convex.
+\end{enumerate}
 \end{proposition}
 
 \begin{proof}
-For the image: let $u = Ax_1 + b, v = Ax_2 + b \in f(C)$ with $x_1, x_2 \in C$. Then
+\textbf{(a) Image.}  Let $u = Ax_1 + b$ and $v = Ax_2 + b$ be points in
+$f(C)$ with $x_1, x_2 \in C$.  For $\theta \in [0,1]$:
 \[
-  \theta u + (1-\theta)v = A(\theta x_1 + (1-\theta) x_2) + b = f(\theta x_1 +
-  (1-\theta) x_2) \in f(C),
+  \theta u + (1-\theta) v
+  = A\bigl(\theta x_1 + (1-\theta) x_2\bigr) + b
+  = f\bigl(\theta x_1 + (1-\theta) x_2\bigr).
 \]
-since $\theta x_1 + (1-\theta) x_2 \in C$.
+Since $\theta x_1 + (1-\theta) x_2 \in C$, we have
+$\theta u + (1-\theta) v \in f(C)$.
 
-For the preimage: let $x_1, x_2 \in f^{-1}(D)$, so $Ax_1 + b, Ax_2 + b \in D$. Then
-$A(\theta x_1 + (1-\theta) x_2) + b = \theta(Ax_1 + b) + (1-\theta)(Ax_2 + b) \in D$
-by convexity of $D$, so $\theta x_1 + (1-\theta) x_2 \in f^{-1}(D)$.
+\textbf{(b) Preimage.}  Let $x_1, x_2 \in f^{-1}(D)$, so $Ax_1 + b$ and
+$Ax_2 + b$ lie in $D$.  Then
+\[
+  A\bigl(\theta x_1 + (1-\theta) x_2\bigr) + b
+  = \theta(Ax_1 + b) + (1-\theta)(Ax_2 + b) \in D,
+\]
+by convexity of $D$.  Hence $\theta x_1 + (1-\theta) x_2 \in f^{-1}(D)$.
 \end{proof}
 
-\begin{proposition}[Perspective Function]
+\begin{corollary}
+\label{cor:affine-ops}
+The following operations preserve convexity:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Scaling and translation}: $\alpha C + a = \{\alpha x + a :
+        x \in C\}$ for any $\alpha \in \R$, $a \in \R^n$.
+  \item \textbf{Projection}: If $C \subseteq \R^m \times \R^n$ is convex,
+        then $\{x \in \R^m : (x, y) \in C \text{ for some } y \in \R^n\}$ is
+        convex (as the image under $(x,y) \mapsto x$).
+  \item \textbf{Minkowski sum}: $C_1 + C_2 = \{x + y : x \in C_1,\; y \in
+        C_2\}$ is convex whenever $C_1, C_2$ are convex (as the image of
+        $C_1 \times C_2$ under $(x,y) \mapsto x + y$).
+\end{enumerate}
+\end{corollary}
+
+\subsection{Perspective Function}
+
+\begin{proposition}[Perspective Function Preserves Convexity]
 \label{prop:perspective}
-The \emph{perspective function} $P : \R^{n+1} \to \R^n$ defined by $P(x, t) = x/t$ with
-$\dom P = \{(x,t) : t > 0\}$ preserves convexity: if $C \subseteq \dom P$ is convex,
-then $P(C)$ is convex; if $D \subseteq \R^n$ is convex, then $P^{-1}(D) = \{(x,t) :
-x/t \in D, \; t > 0\}$ is convex.
+The \emph{perspective function} $P : \R^{n+1} \to \R^n$ defined by
+$P(x, t) = x/t$ on $\dom P = \{(x,t) : t > 0\}$ preserves convexity in both
+directions:
+\begin{enumerate}[label=(\alph*)]
+  \item If $C \subseteq \dom P$ is convex, then $P(C) \subseteq \R^n$ is
+        convex.
+  \item If $D \subseteq \R^n$ is convex, then
+        $P^{-1}(D) = \{(x,t) : t > 0,\; x/t \in D\}$ is convex.
+\end{enumerate}
 \end{proposition}
 
 \begin{proof}
-For the image: let $(x_1, t_1), (x_2, t_2) \in C$ with $t_1, t_2 > 0$ and
-$\theta \in [0,1]$. The convex combination is $(\bar{x}, \bar{t}) = (\theta x_1 +
-(1-\theta) x_2, \; \theta t_1 + (1-\theta) t_2)$, and $\bar{t} > 0$. Then
+\textbf{(a)}  Let $(x_1, t_1), (x_2, t_2) \in C$ with $t_1, t_2 > 0$ and
+$\theta \in [0,1]$.  Define $\bar{t} = \theta t_1 + (1-\theta) t_2 > 0$.  By
+convexity of $C$:
 \[
-  P(\bar{x}, \bar{t}) = \frac{\theta x_1 + (1-\theta) x_2}{\theta t_1 + (1-\theta) t_2}
+  (\bar{x}, \bar{t})
+  := \bigl(\theta x_1 + (1-\theta) x_2,\; \bar{t}\bigr) \in C.
+\]
+Now compute
+\[
+  P(\bar{x}, \bar{t})
+  = \frac{\theta x_1 + (1-\theta) x_2}{\bar{t}}
   = \frac{\theta t_1}{\bar{t}} \cdot \frac{x_1}{t_1}
     + \frac{(1-\theta) t_2}{\bar{t}} \cdot \frac{x_2}{t_2}.
 \]
-The coefficients $\theta t_1 / \bar{t}$ and $(1-\theta) t_2 / \bar{t}$ are nonnegative and
-sum to 1, so this is a convex combination of $P(x_1, t_1)$ and $P(x_2, t_2)$, both in
-$P(C)$. Hence $P(\bar{x}, \bar{t}) \in P(C)$.
+The coefficients $\theta t_1 / \bar{t}$ and $(1-\theta) t_2 / \bar{t}$ are
+nonnegative and sum to 1, so this is a convex combination of $P(x_1, t_1)$ and
+$P(x_2, t_2)$.  Hence $P(\bar{x}, \bar{t}) \in \conv(P(C)) = P(C)$ (the last
+equality holds because we have shown every convex combination of image points
+is an image point).
 
-For the preimage: let $(x_1, t_1), (x_2, t_2) \in P^{-1}(D)$. Then $x_1/t_1, x_2/t_2
-\in D$. The same algebra shows $P(\theta(x_1,t_1) + (1-\theta)(x_2,t_2))$ is a convex
-combination of $x_1/t_1$ and $x_2/t_2$, hence in $D$.
+\textbf{(b)}  Let $(x_1, t_1), (x_2, t_2) \in P^{-1}(D)$, so
+$x_1/t_1, x_2/t_2 \in D$ and $t_1, t_2 > 0$.  The same algebraic identity
+shows $P(\theta(x_1,t_1) + (1-\theta)(x_2,t_2))$ is a convex combination of
+$x_1/t_1$ and $x_2/t_2$, hence lies in $D$.  Also $\bar{t} > 0$, so
+$(\bar{x}, \bar{t}) \in P^{-1}(D)$.
 \end{proof}
 
-\subsection{Separating and Supporting Hyperplane Theorems}
+\subsection{Linear-Fractional Functions}
+
+\begin{definition}[Linear-Fractional Function]
+\label{def:linear-fractional}
+A \emph{linear-fractional function} is $f : \R^n \to \R^m$ of the form
+\[
+  f(x) = \frac{Ax + b}{c^T x + d},
+\]
+where $A \in \R^{m \times n}$, $b \in \R^m$, $c \in \R^n$, $d \in \R$, and
+$\dom f = \{x : c^T x + d > 0\}$.
+\end{definition}
+
+\begin{proposition}[Linear-Fractional Functions Preserve Convexity]
+\label{prop:linfrac}
+If $C$ is a convex set contained in $\dom f$, then $f(C)$ is convex.
+If $D$ is convex, then $f^{-1}(D) = \{x \in \dom f : f(x) \in D\}$ is convex.
+\end{proposition}
+
+\begin{proof}
+A linear-fractional function is the composition of an affine map
+$g : \R^n \to \R^{m+1}$ defined by $g(x) = (Ax + b,\; c^T x + d)$ with the
+perspective function $P(z, t) = z/t$.  Both operations preserve convexity of
+images and preimages (Propositions~\ref{prop:affine-image}
+and~\ref{prop:perspective}), so their composition does as well.
+\end{proof}
+
+%% ========================================================================
+%% SECTION 5: SEPARATION THEOREMS
+%% ========================================================================
+
+\section{Separation Theorems}
+
+The separation theorems are the central results of this lesson.  They provide
+the geometric foundation for Lagrangian duality: every dual variable
+corresponds to a separating hyperplane.
+
+\subsection{Separating Hyperplane Theorem}
 
 \begin{theorem}[Separating Hyperplane Theorem]
 \label{thm:separating}
-Let $C$ and $D$ be nonempty, disjoint, convex subsets of $\R^n$. Then there exist
-$a \in \R^n$, $a \ne 0$, and $b \in \R$ such that
+Let $C, D \subseteq \R^n$ be nonempty, disjoint, convex sets.  Then there
+exist $a \in \R^n$ with $a \ne 0$ and $b \in \R$ such that
 \[
   a^T x \le b \quad \text{for all } x \in C, \qquad
   a^T x \ge b \quad \text{for all } x \in D.
@@ -334,64 +426,169 @@ $a \in \R^n$, $a \ne 0$, and $b \in \R$ such that
 \end{theorem}
 
 \begin{proof}
-We prove the case where $C$ and $D$ are closed and at least one is compact (the general
-case requires the Hahn--Banach theorem, which belongs to functional analysis).
+We give a complete proof under the assumption that $C$ is compact and $D$ is
+closed (the fully general case requires the Hahn--Banach theorem from
+functional analysis).
 
-Since $C$ and $D$ are closed with $C$ compact and $C \cap D = \emptyset$, the function
-$\phi(x, y) = \|x - y\|_2$ attains its minimum on $C \times D$ at some pair
-$(x^*, y^*)$. (Compactness of $C$ and closedness of $D$ together with the fact that
-$\|x - y\| \to \infty$ as $\|y\| \to \infty$ guarantee the minimum is attained.) Let
-$d = \|x^* - y^*\|_2 > 0$.
+\textbf{Step 1: Existence of closest points.}
+Define $\phi : C \times D \to \R$ by $\phi(x, y) = \|x - y\|_2$.  Since $C$
+is compact and $D$ is closed, and $\phi(x,y) \to \infty$ as $\|y\| \to
+\infty$, the infimum $d^* = \inf_{x \in C, y \in D} \|x - y\|_2$ is attained
+at some pair $(x^*, y^*)$.  Since $C \cap D = \emptyset$, $d^* > 0$.
 
-Set $a = y^* - x^*$ and $b = \tfrac{1}{2}(a^T y^* + a^T x^*) =
-\tfrac{1}{2}(\|y^*\|^2 - \|x^*\|^2)$ (after expanding $a = y^* - x^*$). We claim
-$a^T x \le b$ for all $x \in C$ and $a^T y \ge b$ for all $y \in D$.
+\textbf{Step 2: Construction of the separating hyperplane.}
+Set $a = y^* - x^*$ and $b = \tfrac{1}{2}(a^T x^* + a^T y^*)$.  We claim:
+$a^T x \le a^T x^*$ for all $x \in C$, and $a^T y \ge a^T y^*$ for all
+$y \in D$.  Since $a^T x^* < a^T y^*$ (as $a^T(y^* - x^*) = \|a\|_2^2 > 0$),
+the value $b$ separates $C$ and $D$.
 
-For $x \in C$: consider $g(t) = \|x^* + t(x - x^*) - y^*\|_2^2$ for $t \in [0,1]$.
-Since $x^* + t(x - x^*) \in C$ and $(x^*, y^*)$ minimizes the distance, $g(t) \ge
-g(0)$ for all $t \ge 0$, so $g'(0) \ge 0$:
+\textbf{Step 3: Proof for $C$.}
+Let $x \in C$ and define $g(t) = \|x^* + t(x - x^*) - y^*\|_2^2$ for
+$t \in [0,1]$.  Since $C$ is convex, $x^* + t(x - x^*) \in C$ for all
+$t \in [0,1]$.  By the minimality of $(x^*, y^*)$:
 \[
-  g'(0) = 2(x - x^*)^T(x^* - y^*) \ge 0,
+  g(t) = \|x^* + t(x - x^*) - y^*\|_2^2 \ge \|x^* - y^*\|_2^2 = g(0)
+  \quad \text{for all } t \in [0,1].
 \]
-i.e., $(x - x^*)^T a \le 0$, giving $a^T x \le a^T x^*$.
+The function $g$ is differentiable, so $g'(0) \ge 0$.  Computing:
+\[
+  g'(0) = 2(x - x^*)^T(x^* - y^*) = -2(x - x^*)^T a \ge 0.
+\]
+Rearranging: $a^T x \le a^T x^*$.
 
-Similarly, for $y \in D$: $h(t) = \|x^* - y^* - t(y - y^*)\|_2^2 \ge h(0)$
-gives $h'(0) \ge 0$, i.e., $(y - y^*)^T(y^* - x^*) \ge 0$, so $a^T y \ge a^T y^*$.
+\textbf{Step 4: Proof for $D$.}
+Let $y \in D$ and define $h(t) = \|x^* - y^* - t(y - y^*)\|_2^2$ for
+$t \in [0,1]$.  Since $D$ is convex, $y^* + t(y - y^*) \in D$, and by
+minimality:
+\[
+  h(t) = \|x^* - (y^* + t(y - y^*))\|_2^2 \ge \|x^* - y^*\|_2^2 = h(0).
+\]
+So $h'(0) \ge 0$:
+\[
+  h'(0) = -2(y - y^*)^T(x^* - y^*) = 2(y - y^*)^T a \ge 0.
+\]
+Rearranging: $a^T y \ge a^T y^*$.
 
-Since $a^T x \le a^T x^*$ for all $x \in C$ and $a^T y \ge a^T y^*$ for all $y \in D$,
-and $a^T x^* < a^T y^*$ (because $a^T(y^* - x^*) = \|a\|^2 > 0$), any
-$b \in [a^T x^*, a^T y^*]$ works. We choose $b = (a^T x^* + a^T y^*)/2$.
+\textbf{Conclusion.}
+We have $a^T x \le a^T x^*$ for all $x \in C$ and $a^T y \ge a^T y^*$ for all
+$y \in D$, with $a^T x^* < b < a^T y^*$.  In particular, $a^T x \le b$ for
+all $x \in C$ and $a^T y \ge b$ for all $y \in D$.
 \end{proof}
+
+\begin{keyresult}
+The separating hyperplane theorem is the geometric engine behind
+\textbf{Lagrangian duality}.  Every Lagrange multiplier defines a separating
+hyperplane between the feasible set (in objective-constraint space) and the
+half-plane of strictly better objectives.  Strong duality holds precisely when
+this separation is ``tight.''
+\end{keyresult}
+
+\subsection{Supporting Hyperplane Theorem}
 
 \begin{theorem}[Supporting Hyperplane Theorem]
 \label{thm:supporting}
-Let $C \subseteq \R^n$ be a nonempty convex set and let $x_0 \in \partial C$ (the
-boundary of $C$). Then there exists $a \ne 0$ such that $a^T x \le a^T x_0$ for all
-$x \in C$. The hyperplane $\{x : a^T x = a^T x_0\}$ is called a \emph{supporting
+Let $C \subseteq \R^n$ be a nonempty convex set and let $x_0 \in \partial C$
+(the boundary of $C$).  Then there exists $a \in \R^n$ with $a \ne 0$ such that
+\[
+  a^T x \le a^T x_0 \quad \text{for all } x \in C.
+\]
+The hyperplane $\{x : a^T x = a^T x_0\}$ is called a \emph{supporting
 hyperplane} to $C$ at $x_0$.
 \end{theorem}
 
 \begin{proof}
-Since $x_0 \in \partial C$, there is a sequence $\{y_k\}$ with $y_k \notin C$ and
-$y_k \to x_0$. For each $k$, apply the separating hyperplane theorem to the convex sets
-$C$ and $\{y_k\}$: there exists $a_k$ with $\|a_k\| = 1$ and $a_k^T x \le a_k^T y_k$
-for all $x \in C$. Since $\{a_k\}$ lies on the unit sphere (compact), it has a
-convergent subsequence $a_{k_j} \to a$ with $\|a\| = 1$. Passing to the limit:
-$a^T x \le a^T x_0$ for all $x \in C$.
+Since $x_0 \in \partial C$, there exists a sequence $\{y_k\}_{k=1}^\infty$
+with $y_k \notin C$ and $y_k \to x_0$ as $k \to \infty$.
+
+For each $k$, the singleton $\{y_k\}$ and the convex set $C$ are disjoint.
+Apply the separating hyperplane theorem (with $\{y_k\}$ compact and $C$
+closed---if $C$ is not closed, apply to $\cl(C)$ which is also convex and has
+the same boundary): there exists $a_k \in \R^n$ with $\|a_k\|_2 = 1$
+(normalize) such that
+\[
+  a_k^T x \le a_k^T y_k \quad \text{for all } x \in C.
+\]
+The sequence $\{a_k\}$ lies on the unit sphere $S^{n-1}$, which is compact.
+By the Bolzano--Weierstrass theorem, there is a convergent subsequence
+$a_{k_j} \to a^*$ with $\|a^*\|_2 = 1$.
+
+Passing to the limit in $a_{k_j}^T x \le a_{k_j}^T y_{k_j}$:
+\[
+  (a^*)^T x \le (a^*)^T x_0 \quad \text{for all } x \in C.
+\]
+Here we used $a_{k_j} \to a^*$ and $y_{k_j} \to x_0$ (the subsequence of
+$\{y_k\}$ also converges to $x_0$).  Setting $a = a^*$ completes the proof.
 \end{proof}
 
 \begin{rlconnection}
-The separating hyperplane theorem is the geometric engine behind Lagrangian duality.
-Every constraint in an optimization problem can be interpreted as requiring the
-decision variable to lie in a convex set, and Lagrange multipliers define the
-separating hyperplane. In constrained policy optimization (CPO), the safety constraint
-defines a convex feasible region in surrogate-objective space, and the dual variable
-(Lagrange multiplier) encodes the ``price'' of constraint violation.
+The supporting hyperplane theorem guarantees that at every boundary point of a
+convex feasible set, there is a ``tangent'' linear constraint.  In constrained
+policy optimization (CPO), the safety-constraint boundary is approximated by
+such a supporting hyperplane, yielding a linear constraint on the policy update
+that can be solved efficiently.
 \end{rlconnection}
 
 %% ========================================================================
-%% SECTION 3: CONVEX FUNCTIONS
+%% SECTION 6: EXERCISES
 %% ========================================================================
 
+\section{Exercises}
+
+\begin{exercise}[Convexity of Set Operations]
+\label{exer:set-operations}
+Let $C_1, C_2 \subseteq \R^n$ be convex.  Prove that each of the following is
+convex:
+\begin{enumerate}[label=(\alph*)]
+  \item The Minkowski sum $C_1 + C_2 = \{x + y : x \in C_1,\; y \in C_2\}$.
+  \item The set $\{(\lambda, x) \in \R \times \R^n : x \in \lambda C_1,\;
+        \lambda \ge 0\}$.
+  \item The set difference $C_1 \setminus C_2$ is \textbf{not} convex in
+        general.  Give a counterexample in $\R^2$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Separating Hyperplane for Disk and Point]
+\label{exer:separation-disk}
+Let $C = \{x \in \R^2 : x_1^2 + x_2^2 \le 1\}$ and $p = (2, 0)$.
+\begin{enumerate}[label=(\alph*)]
+  \item Find the closest point $x^* \in C$ to $p$ and use the construction
+        from Theorem~\ref{thm:separating} to write down the separating
+        hyperplane explicitly.
+  \item Verify that the separating hyperplane from part (a) is also a
+        supporting hyperplane to $C$ at $x^*$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Convex Hull of Finitely Many Points]
+\label{exer:convex-hull-finite}
+Let $S = \{e_1, \ldots, e_n\} \subset \R^n$ be the standard basis vectors.
+Show that $\conv(S) = \Delta_n$, the probability simplex
+$\{x \in \R^n : x_i \ge 0,\; \sum_i x_i = 1\}$.
+\end{exercise}
+
+\begin{exercise}[PSD Cone Properties]
+\label{exer:psd-cone}
+\begin{enumerate}[label=(\alph*)]
+  \item Show that $\mathbb{S}^n_+$ is a closed set (in the topology of
+        $\mathbb{S}^n \cong \R^{n(n+1)/2}$).
+        \textit{Hint:} Write $\mathbb{S}^n_+$ as an intersection of closed
+        sets.
+  \item Show that $\mathbb{S}^n_+$ is a \emph{proper} cone: it is convex,
+        closed, solid (nonempty interior), and pointed ($X \in
+        \mathbb{S}^n_+$ and $-X \in \mathbb{S}^n_+$ implies $X = 0$).
+  \item Prove that the interior of $\mathbb{S}^n_+$ is
+        $\mathbb{S}^n_{++} = \{X \in \mathbb{S}^n : X \succ 0\}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Perspective Function Application]
+\label{exer:perspective-app}
+Let $D = \{(x_1, x_2) \in \R^2 : x_1^2 + x_2^2 \le 1\}$ (the unit disk).
+Compute the set $P^{-1}(D) = \{(x_1, x_2, t) \in \R^3 : t > 0,\;
+(x_1/t)^2 + (x_2/t)^2 \le 1\}$ and show directly (without using
+Proposition~\ref{prop:perspective}) that it is convex.
+\end{exercise}
+
+\bibliography{optimization-refs}
 
 \end{document}

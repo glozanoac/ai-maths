@@ -1,159 +1,62 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 11: Static and Extensive-Form Games}}
+\fancyhead[L]{\textsc{Lesson 33: Normal-Form Games and Pure Nash Equilibrium}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\supp}{supp}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\argmax}{argmax}
-\DeclareMathOperator{\argmin}{argmin}
-\DeclareMathOperator{\BR}{BR}
-
-% ---- Title ----
 \title{Lesson 33: Normal-Form Games and Pure Nash Equilibrium}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
+
+\DeclareMathOperator{\BR}{BR}
 
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{0}
+%% SECTION 1: MOTIVATION
 
-\section{Why Game Theory for RL and ML?}
-\label{sec:intro}
+\section{Motivation: Why Game Theory for Multi-Agent RL}
+\label{sec:motivation}
 
-In single-agent reinforcement learning, the environment is typically modeled as a
-Markov decision process (MDP): the agent chooses actions, the environment responds
-according to a fixed (if unknown) transition kernel, and the agent seeks a policy
-maximizing cumulative reward. The key simplification is that the environment does
-not \emph{adapt} to the agent's behavior.
+In single-agent reinforcement learning, the environment is modeled as a
+Markov decision process whose transition kernel does not \emph{adapt} to the
+agent's behavior. Multi-agent reinforcement learning (MARL) breaks this
+assumption: when two or more learning agents share an environment, each
+agent's effective ``environment'' includes the other agents, whose policies
+change as they learn. The resulting non-stationarity means that standard
+convergence guarantees fail. To reason about what agents \emph{should}
+converge to, we need a mathematical framework for strategic interaction
+--- and that framework is game theory.
 
-Multi-agent reinforcement learning (MARL) breaks this assumption. When two or more
-learning agents interact in a shared environment, each agent's ``environment'' includes
-the other agents, whose behavior changes as they learn. The resulting non-stationarity
-means that standard single-agent convergence guarantees fail. To analyze MARL, we need
-a mathematical framework for strategic interaction --- and that framework is game theory.
-
-\begin{rlconnection}[MARL Is Game Theory + Learning]
-Every MARL algorithm implicitly assumes a game-theoretic solution concept:
+\begin{rlconnection}
+Every MARL algorithm implicitly targets a game-theoretic solution concept:
 \begin{itemize}[nosep]
-    \item \textbf{Independent Q-learning}: each agent performs Q-learning ignoring
-    others. If it converges, the result is a Nash equilibrium of the stage game
-    (under restrictive conditions).
-    \item \textbf{Minimax-Q} (Littman, 1994): assumes a two-player zero-sum
-    stochastic game and seeks the minimax value --- directly applying
-    von Neumann's theorem (Theorem~\ref{thm:minimax}).
-    \item \textbf{Nash-Q} (Hu \& Wellman, 2003): computes Nash equilibria of
-    stage games at each step.
-    \item \textbf{MAPPO, QMIX}: cooperative MARL algorithms whose convergence
-    analysis relies on the team game structure (common payoff games).
+    \item \textbf{Independent Q-learning}: each agent ignores others; if it
+    converges, the result is a Nash equilibrium of the stage game.
+    \item \textbf{Minimax-Q} \citep{shoham2008}: targets the minimax value in
+    zero-sum stochastic games, applying von Neumann's minimax theorem.
+    \item \textbf{Nash-Q}: computes Nash equilibria of stage games at each step.
+    \item \textbf{MAPPO, QMIX}: cooperative algorithms whose analysis relies on
+    common-payoff game structure.
 \end{itemize}
-Without understanding Nash equilibria, minimax, and subgame perfection, one cannot
-state what these algorithms are trying to compute, let alone prove convergence.
+Without understanding Nash equilibria and dominance, one cannot state what
+these algorithms compute, let alone prove convergence.
 \end{rlconnection}
 
-This lesson covers three progressively richer models of strategic interaction:
-\begin{enumerate}[nosep]
-    \item \textbf{Normal-form (static) games} (Sections~\ref{sec:normal_form}--\ref{sec:correlated}):
-    players choose actions simultaneously.
-    \item \textbf{Extensive-form (dynamic) games} (Sections~\ref{sec:extensive}--\ref{sec:spe}):
-    players move sequentially, possibly with imperfect information.
-    \item \textbf{Solution concepts}: Nash equilibrium, minimax strategies, correlated
-    equilibrium, and subgame perfect equilibrium.
-\end{enumerate}
+This lesson develops the foundational concepts: normal-form games, dominance,
+iterated elimination, best responses, rationalizability, and pure strategy
+Nash equilibrium. Four classical games serve as running examples.
 
-\noindent\textbf{Prerequisites.} Familiarity with basic probability (finite probability
-spaces suffice for this lesson), linear algebra (convex sets, hyperplane separation),
-and real analysis (continuity, compactness in $\R^n$). Knowledge of linear programming
-duality is helpful but not required; we state the needed result.
+\medskip
+\noindent\textbf{Prerequisites.} Finite probability spaces, basic linear
+algebra (convex sets, hyperplane separation), and elementary real analysis.
 
-%% ============================================================
 %% SECTION 2: NORMAL-FORM GAMES
-%% ============================================================
 
 \section{Normal-Form Games}
 \label{sec:normal_form}
-
-\subsection{Basic Definitions}
-\label{subsec:normal_form_def}
 
 \begin{definition}[Normal-Form Game]
 \label{def:normal_form}
@@ -162,267 +65,393 @@ $\Gamma = (N, (S_i)_{i \in N}, (u_i)_{i \in N})$ where:
 \begin{enumerate}[nosep,label=(\roman*)]
     \item $N = \{1, 2, \ldots, n\}$ is a finite set of \emph{players}.
     \item For each $i \in N$, $S_i$ is a non-empty set of \emph{strategies}
-    (or \emph{actions}) available to player~$i$. We write
-    $S = \prod_{i \in N} S_i$ for the set of \emph{strategy profiles}.
-    \item For each $i \in N$, $u_i : S \to \R$ is player~$i$'s \emph{payoff function}
-    (or \emph{utility function}).
+    (or \emph{actions}) available to player~$i$. The set of
+    \emph{strategy profiles} is $S = \prod_{i \in N} S_i$.
+    \item For each $i \in N$, $u_i \colon S \to \R$ is player~$i$'s
+    \emph{payoff function} (or \emph{utility function}).
 \end{enumerate}
-The game is \emph{finite} if each $S_i$ is a finite set.
+The game is \emph{finite} if every $S_i$ is a finite set.
 \end{definition}
 
-\begin{remark}[Notation for ``All but $i$'']
+\begin{remark}[Notation]
 \label{rem:notation}
 For a strategy profile $s = (s_1, \ldots, s_n) \in S$, we write
-$s_{-i} = (s_1, \ldots, s_{i-1}, s_{i+1}, \ldots, s_n) \in S_{-i}
-:= \prod_{j \neq i} S_j$.
-We often write $s = (s_i, s_{-i})$ to emphasize player~$i$'s strategy.
+$s_{-i} = (s_1, \ldots, s_{i-1}, s_{i+1}, \ldots, s_n) \in
+S_{-i} := \prod_{j \neq i} S_j$
+and use $s = (s_i, s_{-i})$ to emphasize player~$i$'s component.
 \end{remark}
 
 \begin{definition}[Bimatrix Game]
 \label{def:bimatrix}
-A \emph{bimatrix game} is a two-player finite game presented as a pair of matrices
-$(A, B) \in \R^{m \times n} \times \R^{m \times n}$, where player~1 has $m$ strategies,
-player~2 has $n$ strategies, $A_{jk} = u_1(j,k)$, and $B_{jk} = u_2(j,k)$.
-If $B = -A$, the game is \emph{zero-sum}.
+A \emph{bimatrix game} is a two-player finite normal-form game presented as a
+pair of matrices $(A, B) \in \R^{m \times k} \times \R^{m \times k}$, where
+player~1 has $m$ strategies, player~2 has $k$ strategies, $A_{jl} = u_1(j,l)$,
+and $B_{jl} = u_2(j,l)$. If $B = -A$, the game is \emph{zero-sum}.
 \end{definition}
-
-\subsection{Classical Examples}
-\label{subsec:examples}
 
 \begin{example}[Prisoner's Dilemma]
 \label{ex:pd}
-Two players simultaneously choose to \emph{Cooperate} (C) or \emph{Defect} (D):
+Two players simultaneously choose to \emph{Cooperate} ($C$) or \emph{Defect}
+($D$). The payoff bimatrix is:
 \[
 \begin{array}{c|cc}
- & C & D \\ \hline
-C & (3,3) & (0,5) \\
-D & (5,0) & (1,1)
+    & C & D \\ \hline
+  C & (3,3) & (0,5) \\
+  D & (5,0) & (1,1)
 \end{array}
 \]
-Here $D$ strictly dominates $C$ for both players (Definition~\ref{def:dominance}),
-so the unique Nash equilibrium is $(D,D)$ with payoffs $(1,1)$, despite $(C,C)$
-giving both players a higher payoff.
+Each entry $(a,b)$ gives (row player's payoff, column player's payoff).
+Regardless of the opponent's choice, Defect yields a strictly higher payoff,
+making $D$ a strictly dominant strategy for both players.
 \end{example}
 
 \begin{example}[Battle of the Sexes]
 \label{ex:bos}
-Players~1 and~2 prefer different activities ($O$pera vs.\ $F$ootball) but prefer
-coordination to miscoordination:
+Players~1 and~2 prefer different activities --- \emph{Opera} ($O$) and
+\emph{Football} ($F$) --- but both prefer coordination to miscoordination:
 \[
 \begin{array}{c|cc}
- & O & F \\ \hline
-O & (3,1) & (0,0) \\
-F & (0,0) & (1,3)
+    & O & F \\ \hline
+  O & (3,1) & (0,0) \\
+  F & (0,0) & (1,3)
 \end{array}
 \]
-This game has two pure Nash equilibria --- $(O,O)$ and $(F,F)$ --- and one mixed
-equilibrium (computed in Example~\ref{ex:mixed_bos}).
+Neither player has a dominant strategy. Both $(O,O)$ and $(F,F)$ will turn
+out to be pure Nash equilibria (Section~\ref{sec:nash}).
 \end{example}
 
 \begin{example}[Matching Pennies]
 \label{ex:mp}
-A zero-sum game: each player chooses $H$eads or $T$ails. Player~1 wins if
-they match; player~2 wins if they differ:
+A zero-sum game: each player shows \emph{Heads} ($H$) or \emph{Tails} ($T$).
+Player~1 wins if the choices match; player~2 wins if they differ:
 \[
 \begin{array}{c|cc}
- & H & T \\ \hline
-H & (1,-1) & (-1,1) \\
-T & (-1,1) & (1,-1)
+    & H & T \\ \hline
+  H & (1,-1) & (-1,1) \\
+  T & (-1,1) & (1,-1)
 \end{array}
 \]
 This game has no pure Nash equilibrium (Proposition~\ref{prop:mp_no_pure}),
-motivating the extension to mixed strategies.
+motivating the extension to mixed strategies in Lesson~34.
 \end{example}
 
 \begin{example}[Stag Hunt]
 \label{ex:stag}
-Players choose to hunt a $S$tag (requiring cooperation) or a $H$are (safe but
-less rewarding):
+Two hunters choose to hunt a \emph{Stag} ($S$, requires cooperation) or a
+\emph{Hare} ($H$, safe but less rewarding):
 \[
 \begin{array}{c|cc}
- & S & H \\ \hline
-S & (4,4) & (0,3) \\
-H & (3,0) & (3,3)
+    & S & H \\ \hline
+  S & (4,4) & (0,3) \\
+  H & (3,0) & (3,3)
 \end{array}
 \]
-Both $(S,S)$ and $(H,H)$ are pure Nash equilibria. The equilibrium $(S,S)$ is
-\emph{payoff-dominant} (higher payoffs for both), while $(H,H)$ is \emph{risk-dominant}
-(safer against uncertainty about the opponent).
+Both $(S,S)$ and $(H,H)$ are pure Nash equilibria. The equilibrium $(S,S)$
+is \emph{payoff-dominant} (higher payoffs for both players), while $(H,H)$
+is \emph{risk-dominant} (safer against uncertainty about the opponent's
+choice).
 \end{example}
 
-\begin{rlconnection}[Stag Hunt and Cooperative MARL]
-The stag hunt captures a fundamental tension in cooperative MARL: agents can achieve
-higher collective reward through coordination, but each agent bears risk if the others
-fail to coordinate. This is precisely the challenge faced by CTDE (centralized training,
-decentralized execution) algorithms like QMIX and MAPPO.
+\begin{rlconnection}
+The Stag Hunt captures a fundamental tension in cooperative MARL: agents can
+achieve higher collective reward through coordination, but each agent bears
+risk if the others fail to coordinate. This is precisely the challenge faced
+by centralized-training decentralized-execution (CTDE) algorithms such as
+QMIX and MAPPO, where the training procedure must guide agents toward the
+payoff-dominant equilibrium despite the safety of the risk-dominant one.
 \end{rlconnection}
 
-\subsection{Dominant and Dominated Strategies}
-\label{subsec:dominance}
+%% SECTION 3: DOMINANCE AND ITERATED ELIMINATION
 
-\begin{definition}[Dominance]
+\section{Dominance and Iterated Elimination}
+\label{sec:dominance}
+
+\begin{definition}[Strict and Weak Dominance]
 \label{def:dominance}
 Let $\Gamma = (N, (S_i), (u_i))$ be a normal-form game and fix player~$i$.
-A strategy $s_i \in S_i$ \emph{strictly dominates} $s_i' \in S_i$ if
-\[
-    u_i(s_i, s_{-i}) > u_i(s_i', s_{-i}) \quad \text{for all } s_{-i} \in S_{-i}.
-\]
-A strategy $s_i$ \emph{weakly dominates} $s_i'$ if
-\[
-    u_i(s_i, s_{-i}) \geq u_i(s_i', s_{-i}) \quad \text{for all } s_{-i} \in S_{-i},
-\]
-with strict inequality for at least one $s_{-i}$.
-A strategy is \emph{strictly dominated} if some other strategy strictly dominates it.
-A strategy is a \emph{(strictly) dominant strategy} if it strictly dominates every
-other strategy of that player.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item A strategy $s_i \in S_i$ \emph{strictly dominates} $s_i' \in S_i$
+    if
+    \[
+        u_i(s_i, s_{-i}) > u_i(s_i', s_{-i})
+        \quad \text{for all } s_{-i} \in S_{-i}.
+    \]
+    \item A strategy $s_i$ \emph{weakly dominates} $s_i'$ if
+    \[
+        u_i(s_i, s_{-i}) \geq u_i(s_i', s_{-i})
+        \quad \text{for all } s_{-i} \in S_{-i},
+    \]
+    with strict inequality for at least one $s_{-i}$.
+\end{enumerate}
+A strategy is \emph{strictly dominated} if some other strategy strictly
+dominates it. A strategy is a \emph{strictly dominant strategy} if it
+strictly dominates every other strategy of that player.
 \end{definition}
+
+\begin{example}[Dominance in the Prisoner's Dilemma]
+\label{ex:pd_dominance}
+In Example~\ref{ex:pd}, for player~1: $u_1(D, C) = 5 > 3 = u_1(C, C)$ and
+$u_1(D, D) = 1 > 0 = u_1(C, D)$. Hence $D$ strictly dominates $C$ for
+player~1. By symmetry, $D$ strictly dominates $C$ for player~2 as well.
+Both players have a strictly dominant strategy.
+\end{example}
 
 \begin{proposition}[Dominated Strategies Are Never Best Responses]
 \label{prop:dominated_not_br}
-If $s_i'$ is strictly dominated by $s_i$, then $s_i'$ is never a best response:
-for every $s_{-i} \in S_{-i}$, $s_i' \notin \argmax_{t_i \in S_i} u_i(t_i, s_{-i})$.
+If $s_i'$ is strictly dominated by $s_i$, then $s_i'$ is never a best
+response: for every $s_{-i} \in S_{-i}$,
+$s_i' \notin \argmax_{t_i \in S_i} u_i(t_i, s_{-i})$.
 \end{proposition}
 
 \begin{proof}
 Fix any $s_{-i} \in S_{-i}$. Since $s_i$ strictly dominates $s_i'$, we have
-$u_i(s_i, s_{-i}) > u_i(s_i', s_{-i})$, so $s_i'$ does not maximize $u_i(\cdot, s_{-i})$.
+$u_i(s_i, s_{-i}) > u_i(s_i', s_{-i})$. Therefore $s_i'$ does not achieve
+the maximum of $u_i(\cdot, s_{-i})$ over $S_i$, so
+$s_i' \notin \argmax_{t_i \in S_i} u_i(t_i, s_{-i})$.
 \end{proof}
 
-\subsection{Iterated Elimination of Strictly Dominated Strategies}
-\label{subsec:iesds}
+\begin{warning}
+The converse of Proposition~\ref{prop:dominated_not_br} is false in general
+for pure strategies: a strategy can fail to be a best response to any pure
+opponent profile without being strictly dominated by any single pure
+strategy. However, in two-player games with finite strategy sets, a pure
+strategy that is never a best response is strictly dominated by some
+\emph{mixed} strategy (a consequence of the supporting hyperplane theorem).
+\end{warning}
 
-\begin{definition}[IESDS]
+\begin{definition}[Iterated Elimination of Strictly Dominated Strategies]
 \label{def:iesds}
-\emph{Iterated elimination of strictly dominated strategies} (IESDS) is the following
-procedure. Set $S_i^0 = S_i$ for all~$i$. For $k = 0, 1, 2, \ldots$, define
+\emph{Iterated elimination of strictly dominated strategies} (IESDS) proceeds
+as follows. Set $S_i^0 = S_i$ for all $i \in N$. For $k = 0, 1, 2, \ldots$,
+define
 \[
-    S_i^{k+1} = \big\{s_i \in S_i^k : \text{there is no } s_i' \in S_i^k
-    \text{ such that } u_i(s_i', s_{-i}) > u_i(s_i, s_{-i})
-    \text{ for all } s_{-i} \in S_{-i}^k\big\}.
+    S_i^{k+1} = \bigl\{s_i \in S_i^k :
+    \text{no } s_i' \in S_i^k \text{ satisfies }
+    u_i(s_i', s_{-i}) > u_i(s_i, s_{-i})
+    \text{ for all } s_{-i} \in S_{-i}^k\bigr\}.
 \]
 The set of \emph{surviving strategies} for player~$i$ is
-$S_i^\infty = \bigcap_{k=0}^\infty S_i^k$.
+$S_i^\infty = \bigcap_{k=0}^\infty S_i^k$. In a finite game, this
+intersection stabilizes after finitely many rounds.
 \end{definition}
+
+\begin{remark}
+\label{rem:iesds_order}
+Definition~\ref{def:iesds} eliminates \emph{all} strictly dominated
+strategies simultaneously at each round. One could instead eliminate
+strategies one at a time, choosing different players and strategies in
+different orders. Theorem~\ref{thm:iesds_order} shows that the final
+surviving set is the same regardless of the elimination order.
+\end{remark}
+
+\begin{example}[IESDS in the Prisoner's Dilemma]
+\label{ex:pd_iesds}
+In the Prisoner's Dilemma (Example~\ref{ex:pd}), $C$ is strictly dominated
+by $D$ for both players. Round~0 eliminates $C$ for both, leaving
+$S_1^1 = S_2^1 = \{D\}$. The unique surviving profile is $(D, D)$.
+\end{example}
 
 \begin{theorem}[Order Independence of IESDS]
 \label{thm:iesds_order}
-In a finite game, the set of strategy profiles surviving iterated elimination of
-strictly dominated strategies is independent of the order of elimination.
+In a finite normal-form game, the set of strategy profiles surviving IESDS
+is independent of the order in which strategies are eliminated.
 \end{theorem}
 
 \begin{proof}
-We prove that any strategy eliminated in some order of elimination is eventually
-eliminated in every order.
+We show that any strategy eliminated under one elimination order is
+eventually eliminated under every elimination order. The proof proceeds by
+strong induction on the round of elimination.
 
-Let $s_i^*$ be a strategy of player~$i$ that is eliminated at round~$k$ in some
-particular elimination order $E$. This means there exists $s_i' \in S_i^{k-1}(E)$
-such that $u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ for all $s_{-i} \in S_{-i}^{k-1}(E)$.
+Let $E$ and $E'$ denote two arbitrary elimination orders. Write $S_i^k(E)$
+for the surviving strategies of player~$i$ after round~$k$ under order~$E$,
+and similarly $S_i^k(E')$ for order~$E'$. Write $S_i^\infty(E)$ and
+$S_i^\infty(E')$ for the respective final surviving sets.
 
-Consider an alternative elimination order $E'$. We show $s_i^*$ is eventually
-eliminated under $E'$. Let $T = S_{-i}^\infty(E')$ be the surviving opponents'
-strategies under $E'$.
+We prove by strong induction on $k$ that if a strategy $s_i^*$ is eliminated
+at round~$k$ under order~$E$, then $s_i^* \notin S_i^\infty(E')$.
 
-Since $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E')$ and every strategy surviving
-under any order is in particular not eliminated in the first $k-1$ rounds under $E$
-(we prove this by induction on rounds), we need a cleaner argument.
+\medskip
+\noindent\textbf{Base case ($k = 0$).}
+If $s_i^*$ is eliminated at round~$0$ under $E$, then there exists
+$s_i' \in S_i$ with $u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ for all
+$s_{-i} \in S_{-i}$. Since $S_{-i}^\infty(E') \subseteq S_{-i}$, the
+domination holds on $S_{-i}^\infty(E')$. If $s_i' \in S_i^\infty(E')$,
+then $s_i^* \notin S_i^\infty(E')$ directly. Otherwise, following the
+chain of dominators from $s_i'$ to some $\hat{s}_i \in S_i^\infty(E')$
+(the chain terminates since $S_i$ is finite), we get
+$u_i(\hat{s}_i, s_{-i}) > u_i(s_i^*, s_{-i})$ on $S_{-i}^\infty(E')$,
+so again $s_i^* \notin S_i^\infty(E')$.
 
-We proceed by induction on the round of elimination. For the base case ($k=0$),
-$s_i^*$ is strictly dominated in the original game, so it will be eliminated in
-round~0 under any order.
+\medskip
+\noindent\textbf{Inductive step.}
+Assume the claim holds for all strategies eliminated in rounds
+$0, 1, \ldots, k-1$ under any elimination order. Suppose $s_i^*$ is
+eliminated at round~$k$ under order~$E$. Then there exists
+$s_i' \in S_i^{k-1}(E)$ such that
+\begin{equation}
+\label{eq:domination_k}
+    u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})
+    \quad \text{for all } s_{-i} \in S_{-i}^{k-1}(E).
+\end{equation}
 
-For the inductive step, suppose every strategy eliminated in rounds $0, \ldots, k-1$
-under \emph{any} elimination order is eventually eliminated under every order. Now
-suppose $s_i^*$ is eliminated at round~$k$ under order~$E$. Then there exists
-$s_i' \in S_i^{k-1}(E)$ with $u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ for all
-$s_{-i} \in S_{-i}^{k-1}(E)$.
+\emph{Claim:} $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E)$.
 
-Under order $E'$, the set $S_{-i}^{k-1}(E)$ may differ from $S_{-i}^{k-1}(E')$.
-However, the key observation is:
+To prove the claim, take any $s_j \in S_j^\infty(E')$ for $j \neq i$.
+Suppose for contradiction that $s_j \notin S_j^{k-1}(E)$. Then $s_j$ was
+eliminated at some round $l < k$ under order~$E$. By the inductive
+hypothesis, $s_j \notin S_j^\infty(E')$, contradicting
+$s_j \in S_j^\infty(E')$. Hence $s_j \in S_j^{k-1}(E)$, establishing the
+claim.
 
-\emph{Claim}: $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E)$.
+By the claim, the strict inequality~\eqref{eq:domination_k} holds for all
+$s_{-i} \in S_{-i}^\infty(E')$. We now consider two cases.
 
-To prove the claim, note that any strategy $s_j$ removed before round~$k$ under
-order~$E$ was strictly dominated by some $s_j'$ against strategies surviving at
-that point. By the inductive hypothesis, $s_j$ is eventually removed under $E'$ as
-well, so $s_j \notin S_j^\infty(E')$. Taking contrapositives:
-$s_j \in S_j^\infty(E') \implies s_j \in S_j^{k-1}(E)$, establishing the claim.
+\emph{Case 1:} $s_i' \in S_i^\infty(E')$. Then $s_i^*$ is strictly
+dominated by $s_i'$ on the surviving set $S_{-i}^\infty(E')$, so
+$s_i^* \notin S_i^\infty(E')$.
 
-Now, since $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E)$, the domination
-$u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ holds for all $s_{-i} \in S_{-i}^\infty(E')$.
-If $s_i' \in S_i^\infty(E')$, then $s_i^*$ is dominated (by $s_i'$) relative to
-the surviving strategies under $E'$ and hence is eliminated. If $s_i'$ is itself
-eliminated under $E'$, then $s_i'$ was dominated by some $s_i''$, and by transitivity
-of strict domination on the surviving set, $s_i^*$ remains dominated and is eliminated.
+\emph{Case 2:} $s_i' \notin S_i^\infty(E')$. Then $s_i'$ was eliminated at
+some round~$m$ under $E'$, meaning there exists
+$s_i'' \in S_i^{m-1}(E')$ that strictly dominates $s_i'$ on
+$S_{-i}^{m-1}(E')$. Repeating this chain, since $S_i$ is finite, we
+eventually reach some $\hat{s}_i \in S_i^\infty(E')$ that strictly dominates
+$s_i'$ on $S_{-i}^\infty(E')$. Combining with~\eqref{eq:domination_k}:
+for all $s_{-i} \in S_{-i}^\infty(E')$,
+$u_i(\hat{s}_i, s_{-i}) > u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$.
+Hence $s_i^*$ is strictly dominated by $\hat{s}_i$ on the surviving set,
+so $s_i^* \notin S_i^\infty(E')$.
 
-By induction, the surviving sets coincide for all elimination orders.
+\medskip
+By induction, $S_i^\infty(E) \supseteq S_i^\infty(E')$ for all~$i$.
+Swapping the roles of $E$ and $E'$ gives the reverse inclusion, so
+$S_i^\infty(E) = S_i^\infty(E')$.
 \end{proof}
 
-\subsection{Rationalizability}
-\label{subsec:rationalizability}
+\begin{keyresult}
+The surviving set under IESDS is a canonical object of the game: it does not
+depend on procedural choices. In a game solvable by IESDS (where the
+surviving set is a singleton), IESDS yields the unique Nash equilibrium.
+\end{keyresult}
 
-\begin{definition}[Best Response]
+%% SECTION 4: BEST RESPONSE AND RATIONALIZABILITY
+
+\section{Best Response and Rationalizability}
+\label{sec:rationalizability}
+
+\begin{definition}[Best Response Correspondence]
 \label{def:best_response}
 Player~$i$'s \emph{best response correspondence} is the set-valued map
-$\BR_i : S_{-i} \rightrightarrows S_i$ defined by
+$\BR_i \colon S_{-i} \rightrightarrows S_i$ defined by
 \[
     \BR_i(s_{-i}) = \argmax_{s_i \in S_i} u_i(s_i, s_{-i}).
 \]
+In a finite game, $\BR_i(s_{-i})$ is non-empty for every $s_{-i} \in S_{-i}$,
+since a finite set always attains its maximum.
 \end{definition}
+
+\begin{example}[Best Responses in Battle of the Sexes]
+\label{ex:bos_br}
+In Example~\ref{ex:bos}, compute player~1's best responses:
+\begin{itemize}[nosep]
+    \item If player~2 plays $O$: $u_1(O,O) = 3 > 0 = u_1(F,O)$, so
+    $\BR_1(O) = \{O\}$.
+    \item If player~2 plays $F$: $u_1(F,F) = 1 > 0 = u_1(O,F)$, so
+    $\BR_1(F) = \{F\}$.
+\end{itemize}
+By symmetry (with swapped preferences), $\BR_2(O) = \{O\}$ and
+$\BR_2(F) = \{F\}$. The profiles where both players play a mutual best
+response are $(O,O)$ and $(F,F)$.
+\end{example}
 
 \begin{definition}[Rationalizable Strategies]
 \label{def:rationalizable}
-A strategy $s_i$ is \emph{rationalizable} if it survives the iterated elimination
-of strategies that are never best responses. Formally, set $R_i^0 = S_i$ and define
+A strategy $s_i$ is \emph{rationalizable} if it survives iterated elimination
+of strategies that are never best responses. Formally, set $R_i^0 = S_i$ and
+define
 \[
-    R_i^{k+1} = \big\{s_i \in R_i^k : \exists\, s_{-i} \in R_{-i}^k
-    \text{ such that } s_i \in \BR_i(s_{-i})\big\}.
+    R_i^{k+1} = \bigl\{s_i \in R_i^k :
+    \exists\, s_{-i} \in R_{-i}^k \text{ such that }
+    s_i \in \BR_i(s_{-i})\bigr\}.
 \]
-The set of rationalizable strategies is $R_i^\infty = \bigcap_{k=0}^\infty R_i^k$.
+The set of \emph{rationalizable strategies} is
+$R_i^\infty = \bigcap_{k=0}^\infty R_i^k$.
 \end{definition}
+
+\begin{remark}
+Rationalizability captures ``common knowledge of rationality'': a strategy
+is rationalizable if it is a best response to some belief about the
+opponents, where that belief is consistent with the opponents being rational,
+and so on ad infinitum.
+\end{remark}
 
 \begin{proposition}[IESDS and Rationalizability in Two-Player Games]
 \label{prop:iesds_rational}
-In finite two-player games, the set of rationalizable strategies coincides with the
-set of strategies surviving IESDS.
+In a finite two-player game, the set of rationalizable strategies coincides
+with the set of strategies surviving IESDS: $R_i^\infty = S_i^\infty$ for
+$i = 1, 2$.
 \end{proposition}
 
 \begin{proof}
+We establish both inclusions.
+
+\medskip
+\noindent\textbf{($S_i^\infty \supseteq R_i^\infty$).}
 Every strictly dominated strategy is never a best response
-(Proposition~\ref{prop:dominated_not_br}), so
-$S_i^\infty \supseteq R_i^\infty$. Conversely, in a two-player finite game,
-a strategy that is never a best response to any pure strategy of the opponent is
-strictly dominated (this follows from the supporting hyperplane theorem applied
-to the payoff polyhedron). Hence a strategy eliminated in the rationalizability
-procedure is strictly dominated relative to the surviving set, giving
-$R_i^\infty \supseteq S_i^\infty$.
+(Proposition~\ref{prop:dominated_not_br}). Hence every strategy eliminated
+in IESDS is also eliminated in the rationalizability procedure, giving
+$R_i^k \subseteq S_i^k$ for all~$k$ by induction. Taking intersections,
+$R_i^\infty \subseteq S_i^\infty$.
+
+\medskip
+\noindent\textbf{($S_i^\infty \subseteq R_i^\infty$).}
+We show the contrapositive: if $s_i \notin R_i^\infty$, then
+$s_i \notin S_i^\infty$. Suppose $s_i$ is eliminated at round~$k$ in the
+rationalizability procedure, meaning $s_i$ is not a best response to any
+$s_{-i} \in R_{-i}^{k-1}$.
+
+In a two-player game, this means: for every $s_j \in R_j^{k-1}$ (where
+$j \neq i$), there exists $s_i'(s_j) \in R_i^{k-1}$ with
+$u_i(s_i'(s_j), s_j) > u_i(s_i, s_j)$. We claim that $s_i$ is strictly
+dominated on $R_j^{k-1}$ (possibly by a mixed strategy). Indeed, consider
+the payoff vectors $v = (u_i(s_i, s_j))_{s_j \in R_j^{k-1}} \in \R^{|R_j^{k-1}|}$
+and the convex set
+$W = \{(u_i(s_i', s_j))_{s_j \in R_j^{k-1}} : s_i' \in R_i^{k-1}\}$.
+Since $s_i$ is never a best response on $R_j^{k-1}$, by the supporting
+hyperplane theorem applied to the convex hull of payoff vectors, there
+exists a convex combination (i.e., a mixed strategy) over $R_i^{k-1}$ that
+strictly dominates $s_i$ on $R_j^{k-1}$.
+
+For pure-strategy IESDS where we also allow elimination by mixed-strategy
+domination, this gives $s_i \notin S_i^\infty$. In finite two-player games,
+elimination by pure or mixed strict domination yields the same surviving
+set \citep{osborne1994}, completing the proof.
 \end{proof}
 
-\begin{warning}[Three or More Players]
-For games with three or more players, IESDS may not eliminate all never-best-response
-strategies. Rationalizability can be a strictly coarser concept than IESDS survival
-in games with $n \geq 3$ players when we restrict to pure strategies. The equivalence
-is restored when we extend dominance to allow domination by mixed strategies.
+\begin{warning}
+For games with three or more players, the equivalence between IESDS and
+rationalizability can fail when restricting to pure-strategy domination.
+Rationalizability may be strictly coarser than pure-strategy IESDS survival
+for $n \geq 3$. The equivalence is restored when domination by mixed
+strategies is permitted \citep{fudenberg1991}.
 \end{warning}
 
-%% ============================================================
-%% SECTION 3: NASH EQUILIBRIUM
-%% ============================================================
+%% SECTION 5: NASH EQUILIBRIUM
 
-\section{Nash Equilibrium in Pure Strategies}
-\label{sec:nash_pure}
+\section{Pure Strategy Nash Equilibrium}
+\label{sec:nash}
 
 \begin{definition}[Pure Strategy Nash Equilibrium]
 \label{def:nash_pure}
-A strategy profile $s^* = (s_1^*, \ldots, s_n^*) \in S$ is a \emph{(pure strategy)
-Nash equilibrium} (NE) if no player can unilaterally improve their payoff:
+A strategy profile $s^* = (s_1^*, \ldots, s_n^*) \in S$ is a \emph{pure
+strategy Nash equilibrium} (NE) if no player can unilaterally improve
+their payoff:
 \[
     u_i(s_i^*, s_{-i}^*) \geq u_i(s_i, s_{-i}^*)
-    \quad \text{for all } s_i \in S_i, \text{ for all } i \in N.
+    \quad \text{for all } s_i \in S_i, \; \text{for all } i \in N.
 \]
-Equivalently, $s_i^* \in \BR_i(s_{-i}^*)$ for all $i \in N$.
 \end{definition}
 
-\begin{proposition}[NE as Mutual Best Response]
+\begin{proposition}[Nash Equilibrium as Mutual Best Response]
 \label{prop:ne_br}
 A strategy profile $s^*$ is a Nash equilibrium if and only if
 $s_i^* \in \BR_i(s_{-i}^*)$ for every $i \in N$.
@@ -430,36 +459,230 @@ $s_i^* \in \BR_i(s_{-i}^*)$ for every $i \in N$.
 
 \begin{proof}
 By Definition~\ref{def:nash_pure}, $s^*$ is a NE if and only if
-$u_i(s_i^*, s_{-i}^*) \geq u_i(s_i, s_{-i}^*)$ for all $s_i \in S_i$ and all~$i$.
-By Definition~\ref{def:best_response}, this is precisely
-$s_i^* \in \argmax_{s_i \in S_i} u_i(s_i, s_{-i}^*) = \BR_i(s_{-i}^*)$ for all~$i$.
+$u_i(s_i^*, s_{-i}^*) \geq u_i(s_i, s_{-i}^*)$ for all $s_i \in S_i$ and
+all $i \in N$. By Definition~\ref{def:best_response}, this is precisely
+$s_i^* \in \argmax_{s_i \in S_i} u_i(s_i, s_{-i}^*) = \BR_i(s_{-i}^*)$
+for all~$i$.
 \end{proof}
 
-\begin{proposition}[Matching Pennies Has No Pure NE]
-\label{prop:mp_no_pure}
-The Matching Pennies game (Example~\ref{ex:mp}) has no pure strategy Nash equilibrium.
+\begin{keyresult}
+Proposition~\ref{prop:ne_br} gives a practical method for finding all pure
+Nash equilibria in finite games: for each player and each opponent profile,
+compute the best response set, then identify profiles where every player's
+strategy is a best response. This ``underline the best responses'' method
+works for any bimatrix game.
+\end{keyresult}
+
+\begin{proposition}[Dominant Strategy Equilibrium Implies Nash Equilibrium]
+\label{prop:dominant_nash}
+If $s_i^*$ is a strictly dominant strategy for every player $i \in N$, then
+$(s_1^*, \ldots, s_n^*)$ is the unique Nash equilibrium.
 \end{proposition}
 
 \begin{proof}
-We check all four profiles:
+Since $s_i^*$ strictly dominates every other strategy of player~$i$, we have
+$u_i(s_i^*, s_{-i}) > u_i(s_i, s_{-i})$ for all $s_i \neq s_i^*$ and all
+$s_{-i} \in S_{-i}$. In particular, for $s_{-i} = s_{-i}^*$, this gives
+$s_i^* \in \BR_i(s_{-i}^*)$ for all~$i$, so $s^*$ is a NE by
+Proposition~\ref{prop:ne_br}.
+
+For uniqueness, suppose $\hat{s} \neq s^*$ is a NE. Then some
+$\hat{s}_i \neq s_i^*$, but $u_i(s_i^*, \hat{s}_{-i}) > u_i(\hat{s}_i,
+\hat{s}_{-i})$ by strict dominance, contradicting $\hat{s}_i \in
+\BR_i(\hat{s}_{-i})$.
+\end{proof}
+
+%% SECTION 6: ANALYSIS OF CLASSIC GAMES
+
+\section{Analysis of Classic Games}
+\label{sec:classics}
+
+We systematically analyze the four classic games from
+Section~\ref{sec:normal_form}, identifying all pure Nash equilibria.
+
+\subsection{Prisoner's Dilemma}
+\label{subsec:pd_analysis}
+
+\begin{proposition}
+\label{prop:pd_ne}
+The Prisoner's Dilemma (Example~\ref{ex:pd}) has a unique pure Nash
+equilibrium at $(D, D)$ with payoffs $(1, 1)$.
+\end{proposition}
+
+\begin{proof}
+By Example~\ref{ex:pd_dominance}, $D$ is a strictly dominant strategy for
+both players. By Proposition~\ref{prop:dominant_nash}, $(D, D)$ is the
+unique Nash equilibrium.
+\end{proof}
+
+\begin{remark}[Individual vs.\ Collective Rationality]
+\label{rem:pd_paradox}
+The profile $(C,C)$ yields payoffs $(3,3)$, Pareto-dominating the NE
+$(D,D)$ with payoffs $(1,1)$. Yet rational players cannot sustain
+cooperation in a one-shot game. This tension is central to MARL:
+independent learners converge to the suboptimal NE unless the interaction
+is repeated (Lesson~36, folk theorems) or agents can commit to contracts.
+\end{remark}
+
+\subsection{Battle of the Sexes}
+\label{subsec:bos_analysis}
+
+\begin{proposition}
+\label{prop:bos_ne}
+The Battle of the Sexes (Example~\ref{ex:bos}) has exactly two pure Nash
+equilibria: $(O, O)$ with payoffs $(3, 1)$ and $(F, F)$ with payoffs
+$(1, 3)$.
+\end{proposition}
+
+\begin{proof}
+From Example~\ref{ex:bos_br}, $\BR_1(O) = \{O\}$, $\BR_1(F) = \{F\}$,
+$\BR_2(O) = \{O\}$, and $\BR_2(F) = \{F\}$. Of the four profiles, only
+$(O,O)$ and $(F,F)$ satisfy $s_i^* \in \BR_i(s_{-i}^*)$ for both players.
+At $(O,F)$, player~1 deviates ($O \notin \BR_1(F)$); at $(F,O)$, likewise.
+\end{proof}
+
+\begin{remark}[Equilibrium Selection]
+The Battle of the Sexes illustrates the \emph{equilibrium selection problem}:
+the theory predicts multiple equilibria but does not say which will be
+played. In MARL, independent learners may converge to different equilibria
+or cycle. Correlated equilibrium (Lesson~34) addresses this ambiguity.
+\end{remark}
+
+\subsection{Matching Pennies}
+\label{subsec:mp_analysis}
+
+\begin{proposition}[Matching Pennies Has No Pure NE]
+\label{prop:mp_no_pure}
+The Matching Pennies game (Example~\ref{ex:mp}) has no pure strategy Nash
+equilibrium.
+\end{proposition}
+
+\begin{proof}
+Player~1 wants to match and player~2 wants to mismatch, so their best
+responses oppose each other: $\BR_1(H) = \{H\}$, $\BR_1(T) = \{T\}$,
+$\BR_2(H) = \{T\}$, $\BR_2(T) = \{H\}$. At every profile, exactly one
+player has a profitable deviation:
 \begin{itemize}[nosep]
-    \item $(H,H)$: Player~2 gains by deviating to~$T$ (payoff $-1 \to 1$).
-    \item $(H,T)$: Player~1 gains by deviating to~$T$ (payoff $-1 \to 1$).
-    \item $(T,H)$: Player~1 gains by deviating to~$H$ (payoff $-1 \to 1$).
-    \item $(T,T)$: Player~2 gains by deviating to~$H$ (payoff $-1 \to 1$).
+    \item $(H,H)$: player~2 deviates ($H \notin \BR_2(H)$).
+    \item $(H,T)$: player~1 deviates ($H \notin \BR_1(T)$).
+    \item $(T,H)$: player~1 deviates ($T \notin \BR_1(H)$).
+    \item $(T,T)$: player~2 deviates ($T \notin \BR_2(T)$).
 \end{itemize}
-Every profile admits a profitable deviation, so no pure NE exists.
+No profile is a mutual best response, so no pure NE exists.
 \end{proof}
 
 \begin{remark}
-The Prisoner's Dilemma has a unique NE at $(D,D)$, the Battle of the Sexes has two
-pure NE at $(O,O)$ and $(F,F)$, and the Stag Hunt has two at $(S,S)$ and $(H,H)$.
-Matching Pennies has none --- motivating the extension to mixed strategies.
+\label{rem:mp_mixed}
+The non-existence of pure NE reflects the adversarial structure of zero-sum
+games. Nash's theorem \citep{nash1950} guarantees a \emph{mixed} NE (each
+player randomizes uniformly), which is the subject of Lesson~34. In
+competitive MARL, the best-response cycling $H \to T \to H \to \cdots$ is
+a simple instance of the oscillation that plagues naive independent learning;
+algorithms like minimax-Q and self-play converge to mixed equilibria instead.
 \end{remark}
 
-%% ============================================================
-%% SECTION 4: MIXED STRATEGIES
-%% ============================================================
+\subsection{Stag Hunt}
+\label{subsec:stag_analysis}
 
+\begin{proposition}
+\label{prop:stag_ne}
+The Stag Hunt (Example~\ref{ex:stag}) has exactly two pure Nash equilibria:
+$(S, S)$ with payoffs $(4, 4)$ and $(H, H)$ with payoffs $(3, 3)$.
+\end{proposition}
+
+\begin{proof}
+Best responses: $\BR_1(S) = \{S\}$ (since $4 > 3$), $\BR_1(H) = \{H\}$
+(since $3 > 0$), and by symmetry $\BR_2(S) = \{S\}$, $\BR_2(H) = \{H\}$.
+Only the diagonal profiles $(S,S)$ and $(H,H)$ satisfy mutual best response;
+at $(S,H)$ and $(H,S)$, the Stag-hunter deviates.
+\end{proof}
+
+\begin{remark}[Payoff Dominance vs.\ Risk Dominance]
+\label{rem:stag_selection}
+The equilibrium $(S,S)$ is \emph{payoff-dominant} (both players prefer it),
+while $(H,H)$ is \emph{risk-dominant} \citep{fudenberg1991}: $S$ is a best
+response only when $p > 3/4$, where $p$ is the believed probability the
+opponent plays $S$. In MARL, this tension determines whether independent
+learners converge to the Pareto-optimal or the risk-dominant equilibrium.
+\end{remark}
+
+%% SECTION 7: EXERCISES
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Three-Player Dominance]
+\label{ex:three_player}
+Consider a three-player game where each player chooses from $\{A, B\}$.
+Player~1's payoff is $u_1(s_1, s_2, s_3) = \indicator[s_1 = A] \cdot
+(1 + \indicator[s_2 = A] + \indicator[s_3 = A])$. That is, player~1
+gets $0$ from $B$ and gets $1$, $2$, or $3$ from $A$ depending on how
+many others play $A$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $B$ is strictly dominated by $A$ for player~1.
+    \item Suppose $u_2$ and $u_3$ are defined analogously. Find all pure
+    Nash equilibria.
+    \item Apply IESDS and verify that the surviving set equals the set of
+    Nash equilibria.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Best Response Analysis]
+\label{ex:br_analysis}
+Consider the bimatrix game:
+\[
+\begin{array}{c|ccc}
+    & L & C & R \\ \hline
+  T & (2,1) & (0,2) & (1,0) \\
+  M & (1,2) & (3,1) & (0,0) \\
+  B & (0,0) & (1,3) & (2,1)
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Compute $\BR_1(s_2)$ for each $s_2 \in \{L, C, R\}$ and
+    $\BR_2(s_1)$ for each $s_1 \in \{T, M, B\}$.
+    \item Identify all pure Nash equilibria using the mutual best response
+    characterization (Proposition~\ref{prop:ne_br}).
+    \item Apply IESDS. Does IESDS alone determine the equilibrium?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[IESDS Order Independence]
+\label{ex:iesds_order}
+Consider the following $3 \times 3$ bimatrix game:
+\[
+\begin{array}{c|ccc}
+    & L & C & R \\ \hline
+  T & (3,1) & (0,2) & (1,0) \\
+  M & (1,0) & (2,3) & (0,1) \\
+  B & (0,2) & (1,1) & (3,0)
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Perform IESDS by first eliminating dominated strategies for
+    player~1, then player~2.
+    \item Perform IESDS in the reverse order: first player~2, then
+    player~1.
+    \item Verify that both orders yield the same surviving set, confirming
+    Theorem~\ref{thm:iesds_order}.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Coordination Game Design]
+\label{ex:coordination}
+Design a symmetric $3 \times 3$ bimatrix game (i.e., $B = A^T$) with exactly
+three pure NE (all on the diagonal) and no strictly dominated strategies.
+Prove both properties hold.
+\end{exercise}
+
+\begin{exercise}[Nash Equilibrium and IESDS Survival]
+\label{ex:ne_iesds}
+Prove that every Nash equilibrium of a finite game survives IESDS: if $s^*$
+is a pure NE, then $s_i^* \in S_i^\infty$ for all $i \in N$.
+\textit{Hint:} Induction on the elimination round.
+\end{exercise}
+
+\bigskip
+\bibliography{game-theory-refs}
 
 \end{document}

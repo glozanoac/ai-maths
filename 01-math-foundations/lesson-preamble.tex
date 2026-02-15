@@ -1,0 +1,137 @@
+% lesson-preamble.tex -- Shared preamble for all Phase 01 lessons
+% Usage: \input{../../lesson-preamble} (from subdomain directories)
+%        \input{../lesson-preamble}    (if needed from phase root)
+
+% ---- Encoding and fonts ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% ---- Mathematics ----
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% ---- Page geometry ----
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% ---- Hyperlinks ----
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% ---- Lists ----
+\usepackage{enumitem}
+
+% ---- Colors and boxes ----
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% ---- Header/Footer ----
+\usepackage{fancyhdr}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Tables ----
+\usepackage{booktabs}
+
+% ---- Bibliography ----
+\usepackage{natbib}
+\bibliographystyle{plainnat}
+
+% --------------------------------------------------------------------------
+% Theorem environments
+% --------------------------------------------------------------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\newtheorem{exercise}[theorem]{Exercise}
+\newtheorem{assumption}[theorem]{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% --------------------------------------------------------------------------
+% Colored boxes
+% --------------------------------------------------------------------------
+\newtcolorbox{keyresult}[1][]{%
+  colback=green!5!white,
+  colframe=green!50!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{%
+  colback=blue!5!white,
+  colframe=blue!50!black,
+  fonttitle=\bfseries,
+  title={RL/ML Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{%
+  colback=red!5!white,
+  colframe=red!50!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% --------------------------------------------------------------------------
+% Custom commands -- number sets
+% --------------------------------------------------------------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+
+% --------------------------------------------------------------------------
+% Custom commands -- probability and expectation
+% --------------------------------------------------------------------------
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\indicator}{\mathbf{1}}
+
+% --------------------------------------------------------------------------
+% Custom commands -- convergence arrows
+% --------------------------------------------------------------------------
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% --------------------------------------------------------------------------
+% Custom commands -- common operators
+% --------------------------------------------------------------------------
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\relint}{relint}
+\DeclareMathOperator{\aff}{aff}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\interior}{int}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\argmin}{arg\,min}
+\DeclareMathOperator{\argmax}{arg\,max}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\dist}{dist}
+\DeclareMathOperator{\diam}{diam}
+\DeclareMathOperator{\Span}{span}
+
+% --------------------------------------------------------------------------
+% Custom commands -- measure theory
+% --------------------------------------------------------------------------
+\newcommand{\powerset}{\mathcal{P}}
+\newcommand{\Borel}{\mathcal{B}}

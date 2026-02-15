@@ -1,605 +1,692 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 5: Probability Spaces, Random Variables, and Expectation}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 5: Probability Spaces, Random Variables, and Expectation}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{0}
-
-\section{Introduction}
-\label{sec:intro}
-
-The convergence proofs in reinforcement learning rely on a core set of probabilistic
-tools. This document develops the complete probability foundation from first
-principles, providing every definition, theorem, and proof needed to follow the
-convergence analyses in the companion articles on Temporal-Difference learning,
-policy gradient methods, and stochastic approximation.
-
-\medskip\noindent\textbf{What this document covers.}
-\begin{enumerate}[nosep]
-    \item \textbf{Probability spaces and events} --- $\sigma$-algebras, Kolmogorov axioms, conditional probability, Bayes' theorem.
-    \item \textbf{Random variables and distributions} --- measurability, distribution functions, expectation, common distributions, joint distributions, linearity.
-    \item \textbf{Conditional expectation and the tower property} --- conditional expectation given events and random variables, linearity, pull-out property, law of total expectation.
-    \item \textbf{MDP expectation expansion} --- the mechanical expansion step in Bellman derivations.
-    \item \textbf{Variance and conditional variance} --- computational formulas, law of total variance.
-    \item \textbf{Independence} --- independent events, independent random variables, product of expectations.
-    \item \textbf{Filtrations} --- natural filtration of an MDP, the Markov property and conditioning equivalence.
-    \item \textbf{Martingale difference sequences} --- definitions, zero mean, partial sums form martingales, uncorrelated increments.
-    \item \textbf{Probability inequalities} --- Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding, Jensen.
-    \item \textbf{Modes of convergence} --- almost sure, in probability, in $L^p$, in distribution, and their relationships.
-    \item \textbf{Borel--Cantelli lemmas} --- the bridge between summable probabilities and almost sure convergence.
-    \item \textbf{Limit theorems} --- weak and strong law of large numbers, central limit theorem, monotone and dominated convergence.
-    \item \textbf{Markov chains} --- transition matrices, stationary distributions, ergodicity.
-    \item \textbf{Martingale convergence theory} --- supermartingales, Doob's convergence theorem, Robbins--Siegmund.
-    \item \textbf{Stochastic approximation noise decomposition} --- the TD noise pattern that drives all convergence proofs.
-\end{enumerate}
-
 %% ============================================================
-%% SECTION 2: PROBABILITY SPACES AND EVENTS
+%% SECTION 1: MOTIVATION AND OVERVIEW
 %% ============================================================
 
-\section{Probability Spaces and Events}
-\label{sec:prob_spaces}
+\section{Motivation and Overview}
+\label{sec:motivation}
 
-\subsection{Sample Spaces and \texorpdfstring{$\sigma$}{Sigma}-Algebras}
-\label{subsec:sigma_algebras}
+This lesson develops the core probabilistic tools that underpin every
+convergence proof in reinforcement learning: conditional probability and
+Bayes' theorem, expectation defined rigorously via the Lebesgue integral,
+linearity of expectation, the common discrete distributions (Bernoulli,
+categorical, geometric), and joint/marginal distributions.
 
-\begin{definition}[$\sigma$-Algebra]
-\label{def:sigma_algebra}
-A collection $\mathcal{F}$ of subsets of a set $\Omega$ is a \emph{$\sigma$-algebra}
-(or \emph{$\sigma$-field}) if:
-\begin{enumerate}[nosep]
-    \item $\Omega \in \mathcal{F}$,
-    \item If $A \in \mathcal{F}$, then $A^c = \Omega \setminus A \in \mathcal{F}$ \hfill(closed under complement),
-    \item If $A_1, A_2, \ldots \in \mathcal{F}$, then $\bigcup_{n=1}^\infty A_n \in \mathcal{F}$ \hfill(closed under countable union).
-\end{enumerate}
-\end{definition}
+%% ============================================================
+%% SECTION 2: REVIEW OF KEY DEFINITIONS
+%% ============================================================
 
-\begin{proposition}[Basic Properties of $\sigma$-Algebras]
-\label{prop:sigma_props}
-Let $\mathcal{F}$ be a $\sigma$-algebra on $\Omega$. Then:
-\begin{enumerate}[nosep]
-    \item $\emptyset \in \mathcal{F}$.
-    \item $\mathcal{F}$ is closed under countable intersection: if $A_1, A_2, \ldots \in \mathcal{F}$, then $\bigcap_{n=1}^\infty A_n \in \mathcal{F}$.
-    \item $\mathcal{F}$ is closed under set difference: if $A, B \in \mathcal{F}$, then $A \setminus B \in \mathcal{F}$.
-\end{enumerate}
-\end{proposition}
+\section{Key Definitions (Review from Lesson 4)}
+\label{sec:review}
 
-\begin{proof}
-\textbf{(1)} $\emptyset = \Omega^c \in \mathcal{F}$ by closure under complement.
+We recall the core definitions from Lesson~4 to fix notation.
+Throughout, $(\Omega, \mathcal{F}, \Prob)$ is a probability space
+(i.e., a measure space with $\Prob(\Omega) = 1$), and a \emph{random
+variable} is a measurable function
+$X: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ with CDF
+$F_X(x) = \Prob(X \leq x)$.
 
-\textbf{(2)} By De Morgan's law, $\bigcap_{n=1}^\infty A_n = \left(\bigcup_{n=1}^\infty A_n^c\right)^c$. Each $A_n^c \in \mathcal{F}$ by (2) of Definition~\ref{def:sigma_algebra}, so $\bigcup A_n^c \in \mathcal{F}$ by (3), and $\left(\bigcup A_n^c\right)^c \in \mathcal{F}$ by (2).
+The basic properties of probability (complement rule, monotonicity,
+inclusion-exclusion, union bound, continuity from above/below) and the
+CDF properties (non-decreasing, correct limits at $\pm\infty$,
+right-continuity) were proved in Lesson~4. We use them freely below.
 
-\textbf{(3)} $A \setminus B = A \cap B^c$. Since $B^c \in \mathcal{F}$, this is a finite intersection of elements of $\mathcal{F}$, which is a special case of (2).
-\end{proof}
+%% ============================================================
+%% SECTION 3: CONDITIONAL PROBABILITY AND BAYES' THEOREM
+%% ============================================================
 
-\begin{definition}[Generated $\sigma$-Algebra]
-\label{def:generated_sigma}
-Given a collection $\mathcal{C}$ of subsets of $\Omega$, the \emph{$\sigma$-algebra generated by $\mathcal{C}$}, denoted $\sigma(\mathcal{C})$, is the smallest $\sigma$-algebra containing $\mathcal{C}$:
-\begin{equation}
-    \sigma(\mathcal{C}) = \bigcap \{ \mathcal{G} : \mathcal{G} \text{ is a $\sigma$-algebra on } \Omega \text{ and } \mathcal{C} \subseteq \mathcal{G} \}.
-    \label{eq:generated_sigma}
-\end{equation}
-\end{definition}
-
-\begin{remark}
-The intersection of any collection of $\sigma$-algebras is again a $\sigma$-algebra (verify the three axioms directly), so $\sigma(\mathcal{C})$ is well defined. The power set $2^\Omega$ is always a $\sigma$-algebra containing $\mathcal{C}$, so the intersection is non-empty.
-\end{remark}
-
-\begin{rlconnection}[Connection to RL]
-In RL, $\sigma(S_0, A_0, R_1, \ldots, S_t)$ is the $\sigma$-algebra generated by the trajectory up to time $t$. It represents ``all information available at time $t$'' and is precisely the filtration $\mathcal{F}_t$ used throughout the TD convergence proofs.
-\end{rlconnection}
-
-\subsection{Probability Measures}
-\label{subsec:prob_measures}
-
-\begin{definition}[Probability Measure --- Kolmogorov Axioms]
-\label{def:prob_measure}
-A \emph{probability measure} on a measurable space $(\Omega, \mathcal{F})$ is a function $\Prob: \mathcal{F} \to [0,1]$ satisfying:
-\begin{enumerate}[nosep]
-    \item \textbf{Non-negativity:} $\Prob(A) \geq 0$ for all $A \in \mathcal{F}$.
-    \item \textbf{Normalization:} $\Prob(\Omega) = 1$.
-    \item \textbf{Countable additivity:} For pairwise disjoint events $A_1, A_2, \ldots \in \mathcal{F}$:
-    \begin{equation}
-        \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \Prob(A_n).
-        \label{eq:countable_additivity}
-    \end{equation}
-\end{enumerate}
-The triple $(\Omega, \mathcal{F}, \Prob)$ is called a \emph{probability space}.
-\end{definition}
-
-\begin{theorem}[Basic Properties of Probability]
-\label{thm:prob_props}
-Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space. For events $A, B \in \mathcal{F}$:
-\begin{enumerate}[nosep]
-    \item $\Prob(\emptyset) = 0$.
-    \item \textbf{Complement:} $\Prob(A^c) = 1 - \Prob(A)$.
-    \item \textbf{Monotonicity:} If $A \subseteq B$, then $\Prob(A) \leq \Prob(B)$.
-    \item \textbf{Inclusion-exclusion:} $\Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B)$.
-    \item \textbf{Sub-additivity:} $\Prob(A \cup B) \leq \Prob(A) + \Prob(B)$.
-    \item \textbf{Union bound:} $\Prob\!\left(\bigcup_{n=1}^\infty A_n\right) \leq \sum_{n=1}^\infty \Prob(A_n)$.
-\end{enumerate}
-\end{theorem}
-
-\begin{proof}
-\textbf{(1)} Write $\Omega = \Omega \cup \emptyset \cup \emptyset \cup \cdots$ (disjoint). By countable additivity, $\Prob(\Omega) = \Prob(\Omega) + \Prob(\emptyset) + \Prob(\emptyset) + \cdots$. Since $\Prob(\Omega) = 1 < \infty$, all remaining terms must be zero, so $\Prob(\emptyset) = 0$.
-
-\textbf{(2)} $\Omega = A \cup A^c$ with $A \cap A^c = \emptyset$, so $1 = \Prob(A) + \Prob(A^c)$.
-
-\textbf{(3)} Write $B = A \cup (B \setminus A)$ disjointly. Then $\Prob(B) = \Prob(A) + \Prob(B \setminus A) \geq \Prob(A)$.
-
-\textbf{(4)} Write $A \cup B = A \cup (B \setminus A)$ disjointly, and $B = (A \cap B) \cup (B \setminus A)$ disjointly. From the second: $\Prob(B \setminus A) = \Prob(B) - \Prob(A \cap B)$. Substituting into the first: $\Prob(A \cup B) = \Prob(A) + \Prob(B) - \Prob(A \cap B)$.
-
-\textbf{(5)} From (4), since $\Prob(A \cap B) \geq 0$.
-
-\textbf{(6)} Define $B_1 = A_1$ and $B_n = A_n \setminus \bigcup_{k=1}^{n-1} A_k$ for $n \geq 2$. The $B_n$ are pairwise disjoint with $\bigcup B_n = \bigcup A_n$, and $B_n \subseteq A_n$ so $\Prob(B_n) \leq \Prob(A_n)$. Then $\Prob(\bigcup A_n) = \Prob(\bigcup B_n) = \sum \Prob(B_n) \leq \sum \Prob(A_n)$.
-\end{proof}
-
-\begin{theorem}[Continuity of Probability]
-\label{thm:continuity}
-Let $(\Omega, \mathcal{F}, \Prob)$ be a probability space.
-\begin{enumerate}[nosep]
-    \item \textbf{Continuity from below:} If $A_1 \subseteq A_2 \subseteq \cdots$, then $\Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \lim_{n \to \infty} \Prob(A_n)$.
-    \item \textbf{Continuity from above:} If $A_1 \supseteq A_2 \supseteq \cdots$, then $\Prob\!\left(\bigcap_{n=1}^\infty A_n\right) = \lim_{n \to \infty} \Prob(A_n)$.
-\end{enumerate}
-\end{theorem}
-
-\begin{proof}
-\textbf{(1)} Define $B_1 = A_1$ and $B_n = A_n \setminus A_{n-1}$ for $n \geq 2$. We establish three claims.
-
-\medskip
-\textit{Claim 1: The $B_n$ are pairwise disjoint.}
-Let $i < j$. We must show $B_i \cap B_j = \emptyset$, i.e., there is no $\omega$ belonging to both $B_i$ and $B_j$. We proceed by contradiction.
-
-Suppose $\omega \in B_i \cap B_j$.
-
-\emph{Step 1: $\omega \in B_i$ implies $\omega \in A_{j-1}$.}
-If $i = 1$, then $B_1 = A_1$, so $\omega \in A_1$. If $i \geq 2$, then $B_i = A_i \setminus A_{i-1} \subseteq A_i$, so $\omega \in A_i$.
-In either case $\omega \in A_i$. Since $i < j$ and the sets are nested ($A_1 \subseteq A_2 \subseteq \cdots$), we have $i \leq j - 1$, hence $A_i \subseteq A_{j-1}$. Therefore $\omega \in A_{j-1}$.
-
-\emph{Step 2: $\omega \in B_j$ implies $\omega \notin A_{j-1}$.}
-Since $j \geq 2$ (because $i \geq 1$ and $i < j$), we have $B_j = A_j \setminus A_{j-1} = \{\alpha \in A_j : \alpha \notin A_{j-1}\}$.
-So $\omega \in B_j$ gives $\omega \notin A_{j-1}$ by definition of set difference.
-
-\emph{Conclusion.}
-Step~1 gives $\omega \in A_{j-1}$ and Step~2 gives $\omega \notin A_{j-1}$. This is a contradiction, so no such $\omega$ exists and $B_i \cap B_j = \emptyset$.
-
-\medskip
-\textit{Claim 2: $A_N = \bigcup_{k=1}^N B_k$ for every $N \geq 1$.}
-We prove this by induction on $N$.
-
-\emph{Base case} ($N = 1$): $\bigcup_{k=1}^1 B_k = B_1 = A_1$. \checkmark
-
-\emph{Inductive step}: Assume $A_{N-1} = \bigcup_{k=1}^{N-1} B_k$. Then:
-\begin{equation}
-    \bigcup_{k=1}^N B_k = \underbrace{\bigcup_{k=1}^{N-1} B_k}_{= A_{N-1}} \cup\; B_N
-    = A_{N-1} \cup (A_N \setminus A_{N-1}).
-    \label{eq:disjointification_induction}
-\end{equation}
-For any sets $C \subseteq D$, we have $C \cup (D \setminus C) = D$ (every element of $D$ is either in $C$ or in $D \setminus C$). Since $A_{N-1} \subseteq A_N$, equation~\eqref{eq:disjointification_induction} gives $\bigcup_{k=1}^N B_k = A_N$. \checkmark
-
-\medskip
-\textit{Claim 3: $\sum_{n=1}^N \Prob(B_n) = \Prob(A_N)$.}
-By Claim~1, $B_1, \ldots, B_N$ are pairwise disjoint. By finite additivity (which follows from countable additivity applied with $A_{N+1} = A_{N+2} = \cdots = \emptyset$):
-\begin{equation}
-    \sum_{n=1}^N \Prob(B_n) = \Prob\!\left(\bigcup_{k=1}^N B_k\right) \overset{\text{Claim 2}}{=} \Prob(A_N).
-    \label{eq:finite_additivity_step}
-\end{equation}
-
-\medskip
-Now, since $\bigcup_{n=1}^\infty A_n = \bigcup_{n=1}^\infty B_n$ (Claim~2 gives $\subseteq$; $B_n \subseteq A_n$ gives $\supseteq$), countable additivity applies to the disjoint union (Claim~1):
-\begin{equation}
-    \Prob\!\left(\bigcup_{n=1}^\infty A_n\right) = \Prob\!\left(\bigcup_{n=1}^\infty B_n\right) = \sum_{n=1}^\infty \Prob(B_n) = \lim_{N \to \infty} \sum_{n=1}^N \Prob(B_n) \overset{\eqref{eq:finite_additivity_step}}{=} \lim_{N \to \infty} \Prob(A_N).
-\end{equation}
-
-\textbf{(2)} Apply (1) to $A_n^c$: since $A_1 \supseteq A_2 \supseteq \cdots$, the complements satisfy $A_1^c \subseteq A_2^c \subseteq \cdots$, so by (1): $\Prob(\bigcup_{n=1}^\infty A_n^c) = \lim_{n \to \infty} \Prob(A_n^c)$. By De Morgan, $\bigcup A_n^c = (\bigcap A_n)^c$, giving $1 - \Prob(\bigcap A_n) = \lim(1 - \Prob(A_n))$, hence $\Prob(\bigcap A_n) = \lim \Prob(A_n)$.
-\end{proof}
-
-\begin{rlconnection}[Connection to RL]
-Continuity from above is the key tool for defining ``almost sure'' events. The event ``$V_t$ converges to $V^\pi$'' is an intersection of increasingly restrictive events, and continuity from above lets us compute its probability as a limit. This underpins every ``convergence with probability 1'' result in the TD article.
-\end{rlconnection}
-
-\subsection{Conditional Probability and Bayes' Theorem}
-\label{subsec:cond_prob}
+\section{Conditional Probability and Bayes' Theorem}
+\label{sec:cond_prob}
 
 \begin{definition}[Conditional Probability]
 \label{def:cond_prob}
-For events $A, B \in \mathcal{F}$ with $\Prob(B) > 0$, the \emph{conditional probability of $A$ given $B$} is:
+For events $A, B \in \mathcal{F}$ with $\Prob(B) > 0$, the
+\emph{conditional probability of $A$ given $B$} is
 \begin{equation}
-    \Prob(A \mid B) = \frac{\Prob(A \cap B)}{\Prob(B)}.
-    \label{eq:cond_prob}
+  \Prob(A \mid B) = \frac{\Prob(A \cap B)}{\Prob(B)}.
+  \label{eq:cond_prob}
 \end{equation}
 \end{definition}
 
 \begin{proposition}[Conditional Probability is a Probability Measure]
 \label{prop:cond_is_prob}
-For a fixed event $B$ with $\Prob(B) > 0$, the function $A \mapsto \Prob(A \mid B)$ satisfies the Kolmogorov axioms and is therefore a probability measure on $(\Omega, \mathcal{F})$.
+For fixed $B$ with $\Prob(B) > 0$, the function
+$A \mapsto \Prob(A \mid B)$ is a probability measure on
+$(\Omega, \mathcal{F})$.
 \end{proposition}
 
 \begin{proof}
-\textbf{Non-negativity:} $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B) \geq 0$.
+We verify the three Kolmogorov axioms.
 
-\textbf{Normalization:} $\Prob(\Omega \mid B) = \Prob(\Omega \cap B)/\Prob(B) = \Prob(B)/\Prob(B) = 1$.
+\textit{(K1)} $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B) \geq 0$.
 
-\textbf{Countable additivity:} For pairwise disjoint $A_1, A_2, \ldots$:
+\textit{(K2)} $\Prob(\Omega \mid B) = \Prob(\Omega \cap B)/\Prob(B)
+= \Prob(B)/\Prob(B) = 1$.
+
+\textit{(K3)} For pairwise disjoint $A_1, A_2, \ldots$:
 \begin{align}
-    \Prob\!\left(\bigcup_n A_n \;\middle|\; B\right) &= \frac{\Prob\!\left(\left(\bigcup_n A_n\right) \cap B\right)}{\Prob(B)} = \frac{\Prob\!\left(\bigcup_n (A_n \cap B)\right)}{\Prob(B)} = \frac{\sum_n \Prob(A_n \cap B)}{\Prob(B)} = \sum_n \Prob(A_n \mid B).
+  \Prob\!\left(\bigcup_n A_n \;\middle|\; B\right)
+  &= \frac{\Prob((\bigcup_n A_n) \cap B)}{\Prob(B)}
+  = \frac{\Prob(\bigcup_n (A_n \cap B))}{\Prob(B)}.
 \end{align}
+The sets $A_n \cap B$ are pairwise disjoint (since the $A_n$ are), so by
+countable additivity of $\Prob$:
+\[
+  = \frac{\sum_n \Prob(A_n \cap B)}{\Prob(B)}
+  = \sum_n \frac{\Prob(A_n \cap B)}{\Prob(B)}
+  = \sum_n \Prob(A_n \mid B). \qedhere
+\]
 \end{proof}
 
 \begin{theorem}[Chain Rule of Probability]
 \label{thm:chain_rule}
-For events $A_1, \ldots, A_n$ with $\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$:
+For events $A_1, \ldots, A_n$ with
+$\Prob(A_1 \cap \cdots \cap A_{n-1}) > 0$:
 \begin{equation}
-    \Prob(A_1 \cap A_2 \cap \cdots \cap A_n) = \Prob(A_1)\, \Prob(A_2 \mid A_1)\, \Prob(A_3 \mid A_1 \cap A_2) \cdots \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}).
-    \label{eq:chain_rule}
+  \Prob(A_1 \cap \cdots \cap A_n)
+  = \Prob(A_1)\, \Prob(A_2 \mid A_1)\,
+    \Prob(A_3 \mid A_1 \cap A_2)
+    \cdots \Prob(A_n \mid A_1 \cap \cdots \cap A_{n-1}).
+  \label{eq:chain_rule}
 \end{equation}
 \end{theorem}
 
 \begin{proof}
-By induction on $n$. The base case $n = 2$ is the definition: $\Prob(A_1 \cap A_2) = \Prob(A_1)\, \Prob(A_2 \mid A_1)$.
+We proceed by induction on $n$.
 
-For the inductive step, assume the formula holds for $n-1$. Write $B = A_1 \cap \cdots \cap A_{n-1}$. Then $\Prob(B \cap A_n) = \Prob(B)\, \Prob(A_n \mid B)$, and expand $\Prob(B)$ by the inductive hypothesis.
+\textit{Base case ($n = 2$).} By definition of conditional probability,
+$\Prob(A_1 \cap A_2) = \Prob(A_1) \cdot \Prob(A_2 \mid A_1)$.
+
+\textit{Inductive step.} Assume the formula holds for $n - 1$ events.
+Let $B = A_1 \cap \cdots \cap A_{n-1}$. By the base case applied to $B$
+and $A_n$:
+\[
+  \Prob(B \cap A_n) = \Prob(B) \cdot \Prob(A_n \mid B).
+\]
+By the inductive hypothesis, $\Prob(B)$ expands as
+\[
+  \Prob(B) = \Prob(A_1)\, \Prob(A_2 \mid A_1) \cdots
+  \Prob(A_{n-1} \mid A_1 \cap \cdots \cap A_{n-2}).
+\]
+Combining gives the formula for $n$ events.
 \end{proof}
 
+\begin{rlconnection}[title={Connection to RL}]
+The chain rule decomposes trajectory probabilities:
+\[
+  \Prob_\pi(S_0, A_0, R_1, S_1, \ldots)
+  = p_0(S_0) \prod_{t=0}^{T-1} \pi(A_t \mid S_t)\,
+    p(S_{t+1}, R_{t+1} \mid S_t, A_t).
+\]
+This factorization is the starting point of importance sampling ratios
+in off-policy methods (TRPO, PPO).
+\end{rlconnection}
+
+\begin{keyresult}[title={Law of Total Probability}]
 \begin{theorem}[Law of Total Probability]
 \label{thm:total_prob}
-Let $B_1, B_2, \ldots, B_n$ be a partition of $\Omega$ (i.e., pairwise disjoint with $\bigcup_i B_i = \Omega$) with $\Prob(B_i) > 0$ for all $i$. Then for any event $A$:
+Let $B_1, B_2, \ldots, B_n$ be a partition of $\Omega$ (pairwise disjoint,
+$\bigcup_i B_i = \Omega$) with $\Prob(B_i) > 0$ for all $i$. Then for any
+event $A \in \mathcal{F}$:
 \begin{equation}
-    \Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i).
-    \label{eq:total_prob}
-\end{equation}
-\end{theorem}
-
-\begin{proof}
-Since the $B_i$ partition $\Omega$, we have $A = \bigcup_{i=1}^n (A \cap B_i)$ with the terms pairwise disjoint. By finite additivity and the definition of conditional probability:
-\begin{equation}
-    \Prob(A) = \sum_{i=1}^n \Prob(A \cap B_i) = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i).
-\end{equation}
-\end{proof}
-
-\begin{keyresult}[Bayes' Theorem]
-\begin{theorem}[Bayes' Theorem]
-\label{thm:bayes}
-Let $B_1, \ldots, B_n$ be a partition of $\Omega$ with $\Prob(B_i) > 0$, and let $A$ be an event with $\Prob(A) > 0$. Then:
-\begin{equation}
-    \Prob(B_j \mid A) = \frac{\Prob(A \mid B_j)\, \Prob(B_j)}{\sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i)}.
-    \label{eq:bayes}
+  \Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i).
+  \label{eq:total_prob}
 \end{equation}
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-By the definition of conditional probability and the law of total probability:
-\begin{equation}
-    \Prob(B_j \mid A) = \frac{\Prob(A \cap B_j)}{\Prob(A)} = \frac{\Prob(A \mid B_j)\, \Prob(B_j)}{\sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i)}.
-\end{equation}
+Since $\{B_i\}$ partitions $\Omega$:
+\[
+  A = A \cap \Omega = A \cap \bigcup_{i=1}^n B_i
+  = \bigcup_{i=1}^n (A \cap B_i).
+\]
+The sets $A \cap B_1, \ldots, A \cap B_n$ are pairwise disjoint (inherited
+from the $B_i$). By finite additivity:
+\[
+  \Prob(A) = \sum_{i=1}^n \Prob(A \cap B_i)
+  = \sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i),
+\]
+where the last step uses $\Prob(A \cap B_i) = \Prob(A \mid B_i) \Prob(B_i)$
+from the definition of conditional probability.
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-The chain rule of probability decomposes the joint probability of a trajectory $(S_0, A_0, R_1, S_1, \ldots)$ into a product of transition and policy probabilities. This decomposition is the starting point of the importance sampling ratio used in off-policy methods (TRPO, PPO). Bayes' theorem underlies posterior updates in Bayesian RL and model-based methods.
-\end{rlconnection}
-
-%% ============================================================
-%% SECTION 3: RANDOM VARIABLES AND DISTRIBUTIONS
-%% ============================================================
-
-\section{Random Variables and Distributions}
-\label{sec:random_variables}
-
-\subsection{Measurability}
-\label{subsec:measurability}
-
-\begin{definition}[Measurable Function / Random Variable]
-\label{def:measurable}
-Let $(\Omega, \mathcal{F})$ be a measurable space. A function $X: \Omega \to \R$ is \emph{$\mathcal{F}$-measurable} (or a \emph{random variable}) if for every Borel set $B \subseteq \R$:
+\begin{keyresult}[title={Bayes' Theorem}]
+\begin{theorem}[Bayes' Theorem]
+\label{thm:bayes}
+Let $B_1, \ldots, B_n$ partition $\Omega$ with $\Prob(B_i) > 0$, and let
+$A$ be an event with $\Prob(A) > 0$. Then for each $j$:
 \begin{equation}
-    X^{-1}(B) = \{\omega \in \Omega : X(\omega) \in B\} \in \mathcal{F}.
-    \label{eq:measurable}
+  \Prob(B_j \mid A)
+  = \frac{\Prob(A \mid B_j)\, \Prob(B_j)}
+         {\sum_{i=1}^n \Prob(A \mid B_i)\, \Prob(B_i)}.
+  \label{eq:bayes}
 \end{equation}
-Equivalently, it suffices to check that $\{X \leq x\} \in \mathcal{F}$ for all $x \in \R$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+By the definition of conditional probability:
+\[
+  \Prob(B_j \mid A) = \frac{\Prob(A \cap B_j)}{\Prob(A)}.
+\]
+The numerator satisfies $\Prob(A \cap B_j) = \Prob(A \mid B_j) \Prob(B_j)$
+(definition of conditional probability). The denominator is expanded using
+the law of total probability (Theorem~\ref{thm:total_prob}):
+$\Prob(A) = \sum_{i=1}^n \Prob(A \mid B_i) \Prob(B_i)$.
+Substituting gives the result.
+\end{proof}
+
+%% ============================================================
+%% SECTION 4: EXPECTATION VIA THE LEBESGUE INTEGRAL
+%% ============================================================
+
+\section{Expectation via the Lebesgue Integral}
+\label{sec:expectation}
+
+\subsection{Integral of Simple Functions}
+\label{subsec:integral_simple}
+
+\begin{definition}[Integral of a Non-negative Simple Function]
+\label{def:integral_simple}
+Let $(\Omega, \mathcal{F}, \mu)$ be a measure space and let
+$\varphi = \sum_{i=1}^n a_i \indicator_{A_i}$ be a non-negative simple
+function in standard representation ($a_i \geq 0$ distinct,
+$A_i = \varphi^{-1}(\{a_i\})$). The \emph{Lebesgue integral} of $\varphi$
+is
+\begin{equation}
+  \int_\Omega \varphi\, d\mu = \sum_{i=1}^n a_i\, \mu(A_i).
+  \label{eq:integral_simple}
+\end{equation}
 \end{definition}
 
-\begin{proposition}[Algebra of Measurable Functions]
-\label{prop:measurable_algebra}
-If $X$ and $Y$ are $\mathcal{F}$-measurable and $a, b \in \R$, then the following are $\mathcal{F}$-measurable:
-\begin{enumerate}[nosep]
-    \item $aX + bY$ (linear combinations),
-    \item $XY$ (products),
-    \item $|X|$ (absolute value),
-    \item $\max(X, Y)$ and $\min(X, Y)$,
-    \item $g(X)$ for any Borel-measurable function $g: \R \to \R$.
+\begin{proposition}[Properties of the Simple Integral]
+\label{prop:simple_integral_props}
+For non-negative simple functions $\varphi, \psi$ and $c \geq 0$:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $\int c\varphi\, d\mu = c \int \varphi\, d\mu$.
+  \item $\int (\varphi + \psi)\, d\mu
+    = \int \varphi\, d\mu + \int \psi\, d\mu$.
+  \item If $\varphi \leq \psi$ pointwise, then
+    $\int \varphi\, d\mu \leq \int \psi\, d\mu$.
 \end{enumerate}
 \end{proposition}
 
 \begin{proof}
-We prove (1); the others follow similar arguments.
+\textbf{(a)} If $\varphi = \sum a_i \indicator_{A_i}$, then
+$c\varphi = \sum (ca_i) \indicator_{A_i}$. Hence
+$\int c\varphi\, d\mu = \sum ca_i\, \mu(A_i)
+= c \sum a_i\, \mu(A_i) = c \int \varphi\, d\mu$.
 
-For $aX + bY$, we need $\{aX + bY \leq c\} \in \mathcal{F}$ for all $c \in \R$. Note that $\{aX + bY \leq c\} = \bigcup_{q \in \mathbb{Q}} (\{aX \leq q\} \cap \{bY \leq c - q\})$. For $a > 0$, $\{aX \leq q\} = \{X \leq q/a\} \in \mathcal{F}$; similarly for $bY$. The countable union over $q \in \mathbb{Q}$ of sets in $\mathcal{F}$ is in $\mathcal{F}$.
+\textbf{(b)} Let $\varphi = \sum_{i=1}^m a_i \indicator_{A_i}$ and
+$\psi = \sum_{j=1}^n b_j \indicator_{B_j}$ in standard representations.
+The sets $C_{ij} = A_i \cap B_j$ form a partition of $\Omega$ (since both
+$\{A_i\}$ and $\{B_j\}$ are partitions). On $C_{ij}$,
+$\varphi + \psi = a_i + b_j$. Therefore:
+\begin{align}
+  \int (\varphi + \psi)\, d\mu
+  &= \sum_{i,j} (a_i + b_j)\, \mu(C_{ij}) \nonumber\\
+  &= \sum_i a_i \sum_j \mu(C_{ij}) + \sum_j b_j \sum_i \mu(C_{ij})
+   \nonumber\\
+  &= \sum_i a_i\, \mu(A_i) + \sum_j b_j\, \mu(B_j)
+  = \int \varphi\, d\mu + \int \psi\, d\mu. \label{eq:simple_linearity}
+\end{align}
+Here we used $\sum_j \mu(C_{ij}) = \mu(A_i)$ (since
+$\bigsqcup_j C_{ij} = A_i$).
+
+\textbf{(c)} $\psi - \varphi \geq 0$, so
+$\int \psi\, d\mu = \int \varphi\, d\mu + \int (\psi - \varphi)\, d\mu
+\geq \int \varphi\, d\mu$.
 \end{proof}
 
-\begin{definition}[$\sigma$-Algebra Generated by a Random Variable]
-\label{def:sigma_rv}
-The $\sigma$-algebra generated by a random variable $X$ is:
+\subsection{Non-negative and General Integrals}
+\label{subsec:integral_general}
+
+\begin{definition}[Lebesgue Integral -- Non-negative Case]
+\label{def:integral_nonneg}
+For a non-negative measurable $f: (\Omega, \mathcal{F}) \to [0, \infty]$:
 \begin{equation}
-    \sigma(X) = \{X^{-1}(B) : B \subseteq \R \text{ is Borel}\} = \{\{X \in B\} : B \text{ Borel}\}.
-    \label{eq:sigma_rv}
+  \int_\Omega f\, d\mu
+  = \sup\left\{\int_\Omega \varphi\, d\mu :
+    0 \leq \varphi \leq f, \; \varphi \text{ simple}\right\}.
+  \label{eq:integral_nonneg}
 \end{equation}
-A random variable $Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$ for some Borel function $g$.
+By the simple function approximation theorem (Lesson~3), simple
+$\varphi_n \uparrow f$ exist, and the monotone convergence theorem gives
+$\int f\, d\mu = \lim_n \int \varphi_n\, d\mu$.
 \end{definition}
 
-\begin{remark}
-The statement ``$Y$ is $\sigma(X)$-measurable if and only if $Y = g(X)$'' is called the \emph{Doob--Dynkin lemma}. It formalizes the intuitive idea that $Y$ is ``determined by $X$'' exactly when $Y$ is a function of $X$. This is the foundation of the pull-out property (Theorem~\ref{thm:pull_out} below): if $h(Z)$ is $\sigma(Z)$-measurable, it acts as a constant when we condition on $Z$.
-\end{remark}
-
-\subsection{Distribution Functions}
-\label{subsec:distributions}
-
-\begin{definition}[Cumulative Distribution Function]
-\label{def:cdf}
-The \emph{cumulative distribution function} (CDF) of a random variable $X$ is:
-\begin{equation}
-    F_X(x) = \Prob(X \leq x), \quad x \in \R.
-    \label{eq:cdf}
-\end{equation}
+\begin{definition}[Lebesgue Integral -- General Case]
+\label{def:integral_general}
+For measurable $f: \Omega \to [-\infty, \infty]$, write $f = f^+ - f^-$
+where $f^+ = \max(f,0)$ and $f^- = \max(-f,0)$. Define
+$\int f\, d\mu = \int f^+\, d\mu - \int f^-\, d\mu$ whenever at least one
+side is finite. If both are finite, $f$ is \emph{integrable}
+($f \in L^1(\mu)$).
 \end{definition}
-
-\begin{proposition}[Properties of the CDF]
-\label{prop:cdf_props}
-Every CDF $F$ satisfies:
-\begin{enumerate}[nosep]
-    \item $F$ is non-decreasing.
-    \item $\lim_{x \to -\infty} F(x) = 0$ and $\lim_{x \to +\infty} F(x) = 1$.
-    \item $F$ is right-continuous: $\lim_{y \downarrow x} F(y) = F(x)$.
-\end{enumerate}
-\end{proposition}
-
-\begin{proof}
-\textbf{(1)} If $x \leq y$, then $\{X \leq x\} \subseteq \{X \leq y\}$, so $F(x) = \Prob(X \leq x) \leq \Prob(X \leq y) = F(y)$ by monotonicity of $\Prob$.
-
-\textbf{(2)} For the left limit, let $A_n = \{X \leq -n\} = \{\omega \in \Omega : X(\omega) \leq -n\}$.
-
-\emph{The $A_n$ are decreasing:} If $\omega \in A_{n+1}$, then $X(\omega) \leq -(n+1) < -n$, so $\omega \in A_n$. Hence $A_{n+1} \subseteq A_n$, giving $A_1 \supseteq A_2 \supseteq \cdots$.
-
-\emph{$\bigcap_{n=1}^\infty A_n = \emptyset$:} Suppose for contradiction that $\omega \in \bigcap_{n=1}^\infty A_n$. Then $\omega \in A_n$ for every $n \geq 1$, meaning $X(\omega) \leq -n$ for every $n \geq 1$. Since $X : \Omega \to \mathbb{R}$, the value $X(\omega)$ is a real number. But for any $x \in \mathbb{R}$, the Archimedean property of $\mathbb{R}$ guarantees the existence of $n_0 \in \mathbb{N}$ with $n_0 > -x$, i.e., $x > -n_0$. Taking $x = X(\omega)$, we get $X(\omega) > -n_0$, contradicting $X(\omega) \leq -n_0$. Therefore no such $\omega$ exists and $\bigcap_{n=1}^\infty A_n = \emptyset$.
-
-By continuity from above (Theorem~\ref{thm:continuity}), $\lim_{n \to \infty} F(-n) = \lim_{n \to \infty} \Prob(A_n) = \Prob(\bigcap A_n) = \Prob(\emptyset) = 0$.
-
-The right limit is analogous with $A_n = \{X \leq n\}$ increasing to $\Omega$ (every $\omega$ satisfies $X(\omega) \leq n$ for large enough $n$, again by the Archimedean property).
-
-\textbf{(3)} Let $y_n \downarrow x$. Then $\{X \leq y_n\} \supseteq \{X \leq y_{n+1}\}$ and $\bigcap_n \{X \leq y_n\} = \{X \leq x\}$. By continuity from above, $\lim F(y_n) = F(x)$.
-\end{proof}
-
-\subsection{Expectation}
-\label{subsec:expectation}
 
 \begin{definition}[Expectation]
 \label{def:expectation}
-The \emph{expectation} (or \emph{expected value}) of a discrete random variable $X$ with PMF $p_X$ is
+Let $X$ be a random variable on $(\Omega, \mathcal{F}, \Prob)$. The
+\emph{expectation} of $X$ is
 \begin{equation}
-    \E[X] = \sum_{x} x\, p_X(x),
-    \label{eq:expectation_def}
+  \E[X] = \int_\Omega X\, d\Prob,
+  \label{eq:expectation}
 \end{equation}
-provided the sum converges absolutely: $\sum_x |x|\, p_X(x) < \infty$.
-\end{definition}
-
-\begin{tdconnection}[Connection to TD Learning]
-The state-value function $V^\pi(s) = \E_\pi[G_0 \mid S_0 = s]$ is an expectation of the return $G_0 = \sum_{t=0}^\infty \gamma^t R_{t+1}$ over all trajectories from state $s$. Since the MDP has finite state and action spaces and $\gamma < 1$, the return is bounded, so the expectation is always well defined.
-\end{tdconnection}
-
-\subsection{Common Distributions}
-\label{subsec:common_dist}
-
-\begin{definition}[Bernoulli Distribution]
-\label{def:bernoulli}
-A random variable $X$ has a \emph{Bernoulli distribution} with parameter $p \in [0,1]$, written $X \sim \text{Bernoulli}(p)$, if $\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$. Then $\E[X] = 1 \cdot p + 0 \cdot (1-p) = p$.
-\end{definition}
-
-\begin{definition}[Categorical Distribution]
-\label{def:categorical}
-A random variable $X$ taking values in $\{1, 2, \ldots, k\}$ has a \emph{categorical distribution} with parameters $(p_1, \ldots, p_k)$, where $p_i \geq 0$ and $\sum_i p_i = 1$, if $\Prob(X = i) = p_i$.
-\end{definition}
-
-\begin{definition}[Geometric Distribution]
-\label{def:geometric}
-$X \sim \text{Geometric}(p)$ for $p \in (0,1]$ if $\Prob(X = k) = (1-p)^{k-1} p$ for $k = 1, 2, \ldots$. Then $\E[X] = 1/p$.
+provided the integral exists (i.e., $\E[|X|] < \infty$).
 \end{definition}
 
 \begin{remark}
-The variance of these distributions ($\Var(X) = p(1-p)$ for Bernoulli, $\Var(X) = (1-p)/p^2$ for Geometric) will be computed in Section~\ref{sec:variance} once variance is formally defined.
+For a discrete random variable taking values $\{x_k\}_{k \geq 1}$ with
+$p_k = \Prob(X = x_k)$, the Lebesgue integral reduces to
+$\E[X] = \sum_k x_k p_k$ (provided $\sum_k |x_k| p_k < \infty$). This is
+because $X = \lim_N \sum_{k=1}^N x_k \indicator_{\{X = x_k\}}$ and the
+integral of each simple approximation is $\sum_{k=1}^N x_k p_k$.
 \end{remark}
 
-\begin{rlconnection}[Connection to RL]
-The categorical distribution models action selection under a stochastic policy: $A_t \sim \pi(\cdot \mid s)$ is categorical with $\Prob(A_t = a) = \pi(a \mid s)$. The geometric distribution arises in episode length analysis: in an MDP with a per-step termination probability $p$, the episode length is geometric.
-\end{rlconnection}
+%% ============================================================
+%% SECTION 5: LINEARITY OF EXPECTATION
+%% ============================================================
 
-\subsection{Joint Distributions and Marginals}
-\label{subsec:joint}
+\section{Linearity of Expectation}
+\label{sec:linearity}
 
-\begin{definition}[Joint Distribution]
-\label{def:joint}
-For random variables $X$ and $Y$, the \emph{joint PMF} (in the discrete case) is:
-\begin{equation}
-    p_{X,Y}(x, y) = \Prob(X = x, Y = y).
-    \label{eq:joint_pmf}
-\end{equation}
-\end{definition}
-
-\begin{definition}[Marginal Distribution]
-\label{def:marginal}
-The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over all values of $Y$:
-\begin{equation}
-    p_X(x) = \Prob(X = x) = \sum_y \Prob(X = x, Y = y) = \sum_y p_{X,Y}(x, y).
-    \label{eq:marginal}
-\end{equation}
-\end{definition}
-
-\begin{proposition}[Marginalization via Total Probability]
-\label{prop:marginalization}
-Let $X$ and $Y$ be discrete random variables. Then for every $x$ in the range of $X$:
-\[
-    p_X(x) = \sum_y p_{X,Y}(x,y).
-\]
-\end{proposition}
-
-\begin{proof}
-Let $Y$ take values in the countable set $\{y_1, y_2, \ldots\}$. The events $B_j = \{Y = y_j\}$ are pairwise disjoint (since $Y$ assigns a single value to each $\omega$), and they cover $\Omega$: every $\omega \in \Omega$ satisfies $Y(\omega) = y_j$ for exactly one $j$, so $\bigcup_j B_j = \Omega$.
-
-Fix an arbitrary $x$ in the range of $X$ and let $A = \{X = x\}$. Since $\bigcup_j B_j = \Omega$:
-\[
-    A = A \cap \Omega = A \cap \bigcup_j B_j = \bigcup_j (A \cap B_j).
-\]
-The sets $A \cap B_j = \{X = x, Y = y_j\}$ are pairwise disjoint (inherited from the $B_j$). By countable additivity of $\Prob$ (Definition~\ref{def:prob_measure}):
-\begin{align}
-    p_X(x) = \Prob(X = x) &= \Prob\!\Bigl(\bigcup_j (A \cap B_j)\Bigr) \nonumber\\
-    &= \sum_j \Prob(A \cap B_j) \nonumber\\
-    &= \sum_j \Prob(X = x, Y = y_j) = \sum_j p_{X,Y}(x, y_j). \label{eq:marginalization_proof}
-\end{align}
-
-Note that this derivation uses only countable additivity and requires no assumption that $\Prob(Y = y_j) > 0$: terms with $\Prob(Y = y_j) = 0$ simply contribute zero to the sum.
-\end{proof}
-
-\subsection{Linearity of Expectation}
-\label{subsec:linearity}
-
-\begin{keyresult}[Linearity of Expectation]
-\begin{theorem}[Linearity]
+\begin{keyresult}[title={Linearity of Expectation}]
+\begin{theorem}[Linearity of Expectation]
 \label{thm:linearity}
-For any discrete random variables $X$ and $Y$ with finite expectations, and constants $a, b \in \R$:
+For random variables $X$ and $Y$ with finite expectations, and constants
+$a, b \in \R$:
 \begin{equation}
-    \E[aX + bY] = a\,\E[X] + b\,\E[Y].
-    \label{eq:linearity}
+  \E[aX + bY] = a\,\E[X] + b\,\E[Y].
+  \label{eq:linearity}
 \end{equation}
 This holds regardless of whether $X$ and $Y$ are independent.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Let $X$ take values $\{x_i\}$ and $Y$ take values $\{y_j\}$. Denote the joint PMF by $p_{X,Y}(x_i, y_j) = \Prob(X = x_i, Y = y_j)$. Then:
-\begin{align}
-    \E[aX + bY]
-    &= \sum_{i}\sum_{j} (a x_i + b y_j)\, p_{X,Y}(x_i, y_j) \nonumber\\
-    &= a \sum_{i}\sum_{j} x_i\, p_{X,Y}(x_i, y_j) + b \sum_{i}\sum_{j} y_j\, p_{X,Y}(x_i, y_j) \nonumber\\
-    &= a \sum_{i} x_i \underbrace{\sum_{j} p_{X,Y}(x_i, y_j)}_{= p_X(x_i)} + b \sum_{j} y_j \underbrace{\sum_{i} p_{X,Y}(x_i, y_j)}_{= p_Y(y_j)} \nonumber\\
-    &= a \sum_{i} x_i\, p_X(x_i) + b \sum_{j} y_j\, p_Y(y_j) \nonumber\\
-    &= a\,\E[X] + b\,\E[Y]. \label{eq:linearity_proof}
-\end{align}
-The marginal sums $\sum_j p_{X,Y}(x_i, y_j) = p_X(x_i)$ and $\sum_i p_{X,Y}(x_i, y_j) = p_Y(y_j)$ follow from the definition of marginal distributions. No independence assumption is needed.
+We prove linearity in stages, building from simple functions to the general
+case.
+
+\textbf{Step 1: Homogeneity, $\E[aX] = a\E[X]$.}
+For $a \geq 0$ and $X \geq 0$: if $\varphi \leq X$ is simple, then
+$a\varphi \leq aX$ is simple and $\int a\varphi = a \int \varphi$
+(Proposition~\ref{prop:simple_integral_props}(a)). Taking the supremum:
+$\int aX = a \int X$. For general $a$ and $X$, decompose using positive
+and negative parts and consider the cases $a \geq 0$ and $a < 0$
+separately.
+
+\textbf{Step 2: Additivity for non-negative simple functions.}
+This is Proposition~\ref{prop:simple_integral_props}(b).
+
+\textbf{Step 3: Additivity for non-negative measurable functions.}
+Let $X, Y \geq 0$ be measurable. By the simple function approximation
+theorem, there exist simple $\varphi_n \uparrow X$ and
+$\psi_n \uparrow Y$. Then $\varphi_n + \psi_n \uparrow X + Y$ and
+\[
+  \int (X + Y)\, d\Prob
+  = \lim_n \int (\varphi_n + \psi_n)\, d\Prob
+  = \lim_n \left(\int \varphi_n\, d\Prob + \int \psi_n\, d\Prob\right)
+  = \int X\, d\Prob + \int Y\, d\Prob,
+\]
+where the first equality uses the monotone convergence theorem (the
+integrals of an increasing sequence of non-negative functions converge to
+the integral of the limit).
+
+\textbf{Step 4: General case.}
+Write $X = X^+ - X^-$ and $Y = Y^+ - Y^-$. Then
+$X + Y = (X^+ + Y^+) - (X^- + Y^-)$. By Step~3 applied to the
+non-negative functions $X^+ + Y^+$ and $X^- + Y^-$:
+$\int(X^+ + Y^+) = \int X^+ + \int Y^+$ and similarly for the negative
+parts. It follows that $\E[X+Y] = \E[X] + \E[Y]$.
+
+\textbf{Combining:} $\E[aX + bY] = \E[aX] + \E[bY] = a\E[X] + b\E[Y]$.
 \end{proof}
 
-\begin{corollary}[Finite Sums]
+\begin{corollary}[Linearity for Finite Sums]
 \label{cor:linearity_sum}
-For any random variables $X_1, \ldots, X_n$ with finite expectations and constants $a_1, \ldots, a_n$:
+For random variables $X_1, \ldots, X_n$ with finite expectations and
+constants $a_1, \ldots, a_n \in \R$:
 \begin{equation}
-    \E\!\left[\sum_{k=1}^n a_k X_k\right] = \sum_{k=1}^n a_k\,\E[X_k].
-    \label{eq:linearity_sum}
+  \E\!\left[\sum_{k=1}^n a_k X_k\right]
+  = \sum_{k=1}^n a_k\, \E[X_k].
+  \label{eq:linearity_sum}
 \end{equation}
 \end{corollary}
 
 \begin{proof}
-Apply Theorem~\ref{thm:linearity} inductively $n-1$ times.
+Induction on $n$. The base case $n = 1$ is homogeneity. For the inductive
+step, let $Z = \sum_{k=1}^{n-1} a_k X_k$. By
+Theorem~\ref{thm:linearity}:
+\[
+  \E\!\left[\sum_{k=1}^n a_k X_k\right]
+  = \E[Z + a_n X_n]
+  = \E[Z] + a_n \E[X_n]
+  = \sum_{k=1}^{n-1} a_k \E[X_k] + a_n \E[X_n]
+  = \sum_{k=1}^n a_k \E[X_k],
+\]
+where the third equality uses the inductive hypothesis.
 \end{proof}
 
-\begin{tdconnection}[Connection to TD Learning]
-Linearity is used to split the return $G_t = R_{t+1} + \gamma G_{t+1}$ inside expectations:
+\begin{rlconnection}[title={Connection to RL}]
+Linearity is the first step of every Bellman equation derivation. The
+return $G_t = R_{t+1} + \gamma G_{t+1}$ gives
 \[
-    \E_\pi[G_t \mid S_t = s] = \E_\pi[R_{t+1} \mid S_t = s] + \gamma\,\E_\pi[G_{t+1} \mid S_t = s].
+  V^\pi(s) = \E_\pi[G_t \mid S_t = s]
+  = \E_\pi[R_{t+1} \mid S_t = s]
+    + \gamma\, \E_\pi[G_{t+1} \mid S_t = s].
 \]
-This is the first step of every Bellman equation derivation.
-\end{tdconnection}
+The second term is then expanded using the law of total expectation
+(developed in Lesson~6) to obtain the full Bellman equation.
+\end{rlconnection}
 
 %% ============================================================
-%% SECTION 4: CONDITIONAL EXPECTATION AND TOWER PROPERTY
+%% SECTION 6: COMMON DISCRETE DISTRIBUTIONS
 %% ============================================================
 
+\section{Common Discrete Distributions}
+\label{sec:distributions}
+
+\begin{definition}[Bernoulli Distribution]
+\label{def:bernoulli}
+A random variable $X$ has a \emph{Bernoulli distribution} with parameter
+$p \in [0,1]$, written $X \sim \operatorname{Bernoulli}(p)$, if
+$\Prob(X = 1) = p$ and $\Prob(X = 0) = 1 - p$.
+\end{definition}
+
+\begin{proposition}[Expectation of Bernoulli]
+\label{prop:bernoulli_E}
+If $X \sim \operatorname{Bernoulli}(p)$, then $\E[X] = p$.
+\end{proposition}
+
+\begin{proof}
+$\E[X] = 1 \cdot \Prob(X = 1) + 0 \cdot \Prob(X = 0) = p$.
+\end{proof}
+
+\begin{definition}[Categorical Distribution]
+\label{def:categorical}
+A random variable $X$ taking values in $\{1, 2, \ldots, k\}$ has a
+\emph{categorical distribution} with parameters $(p_1, \ldots, p_k)$,
+where $p_i \geq 0$ and $\sum_{i=1}^k p_i = 1$, if
+$\Prob(X = i) = p_i$ for each $i$.
+\end{definition}
+
+\begin{proposition}[Expectation of Categorical]
+\label{prop:categorical_E}
+If $X$ has a categorical distribution with parameters $(p_1, \ldots, p_k)$,
+then $\E[X] = \sum_{i=1}^k i\, p_i$.
+\end{proposition}
+
+\begin{proof}
+$\E[X] = \sum_{i=1}^k i \cdot \Prob(X = i) = \sum_{i=1}^k i\, p_i$.
+\end{proof}
+
+\begin{rlconnection}[title={Connection to RL}]
+The categorical distribution models action selection under a stochastic
+policy: $A_t \sim \pi(\cdot \mid s)$ is categorical with
+$\Prob(A_t = a) = \pi(a \mid s)$. The policy gradient theorem computes
+$\nabla_\theta \E[R]$ by differentiating through these categorical
+probabilities.
+\end{rlconnection}
+
+\begin{definition}[Geometric Distribution]
+\label{def:geometric}
+$X \sim \operatorname{Geometric}(p)$ for $p \in (0,1]$ if
+$\Prob(X = k) = (1-p)^{k-1} p$ for $k = 1, 2, 3, \ldots$.
+\end{definition}
+
+\begin{proposition}[Expectation of Geometric]
+\label{prop:geometric_E}
+If $X \sim \operatorname{Geometric}(p)$, then $\E[X] = 1/p$.
+\end{proposition}
+
+\begin{proof}
+We compute:
+\begin{align}
+  \E[X] &= \sum_{k=1}^\infty k\, (1-p)^{k-1} p
+  = p \sum_{k=1}^\infty k\, (1-p)^{k-1}.
+  \label{eq:geometric_E_start}
+\end{align}
+Let $q = 1 - p$. We evaluate $\sum_{k=1}^\infty k q^{k-1}$ by
+differentiating the geometric series:
+\[
+  \sum_{k=0}^\infty q^k = \frac{1}{1 - q}
+  \quad \implies \quad
+  \frac{d}{dq} \sum_{k=0}^\infty q^k
+  = \sum_{k=1}^\infty k q^{k-1} = \frac{1}{(1-q)^2}.
+\]
+The differentiation is justified because the power series converges
+uniformly on $[0, q_0]$ for any $q_0 < 1$, and $q = 1 - p \in [0, 1)$.
+Substituting $1 - q = p$:
+\[
+  \E[X] = p \cdot \frac{1}{p^2} = \frac{1}{p}. \qedhere
+\]
+\end{proof}
+
+\begin{remark}
+The geometric distribution models the number of trials until the first
+success. In RL, it arises in episode length analysis: if each step has
+termination probability $p$, the episode length is
+$\operatorname{Geometric}(p)$ with expected length $1/p$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: JOINT AND MARGINAL DISTRIBUTIONS
+%% ============================================================
+
+\section{Joint and Marginal Distributions}
+\label{sec:joint_marginal}
+
+\begin{definition}[Joint Distribution]
+\label{def:joint}
+For random variables $X$ and $Y$ on $(\Omega, \mathcal{F}, \Prob)$, the
+\emph{joint distribution} is the probability measure $\mu_{X,Y}$ on
+$(\R^2, \Borel(\R^2))$ defined by
+\begin{equation}
+  \mu_{X,Y}(B) = \Prob\bigl((X, Y) \in B\bigr)
+  \quad \text{for all } B \in \Borel(\R^2).
+\end{equation}
+In the discrete case, the \emph{joint PMF} is
+$p_{X,Y}(x,y) = \Prob(X = x, Y = y)$.
+\end{definition}
+
+\begin{definition}[Marginal Distribution]
+\label{def:marginal}
+The \emph{marginal PMF} of $X$ is obtained by summing the joint PMF over
+all values of $Y$:
+\begin{equation}
+  p_X(x) = \sum_y p_{X,Y}(x, y).
+  \label{eq:marginal_def}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Marginalization via Total Probability]
+\label{prop:marginalization}
+Let $X$ and $Y$ be discrete random variables. Then for every $x$ in the
+range of $X$:
+\begin{equation}
+  p_X(x) = \sum_y p_{X,Y}(x, y).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Let $Y$ take values in $\{y_1, y_2, \ldots\}$. The events
+$B_j = \{Y = y_j\}$ are pairwise disjoint with $\bigcup_j B_j = \Omega$.
+For $A = \{X = x\}$: $A = \bigsqcup_j (A \cap B_j)$, so by countable
+additivity $p_X(x) = \sum_j \Prob(X = x, Y = y_j)
+= \sum_j p_{X,Y}(x, y_j)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 8: MONOTONICITY AND BASIC INTEGRAL INEQUALITIES
+%% ============================================================
+
+\section{Basic Properties of Expectation}
+\label{sec:expect_props}
+
+\begin{proposition}[Monotonicity of Expectation]
+\label{prop:monotonicity}
+If $X \leq Y$ almost surely and both expectations exist, then
+$\E[X] \leq \E[Y]$.
+\end{proposition}
+
+\begin{proof}
+$Y - X \geq 0$ a.s., so $\E[Y - X] \geq 0$ (the integral of a
+non-negative function is non-negative). By linearity:
+$\E[Y] - \E[X] = \E[Y - X] \geq 0$.
+\end{proof}
+
+\begin{proposition}[Triangle Inequality for Expectation]
+\label{prop:triangle}
+If $\E[|X|] < \infty$, then $|\E[X]| \leq \E[|X|]$.
+\end{proposition}
+
+\begin{proof}
+Since $-|X| \leq X \leq |X|$, monotonicity gives
+$-\E[|X|] \leq \E[X] \leq \E[|X|]$, which is $|\E[X]| \leq \E[|X|]$.
+\end{proof}
+
+\begin{proposition}[Expectation of an Indicator]
+\label{prop:expect_indicator}
+For any event $A \in \mathcal{F}$, $\E[\indicator_A] = \Prob(A)$.
+\end{proposition}
+
+\begin{proof}
+$\indicator_A$ is a simple function with standard representation
+$1 \cdot \indicator_A + 0 \cdot \indicator_{A^c}$. By
+Definition~\ref{def:integral_simple}:
+$\E[\indicator_A] = 1 \cdot \Prob(A) + 0 \cdot \Prob(A^c) = \Prob(A)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}
+\label{ex:total_prob_countable}
+Extend the law of total probability
+(Theorem~\ref{thm:total_prob}) to countable partitions: if
+$B_1, B_2, \ldots$ is a countable partition of $\Omega$ with
+$\Prob(B_i) > 0$, show that $\Prob(A) = \sum_{i=1}^\infty
+\Prob(A \mid B_i) \Prob(B_i)$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:bayes_three}
+In a three-state MDP, the agent starts in state $s_1$, $s_2$, or $s_3$
+with prior probabilities $0.5$, $0.3$, $0.2$. The probability of
+receiving a positive reward ($R > 0$) from each state is $0.9$, $0.4$,
+$0.1$ respectively. Given that a positive reward was observed, compute
+the posterior probability of each starting state using Bayes' theorem.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:linearity_return}
+Let $G_t = \sum_{k=0}^{T-t-1} \gamma^k R_{t+k+1}$ be the discounted
+return in a finite-horizon MDP with horizon $T$ and discount factor
+$\gamma \in (0,1)$. Using linearity of expectation, show that
+$\E[G_t] = \sum_{k=0}^{T-t-1} \gamma^k \E[R_{t+k+1}]$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:geometric_memoryless}
+Prove the \emph{memoryless property} of the geometric distribution: if
+$X \sim \operatorname{Geometric}(p)$, then for all $m, n \geq 1$:
+\[
+  \Prob(X > m + n \mid X > m) = \Prob(X > n).
+\]
+\textit{Hint:} Compute $\Prob(X > k) = (1-p)^k$ and use the definition of
+conditional probability.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:cdf_determines_expectation}
+Let $X$ be a non-negative integer-valued random variable with CDF $F_X$.
+Show that $\E[X] = \sum_{k=0}^\infty \Prob(X > k)
+= \sum_{k=0}^\infty (1 - F_X(k))$.
+\textit{Hint:} Write $X = \sum_{k=0}^\infty \indicator_{\{X > k\}}$ and
+apply linearity.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:indicator_variance_preview}
+For $A \in \mathcal{F}$, compute $\E[\indicator_A^2]$ and use it to find
+$\E[\indicator_A^2] - (\E[\indicator_A])^2$. The quantity you obtain is
+the variance of a Bernoulli random variable (to be formally defined in
+Lesson~7).
+\end{exercise}
+
+\begin{exercise}
+\label{ex:joint_marginal_compute}
+Let $(X, Y)$ have joint PMF $p_{X,Y}(0,0) = 1/4$, $p_{X,Y}(0,1) = 1/4$,
+$p_{X,Y}(1,0) = 1/4$, $p_{X,Y}(1,1) = 1/4$.
+Compute the marginal PMFs $p_X$ and $p_Y$, verify $\E[XY] = \E[X]\E[Y]$,
+and compute $\E[X + 2Y]$ using linearity.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{4cm} p{5.5cm} p{4.5cm}}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{Role} \\
+\midrule
+Conditional probability &
+  $\Prob(A \mid B) = \Prob(A \cap B)/\Prob(B)$ &
+  Defines Bayesian updates \\
+Chain rule &
+  $\Prob(\bigcap A_i) = \prod \Prob(A_i \mid \bigcap_{j<i} A_j)$ &
+  Trajectory probabilities \\
+Total probability &
+  $\Prob(A) = \sum \Prob(A \mid B_i)\Prob(B_i)$ &
+  Marginalizes over partitions \\
+Bayes' theorem &
+  $\Prob(B_j \mid A) \propto \Prob(A \mid B_j)\Prob(B_j)$ &
+  Posterior updates \\
+Expectation &
+  $\E[X] = \int X\, d\Prob$ via Lebesgue integral &
+  Value functions \\
+Linearity &
+  $\E[aX + bY] = a\E[X] + b\E[Y]$ &
+  Bellman equation derivations \\
+Bernoulli & $\E[X] = p$ & Binary outcomes \\
+Categorical & $\E[X] = \sum i\, p_i$ & Policy action selection \\
+Geometric & $\E[X] = 1/p$ & Episode length \\
+Marginalization &
+  $p_X(x) = \sum_y p_{X,Y}(x,y)$ &
+  Summing over nuisance variables \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\textbf{Next lesson:} Conditional Expectation and the Tower
+Property -- the rigorous definition of $\E[Y \mid X]$ as a random
+variable, its key properties (linearity, pull-out, tower), and
+applications to the Bellman equation.
+
+\bibliography{measure-theory-refs}
 
 \end{document}

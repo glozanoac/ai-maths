@@ -1,301 +1,687 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 1: Measure Spaces}}
+\fancyhead[L]{\textsc{Lesson 3: Measurable Functions and Simple Approximation}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\powerset}{\mathcal{P}}
-\newcommand{\Borel}{\mathcal{B}}
-
-% ---- Title ----
 \title{Lesson 3: Measurable Functions and Simple Approximation}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
-\date{February 9, 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{4}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Every random variable in reinforcement learning -- states, actions,
+rewards, returns -- is a measurable function from a probability space to
+a target space. This lesson develops: (1) the generator criterion for
+checking measurability efficiently, (2) closure under algebraic operations
+and pointwise limits, (3) the simple function approximation theorem that
+bridges to Lebesgue integration, and (4) the Doob--Dynkin lemma
+characterizing $\sigma(X)$-measurability as ``being a function of $X$.''
+
+%% ============================================================
+%% SECTION 2: MEASURABLE FUNCTIONS
+%% ============================================================
 
 \section{Measurable Functions}
 \label{sec:measurable}
 
-\subsection{Definition and Characterization}
+\subsection{Definition and Basic Properties}
 \label{subsec:meas_def}
 
 \begin{definition}[Measurable Function]
 \label{def:measurable_fn}
-Let $(\Omega, \mathcal{F})$ and $(S, \mathcal{S})$ be measurable spaces. A function
-$f: \Omega \to S$ is \emph{$(\mathcal{F}, \mathcal{S})$-measurable} (or simply
-\emph{measurable}) if:
+Let $(\Omega, \mathcal{F})$ and $(S, \mathcal{S})$ be measurable spaces. A
+function $f: \Omega \to S$ is \emph{$(\mathcal{F}, \mathcal{S})$-measurable}
+(or simply \emph{measurable} when the sigma-algebras are clear) if
 \begin{equation}
-    f^{-1}(B) := \{\omega \in \Omega : f(\omega) \in B\} \in \mathcal{F} \quad \text{for all } B \in \mathcal{S}.
-    \label{eq:measurable_fn}
+  f^{-1}(B) := \{\omega \in \Omega : f(\omega) \in B\} \in \mathcal{F}
+  \quad \text{for all } B \in \mathcal{S}.
+  \label{eq:measurable_fn}
 \end{equation}
-When $S = \R$ and $\mathcal{S} = \Borel(\R)$, we say $f$ is \emph{Borel measurable}
-(or just \emph{measurable}).
+When $(S, \mathcal{S}) = (\R, \Borel(\R))$ we call $f$
+\emph{Borel measurable}, and when a probability measure $\Prob$ is present
+on $(\Omega, \mathcal{F})$ we call $f$ a \emph{random variable}.
 \end{definition}
 
+\begin{remark}
+The preimage operation satisfies $f^{-1}(B^c) = (f^{-1}(B))^c$ and
+$f^{-1}(\bigcup_n B_n) = \bigcup_n f^{-1}(B_n)$. These identities are
+used repeatedly when verifying measurability.
+\end{remark}
+
+\subsection{The Generator Criterion}
+\label{subsec:generator_criterion}
+
+Checking the preimage condition for every set in $\mathcal{S}$ is usually
+infeasible. The following result reduces the task to a generating collection.
+
+\begin{keyresult}[title={Generator Criterion}]
 \begin{theorem}[Generator Criterion for Measurability]
 \label{thm:generator_criterion}
-Let $\mathcal{S} = \sigma(\mathcal{C})$ for some collection $\mathcal{C}$. Then
-$f: (\Omega, \mathcal{F}) \to (S, \mathcal{S})$ is measurable if and only if:
+Let $\mathcal{S} = \sigma(\mathcal{C})$ for some collection $\mathcal{C}$
+of subsets of $S$. Then $f: (\Omega, \mathcal{F}) \to (S, \mathcal{S})$
+is measurable if and only if
 \begin{equation}
-    f^{-1}(C) \in \mathcal{F} \quad \text{for all } C \in \mathcal{C}.
+  f^{-1}(C) \in \mathcal{F} \quad \text{for all } C \in \mathcal{C}.
+  \label{eq:generator_criterion}
 \end{equation}
-\end{theorem}
-
-\begin{proof}
-($\Rightarrow$) Trivial: $\mathcal{C} \subseteq \mathcal{S}$.
-
-($\Leftarrow$) Define $\mathcal{G} = \{B \in \mathcal{S} : f^{-1}(B) \in \mathcal{F}\}$. We show $\mathcal{G}$ is a $\sigma$-algebra:
-\begin{itemize}[nosep]
-    \item $S \in \mathcal{G}$: $f^{-1}(S) = \Omega \in \mathcal{F}$.
-    \item $B \in \mathcal{G} \implies B^c \in \mathcal{G}$: $f^{-1}(B^c) = (f^{-1}(B))^c \in \mathcal{F}$.
-    \item $B_n \in \mathcal{G} \implies \bigcup B_n \in \mathcal{G}$: $f^{-1}(\bigcup B_n) = \bigcup f^{-1}(B_n) \in \mathcal{F}$.
-\end{itemize}
-By hypothesis, $\mathcal{C} \subseteq \mathcal{G}$. Since $\mathcal{G}$ is a $\sigma$-algebra, $\sigma(\mathcal{C}) = \mathcal{S} \subseteq \mathcal{G}$, so $\mathcal{G} = \mathcal{S}$.
-\end{proof}
-
-\begin{corollary}[Standard Criterion for Real-Valued Measurability]
-\label{cor:real_measurable}
-$f: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ is measurable if and only if
-$\{f \leq x\} := \{\omega : f(\omega) \leq x\} \in \mathcal{F}$ for all $x \in \R$.
-\end{corollary}
-
-\begin{proof}
-Apply Theorem~\ref{thm:generator_criterion} with $\mathcal{C} = \{(-\infty, x] : x \in \R\}$, which generates $\Borel(\R)$ by Proposition~\ref{prop:borel_generators}(d).
-\end{proof}
-
-\begin{rlconnection}[Connection to RL]
-A \emph{random variable} is precisely a measurable function $X: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$. In an MDP, the state $S_t$, action $A_t$, and reward $R_{t+1}$ are all random variables. The value function $V^\pi(s) = \E[G_t \mid S_t = s]$ is a measurable function of $s$. Corollary~\ref{cor:real_measurable} says that being a random variable means precisely that events like $\{X \leq x\}$ are ``observable'' (in $\mathcal{F}$) --- which is why we can compute their probabilities.
-\end{rlconnection}
-
-\subsection{Algebra of Measurable Functions}
-\label{subsec:meas_algebra}
-
-\begin{theorem}[Closure Properties]
-\label{thm:meas_closure}
-Let $f, g: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ be measurable and $c \in \R$.
-Then the following are measurable:
-\begin{enumerate}[nosep,label=(\alph*)]
-    \item $cf$, \quad $f + g$, \quad $fg$, \quad $|f|$, \quad $\max(f, g)$, \quad $\min(f, g)$.
-    \item $f/g$ on $\{g \neq 0\}$.
-    \item $f^+ = \max(f, 0)$ and $f^- = \max(-f, 0)$.
-\end{enumerate}
-\end{theorem}
-
-\begin{proof}
-We prove $f + g$ is measurable; the others are similar.
-
-\textbf{Key idea:} $\{f + g < c\} = \bigcup_{q \in \Q} (\{f < q\} \cap \{g < c - q\})$.
-
-\textit{Why?} If $f(\omega) + g(\omega) < c$, then $f(\omega) < c - g(\omega)$. By density of $\Q$, there exists $q \in \Q$ with $f(\omega) < q < c - g(\omega)$, so $\omega \in \{f < q\} \cap \{g < c - q\}$.
-
-Conversely, if $f(\omega) < q$ and $g(\omega) < c - q$, then $f(\omega) + g(\omega) < c$.
-
-Since each $\{f < q\}$ and $\{g < c - q\}$ is in $\mathcal{F}$ (measurability of $f$ and $g$), and the union is countable (over $q \in \Q$), we conclude $\{f + g < c\} \in \mathcal{F}$.
-
-Since $\{f + g < c\} \in \mathcal{F}$ for all $c$ and $\{f + g \leq c\} = \bigcap_{n} \{f + g < c + 1/n\}$, we get $\{f + g \leq c\} \in \mathcal{F}$.
-\end{proof}
-
-\begin{theorem}[Limits of Measurable Functions]
-\label{thm:meas_limits}
-If $f_1, f_2, \ldots$ are measurable, then the following are measurable:
-\begin{equation}
-    \sup_n f_n, \quad \inf_n f_n, \quad \limsup_n f_n, \quad \liminf_n f_n.
-\end{equation}
-In particular, if $f_n \to f$ pointwise (or a.s.), then $f$ is measurable.
-\end{theorem}
-
-\begin{proof}
-$\{\sup_n f_n \leq c\} = \bigcap_{n=1}^\infty \{f_n \leq c\} \in \mathcal{F}$ (countable intersection of measurable sets).
-
-$\inf_n f_n = -\sup_n(-f_n)$ is measurable.
-
-$\limsup_n f_n = \inf_n \sup_{k \geq n} f_k$ and $\liminf_n f_n = \sup_n \inf_{k \geq n} f_k$ are measurable by composing the above.
-
-If $f_n \to f$ pointwise, then $f = \lim_n f_n = \limsup_n f_n = \liminf_n f_n$.
-\end{proof}
-
-\subsection{Simple Functions and Approximation}
-\label{subsec:simple}
-
-\begin{definition}[Simple Function]
-\label{def:simple}
-A \emph{simple function} is a measurable function $\varphi: \Omega \to \R$ taking
-finitely many values. Every simple function can be written as:
-\begin{equation}
-    \varphi = \sum_{i=1}^n a_i \indicator_{A_i},
-    \label{eq:simple}
-\end{equation}
-where $a_1, \ldots, a_n \in \R$ are distinct, $A_i = \varphi^{-1}(\{a_i\}) \in \mathcal{F}$,
-and $\Omega = \bigsqcup_{i=1}^n A_i$. This is the \emph{standard representation}.
-\end{definition}
-
-\begin{keyresult}[Simple Function Approximation]
-\begin{theorem}[Approximation Theorem]
-\label{thm:approximation}
-Let $f: (\Omega, \mathcal{F}) \to [0, \infty]$ be measurable. Then there exist
-simple functions $0 \leq \varphi_1 \leq \varphi_2 \leq \cdots$ with $\varphi_n \uparrow f$
-pointwise. If $f$ is bounded, the convergence is uniform.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-For each $n \geq 1$, define:
+$(\Rightarrow)$ If $f$ is measurable, then $f^{-1}(B) \in \mathcal{F}$ for
+all $B \in \mathcal{S}$. Since $\mathcal{C} \subseteq \mathcal{S}$, the
+claim is immediate.
+
+$(\Leftarrow)$ Define the \emph{good-sets collection}
 \begin{equation}
-    \varphi_n(\omega) = \begin{cases}
-        \frac{k-1}{2^n} & \text{if } \frac{k-1}{2^n} \leq f(\omega) < \frac{k}{2^n}, \quad k = 1, 2, \ldots, n \cdot 2^n,\\[4pt]
-        n & \text{if } f(\omega) \geq n.
-    \end{cases}
-    \label{eq:approx_construction}
+  \mathcal{G} = \{B \subseteq S : f^{-1}(B) \in \mathcal{F}\}.
+  \label{eq:good_sets}
 \end{equation}
-In other words, $\varphi_n$ rounds $f$ down to the nearest multiple of $1/2^n$,
-capped at $n$.
+We show that $\mathcal{G}$ is a sigma-algebra on $S$.
 
-\textit{Measurability:} $\varphi_n$ takes finitely many values, and each level set
-$\varphi_n^{-1}(\{k/2^n\}) = \{k/2^n \leq f < (k+1)/2^n\} \in \mathcal{F}$.
+\textit{Step 1.} $S \in \mathcal{G}$: we have
+$f^{-1}(S) = \Omega \in \mathcal{F}$.
 
-\textit{Monotonicity:} $\varphi_{n+1}$ uses a finer grid ($1/2^{n+1}$ vs $1/2^n$)
-and a higher cap ($n+1$ vs $n$), so $\varphi_{n+1} \geq \varphi_n$.
+\textit{Step 2.} If $B \in \mathcal{G}$, then
+$f^{-1}(B^c) = (f^{-1}(B))^c \in \mathcal{F}$, so $B^c \in \mathcal{G}$.
 
-\textit{Convergence:} If $f(\omega) < \infty$, then for $n > f(\omega)$:
-$0 \leq f(\omega) - \varphi_n(\omega) < 1/2^n \to 0$.
-If $f(\omega) = \infty$, then $\varphi_n(\omega) = n \to \infty = f(\omega)$.
+\textit{Step 3.} If $B_1, B_2, \ldots \in \mathcal{G}$, then
+$f^{-1}(\bigcup_n B_n) = \bigcup_n f^{-1}(B_n) \in \mathcal{F}$ (a
+countable union of $\mathcal{F}$-sets), so
+$\bigcup_n B_n \in \mathcal{G}$.
 
-\textit{Uniform convergence when bounded:} If $f \leq M$, then for $n > M$,
-$|f - \varphi_n| < 1/2^n$ everywhere.
+Thus $\mathcal{G}$ is a sigma-algebra. By hypothesis,
+$\mathcal{C} \subseteq \mathcal{G}$. Since $\sigma(\mathcal{C})$ is the
+smallest sigma-algebra containing $\mathcal{C}$, we obtain
+$\mathcal{S} = \sigma(\mathcal{C}) \subseteq \mathcal{G}$. Hence
+$f^{-1}(B) \in \mathcal{F}$ for all $B \in \mathcal{S}$, i.e., $f$ is
+measurable.
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-The approximation theorem is the foundation of Lebesgue integration (next lesson).
-The Lebesgue integral of a non-negative function is defined as
-$\int f\,d\mu = \sup\{\int \varphi\,d\mu : \varphi \text{ simple}, \varphi \leq f\}$,
-where simple function integrals are just weighted sums. In RL, this underlies
-the expectation $\E[G_t \mid S_t = s]$: the return $G_t$ is approximated by
-simple functions, and the expectation is the limit of their integrals.
+\begin{corollary}[Standard Criterion for Real-Valued Measurability]
+\label{cor:real_measurable}
+A function $f: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ is measurable if
+and only if any one of the following equivalent conditions holds for all
+$a \in \R$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $\{\omega : f(\omega) \leq a\} \in \mathcal{F}$,
+  \item $\{\omega : f(\omega) < a\} \in \mathcal{F}$,
+  \item $\{\omega : f(\omega) \geq a\} \in \mathcal{F}$,
+  \item $\{\omega : f(\omega) > a\} \in \mathcal{F}$.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+Each of the four families generates $\Borel(\R)$. For instance, the
+half-lines $\{(-\infty, a] : a \in \R\}$ generate $\Borel(\R)$ (see
+Lesson~1), so condition (i) is equivalent to measurability by
+Theorem~\ref{thm:generator_criterion}. For (ii), note that
+$\{f < a\} = \bigcup_{n=1}^\infty \{f \leq a - 1/n\}$, so (i)
+$\Leftrightarrow$ (ii). Conditions (iii) and (iv) follow by taking
+complements.
+\end{proof}
+
+\begin{rlconnection}[title={Connection to RL}]
+A random variable $X$ on $(\Omega, \mathcal{F}, \Prob)$ is precisely a
+measurable function to $(\R, \Borel(\R))$.
+Corollary~\ref{cor:real_measurable} says that being a random variable means
+the events $\{X \leq x\}$ belong to $\mathcal{F}$, which is exactly what
+is needed to define the CDF $F_X(x) = \Prob(X \leq x)$. In an MDP, every
+quantity we compute probabilities for -- $S_t$, $A_t$, $R_{t+1}$, the
+return $G_t$ -- must be a random variable in this precise sense.
 \end{rlconnection}
 
-\subsection{$\sigma$-Algebra Generated by a Random Variable}
-\label{subsec:sigma_rv}
+\begin{example}[Composition of Measurable Functions]
+\label{ex:composition}
+If $f: (\Omega, \mathcal{F}) \to (S, \mathcal{S})$ and
+$g: (S, \mathcal{S}) \to (T, \mathcal{T})$ are both measurable, then
+$g \circ f: (\Omega, \mathcal{F}) \to (T, \mathcal{T})$ is measurable.
+Indeed, for any $B \in \mathcal{T}$,
+$(g \circ f)^{-1}(B) = f^{-1}(g^{-1}(B))$. Since $g$ is measurable,
+$g^{-1}(B) \in \mathcal{S}$, and since $f$ is measurable,
+$f^{-1}(g^{-1}(B)) \in \mathcal{F}$.
+This implies: if $X$ is a random variable and $\varphi: \R \to \R$ is
+Borel measurable, then $\varphi(X)$ is a random variable.
+\end{example}
 
-\begin{definition}[$\sigma(X)$]
-\label{def:sigma_x}
-For a measurable function $X: (\Omega, \mathcal{F}) \to (S, \mathcal{S})$, the
-$\sigma$-algebra \emph{generated by $X$} is:
-\begin{equation}
-    \sigma(X) = \{X^{-1}(B) : B \in \mathcal{S}\} = \{\{X \in B\} : B \in \mathcal{S}\}.
-\end{equation}
-This is the smallest $\sigma$-algebra on $\Omega$ making $X$ measurable.
-\end{definition}
+%% ============================================================
+%% SECTION 3: ALGEBRAIC CLOSURE
+%% ============================================================
 
-\begin{theorem}[Doob--Dynkin Lemma]
-\label{thm:doob_dynkin}
-Let $X: \Omega \to S$ and $Y: \Omega \to \R$ be functions. Then $Y$ is
-$\sigma(X)$-measurable if and only if $Y = g \circ X$ for some measurable
-$g: (S, \mathcal{S}) \to (\R, \Borel(\R))$.
+\section{Closure Under Algebraic Operations}
+\label{sec:algebraic_closure}
+
+\begin{theorem}[Closure Under Algebraic Operations]
+\label{thm:meas_closure}
+Let $f, g: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ be measurable
+and let $c \in \R$. Then the following functions are measurable:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $cf$, \quad $f + g$, \quad $fg$, \quad $|f|$,
+  \item $\max(f, g)$ \quad and \quad $\min(f, g)$,
+  \item $f/g$ on $\{\omega : g(\omega) \neq 0\}$,
+  \item $f^+ = \max(f, 0)$ \quad and \quad $f^- = \max(-f, 0)$.
+\end{enumerate}
 \end{theorem}
 
 \begin{proof}
-($\Leftarrow$) If $Y = g(X)$, then $\{Y \leq c\} = \{g(X) \leq c\} = X^{-1}(g^{-1}((-\infty, c])) \in \sigma(X)$.
+We give complete proofs for the key cases.
 
-($\Rightarrow$) We prove this for the case $S = \R^d$ (which covers all RL applications).
+\textbf{Scalar multiple $cf$.} If $c = 0$, $cf$ is constant and hence
+measurable. If $c > 0$, $\{cf \leq a\} = \{f \leq a/c\} \in \mathcal{F}$.
+If $c < 0$, $\{cf \leq a\} = \{f \geq a/c\} \in \mathcal{F}$ by
+Corollary~\ref{cor:real_measurable}(iii).
 
-\textit{Step 1: Simple functions.} If $Y = \sum a_i \indicator_{A_i}$ with $A_i \in \sigma(X)$, then $A_i = X^{-1}(B_i)$ for some $B_i \in \mathcal{S}$. Define $g = \sum a_i \indicator_{B_i}$. Then $Y = g(X)$.
+\textbf{Sum $f + g$.} Fix $a \in \R$. We claim
+\begin{equation}
+  \{f + g < a\}
+  = \bigcup_{q \in \Q} \bigl(\{f < q\} \cap \{g < a - q\}\bigr).
+  \label{eq:sum_measurable}
+\end{equation}
+\textit{Proof of~\eqref{eq:sum_measurable}.}
+If $f(\omega) + g(\omega) < a$, set $\varepsilon = a - f(\omega) - g(\omega) > 0$.
+By density of $\Q$ in $\R$, there exists $q \in \Q$ with
+$f(\omega) < q < f(\omega) + \varepsilon = a - g(\omega)$.
+Then $g(\omega) < a - q$, so $\omega$ belongs to the right-hand side.
+Conversely, if $f(\omega) < q$ and $g(\omega) < a - q$ for some $q$, then
+$f(\omega) + g(\omega) < a$.
 
-\textit{Step 2: Non-negative functions.} By Theorem~\ref{thm:approximation}, $Y = \lim_n \varphi_n$ with $\varphi_n$ simple and $\sigma(X)$-measurable. By Step 1, $\varphi_n = g_n(X)$. Define $g = \lim_n g_n$ (well-defined $\mathcal{S}$-a.e.). Then $Y = g(X)$.
+Each set $\{f < q\}$ and $\{g < a - q\}$ is in $\mathcal{F}$. The union
+over the countable set $\Q$ yields $\{f + g < a\} \in \mathcal{F}$.
+Since $\{f + g \leq a\} = \bigcap_{n=1}^\infty \{f + g < a + 1/n\}$ is a
+countable intersection of $\mathcal{F}$-sets, we get measurability of $f+g$.
 
-\textit{Step 3: General.} Write $Y = Y^+ - Y^-$ and apply Step 2 to each part.
+\textbf{Product $fg$.} First observe that $f^2$ is measurable: for $a < 0$
+we have $\{f^2 \leq a\} = \emptyset \in \mathcal{F}$, and for $a \geq 0$,
+$\{f^2 \leq a\} = \{-\sqrt{a} \leq f \leq \sqrt{a}\}
+= \{f \leq \sqrt{a}\} \cap \{f \geq -\sqrt{a}\} \in \mathcal{F}$.
+Now use the polarization identity
+$fg = \tfrac{1}{4}\bigl[(f+g)^2 - (f-g)^2\bigr]$, which expresses the
+product in terms of sums and squarings.
+
+\textbf{Absolute value $|f|$.} We have
+$\{|f| \leq a\} = \{-a \leq f \leq a\} \in \mathcal{F}$ for $a \geq 0$
+and $\{|f| \leq a\} = \emptyset$ for $a < 0$.
+
+\textbf{Maximum and minimum.} $\{\max(f,g) \leq a\} = \{f \leq a\}
+\cap \{g \leq a\} \in \mathcal{F}$.
+$\min(f,g) = -\max(-f, -g)$ is then measurable by the scalar-multiple case.
+
+\textbf{Quotient $f/g$.} On $\{g \neq 0\}$ the function $1/g$ is measurable
+(by a direct check using the standard criterion), and $f/g = f \cdot (1/g)$
+is measurable by the product case.
+
+\textbf{Positive and negative parts.} $f^+ = \max(f, 0)$ and
+$f^- = \max(-f, 0)$ are covered by the maximum case with $g = 0$ (constant,
+hence measurable).
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-The Doob--Dynkin lemma is the formal justification for the pull-out property:
-$\E[h(X) \cdot Y \mid X] = h(X) \cdot \E[Y \mid X]$. The function $h(X)$ is
-$\sigma(X)$-measurable (it's a function of $X$), so it's ``known'' given $X$
-and can be pulled out of the conditional expectation. This is used in every
-TD proof when extracting $V(S_t)$ from $\E[\delta_t \mid S_t]$.
+\begin{remark}
+Note that $f = f^+ - f^-$ and $|f| = f^+ + f^-$. These decompositions
+are used when defining the Lebesgue integral: one first integrates
+non-negative functions, then defines $\int f = \int f^+ - \int f^-$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: LIMITS OF MEASURABLE FUNCTIONS
+%% ============================================================
+
+\section{Limits of Measurable Functions}
+\label{sec:limits}
+
+\begin{theorem}[Closure Under Pointwise Limits]
+\label{thm:meas_limits}
+Let $(f_n)_{n \geq 1}$ be a sequence of measurable functions from
+$(\Omega, \mathcal{F})$ to $(\R, \Borel(\R))$. Then the following
+extended-real-valued functions are measurable:
+\begin{equation}
+  \sup_n f_n, \quad \inf_n f_n, \quad
+  \limsup_{n \to \infty} f_n, \quad \liminf_{n \to \infty} f_n.
+  \label{eq:limits_measurable}
+\end{equation}
+In particular, if $f(\omega) = \lim_{n \to \infty} f_n(\omega)$ exists for
+all $\omega$ (or almost all $\omega$), then $f$ is measurable.
+\end{theorem}
+
+\begin{proof}
+\textbf{Supremum.} For any $a \in \R$,
+\begin{equation}
+  \{\sup_n f_n \leq a\} = \bigcap_{n=1}^\infty \{f_n \leq a\}.
+  \label{eq:sup_measurable}
+\end{equation}
+\textit{Proof of~\eqref{eq:sup_measurable}.}
+$\sup_n f_n(\omega) \leq a$ if and only if $f_n(\omega) \leq a$ for every
+$n$, which is $\omega \in \bigcap_n \{f_n \leq a\}$.
+
+Since each $\{f_n \leq a\} \in \mathcal{F}$ and sigma-algebras are closed
+under countable intersection, $\{\sup_n f_n \leq a\} \in \mathcal{F}$.
+
+\textbf{Infimum.} Observe that $\inf_n f_n = -\sup_n (-f_n)$. Since $-f_n$
+is measurable (Theorem~\ref{thm:meas_closure}(a) with $c = -1$), the
+supremum result applies.
+
+\textbf{Limsup and liminf.} By definition,
+\begin{equation}
+  \limsup_{n} f_n = \inf_{n \geq 1}\, \sup_{k \geq n} f_k, \qquad
+  \liminf_{n} f_n = \sup_{n \geq 1}\, \inf_{k \geq n} f_k.
+\end{equation}
+For each $n$, $g_n = \sup_{k \geq n} f_k$ is measurable by the supremum
+result. Then $\limsup_n f_n = \inf_n g_n$ is measurable by the infimum
+result. The argument for liminf is symmetric.
+
+\textbf{Pointwise limit.} If $f_n \to f$ pointwise, then
+$f = \limsup_n f_n = \liminf_n f_n$, hence $f$ is measurable.
+\end{proof}
+
+\begin{remark}
+The result requires \emph{countable} suprema and infima. An uncountable
+supremum of measurable functions need not be measurable.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: SIMPLE FUNCTIONS
+%% ============================================================
+
+\section{Simple Functions and Approximation}
+\label{sec:simple}
+
+\subsection{Simple Functions}
+\label{subsec:simple_def}
+
+\begin{definition}[Simple Function]
+\label{def:simple}
+A \emph{simple function} is a measurable function
+$\varphi: (\Omega, \mathcal{F}) \to \R$ that takes only finitely many
+values. Every simple function admits the \emph{standard (canonical)
+representation}
+\begin{equation}
+  \varphi = \sum_{i=1}^{n} a_i \, \indicator_{A_i},
+  \label{eq:simple_standard}
+\end{equation}
+where $a_1, \ldots, a_n \in \R$ are the \emph{distinct} values of
+$\varphi$, $A_i = \varphi^{-1}(\{a_i\}) \in \mathcal{F}$, and
+$\{A_1, \ldots, A_n\}$ is a partition of $\Omega$.
+\end{definition}
+
+\begin{remark}
+A simple function can also be written as $\sum_{j=1}^m b_j \indicator_{B_j}$
+with $B_j \in \mathcal{F}$ (not necessarily disjoint, values not necessarily
+distinct). The standard representation is unique and is used when defining
+the Lebesgue integral of simple functions.
+\end{remark}
+
+\begin{proposition}[Algebra of Simple Functions]
+\label{prop:simple_algebra}
+If $\varphi$ and $\psi$ are simple and $c \in \R$, then $c\varphi$,
+$\varphi + \psi$, $\varphi\psi$, $\max(\varphi,\psi)$,
+and $\min(\varphi,\psi)$ are all simple.
+\end{proposition}
+
+\begin{proof}
+Each operation produces a function taking finitely many values (at most the
+product of the number of values of $\varphi$ and $\psi$). Measurability
+follows from Theorem~\ref{thm:meas_closure}.
+\end{proof}
+
+\subsection{The Simple Function Approximation Theorem}
+\label{subsec:approx_thm}
+
+\begin{keyresult}[title={Simple Function Approximation}]
+\begin{theorem}[Simple Function Approximation Theorem]
+\label{thm:approximation}
+Let $f: (\Omega, \mathcal{F}) \to [0, \infty]$ be measurable. Then there
+exists a sequence of simple functions
+$0 \leq \varphi_1 \leq \varphi_2 \leq \cdots$ such that
+$\varphi_n(\omega) \uparrow f(\omega)$ for every $\omega \in \Omega$.
+If $f$ is bounded, the convergence is uniform.
+
+For a general measurable $f: \Omega \to [-\infty, \infty]$, there exist
+simple functions $(\psi_n)$ with $|\psi_n| \leq |f|$ and
+$\psi_n \to f$ pointwise.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Part 1: Non-negative case.}
+For each integer $n \geq 1$, define the simple function $\varphi_n$ by
+a ``truncation + discretization'' procedure. The range $[0, \infty)$ is
+partitioned into $n \cdot 2^n$ intervals of width $1/2^n$ from $0$ to $n$,
+plus the overflow region $[n, \infty]$:
+\begin{equation}
+  \varphi_n(\omega) =
+  \begin{cases}
+    \displaystyle\frac{k-1}{2^n}
+      & \text{if } \frac{k-1}{2^n} \leq f(\omega) < \frac{k}{2^n},
+        \quad k = 1, 2, \ldots, n \cdot 2^n, \\[6pt]
+    n & \text{if } f(\omega) \geq n.
+  \end{cases}
+  \label{eq:approx_construction}
+\end{equation}
+In words, $\varphi_n$ rounds $f$ down to the nearest multiple of $1/2^n$,
+capped at $n$.
+
+\textit{Step 1: $\varphi_n$ is simple and measurable.}
+The function $\varphi_n$ takes at most $n \cdot 2^n + 1$ values. The
+level sets are
+\[
+  \varphi_n^{-1}\!\left(\left\{\frac{k-1}{2^n}\right\}\right)
+  = \left\{\frac{k-1}{2^n} \leq f < \frac{k}{2^n}\right\}
+  = \left\{f \geq \frac{k-1}{2^n}\right\}
+    \cap \left\{f < \frac{k}{2^n}\right\} \in \mathcal{F},
+\]
+and $\varphi_n^{-1}(\{n\}) = \{f \geq n\} \in \mathcal{F}$.
+
+\textit{Step 2: $\varphi_n \leq \varphi_{n+1}$ (monotonicity).}
+The grid at level $n+1$ is finer: each interval
+$[(k-1)/2^n, k/2^n)$ is split into
+$[(2k-2)/2^{n+1}, (2k-1)/2^{n+1})$ and $[(2k-1)/2^{n+1}, 2k/2^{n+1})$.
+Since $\varphi_{n+1}$ rounds down on a finer grid, it gives a value at
+least as large as $\varphi_n$ on each sub-interval. Moreover, the cap
+increases from $n$ to $n+1$.
+
+\textit{Step 3: $\varphi_n \uparrow f$ (convergence).}
+Fix $\omega \in \Omega$.
+
+\textit{Case (a): $f(\omega) < \infty$.} Choose $N > f(\omega)$. For all
+$n \geq N$, we have $f(\omega) < n$ (so the cap is not hit), and
+$\varphi_n(\omega)$ is obtained by rounding $f(\omega)$ down to a multiple
+of $1/2^n$. Therefore
+\[
+  0 \leq f(\omega) - \varphi_n(\omega) < \frac{1}{2^n} \to 0
+  \quad \text{as } n \to \infty.
+\]
+
+\textit{Case (b): $f(\omega) = \infty$.} For every $n$, $\varphi_n(\omega) = n$,
+so $\varphi_n(\omega) \to \infty = f(\omega)$.
+
+\textit{Step 4: Uniform convergence when $f$ is bounded.}
+If $f \leq M$ for some $M < \infty$, then for all $n > M$ and every
+$\omega$, the cap is never reached, so
+$|f(\omega) - \varphi_n(\omega)| < 1/2^n$. Hence
+$\|f - \varphi_n\|_\infty < 1/2^n \to 0$.
+
+\medskip
+\textbf{Part 2: General case.}
+Write $f = f^+ - f^-$ where $f^+ = \max(f, 0) \geq 0$ and
+$f^- = \max(-f, 0) \geq 0$ are both non-negative measurable functions.
+By Part~1, there exist increasing simple sequences $\varphi_n \uparrow f^+$
+and $\chi_n \uparrow f^-$. Set $\psi_n = \varphi_n - \chi_n$. Then
+$\psi_n$ is simple, $|\psi_n| = \varphi_n + \chi_n \leq f^+ + f^- = |f|$,
+and $\psi_n \to f^+ - f^- = f$ pointwise.
+\end{proof}
+
+\begin{rlconnection}[title={Connection to RL}]
+The approximation theorem is the foundation of the Lebesgue integral.
+The integral of a non-negative function is defined as
+$\int f\,d\mu = \sup\{\int \varphi\,d\mu : \varphi \text{ simple},\,
+0 \leq \varphi \leq f\}$, where simple-function integrals are weighted
+sums. In RL, the expectation $\E[G_t \mid S_t = s]$ is the Lebesgue
+integral of the return $G_t$ against the conditional probability measure.
+The approximation theorem guarantees that this integral can always be
+computed as a limit of sums -- finite-state MDPs effectively use simple
+function approximations.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 6: CONNECTION TO PROBABILITY
+%% SECTION 6: SIGMA-ALGEBRA GENERATED BY A FUNCTION
 %% ============================================================
 
+\section{The $\sigma$-Algebra Generated by a Function}
+\label{sec:sigma_X}
+
+\begin{definition}[$\sigma(X)$]
+\label{def:sigma_x}
+Let $X: (\Omega, \mathcal{F}) \to (S, \mathcal{S})$ be a measurable
+function. The \emph{$\sigma$-algebra generated by $X$} is
+\begin{equation}
+  \sigma(X) = \{X^{-1}(B) : B \in \mathcal{S}\}
+            = \bigl\{\{\omega : X(\omega) \in B\} : B \in \mathcal{S}\bigr\}.
+  \label{eq:sigma_x}
+\end{equation}
+More generally, for a family of functions $(X_i)_{i \in I}$,
+$\sigma\bigl((X_i)_{i \in I}\bigr) = \sigma\bigl(\bigcup_{i \in I}
+\sigma(X_i)\bigr)$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:sigma_x_smallest}
+$\sigma(X)$ is the smallest sub-$\sigma$-algebra of $\mathcal{F}$ making
+$X$ measurable.
+\end{proposition}
+
+\begin{proof}
+First, $\sigma(X) \subseteq \mathcal{F}$ because $X$ is
+$(\mathcal{F}, \mathcal{S})$-measurable and therefore
+$X^{-1}(B) \in \mathcal{F}$ for every $B \in \mathcal{S}$.
+
+Second, $X$ is $\sigma(X)$-measurable by construction: for any
+$B \in \mathcal{S}$, $X^{-1}(B) \in \sigma(X)$ by definition.
+
+Third, if $\mathcal{G} \subseteq \mathcal{F}$ is any sub-$\sigma$-algebra
+with $X$ being $\mathcal{G}$-measurable, then $X^{-1}(B) \in \mathcal{G}$
+for all $B \in \mathcal{S}$, so $\sigma(X) \subseteq \mathcal{G}$.
+\end{proof}
+
+\begin{example}
+\label{ex:sigma_indicator}
+Let $A \in \mathcal{F}$ and $X = \indicator_A$. Then
+$\sigma(X) = \{\emptyset, A, A^c, \Omega\}$. Indeed,
+$X^{-1}(\{1\}) = A$, $X^{-1}(\{0\}) = A^c$,
+$X^{-1}(\{0,1\}) = \Omega$, $X^{-1}(\emptyset) = \emptyset$, and these
+four sets form a sigma-algebra.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: DOOB-DYNKIN LEMMA
+%% ============================================================
+
+\section{The Doob--Dynkin Lemma}
+\label{sec:doob_dynkin}
+
+The following result characterizes when a function $Y$ is
+$\sigma(X)$-measurable: it must be a Borel function of $X$.
+
+\begin{keyresult}[title={Doob--Dynkin Lemma}]
+\begin{theorem}[Doob--Dynkin Lemma]
+\label{thm:doob_dynkin}
+Let $X: \Omega \to S$ be a function (where $(S, \mathcal{S})$ is a
+measurable space) and let $Y: \Omega \to \R$. Then $Y$ is
+$\sigma(X)$-measurable if and only if there exists a measurable function
+$g: (S, \mathcal{S}) \to (\R, \Borel(\R))$ such that $Y = g \circ X$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+$(\Leftarrow)$ Suppose $Y = g(X)$ for some measurable $g: S \to \R$.
+For any $B \in \Borel(\R)$,
+\[
+  Y^{-1}(B) = (g \circ X)^{-1}(B) = X^{-1}(g^{-1}(B)).
+\]
+Since $g$ is measurable, $g^{-1}(B) \in \mathcal{S}$, so
+$X^{-1}(g^{-1}(B)) \in \sigma(X)$ by definition of $\sigma(X)$.
+Hence $Y$ is $\sigma(X)$-measurable.
+
+$(\Rightarrow)$ We prove that if $Y$ is $\sigma(X)$-measurable, then
+$Y = g(X)$ for some measurable $g$. The proof proceeds in three steps.
+
+\textit{Step 1: Indicator functions.}
+Suppose $Y = \indicator_A$ where $A \in \sigma(X)$. By definition of
+$\sigma(X)$, there exists $B \in \mathcal{S}$ such that $A = X^{-1}(B)$.
+Define $g = \indicator_B: S \to \R$. Then for any $\omega \in \Omega$:
+\[
+  g(X(\omega)) = \indicator_B(X(\omega))
+  = \begin{cases} 1 & \text{if } X(\omega) \in B, \\
+                  0 & \text{if } X(\omega) \notin B, \end{cases}
+  = \indicator_{X^{-1}(B)}(\omega) = \indicator_A(\omega) = Y(\omega).
+\]
+Moreover, $g = \indicator_B$ is $(\mathcal{S}, \Borel(\R))$-measurable
+because $g^{-1}(\{1\}) = B \in \mathcal{S}$.
+
+\textit{Step 2: Simple functions.}
+Suppose $Y = \sum_{i=1}^n a_i \indicator_{A_i}$ is simple with each
+$A_i \in \sigma(X)$. By Step~1, for each $i$ there exists
+$B_i \in \mathcal{S}$ with $A_i = X^{-1}(B_i)$ and
+$\indicator_{A_i} = \indicator_{B_i} \circ X$. Define
+$g = \sum_{i=1}^n a_i \indicator_{B_i}$. Then $g$ is measurable (a finite
+linear combination of measurable functions) and
+\[
+  g(X(\omega)) = \sum_{i=1}^n a_i \indicator_{B_i}(X(\omega))
+  = \sum_{i=1}^n a_i \indicator_{A_i}(\omega) = Y(\omega).
+\]
+
+\textit{Step 3: General non-negative, then general.}
+If $Y \geq 0$ is $\sigma(X)$-measurable, the approximation theorem
+(Theorem~\ref{thm:approximation}) provides simple functions
+$\varphi_n \uparrow Y$ with each $\varphi_n$ being $\sigma(X)$-measurable
+(since the construction uses only level sets of $Y$, which are in
+$\sigma(X)$). By Step~2, $\varphi_n = g_n \circ X$ for measurable
+$g_n: S \to \R$.
+
+Define $g(s) = \lim_{n \to \infty} g_n(s)$ wherever this limit exists,
+and $g(s) = 0$ otherwise. Since the $g_n$ are measurable and pointwise
+limits of measurable functions are measurable
+(Theorem~\ref{thm:meas_limits}), $g$ is measurable. For any
+$\omega \in \Omega$:
+\[
+  g(X(\omega)) = \lim_n g_n(X(\omega)) = \lim_n \varphi_n(\omega)
+  = Y(\omega).
+\]
+
+For general $Y$, write $Y = Y^+ - Y^-$. Each part is non-negative and
+$\sigma(X)$-measurable, so $Y^+ = g_+(X)$ and $Y^- = g_-(X)$, giving
+$Y = (g_+ - g_-)(X)$ with $g = g_+ - g_-$ measurable.
+\end{proof}
+
+\begin{rlconnection}[title={Connection to RL}]
+The Doob--Dynkin lemma rigorously justifies two fundamental operations in
+RL theory:
+
+\textbf{1. The pull-out property.} In conditional expectation,
+$\E[h(X) \cdot Y \mid X] = h(X) \cdot \E[Y \mid X]$. Since $h(X)$ is
+$\sigma(X)$-measurable (it is a function of $X$), it behaves as a
+``known constant'' given $X$ and can be pulled out.
+
+\textbf{2. Value functions as functions of state.} $V^\pi(S_t)$ is
+$\sigma(S_t)$-measurable because it is a Borel function $V^\pi$ applied
+to $S_t$. When we write $\E[\delta_t \mid S_t]$ in TD proofs and pull
+out $V(S_t)$, the Doob--Dynkin lemma is the underlying justification.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}
+\label{ex:continuous_measurable}
+Prove that every continuous function $f: \R \to \R$ is Borel measurable.
+\textit{Hint:} Show that for every open set $U \subseteq \R$,
+$f^{-1}(U)$ is open, and recall that every open set is a Borel set.
+Then apply the generator criterion with the open sets as generators.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:monotone_measurable}
+Prove that every monotone function $f: \R \to \R$ is Borel measurable.
+\textit{Hint:} For $f$ non-decreasing, show that $\{f \leq a\}$ is
+either $\emptyset$, $\R$, $(-\infty, c]$, or $(-\infty, c)$ for some $c$,
+all of which are Borel sets.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:measurable_sets}
+Let $f, g: (\Omega, \mathcal{F}) \to (\R, \Borel(\R))$ be measurable.
+Prove that $\{f < g\}$, $\{f \leq g\}$, and $\{f = g\}$ are in
+$\mathcal{F}$.
+\textit{Hint:} $\{f < g\} = \bigcup_{q \in \Q}
+(\{f < q\} \cap \{q < g\})$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:indicator_algebra}
+Let $A, B \in \mathcal{F}$. Express $\indicator_{A \cup B}$,
+$\indicator_{A \cap B}$, and $\indicator_{A^c}$ in terms of
+$\indicator_A$ and $\indicator_B$ using algebraic operations. Verify
+measurability using Theorem~\ref{thm:meas_closure}.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:doob_dynkin_concrete}
+Let $\Omega = \{1, 2, 3, 4, 5, 6\}$ and $X(\omega) = \omega \bmod 2$
+(so $X$ maps odd numbers to $1$ and even to $0$). List all elements of
+$\sigma(X)$. Then determine which of the following functions are
+$\sigma(X)$-measurable and, for those that are, find the Borel function
+$g$ such that $Y = g(X)$:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $Y(\omega) = (-1)^\omega$,
+  \item $Y(\omega) = \omega^2$,
+  \item $Y(\omega) = 3 \cdot \indicator_{\{1,3,5\}}(\omega) + 7 \cdot
+    \indicator_{\{2,4,6\}}(\omega)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[RL Application]
+\label{ex:rl_doob_dynkin}
+Consider a finite MDP with states $\mathcal{S} = \{s_1, s_2, s_3\}$ and
+the random variable $S_t$ denoting the state at time $t$.
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Let $V: \mathcal{S} \to \R$ be a value function. Use the
+    Doob--Dynkin lemma to show that $V(S_t)$ is $\sigma(S_t)$-measurable.
+  \item The TD error is $\delta_t = R_{t+1} + \gamma V(S_{t+1}) - V(S_t)$.
+    Show that $\delta_t$ is $\sigma(S_t, A_t, R_{t+1}, S_{t+1})$-measurable.
+  \item Explain why $V(S_t)$ can be pulled out of
+    $\E[\delta_t \mid \mathcal{F}_t]$ where
+    $\mathcal{F}_t = \sigma(S_0, A_0, \ldots, S_t)$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{4.5cm} p{5cm} p{4.5cm}}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{Role} \\
+\midrule
+Measurable function & $f^{-1}(B) \in \mathcal{F}$ for all
+  $B \in \mathcal{S}$ & Defines random variables \\
+Generator criterion & Check preimages on generators only &
+  Practical measurability test \\
+Algebraic closure & Sums, products, absolute values of measurable
+  functions are measurable & Build new RVs from old \\
+Limit closure & $\sup$, $\inf$, $\limsup$, $\liminf$ of measurable
+  sequences are measurable & Pointwise limits OK \\
+Approximation theorem & $f \geq 0$ measurable $\Rightarrow$
+  $\varphi_n$ simple with $\varphi_n \uparrow f$ &
+  Foundation of Lebesgue integral \\
+Doob--Dynkin & $Y$ is $\sigma(X)$-measurable iff $Y = g(X)$ &
+  Pull-out property \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\textbf{Next lesson:} From Measures to Probability Spaces -- we
+specialize measure theory to the probabilistic setting, defining
+probability spaces, random variables as measurable functions, distributions,
+and CDFs.
+
+\bibliography{measure-theory-refs}
 
 \end{document}

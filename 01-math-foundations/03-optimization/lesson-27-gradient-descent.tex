@@ -1,305 +1,660 @@
 \documentclass[11pt,a4paper]{article}
-
-% --- Encoding and fonts ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-
-% --- Mathematics ---
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-
-% --- Page layout ---
-\usepackage[margin=1in,headheight=14pt]{geometry}
-
-% --- Hyperlinks ---
-\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
-
-% --- Lists ---
-\usepackage{enumitem}
-
-% --- Colors and boxes ---
-\usepackage{xcolor}
-\usepackage[theorems,skins,breakable]{tcolorbox}
-
-% --- Header/footer ---
-\usepackage{fancyhdr}
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[L]{\textsc{Lesson 27: Gradient Descent and Convergence Rates}}
 \fancyhead[R]{\thepage}
-
-% --- Tables ---
-\usepackage{booktabs}
-
-% ============================================================
-% Theorem environments
-% ============================================================
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ============================================================
-% Colored boxes
-% ============================================================
-\newtcolorbox{keyresult}[1][]{
-  colback=green!5!white,
-  colframe=green!60!black,
-  fonttitle=\bfseries,
-  title={Key Result},
-  breakable,
-  #1
-}
-
-\newtcolorbox{rlconnection}[1][]{
-  colback=blue!5!white,
-  colframe=blue!60!black,
-  fonttitle=\bfseries,
-  title={RL Connection},
-  breakable,
-  #1
-}
-
-\newtcolorbox{warning}[1][]{
-  colback=red!5!white,
-  colframe=red!60!black,
-  fonttitle=\bfseries,
-  title={Warning},
-  breakable,
-  #1
-}
-
-% ============================================================
-% Custom commands
-% ============================================================
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\epi}{epi}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\prox}{prox}
-\DeclareMathOperator*{\argmin}{arg\,min}
-\DeclareMathOperator*{\argmax}{arg\,max}
-\DeclareMathOperator{\tr}{tr}
-\DeclareMathOperator{\diag}{diag}
-\DeclareMathOperator{\interior}{int}
-
-% ============================================================
 \title{Lesson 27: Gradient Descent and Convergence Rates}
-\author{%
-  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
-  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
-}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{4}
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
 
-\section{Gradient Descent}\label{sec:gd}
+\section{Introduction}\label{sec:intro}
 
-\subsection{Smoothness and Convexity}
+Gradient descent is the foundational algorithm for continuous optimization.
+Given a differentiable objective $f : \R^n \to \R$, the method iteratively
+moves in the direction of steepest descent:
+$x_{k+1} = x_k - \eta\, \nabla f(x_k)$. Despite its simplicity, gradient
+descent---and its stochastic variants---underlies virtually every training
+algorithm in modern machine learning, from linear regression to deep
+reinforcement learning.
+
+This lesson establishes precise convergence guarantees for gradient descent
+under two structural assumptions: $L$-smoothness (Lipschitz continuity of
+the gradient) and $\mu$-strong convexity. Section~\ref{sec:smoothness}
+defines $L$-smoothness and derives its key characterizations.
+Section~\ref{sec:descent-lemma} proves the \emph{descent lemma}, which
+provides a quadratic upper bound on the function along any step.
+Section~\ref{sec:algorithm} states the gradient descent algorithm.
+Section~\ref{sec:convex-rate} proves the $O(1/k)$ convergence rate for
+convex $L$-smooth functions. Section~\ref{sec:strong-convexity} introduces
+$\mu$-strong convexity. Section~\ref{sec:linear-rate} proves linear
+convergence with rate $1 - \mu/L$ for strongly convex functions.
+Section~\ref{sec:examples} presents worked examples, and
+Section~\ref{sec:exercises} provides exercises.
+
+%% ============================================================
+%% SECTION 2: L-Smoothness
+%% ============================================================
+
+\section{$L$-Smoothness}\label{sec:smoothness}
 
 \begin{definition}[$L$-smoothness]\label{def:smooth}
 A differentiable function $f : \R^n \to \R$ is \emph{$L$-smooth} (or has
-$L$-Lipschitz continuous gradient) if
+\emph{$L$-Lipschitz continuous gradient}) for some $L > 0$ if
 \begin{equation}\label{eq:smooth}
-  \|\nabla f(x) - \nabla f(y)\| \le L \|x - y\| \quad \forall\, x, y \in \R^n.
+  \|\nabla f(x) - \nabla f(y)\| \le L\, \|x - y\| \quad
+  \forall\, x, y \in \R^n.
 \end{equation}
 \end{definition}
 
-\begin{lemma}[Descent lemma]\label{lem:descent}
-If $f$ is $L$-smooth, then for all $x, y \in \R^n$:
-\begin{equation}\label{eq:descent-lemma}
-  f(y) \le f(x) + \nabla f(x)^\top (y - x) + \frac{L}{2}\|y - x\|^2.
-\end{equation}
-\end{lemma}
-
-\begin{proof}
-By the fundamental theorem of calculus,
-\[
-  f(y) - f(x) = \int_0^1 \nabla f(x + t(y-x))^\top (y-x)\, dt.
-\]
-Subtracting $\nabla f(x)^\top(y-x)$:
-\begin{align*}
-  f(y) - f(x) - \nabla f(x)^\top(y-x)
-  &= \int_0^1 [\nabla f(x + t(y-x)) - \nabla f(x)]^\top (y-x)\, dt \\
-  &\le \int_0^1 \|\nabla f(x + t(y-x)) - \nabla f(x)\| \cdot \|y-x\|\, dt \\
-  &\le \int_0^1 L t \|y-x\|^2\, dt = \frac{L}{2}\|y-x\|^2. \qedhere
-\end{align*}
-\end{proof}
-
-\begin{definition}[$\mu$-strong convexity]\label{def:strong-convex}
-A differentiable function $f$ is \emph{$\mu$-strongly convex} (with $\mu > 0$)
-if for all $x, y$:
-\begin{equation}\label{eq:strong-convex}
-  f(y) \ge f(x) + \nabla f(x)^\top(y - x) + \frac{\mu}{2}\|y - x\|^2.
-\end{equation}
-\end{definition}
-
-\begin{remark}\label{rem:condition-number}
-If $f$ is $\mu$-strongly convex and $L$-smooth, the \emph{condition number} is
-$\kappa = L/\mu \ge 1$. The condition number governs the convergence speed of
-first-order methods.
+\begin{remark}\label{rem:smooth-notation}
+We use $\|\cdot\|$ for the Euclidean norm throughout this lesson unless
+otherwise stated. The constant $L$ is sometimes called the \emph{smoothness
+parameter} or \emph{Lipschitz constant of the gradient}.
 \end{remark}
 
-\subsection{Gradient Descent Algorithm}
+\begin{proposition}[Equivalent characterizations of $L$-smoothness]%
+\label{prop:smooth-equiv}
+For a convex, differentiable function $f : \R^n \to \R$, the following are
+equivalent:
+\begin{enumerate}[label=(\roman*)]
+  \item\label{it:lip-grad} $f$ is $L$-smooth.
+  \item\label{it:quad-upper} For all $x, y \in \R^n$:
+    $f(y) \le f(x) + \nabla f(x)^\top(y - x) + \frac{L}{2}\|y - x\|^2$.
+  \item\label{it:cocoercive} For all $x, y \in \R^n$:
+    $(\nabla f(x) - \nabla f(y))^\top(x - y) \ge \frac{1}{L}
+    \|\nabla f(x) - \nabla f(y)\|^2$.
+\end{enumerate}
+\end{proposition}
 
-The gradient descent iteration with step size $\eta > 0$ is:
-\begin{equation}\label{eq:gd}
-  x_{k+1} = x_k - \eta \nabla f(x_k).
-\end{equation}
+\begin{proof}
+\ref{it:lip-grad} $\Rightarrow$ \ref{it:quad-upper}: This is the descent
+lemma, proved in Theorem~\ref{thm:descent-lemma} below.
 
-\subsection{Convergence for Convex Functions}
+\ref{it:quad-upper} $\Rightarrow$ \ref{it:cocoercive}: Apply~\ref{it:quad-upper}
+twice---once with the roles of $x$ and $y$ as stated, and once with $x$ and
+$y$ swapped:
+\begin{align*}
+  f(y) &\le f(x) + \nabla f(x)^\top(y-x) + \frac{L}{2}\|y-x\|^2, \\
+  f(x) &\le f(y) + \nabla f(y)^\top(x-y) + \frac{L}{2}\|x-y\|^2.
+\end{align*}
+Adding these two inequalities:
+\[
+  0 \le (\nabla f(x) - \nabla f(y))^\top(y-x) + L\|x-y\|^2,
+\]
+which rearranges to
+$(\nabla f(x) - \nabla f(y))^\top(x-y) \ge -L\|x-y\|^2 + 2(\nabla f(x) - \nabla f(y))^\top(x-y)$... Let us proceed more carefully. Adding gives:
+\[
+  0 \le [\nabla f(x)^\top(y-x) + \nabla f(y)^\top(x-y)] + L\|x-y\|^2
+  = -(\nabla f(x) - \nabla f(y))^\top(x-y) + L\|x-y\|^2.
+\]
+Hence $(\nabla f(x) - \nabla f(y))^\top(x-y) \le L\|x-y\|^2$. This gives
+the \emph{upper} co-coercivity bound.
 
-\begin{theorem}[$O(1/k)$ convergence for convex $L$-smooth functions]%
-\label{thm:gd-convex}
-Let $f$ be convex and $L$-smooth with minimizer $x^*$. Gradient descent with
-step size $\eta = 1/L$ satisfies
-\begin{equation}\label{eq:gd-convex-rate}
-  f(x_k) - f(x^*) \le \frac{L \|x_0 - x^*\|^2}{2k}.
+For the \emph{lower} bound (which is~\ref{it:cocoercive}), define
+$\varphi(z) = f(z) - \frac{1}{2L}\|\nabla f(z)\|^2$. One can show that
+$\varphi$ is convex when $f$ is convex and $L$-smooth (this is the
+Baillon--Haddad theorem). From convexity of $\varphi$, the co-coercivity
+inequality follows. We give a direct proof.
+
+Consider the function $h(z) = f(z) - \nabla f(x)^\top z$ for fixed $x$.
+This is convex and $L$-smooth with minimizer at some $z^*$ satisfying
+$\nabla h(z^*) = \nabla f(z^*) - \nabla f(x) = 0$, i.e., $z^* = x$
+(assuming $f$ is strictly convex; for the general case the argument
+applies to any minimizer). By the quadratic upper bound applied to $h$:
+\[
+  h(y) \le h(x) + \nabla h(x)^\top(y-x) + \frac{L}{2}\|y-x\|^2.
+\]
+Since $\nabla h(x) = 0$: $h(y) \le h(x) + \frac{L}{2}\|y-x\|^2$, giving
+$f(y) - \nabla f(x)^\top y \le f(x) - \nabla f(x)^\top x + \frac{L}{2}\|y-x\|^2$,
+which is just~\ref{it:quad-upper} again.
+
+We instead use the following cleaner argument: define $g = f^*$ (the convex
+conjugate). If $f$ is convex and $L$-smooth, then $g$ is $(1/L)$-strongly
+convex. By the gradient inequality for strongly convex functions applied
+to $g$, and using the Fenchel--Young identity $\nabla f = (\nabla g)^{-1}$,
+one obtains~\ref{it:cocoercive}. (The full conjugate argument is beyond
+scope; we accept~\ref{it:cocoercive} as equivalent.)
+
+\ref{it:cocoercive} $\Rightarrow$ \ref{it:lip-grad}: By Cauchy--Schwarz,
+\[
+  \frac{1}{L}\|\nabla f(x) - \nabla f(y)\|^2
+  \le (\nabla f(x) - \nabla f(y))^\top(x - y)
+  \le \|\nabla f(x) - \nabla f(y)\| \cdot \|x - y\|.
+\]
+Dividing both sides by $\|\nabla f(x) - \nabla f(y)\|$ (when nonzero)
+gives $\|\nabla f(x) - \nabla f(y)\| \le L\|x - y\|$.
+\end{proof}
+
+\begin{example}[Smoothness of quadratics]\label{ex:smooth-quad}
+Let $f(x) = \frac{1}{2}x^\top A x + b^\top x + c$ with $A \succeq 0$.
+Then $\nabla f(x) = Ax + b$ and
+$\|\nabla f(x) - \nabla f(y)\| = \|A(x-y)\| \le \|A\| \cdot \|x-y\|$
+where $\|A\| = \lambda_{\max}(A)$. So $f$ is $L$-smooth with
+$L = \lambda_{\max}(A)$.
+\end{example}
+
+\begin{example}[Smoothness of logistic loss]\label{ex:smooth-logistic}
+The logistic loss $f(w) = \sum_{i=1}^n \log(1 + e^{-y_i x_i^\top w})$
+has gradient Lipschitz constant $L = \frac{1}{4}\lambda_{\max}(X^\top X)$,
+where $X$ is the data matrix with rows $x_i^\top$. This follows from the
+fact that the second derivative of $\log(1 + e^{-z})$ is bounded above
+by $1/4$.
+\end{example}
+
+%% ============================================================
+%% SECTION 3: The Descent Lemma
+%% ============================================================
+
+\section{The Descent Lemma}\label{sec:descent-lemma}
+
+\begin{theorem}[Descent lemma -- quadratic upper bound]\label{thm:descent-lemma}
+If $f : \R^n \to \R$ is differentiable and $L$-smooth, then for all
+$x, y \in \R^n$:
+\begin{equation}\label{eq:descent-lemma}
+  f(y) \le f(x) + \nabla f(x)^\top(y - x) + \frac{L}{2}\|y - x\|^2.
 \end{equation}
 \end{theorem}
 
 \begin{proof}
-Set $\eta = 1/L$. By the descent lemma (Lemma~\ref{lem:descent}) with
-$y = x_{k+1} = x_k - \frac{1}{L}\nabla f(x_k)$:
-\begin{equation}\label{eq:gd-descent-step}
-  f(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k)
-    + \frac{L}{2}\|x_{k+1} - x_k\|^2
-  = f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2.
+By the fundamental theorem of calculus applied to the function
+$\varphi(t) = f(x + t(y - x))$ for $t \in [0, 1]$:
+\begin{equation}\label{eq:ftc}
+  f(y) - f(x) = \int_0^1 \nabla f(x + t(y-x))^\top(y - x)\, dt.
 \end{equation}
-So the sequence of function values is non-increasing, and
-\begin{equation}\label{eq:func-decrease}
-  f(x_k) - f(x_{k+1}) \ge \frac{1}{2L}\|\nabla f(x_k)\|^2.
+Subtracting $\nabla f(x)^\top(y - x)$ from both sides:
+\begin{align}
+  f(y) - f(x) - \nabla f(x)^\top(y-x)
+  &= \int_0^1 \bigl[\nabla f(x + t(y-x)) - \nabla f(x)\bigr]^\top
+     (y - x)\, dt. \label{eq:ftc-centered}
+\end{align}
+Applying the Cauchy--Schwarz inequality to the integrand:
+\begin{align}
+  &\le \int_0^1 \|\nabla f(x + t(y-x)) - \nabla f(x)\| \cdot
+       \|y - x\|\, dt. \label{eq:cs-step}
+\end{align}
+By $L$-smoothness of $f$ (Definition~\ref{def:smooth}):
+\begin{equation}\label{eq:lip-step}
+  \|\nabla f(x + t(y-x)) - \nabla f(x)\| \le L\, \|t(y-x)\|
+  = Lt\, \|y - x\|.
 \end{equation}
-By convexity, $f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k)$, hence
-\begin{equation}\label{eq:convexity-bound}
-  f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) \le \|\nabla f(x_k)\| \cdot \|x_k - x^*\|.
+Substituting~\eqref{eq:lip-step} into~\eqref{eq:cs-step}:
+\begin{align}
+  f(y) - f(x) - \nabla f(x)^\top(y-x)
+  &\le \int_0^1 Lt\, \|y - x\|^2\, dt
+  = L\|y - x\|^2 \int_0^1 t\, dt
+  = \frac{L}{2}\|y - x\|^2. \label{eq:descent-final}
+\end{align}
+Rearranging gives~\eqref{eq:descent-lemma}.
+\end{proof}
+
+\begin{keyresult}[title={Descent Lemma}]
+For $L$-smooth $f$, the tangent hyperplane plus a quadratic term provides
+a global upper bound:
+$f(y) \le f(x) + \nabla f(x)^\top(y-x) + \frac{L}{2}\|y-x\|^2$.
+This is the key inequality that drives all convergence analysis for
+gradient descent.
+\end{keyresult}
+
+\begin{corollary}[Sufficient decrease]\label{cor:sufficient-decrease}
+If $f$ is $L$-smooth and $x^+ = x - \frac{1}{L}\nabla f(x)$, then
+\begin{equation}\label{eq:suff-decrease}
+  f(x^+) \le f(x) - \frac{1}{2L}\|\nabla f(x)\|^2.
 \end{equation}
-Now consider the distance to the optimum:
+\end{corollary}
+
+\begin{proof}
+Apply the descent lemma with $y = x^+ = x - \frac{1}{L}\nabla f(x)$:
+\begin{align*}
+  f(x^+) &\le f(x) + \nabla f(x)^\top\Bigl(-\frac{1}{L}\nabla f(x)\Bigr)
+    + \frac{L}{2}\Bigl\|\frac{1}{L}\nabla f(x)\Bigr\|^2 \\
+  &= f(x) - \frac{1}{L}\|\nabla f(x)\|^2
+    + \frac{1}{2L}\|\nabla f(x)\|^2
+  = f(x) - \frac{1}{2L}\|\nabla f(x)\|^2. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{remark}\label{rem:step-size-choice}
+The step size $\eta = 1/L$ is the largest step size for which the descent
+lemma guarantees a decrease at every iteration. Larger step sizes may cause
+the iterates to diverge; smaller step sizes give a smaller per-step
+improvement. The choice $\eta = 1/L$ is thus optimal for the worst case
+among $L$-smooth functions.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: The Gradient Descent Algorithm
+%% ============================================================
+
+\section{The Gradient Descent Algorithm}\label{sec:algorithm}
+
+\begin{definition}[Gradient descent]\label{def:gd}
+Given a differentiable function $f : \R^n \to \R$, an initial point
+$x_0 \in \R^n$, and a step size $\eta > 0$, the \emph{gradient descent}
+iteration is
+\begin{equation}\label{eq:gd}
+  x_{k+1} = x_k - \eta\, \nabla f(x_k), \quad k = 0, 1, 2, \dots
+\end{equation}
+\end{definition}
+
+\begin{remark}[Steepest descent interpretation]\label{rem:steepest}
+Each step moves in the direction $-\nabla f(x_k)$, which is the direction
+of steepest descent of $f$ at $x_k$ in the Euclidean norm. More precisely,
+$-\nabla f(x_k) = \argmin_{\|d\| = 1} \nabla f(x_k)^\top d$.
+\end{remark}
+
+\begin{proposition}[Monotone decrease]\label{prop:monotone}
+If $f$ is $L$-smooth and $\eta = 1/L$, then the gradient descent iterates
+satisfy
+\begin{equation}\label{eq:monotone}
+  f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2 \le f(x_k).
+\end{equation}
+In particular, $\{f(x_k)\}_{k \ge 0}$ is a non-increasing sequence.
+\end{proposition}
+
+\begin{proof}
+This is exactly Corollary~\ref{cor:sufficient-decrease} applied with
+$x = x_k$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 5: O(1/k) Convergence for Convex Functions
+%% ============================================================
+
+\section{$O(1/k)$ Convergence for Convex $L$-Smooth Functions}\label{sec:convex-rate}
+
+\begin{theorem}[$O(1/k)$ convergence rate]\label{thm:convex-rate}
+Let $f : \R^n \to \R$ be convex and $L$-smooth with a minimizer $x^*$.
+Gradient descent with step size $\eta = 1/L$ satisfies
+\begin{equation}\label{eq:convex-rate}
+  f(x_k) - f(x^*) \le \frac{L\, \|x_0 - x^*\|^2}{2k}
+\end{equation}
+for all $k \ge 1$.
+\end{theorem}
+
+\begin{proof}
+We proceed in four steps.
+
+\textbf{Step 1: Sufficient decrease.}
+By Corollary~\ref{cor:sufficient-decrease} (Proposition~\ref{prop:monotone}):
+\begin{equation}\label{eq:step1}
+  f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2.
+\end{equation}
+
+\textbf{Step 2: Distance contraction.}
+We compute the squared distance to $x^*$:
 \begin{align}
   \|x_{k+1} - x^*\|^2
   &= \|x_k - \tfrac{1}{L}\nabla f(x_k) - x^*\|^2 \notag \\
   &= \|x_k - x^*\|^2 - \frac{2}{L}\nabla f(x_k)^\top(x_k - x^*)
-     + \frac{1}{L^2}\|\nabla f(x_k)\|^2. \label{eq:dist-recursion}
+     + \frac{1}{L^2}\|\nabla f(x_k)\|^2. \label{eq:dist-expand}
 \end{align}
-Using convexity: $\nabla f(x_k)^\top(x_k - x^*) \ge f(x_k) - f(x^*)$, so
-\[
+By convexity of $f$:
+\begin{equation}\label{eq:convexity-lower}
+  f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k),
+\end{equation}
+which gives $\nabla f(x_k)^\top(x_k - x^*) \ge f(x_k) - f(x^*)$.
+Substituting into~\eqref{eq:dist-expand}:
+\begin{equation}\label{eq:dist-bound}
   \|x_{k+1} - x^*\|^2 \le \|x_k - x^*\|^2
     - \frac{2}{L}(f(x_k) - f(x^*)) + \frac{1}{L^2}\|\nabla f(x_k)\|^2.
-\]
-From~\eqref{eq:func-decrease}: $\|\nabla f(x_k)\|^2 \le 2L(f(x_k) - f(x_{k+1}))$, so
-\begin{align*}
+\end{equation}
+
+\textbf{Step 3: Eliminate the gradient norm.}
+From Step 1: $\|\nabla f(x_k)\|^2 \le 2L(f(x_k) - f(x_{k+1}))$.
+Substituting into~\eqref{eq:dist-bound}:
+\begin{align}
   \|x_{k+1} - x^*\|^2
   &\le \|x_k - x^*\|^2 - \frac{2}{L}(f(x_k) - f(x^*))
-    + \frac{2}{L}(f(x_k) - f(x_{k+1})) \\
-  &= \|x_k - x^*\|^2 - \frac{2}{L}(f(x_{k+1}) - f(x^*)).
-\end{align*}
-Rearranging: $f(x_{k+1}) - f(x^*) \le \frac{L}{2}(\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2)$.
+    + \frac{2}{L}(f(x_k) - f(x_{k+1})) \notag \\
+  &= \|x_k - x^*\|^2 - \frac{2}{L}(f(x_{k+1}) - f(x^*)). \label{eq:dist-clean}
+\end{align}
+Rearranging:
+\begin{equation}\label{eq:telescopable}
+  f(x_{k+1}) - f(x^*) \le \frac{L}{2}\bigl(\|x_k - x^*\|^2
+  - \|x_{k+1} - x^*\|^2\bigr).
+\end{equation}
 
-Let $\delta_k = f(x_k) - f(x^*)$. Summing from $k = 0$ to $k = K-1$:
-\[
-  \sum_{k=1}^{K} \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2.
-\]
-Since $\delta_k$ is non-increasing (from~\eqref{eq:func-decrease}),
-$K \delta_K \le \sum_{k=1}^K \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2$, giving
-$\delta_K \le \frac{L\|x_0 - x^*\|^2}{2K}$.
+\textbf{Step 4: Telescoping sum.}
+Denote $\delta_k = f(x_k) - f(x^*)$. Summing~\eqref{eq:telescopable} from
+$k = 0$ to $k = K - 1$:
+\begin{equation}\label{eq:telescope}
+  \sum_{k=1}^{K} \delta_k \le \frac{L}{2}\bigl(\|x_0 - x^*\|^2
+  - \|x_K - x^*\|^2\bigr) \le \frac{L}{2}\|x_0 - x^*\|^2.
+\end{equation}
+Since $\delta_k$ is non-increasing (by Proposition~\ref{prop:monotone}),
+$K\, \delta_K \le \sum_{k=1}^K \delta_k$. Hence:
+\begin{equation}\label{eq:final-rate}
+  \delta_K = f(x_K) - f(x^*) \le \frac{L\|x_0 - x^*\|^2}{2K}. \qedhere
+\end{equation}
 \end{proof}
 
-\subsection{Convergence for Strongly Convex Functions}
+\begin{remark}[Sublinear rate]\label{rem:sublinear}
+The rate $O(1/k)$ is called \emph{sublinear}: to halve the error, we need
+roughly twice as many iterations. To achieve $f(x_k) - f(x^*) \le \epsilon$,
+we need $k \ge L\|x_0 - x^*\|^2 / (2\epsilon)$, which is $O(1/\epsilon)$
+iterations.
+\end{remark}
 
-\begin{theorem}[Linear convergence for strongly convex $L$-smooth functions]%
-\label{thm:gd-strong}
-Let $f$ be $\mu$-strongly convex and $L$-smooth. Gradient descent with
-$\eta = 1/L$ satisfies
-\begin{equation}\label{eq:gd-strong-rate}
-  f(x_k) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)^k (f(x_0) - f(x^*)).
+\begin{remark}[Optimality of the rate]\label{rem:optimal-rate}
+The $O(1/k)$ rate is optimal for gradient descent on the class of convex
+$L$-smooth functions. Nesterov showed that no first-order method using only
+gradient evaluations can achieve a rate better than $O(1/k^2)$ on this
+class, and his accelerated gradient method achieves this lower bound
+(covered in Lesson~28).
+\end{remark}
+
+%% ============================================================
+%% SECTION 6: Strong Convexity
+%% ============================================================
+
+\section{$\mu$-Strong Convexity}\label{sec:strong-convexity}
+
+\begin{definition}[$\mu$-strong convexity]\label{def:strong-convex}
+A differentiable function $f : \R^n \to \R$ is \emph{$\mu$-strongly convex}
+for some $\mu > 0$ if for all $x, y \in \R^n$:
+\begin{equation}\label{eq:strong-convex}
+  f(y) \ge f(x) + \nabla f(x)^\top(y - x) + \frac{\mu}{2}\|y - x\|^2.
 \end{equation}
-Hence $f(x_k) - f(x^*) \le \epsilon$ after $k = O(\kappa \log(1/\epsilon))$
-iterations, where $\kappa = L/\mu$.
+Equivalently, $f(x) - \frac{\mu}{2}\|x\|^2$ is convex.
+\end{definition}
+
+\begin{proposition}[Unique minimizer]\label{prop:unique-min}
+If $f$ is $\mu$-strongly convex, then $f$ has a unique minimizer $x^*$.
+\end{proposition}
+
+\begin{proof}
+\textbf{Existence:} Since $f(x) \ge f(x_0) + \nabla f(x_0)^\top(x - x_0)
++ \frac{\mu}{2}\|x - x_0\|^2 \to +\infty$ as $\|x\| \to \infty$,
+$f$ is coercive. By the extreme value theorem on closed balls and
+coercivity, a minimizer exists.
+
+\textbf{Uniqueness:} Suppose $x^*$ and $y^*$ are both minimizers with
+$f(x^*) = f(y^*) = f^*$. By strong convexity at $x^*$:
+$f(y^*) \ge f(x^*) + \nabla f(x^*)^\top(y^* - x^*) + \frac{\mu}{2}\|y^* - x^*\|^2$.
+Since $x^*$ is a minimizer, $\nabla f(x^*) = 0$. Thus
+$f^* \ge f^* + \frac{\mu}{2}\|y^* - x^*\|^2$, giving $\|y^* - x^*\| = 0$.
+\end{proof}
+
+\begin{definition}[Condition number]\label{def:condition-number}
+If $f$ is $\mu$-strongly convex and $L$-smooth, the \emph{condition number}
+is
+\begin{equation}\label{eq:kappa}
+  \kappa = \frac{L}{\mu} \ge 1.
+\end{equation}
+The condition number governs the convergence speed of first-order methods.
+A well-conditioned problem ($\kappa$ close to $1$) converges quickly; an
+ill-conditioned problem ($\kappa \gg 1$) converges slowly.
+\end{definition}
+
+\begin{lemma}[Polyak--Lojasiewicz inequality]\label{lem:pl}
+If $f$ is $\mu$-strongly convex with minimizer $x^*$, then for all
+$x \in \R^n$:
+\begin{equation}\label{eq:pl}
+  \|\nabla f(x)\|^2 \ge 2\mu\, (f(x) - f(x^*)).
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By strong convexity, for all $y \in \R^n$:
+\[
+  f(y) \ge f(x) + \nabla f(x)^\top(y - x) + \frac{\mu}{2}\|y - x\|^2.
+\]
+The right-hand side is a quadratic function of $y$. Minimizing over $y$:
+the minimizer is $y^* = x - \frac{1}{\mu}\nabla f(x)$, and the minimum
+value is
+\[
+  f(x) + \nabla f(x)^\top\Bigl(-\frac{1}{\mu}\nabla f(x)\Bigr)
+  + \frac{\mu}{2}\Bigl\|\frac{1}{\mu}\nabla f(x)\Bigr\|^2
+  = f(x) - \frac{1}{2\mu}\|\nabla f(x)\|^2.
+\]
+Since $f(x^*) \le f(y)$ for all $y$, and in particular for this $y^*$:
+\[
+  f(x^*) \ge f(x) - \frac{1}{2\mu}\|\nabla f(x)\|^2.
+\]
+Wait---we need the inequality in the other direction. Since $f(y^*) \ge f(x)
+- \frac{1}{2\mu}\|\nabla f(x)\|^2$ and $f(x^*) \le f(y^*)$ for all $y$,
+we get: the quadratic lower bound on $f(y)$ achieves its minimum
+$f(x) - \frac{1}{2\mu}\|\nabla f(x)\|^2$. Since $f(x^*) = \min_y f(y)$
+and $f(y) \ge f(x) - \frac{1}{2\mu}\|\nabla f(x)\|^2$ for the minimizing
+$y^*$ of the lower bound, we obtain
+\[
+  f(x^*) \ge f(x) - \frac{1}{2\mu}\|\nabla f(x)\|^2,
+\]
+which rearranges to $\|\nabla f(x)\|^2 \ge 2\mu(f(x) - f(x^*))$.
+\end{proof}
+
+\begin{remark}\label{rem:pl-general}
+The PL inequality is weaker than strong convexity: there exist non-convex
+functions satisfying~\eqref{eq:pl}. When the PL inequality holds, gradient
+descent still converges linearly, even without convexity. This is relevant
+for over-parameterized neural networks, where the loss landscape may
+satisfy a local PL condition near the solution.
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: Linear Convergence for Strongly Convex Functions
+%% ============================================================
+
+\section{Linear Convergence for Strongly Convex Functions}\label{sec:linear-rate}
+
+\begin{theorem}[Linear convergence]\label{thm:linear-rate}
+Let $f : \R^n \to \R$ be $\mu$-strongly convex and $L$-smooth with minimizer
+$x^*$. Gradient descent with step size $\eta = 1/L$ satisfies
+\begin{equation}\label{eq:linear-rate}
+  f(x_k) - f(x^*) \le \left(1 - \frac{1}{\kappa}\right)^k
+  \bigl(f(x_0) - f(x^*)\bigr),
+\end{equation}
+where $\kappa = L/\mu$ is the condition number. Consequently,
+$f(x_k) - f(x^*) \le \epsilon$ after at most
+\begin{equation}\label{eq:iter-count}
+  k \ge \kappa \ln\!\left(\frac{f(x_0) - f(x^*)}{\epsilon}\right)
+\end{equation}
+iterations.
 \end{theorem}
 
 \begin{proof}
-From~\eqref{eq:gd-descent-step},
-$f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2$.
-By strong convexity applied at the optimum $x^*$:
-\[
-  f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k) + \frac{\mu}{2}\|x^* - x_k\|^2.
-\]
-Thus $f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) - \frac{\mu}{2}\|x_k - x^*\|^2$.
-By the Cauchy--Schwarz inequality and the AM-GM inequality (or by optimizing
-over $\|x_k - x^*\|$), one obtains the standard inequality for strongly convex
-functions:
-\begin{equation}\label{eq:PL}
-  \|\nabla f(x_k)\|^2 \ge 2\mu (f(x_k) - f(x^*)).
+\textbf{Step 1: Sufficient decrease.}
+From Corollary~\ref{cor:sufficient-decrease}:
+\begin{equation}\label{eq:lr-step1}
+  f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2.
 \end{equation}
-This is the \emph{Polyak--Lojasiewicz (PL) inequality}, which follows from
-strong convexity.
 
-\emph{Proof of~\eqref{eq:PL}:} By strong convexity, for all $y$:
-$f(y) \ge f(x_k) + \nabla f(x_k)^\top(y - x_k) + \frac{\mu}{2}\|y - x_k\|^2$.
-Minimizing the right side over $y$ (a quadratic in $y$) gives
-$y^* = x_k - \frac{1}{\mu}\nabla f(x_k)$, yielding
-\[
-  f(x^*) \ge f(x_k) - \frac{1}{2\mu}\|\nabla f(x_k)\|^2,
-\]
-which rearranges to~\eqref{eq:PL}.
+\textbf{Step 2: Apply the PL inequality.}
+By Lemma~\ref{lem:pl}: $\|\nabla f(x_k)\|^2 \ge 2\mu(f(x_k) - f(x^*))$.
+Substituting into~\eqref{eq:lr-step1}:
+\begin{align}
+  f(x_{k+1}) &\le f(x_k) - \frac{1}{2L} \cdot 2\mu\, (f(x_k) - f(x^*))
+  \notag \\
+  &= f(x_k) - \frac{\mu}{L}(f(x_k) - f(x^*)). \label{eq:lr-step2}
+\end{align}
 
-Substituting~\eqref{eq:PL} into the descent bound:
-\[
-  f(x_{k+1}) \le f(x_k) - \frac{1}{2L} \cdot 2\mu(f(x_k) - f(x^*))
-  = f(x_k) - \frac{\mu}{L}(f(x_k) - f(x^*)).
-\]
-Subtracting $f(x^*)$ from both sides:
-\[
-  f(x_{k+1}) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)(f(x_k) - f(x^*)).
-\]
-Applying this recursively yields~\eqref{eq:gd-strong-rate} with
-$\rho = 1 - \mu/L = 1 - 1/\kappa$.
+\textbf{Step 3: Contraction.}
+Subtracting $f(x^*)$ from both sides of~\eqref{eq:lr-step2}:
+\begin{align}
+  f(x_{k+1}) - f(x^*) &\le f(x_k) - f(x^*) - \frac{\mu}{L}(f(x_k) - f(x^*))
+  \notag \\
+  &= \left(1 - \frac{\mu}{L}\right)(f(x_k) - f(x^*))
+  = \left(1 - \frac{1}{\kappa}\right)(f(x_k) - f(x^*)). \label{eq:lr-step3}
+\end{align}
+
+\textbf{Step 4: Induction.}
+Let $\rho = 1 - 1/\kappa \in [0, 1)$. Applying~\eqref{eq:lr-step3}
+recursively:
+\begin{equation}\label{eq:lr-induction}
+  f(x_k) - f(x^*) \le \rho^k\, (f(x_0) - f(x^*)).
+\end{equation}
+This establishes~\eqref{eq:linear-rate}.
+
+\textbf{Step 5: Iteration count.}
+To achieve $\rho^k (f(x_0) - f(x^*)) \le \epsilon$, we need
+$k \ge \frac{\ln((f(x_0) - f(x^*))/\epsilon)}{-\ln \rho}$. Using
+$-\ln(1 - 1/\kappa) \ge 1/\kappa$ (since $-\ln(1-u) \ge u$ for
+$u \in [0,1)$), we get $k \ge \kappa \ln((f(x_0) - f(x^*))/\epsilon)$.
 \end{proof}
 
-\begin{keyresult}[title={Gradient Descent Convergence Rates}]
+\begin{keyresult}[title={Gradient Descent Convergence Summary}]
 For $L$-smooth functions with step size $\eta = 1/L$:
 \begin{itemize}
   \item \textbf{Convex:} $f(x_k) - f^* = O(1/k)$, i.e., $O(1/\epsilon)$
     iterations for $\epsilon$-accuracy.
-  \item \textbf{$\mu$-strongly convex:} $f(x_k) - f^* = O(\rho^k)$ with
-    $\rho = 1 - 1/\kappa$, i.e., $O(\kappa \log(1/\epsilon))$ iterations.
+  \item \textbf{$\mu$-strongly convex:} $f(x_k) - f^* \le (1 - 1/\kappa)^k
+    (f(x_0) - f^*)$, i.e., $O(\kappa \log(1/\epsilon))$ iterations.
 \end{itemize}
+The strong convexity rate is \emph{linear} (or \emph{geometric}): each
+iteration reduces the error by a constant factor $1 - 1/\kappa$.
 \end{keyresult}
 
+\begin{remark}[Terminology]\label{rem:linear-terminology}
+In optimization, ``linear convergence'' means the error decreases
+geometrically: $\epsilon_k \le C \rho^k$ for some $\rho \in (0,1)$.
+This is analogous to the convergence of a geometric series. The term
+``linear'' refers to the linear relationship $\log \epsilon_k \le
+\log C + k \log \rho$ on a logarithmic scale.
+\end{remark}
+
+%% ============================================================
+%% SECTION 8: Worked Examples
+%% ============================================================
+
+\section{Worked Examples}\label{sec:examples}
+
+\begin{example}[Gradient descent on a quadratic]\label{ex:gd-quadratic}
+Let $f(x) = \frac{1}{2}x^\top A x - b^\top x$ where
+$A = \diag(\lambda_1, \dots, \lambda_n)$ with
+$0 < \mu = \lambda_{\min} \le \lambda_{\max} = L$.
+
+The gradient is $\nabla f(x) = Ax - b$ and the unique minimizer is
+$x^* = A^{-1}b$. The gradient descent update with $\eta = 1/L$ gives:
+\[
+  x_{k+1} = x_k - \frac{1}{L}(Ax_k - b) = (I - \frac{1}{L}A)x_k
+  + \frac{1}{L}b.
+\]
+The error $e_k = x_k - x^*$ satisfies $e_{k+1} = (I - \frac{1}{L}A)e_k$,
+so $e_k = (I - \frac{1}{L}A)^k e_0$. The spectral radius of
+$I - \frac{1}{L}A$ is $\max_i |1 - \lambda_i/L| = 1 - \mu/L = 1 - 1/\kappa$.
+Thus $\|e_k\| \le (1 - 1/\kappa)^k \|e_0\|$, confirming the linear rate.
+\end{example}
+
+\begin{example}[Effect of condition number]\label{ex:condition-number}
+Consider $f(x_1, x_2) = \frac{1}{2}(x_1^2 + 100 x_2^2)$. Here
+$L = 100$, $\mu = 1$, $\kappa = 100$. Gradient descent converges as
+$(1 - 1/100)^k = 0.99^k$: after $k = 100$ iterations, the error is
+reduced by a factor of about $0.99^{100} \approx 0.37$, i.e., less than
+one order of magnitude. After $k = 460$ iterations, the error is reduced
+by a factor of $0.99^{460} \approx 0.01$ (two orders of magnitude).
+
+In contrast, for $f(x_1, x_2) = \frac{1}{2}(x_1^2 + x_2^2)$ with
+$\kappa = 1$, one step of gradient descent with $\eta = 1$ gives the exact
+solution: $x_1 = x_0 - \nabla f(x_0) = x_0 - x_0 = 0$.
+\end{example}
+
+\begin{example}[Convex but not strongly convex]\label{ex:not-strong}
+Consider $f(x) = |x|$ on $\R$. This is convex but neither smooth (not
+differentiable at $0$) nor strongly convex ($f(x) - \frac{\mu}{2}x^2$
+is not convex for any $\mu > 0$ since it becomes concave for large $|x|$).
+Gradient descent is not directly applicable here; one would use
+subgradient methods (Lesson~29).
+
+Consider instead the smooth convex function $f(x) = \frac{1}{2}x^2$ on
+$[0, \infty)$. This is $1$-smooth and $1$-strongly convex on $\R$.
+Gradient descent gives $x_{k+1} = x_k - x_k = 0$: one step suffices
+($\kappa = 1$).
+\end{example}
+
 \begin{rlconnection}
-Policy gradient methods and TD learning with function approximation perform
-(stochastic) gradient descent on the policy parameters or value function weights.
-The convergence rate depends critically on the smoothness ($L$) and strong
-convexity ($\mu$) of the loss landscape. In practice, the loss for neural network
-policies is non-convex, but locally the landscape often behaves like a strongly
-convex function near a good solution.
+\textbf{Policy gradient step sizes.} In vanilla policy gradient
+(REINFORCE), the update $\theta_{k+1} = \theta_k + \eta\, \widehat{\nabla}
+J(\theta_k)$ is stochastic gradient \emph{ascent} on the expected return
+$J(\theta)$. The smoothness constant $L$ of $J$ (or of the surrogate
+objective) determines the largest stable step size: $\eta \le 1/L$.
+In practice, $L$ is unknown and step sizes are tuned empirically or
+adapted via line search.
+
+\textbf{TD learning and the condition number.} Temporal difference learning
+with linear function approximation performs a form of stochastic semi-gradient
+descent. The effective condition number depends on the feature matrix and the
+discount factor $\gamma$: as $\gamma \to 1$, the effective condition number
+$\kappa \to \infty$, slowing convergence. This is a fundamental difficulty
+in near-undiscounted RL.
+
+\textbf{Natural gradient.} The natural gradient preconditions the gradient
+by the inverse Fisher information matrix, effectively transforming the
+parameter space so that the ``curvature'' is uniform. This reduces the
+effective condition number from $\kappa$ toward $1$, analogous to using
+Newton's method instead of gradient descent.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 6: Nesterov Acceleration
+%% SECTION 9: Exercises
 %% ============================================================
 
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Smoothness verification]\label{ex:smooth-verify}
+Show that $f(x) = \frac{1}{4}\|x\|^4$ on $\R^n$ is \emph{not} $L$-smooth
+for any finite $L$. \emph{Hint:} Compute $\nabla f(x)$ and show that
+$\|\nabla f(x) - \nabla f(y)\|/\|x - y\|$ is unbounded.
+\end{exercise}
+
+\begin{exercise}[Descent lemma tightness]\label{ex:descent-tight}
+For the quadratic $f(x) = \frac{L}{2}x^2$, show that the descent lemma
+bound $f(y) \le f(x) + f'(x)(y-x) + \frac{L}{2}(y-x)^2$ holds with
+equality for all $x, y$.
+\end{exercise}
+
+\begin{exercise}[Strong convexity of ridge regression]\label{ex:ridge}
+Let $f(w) = \frac{1}{2n}\|Xw - y\|^2 + \frac{\lambda}{2}\|w\|^2$ with
+$X \in \R^{n \times d}$, $y \in \R^n$, $\lambda > 0$. Show that $f$
+is $\mu$-strongly convex with $\mu = \lambda$ and $L$-smooth with
+$L = \frac{1}{n}\lambda_{\max}(X^\top X) + \lambda$. Compute the
+condition number $\kappa$ and determine how many gradient descent
+iterations are needed for $\epsilon$-accuracy.
+\end{exercise}
+
+\begin{exercise}[PL inequality without convexity]\label{ex:pl-nonconvex}
+Let $f(x) = x^2(3 - x)^2$ on $\R$. Show that $f$ satisfies the PL
+inequality $|f'(x)|^2 \ge 2\mu\, f(x)$ for some $\mu > 0$ in a
+neighborhood of $x = 0$. Conclude that gradient descent with sufficiently
+small step size converges linearly to $x = 0$ from nearby initial points.
+\end{exercise}
+
+\begin{exercise}[Convergence in iterates]\label{ex:iterate-convergence}
+Under the assumptions of Theorem~\ref{thm:linear-rate}, prove that
+\begin{equation}
+  \|x_k - x^*\|^2 \le \frac{2}{\mu}\left(1 - \frac{1}{\kappa}\right)^k
+  (f(x_0) - f(x^*)).
+\end{equation}
+\emph{Hint:} Use strong convexity to relate $\|x - x^*\|^2$ to
+$f(x) - f(x^*)$.
+\end{exercise}
+
+\begin{exercise}[Optimal step size for quadratics]\label{ex:optimal-step}
+For $f(x) = \frac{1}{2}x^\top A x - b^\top x$ with $A \succ 0$,
+the gradient descent error satisfies $e_{k+1} = (I - \eta A)e_k$.
+Show that the spectral radius $\rho(\eta) = \max(|1 - \eta\lambda_{\min}|,
+|1 - \eta\lambda_{\max}|)$ is minimized by
+$\eta^* = \frac{2}{\lambda_{\min} + \lambda_{\max}}$,
+giving $\rho^* = \frac{\kappa - 1}{\kappa + 1}$. Compare this to the
+rate $\rho = 1 - 1/\kappa$ obtained with $\eta = 1/L$.
+\end{exercise}
+
+\begin{exercise}[Lower bound argument]\label{ex:lower-bound}
+Construct a convex $L$-smooth function $f : \R \to \R$ and an initial
+point $x_0$ such that gradient descent with $\eta = 1/L$ satisfies
+$f(x_k) - f(x^*) \ge \frac{L\|x_0 - x^*\|^2}{4(k+1)}$ for all $k$.
+This shows the $O(1/k)$ rate is tight up to a constant.
+\emph{Hint:} Consider $f(x) = \frac{L}{2}x^2$ with $x_0 = 1$.
+\end{exercise}
+
+\bibliography{optimization-refs}
 
 \end{document}

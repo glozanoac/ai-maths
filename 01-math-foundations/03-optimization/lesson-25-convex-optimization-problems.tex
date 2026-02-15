@@ -1,153 +1,53 @@
 \documentclass[11pt,a4paper]{article}
-
-% --- Encoding and fonts ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-
-% --- Mathematics ---
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-
-% --- Page layout ---
-\usepackage[margin=1in,headheight=14pt]{geometry}
-
-% --- Hyperlinks ---
-\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
-
-% --- Lists ---
-\usepackage{enumitem}
-
-% --- Colors and boxes ---
-\usepackage{xcolor}
-\usepackage[theorems,skins,breakable]{tcolorbox}
-
-% --- Header/footer ---
-\usepackage{fancyhdr}
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[L]{\textsc{Lesson 25: Convex Optimization Problems}}
 \fancyhead[R]{\thepage}
-
-% --- Tables ---
-\usepackage{booktabs}
-
-% ============================================================
-% Theorem environments
-% ============================================================
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ============================================================
-% Colored boxes
-% ============================================================
-\newtcolorbox{keyresult}[1][]{
-  colback=green!5!white,
-  colframe=green!60!black,
-  fonttitle=\bfseries,
-  title={Key Result},
-  breakable,
-  #1
-}
-
-\newtcolorbox{rlconnection}[1][]{
-  colback=blue!5!white,
-  colframe=blue!60!black,
-  fonttitle=\bfseries,
-  title={RL Connection},
-  breakable,
-  #1
-}
-
-\newtcolorbox{warning}[1][]{
-  colback=red!5!white,
-  colframe=red!60!black,
-  fonttitle=\bfseries,
-  title={Warning},
-  breakable,
-  #1
-}
-
-% ============================================================
-% Custom commands
-% ============================================================
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\epi}{epi}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\prox}{prox}
-\DeclareMathOperator*{\argmin}{arg\,min}
-\DeclareMathOperator*{\argmax}{arg\,max}
-\DeclareMathOperator{\tr}{tr}
-\DeclareMathOperator{\diag}{diag}
-\DeclareMathOperator{\interior}{int}
-
-% ============================================================
 \title{Lesson 25: Convex Optimization Problems}
-\author{%
-  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
-  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
-}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{0}
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
 
 \section{Introduction}\label{sec:intro}
 
-Optimization is the computational engine beneath virtually every algorithm in
-machine learning and reinforcement learning. Policy gradient methods solve
-surrogate optimization problems at each iteration; value function approximation
-minimizes projected Bellman error; and constrained MDPs reduce to saddle-point
-problems whose structure is governed by duality theory.
+Optimization lies at the heart of nearly every algorithm in machine learning and
+reinforcement learning. Supervised learning reduces to empirical risk minimization;
+policy gradient methods maximize a surrogate objective at each iteration; and
+constrained Markov decision processes are formulated as saddle-point problems
+whose structure is governed by convexity and duality. A precise understanding of
+convex optimization problems---their standard form, the structure of their feasible
+sets, the classes of programs that arise in practice, and the fundamental theorem
+that local optimality implies global optimality---is therefore essential.
 
-This document develops the theory of convex optimization from first principles:
-the hierarchy of convex programs (Section~\ref{sec:convex-problems}), Lagrangian
-duality and the passage from primal to dual (Section~\ref{sec:duality}), the
-Karush--Kuhn--Tucker conditions (Section~\ref{sec:kkt}), gradient descent and
-its convergence guarantees (Section~\ref{sec:gd}), Nesterov's accelerated method
-(Section~\ref{sec:nesterov}), proximal methods for non-smooth objectives
-(Section~\ref{sec:proximal}), and interior-point methods
-(Section~\ref{sec:interior}). We close with exercises
-(Section~\ref{sec:exercises}) and a summary table of convergence rates
-(Section~\ref{sec:summary}).
+This lesson develops the theory of convex optimization problems from first
+principles. Section~\ref{sec:standard-form} introduces the standard form, the
+feasible set, and the optimal value. Section~\ref{sec:local-global} proves that
+every local minimizer of a convex program is a global minimizer.
+Sections~\ref{sec:lp}--\ref{sec:sdp} present the principal classes of convex
+programs---linear programs, quadratic programs, second-order cone programs, and
+semidefinite programs---and Section~\ref{sec:hierarchy} establishes the inclusion
+hierarchy among them. Section~\ref{sec:examples} works through detailed examples,
+and Section~\ref{sec:exercises} provides exercises for further practice.
 
-Throughout, we assume familiarity with real analysis (continuity, compactness)
-and linear algebra (eigenvalues, positive definiteness) at the level of the
-Phase~00 prerequisites.
+Throughout we assume familiarity with convex sets, convex functions, and their
+basic properties as developed in Lessons~23--24.
 
 %% ============================================================
-%% SECTION 2: Convex Optimization Problems
+%% SECTION 2: Standard Form
 %% ============================================================
 
-\section{Convex Optimization Problems}\label{sec:convex-problems}
-
-\subsection{Standard Form}
+\section{Standard Form of Convex Optimization}\label{sec:standard-form}
 
 \begin{definition}[Convex optimization problem]\label{def:convex-opt}
-A \emph{convex optimization problem} in standard form is
+A \emph{convex optimization problem} in \emph{standard form} is
 \begin{equation}\label{eq:std-form}
 \begin{aligned}
   \min_{x \in \R^n} \quad & f_0(x) \\
@@ -155,85 +55,560 @@ A \emph{convex optimization problem} in standard form is
                           & a_j^\top x = b_j, \quad j = 1,\dots,p,
 \end{aligned}
 \end{equation}
-where $f_0, f_1, \dots, f_m : \R^n \to \R$ are convex functions and the
-equality constraints are affine.
+where $f_0, f_1, \dots, f_m : \R^n \to \R$ are \emph{convex} functions,
+$a_j \in \R^n$, and $b_j \in \R$. The function $f_0$ is called the
+\emph{objective function}, the inequalities $f_i(x) \le 0$ are
+\emph{inequality constraints}, and $a_j^\top x = b_j$ are
+\emph{equality constraints}.
 \end{definition}
 
-\begin{definition}[Feasible set, optimal value]\label{def:feasible}
-The \emph{feasible set} is
-$\mathcal{F} = \{x \in \R^n : f_i(x) \le 0,\; a_j^\top x = b_j\}$.
-The \emph{optimal value} is $p^* = \inf\{f_0(x) : x \in \mathcal{F}\}$.
-A point $x^*$ with $f_0(x^*) = p^*$ is an \emph{optimal point} (or
-\emph{minimizer}).
+\begin{remark}\label{rem:equality-affine}
+The equality constraints must be affine. If we were to allow a nonlinear
+equality constraint $h(x) = 0$ with $h$ convex, the set $\{x : h(x) = 0\}$
+would generally not be convex (it is convex only when $h$ is affine).
+Requiring affine equality constraints ensures the feasible set is convex.
+\end{remark}
+
+\begin{definition}[Feasible set and optimal value]\label{def:feasible}
+The \emph{feasible set} of~\eqref{eq:std-form} is
+\begin{equation}\label{eq:feasible-set}
+  \mathcal{F} = \bigl\{x \in \R^n : f_i(x) \le 0 \;\text{for}\;
+  i = 1,\dots,m, \quad a_j^\top x = b_j \;\text{for}\;
+  j = 1,\dots,p \bigr\}.
+\end{equation}
+The \emph{optimal value} is
+\begin{equation}\label{eq:optimal-value}
+  p^* = \inf \{f_0(x) : x \in \mathcal{F}\}.
+\end{equation}
+We adopt the convention $p^* = +\infty$ if $\mathcal{F} = \emptyset$ (the
+problem is \emph{infeasible}) and $p^* = -\infty$ if the objective is
+unbounded below on $\mathcal{F}$.
 \end{definition}
+
+\begin{definition}[Optimal point]\label{def:optimal-point}
+A point $x^* \in \mathcal{F}$ is an \emph{optimal point} (or \emph{global
+minimizer}) if $f_0(x^*) = p^*$. The set of all optimal points is denoted
+$X_{\text{opt}}$. A point $x^*$ is a \emph{local minimizer} if there
+exists $\delta > 0$ such that $f_0(x^*) \le f_0(x)$ for all
+$x \in \mathcal{F}$ with $\|x - x^*\| \le \delta$.
+\end{definition}
+
+\begin{proposition}[Convexity of the feasible set]\label{prop:feasible-convex}
+The feasible set $\mathcal{F}$ of a convex optimization
+problem~\eqref{eq:std-form} is a convex set.
+\end{proposition}
+
+\begin{proof}
+Let $x, y \in \mathcal{F}$ and $t \in [0,1]$. Set $z = (1-t)x + ty$.
+For each inequality constraint, by convexity of $f_i$:
+\[
+  f_i(z) \le (1-t) f_i(x) + t f_i(y) \le (1-t) \cdot 0 + t \cdot 0 = 0.
+\]
+For each equality constraint, by linearity:
+\[
+  a_j^\top z = (1-t) a_j^\top x + t a_j^\top y = (1-t) b_j + t b_j = b_j.
+\]
+Hence $z \in \mathcal{F}$, so $\mathcal{F}$ is convex.
+\end{proof}
+
+\begin{proposition}[Convexity of the optimal set]\label{prop:opt-set-convex}
+If $X_{\text{opt}} \neq \emptyset$, then $X_{\text{opt}}$ is a convex set.
+\end{proposition}
+
+\begin{proof}
+Let $x^*, y^* \in X_{\text{opt}}$, so $f_0(x^*) = f_0(y^*) = p^*$. For
+$t \in [0,1]$, set $z = (1-t)x^* + ty^*$. By
+Proposition~\ref{prop:feasible-convex}, $z \in \mathcal{F}$. By convexity
+of $f_0$:
+\[
+  f_0(z) \le (1-t)f_0(x^*) + t f_0(y^*) = (1-t)p^* + t p^* = p^*.
+\]
+Since $z$ is feasible and $p^*$ is the infimum, $f_0(z) \ge p^*$. Hence
+$f_0(z) = p^*$, so $z \in X_{\text{opt}}$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 3: Local Optimality Implies Global Optimality
+%% ============================================================
+
+\section{Local Optimality Implies Global Optimality}\label{sec:local-global}
+
+The following theorem is the most fundamental property of convex optimization.
+It asserts that every local minimum is automatically a global minimum, so
+there are no suboptimal local minima to get trapped in.
 
 \begin{theorem}[Local optimality implies global optimality]\label{thm:local-global}
 For the convex program~\eqref{eq:std-form}, every local minimizer is a global
-minimizer.
+minimizer. That is, if $x^*$ is a local minimizer, then $f_0(x^*) = p^*$.
 \end{theorem}
 
 \begin{proof}
 Let $x^*$ be a local minimizer: there exists $\delta > 0$ such that
-$f_0(x^*) \le f_0(x)$ for all feasible $x$ with $\|x - x^*\| \le \delta$.
-Suppose for contradiction there exists a feasible $y$ with $f_0(y) < f_0(x^*)$.
-Consider $z_t = (1-t)x^* + ty$ for $t \in (0,1)$. By convexity of each $f_i$
-and affinity of the equality constraints, $z_t$ is feasible. Moreover,
+$f_0(x^*) \le f_0(x)$ for all $x \in \mathcal{F}$ with
+$\|x - x^*\| \le \delta$. Suppose, for the sake of contradiction, that there
+exists a feasible point $y \in \mathcal{F}$ with $f_0(y) < f_0(x^*)$.
+
+Define the convex combination
+\begin{equation}\label{eq:convex-combo}
+  z_t = (1-t) x^* + t y, \quad t \in (0,1).
+\end{equation}
+
+\textbf{Step 1: $z_t$ is feasible.} By Proposition~\ref{prop:feasible-convex},
+$\mathcal{F}$ is convex, so $z_t \in \mathcal{F}$ for all $t \in [0,1]$.
+
+\textbf{Step 2: $f_0(z_t) < f_0(x^*)$.} By convexity of $f_0$:
+\begin{equation}\label{eq:convex-bound}
+  f_0(z_t) \le (1-t) f_0(x^*) + t f_0(y) < (1-t) f_0(x^*) + t f_0(x^*) = f_0(x^*),
+\end{equation}
+where the strict inequality uses $f_0(y) < f_0(x^*)$ and $t > 0$.
+
+\textbf{Step 3: $z_t$ is within $\delta$ of $x^*$.} We have
 \[
-  f_0(z_t) \le (1-t) f_0(x^*) + t f_0(y) < f_0(x^*)
+  \|z_t - x^*\| = t\|y - x^*\|.
 \]
-for all $t \in (0,1)$. Choosing $t$ small enough that
-$\|z_t - x^*\| = t\|y - x^*\| < \delta$ contradicts local optimality.
+Choose $t_0 \in (0,1)$ small enough that $t_0 \|y - x^*\| < \delta$.
+
+\textbf{Contradiction.} For $t = t_0$, the point $z_{t_0}$ is feasible,
+satisfies $\|z_{t_0} - x^*\| < \delta$, and $f_0(z_{t_0}) < f_0(x^*)$.
+This contradicts the local optimality of $x^*$.
 \end{proof}
 
-\subsection{Important Special Cases}
+\begin{keyresult}[title={Local Implies Global for Convex Problems}]
+Every local minimizer of a convex optimization problem is a global minimizer.
+This is the principal reason convex problems are considered ``tractable'':
+any descent algorithm that converges to a local minimum has necessarily found
+the global minimum.
+\end{keyresult}
 
-\begin{definition}[Linear program -- LP]\label{def:lp}
-A \emph{linear program} has the form
-\[
-  \min_{x} \; c^\top x \quad \text{s.t.} \quad Ax \le b, \; Cx = d,
-\]
-where all functions are affine (hence convex).
+\begin{corollary}[First-order optimality for unconstrained convex problems]%
+\label{cor:first-order}
+If $f_0 : \R^n \to \R$ is convex and differentiable, then $x^*$ is a global
+minimizer of $f_0$ if and only if $\nabla f_0(x^*) = 0$.
+\end{corollary}
+
+\begin{proof}
+$(\Leftarrow)$ By convexity, for all $x \in \R^n$:
+$f_0(x) \ge f_0(x^*) + \nabla f_0(x^*)^\top(x - x^*) = f_0(x^*)$,
+so $x^*$ is a global minimizer.
+
+$(\Rightarrow)$ If $\nabla f_0(x^*) \neq 0$, then $d = -\nabla f_0(x^*)$
+is a descent direction: $f_0(x^* + \epsilon d) < f_0(x^*)$ for small
+$\epsilon > 0$, contradicting global minimality.
+\end{proof}
+
+\begin{warning}
+The theorem relies crucially on the convexity of both the objective $f_0$ and
+the feasible set $\mathcal{F}$. For non-convex problems, local minima may be
+strictly worse than the global minimum; this is the fundamental difficulty in
+training deep neural networks.
+\end{warning}
+
+%% ============================================================
+%% SECTION 4: Linear Programs
+%% ============================================================
+
+\section{Linear Programs (LP)}\label{sec:lp}
+
+\begin{definition}[Linear program]\label{def:lp}
+A \emph{linear program} (LP) has the form
+\begin{equation}\label{eq:lp}
+  \min_{x \in \R^n} \; c^\top x \quad
+  \text{s.t.} \quad Ax \le b, \;\; Cx = d,
+\end{equation}
+where $c \in \R^n$, $A \in \R^{m \times n}$, $b \in \R^m$,
+$C \in \R^{p \times n}$, $d \in \R^p$.
 \end{definition}
 
-\begin{definition}[Quadratic program -- QP]\label{def:qp}
-A \emph{quadratic program} minimizes a convex quadratic over a polyhedral
-feasible set:
-\[
-  \min_{x} \; \tfrac{1}{2} x^\top P x + q^\top x \quad \text{s.t.} \quad Ax \le b,
-\]
-with $P \succeq 0$ (positive semidefinite).
-\end{definition}
-
-\begin{definition}[Second-order cone program -- SOCP]\label{def:socp}
-An SOCP has constraints of the form $\|A_i x + b_i\|_2 \le c_i^\top x + d_i$
-(second-order cone constraints), which are convex.
-\end{definition}
-
-\begin{definition}[Semidefinite program -- SDP]\label{def:sdp}
-An SDP minimizes a linear objective subject to a linear matrix inequality:
-\[
-  \min_{x} \; c^\top x \quad \text{s.t.} \quad F_0 + \sum_{i=1}^n x_i F_i \succeq 0,
-\]
-where $F_0, \dots, F_n$ are symmetric matrices.
-\end{definition}
-
-\begin{remark}[Hierarchy]\label{rem:hierarchy}
-We have the strict inclusion chain:
-$\text{LP} \subset \text{QP} \subset \text{SOCP} \subset \text{SDP} \subset
-\text{convex programs}$.
+\begin{remark}\label{rem:lp-convex}
+Both the objective $c^\top x$ and the constraints $A_i^\top x - b_i \le 0$
+are affine, hence convex. The feasible set is a \emph{polyhedron}. By
+Theorem~\ref{thm:local-global}, every local optimum of an LP is a global
+optimum.
 \end{remark}
 
+\begin{example}[LP for MDP]\label{ex:lp-mdp}
+Given a discounted MDP with states $\mathcal{S}$, actions $\mathcal{A}$,
+transition probabilities $P(s'|s,a)$, rewards $r(s,a)$, and discount factor
+$\gamma \in (0,1)$, the value function satisfies the linear program:
+\[
+  \min_{V} \; \sum_{s \in \mathcal{S}} c(s) V(s) \quad \text{s.t.} \quad
+  V(s) \ge r(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s'), \quad
+  \forall\, s \in \mathcal{S}, \; a \in \mathcal{A},
+\]
+where $c(s) > 0$ are state relevance weights. The constraints enforce the
+Bellman inequality, and the minimization pushes $V$ down to the fixed point.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: Quadratic Programs
+%% ============================================================
+
+\section{Quadratic Programs (QP)}\label{sec:qp}
+
+\begin{definition}[Quadratic program]\label{def:qp}
+A \emph{quadratic program} (QP) has the form
+\begin{equation}\label{eq:qp}
+  \min_{x \in \R^n} \; \frac{1}{2} x^\top P x + q^\top x + r \quad
+  \text{s.t.} \quad Ax \le b, \;\; Cx = d,
+\end{equation}
+where $P \in \R^{n \times n}$ is symmetric positive semidefinite
+($P \succeq 0$), $q \in \R^n$, and $r \in \R$.
+\end{definition}
+
+\begin{remark}\label{rem:qp-contains-lp}
+Setting $P = 0$ in~\eqref{eq:qp} recovers a linear program. Hence
+$\text{LP} \subseteq \text{QP}$.
+\end{remark}
+
+\begin{example}[Least-squares regression]\label{ex:ls}
+Given data matrix $A \in \R^{m \times n}$ and target $b \in \R^m$, the
+ordinary least-squares problem is
+\[
+  \min_{x} \; \frac{1}{2}\|Ax - b\|^2 = \frac{1}{2}x^\top(A^\top A) x
+  - b^\top A x + \frac{1}{2}\|b\|^2,
+\]
+which is a QP with $P = A^\top A \succeq 0$.
+\end{example}
+
+\begin{example}[Quadratically constrained QP -- QCQP]\label{ex:qcqp}
+A \emph{QCQP} allows convex quadratic constraints:
+\[
+  \min_{x} \; \frac{1}{2}x^\top P_0 x + q_0^\top x \quad \text{s.t.} \quad
+  \frac{1}{2}x^\top P_i x + q_i^\top x + r_i \le 0, \quad i = 1,\dots,m,
+\]
+with each $P_i \succeq 0$. QCQPs arise in robust optimization and trust-region
+methods, where the trust region $\|x - x_k\|^2 \le \Delta^2$ is a quadratic
+constraint.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: Second-Order Cone Programs
+%% ============================================================
+
+\section{Second-Order Cone Programs (SOCP)}\label{sec:socp}
+
+\begin{definition}[Second-order cone]\label{def:soc}
+The \emph{second-order cone} (or \emph{Lorentz cone}) in $\R^{n+1}$ is
+\[
+  \mathcal{K}_{n+1} = \{(x, t) \in \R^n \times \R : \|x\|_2 \le t\}.
+\]
+\end{definition}
+
+\begin{definition}[Second-order cone program]\label{def:socp}
+A \emph{second-order cone program} (SOCP) has the form
+\begin{equation}\label{eq:socp}
+  \min_{x \in \R^n} \; f^\top x \quad
+  \text{s.t.} \quad \|A_i x + b_i\|_2 \le c_i^\top x + d_i, \quad
+  i = 1,\dots,m,
+\end{equation}
+where $A_i \in \R^{n_i \times n}$, $b_i \in \R^{n_i}$, $c_i \in \R^n$,
+$d_i \in \R$.
+\end{definition}
+
+\begin{proposition}[SOCP constraints are convex]\label{prop:socp-convex}
+Each constraint $\|A_i x + b_i\|_2 \le c_i^\top x + d_i$ defines a convex
+set.
+\end{proposition}
+
+\begin{proof}
+Define $g(x) = \|A_i x + b_i\|_2 - (c_i^\top x + d_i)$. The function
+$x \mapsto \|A_i x + b_i\|_2$ is convex as the composition of a norm
+(convex) with an affine map (which preserves convexity). Subtracting the
+affine function $c_i^\top x + d_i$ preserves convexity. Hence $g$ is convex,
+and $\{x : g(x) \le 0\}$ is a convex set.
+\end{proof}
+
+\begin{proposition}[QP embeds in SOCP]\label{prop:qp-in-socp}
+Every quadratic program can be written as a second-order cone program.
+Hence $\text{QP} \subseteq \text{SOCP}$.
+\end{proposition}
+
+\begin{proof}
+Consider the QP constraint $\frac{1}{2}x^\top P x + q^\top x + r \le 0$
+with $P = R^\top R$ (Cholesky). Introduce $t$ and rewrite as:
+\[
+  q^\top x + r \le t, \quad \|Rx\|_2 \le t,
+\]
+using the fact that $\frac{1}{2}x^\top P x \le t$ for suitable $t$ can
+be encoded via the rotated second-order cone. The linear objective is
+trivially an SOCP objective.
+\end{proof}
+
+\begin{example}[Robust least-squares]\label{ex:robust-ls}
+When the data matrix $A$ has uncertain rows, the robust formulation
+$\min_x \max_{\|u_i\| \le \epsilon} \|(A + U)x - b\|_2$ reduces to an SOCP.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: Semidefinite Programs
+%% ============================================================
+
+\section{Semidefinite Programs (SDP)}\label{sec:sdp}
+
+\begin{definition}[Linear matrix inequality]\label{def:lmi}
+A \emph{linear matrix inequality} (LMI) is a constraint of the form
+\begin{equation}\label{eq:lmi}
+  F(x) = F_0 + \sum_{i=1}^n x_i F_i \succeq 0,
+\end{equation}
+where $F_0, F_1, \dots, F_n \in \R^{k \times k}$ are given symmetric matrices
+and $\succeq 0$ denotes positive semidefiniteness.
+\end{definition}
+
+\begin{definition}[Semidefinite program]\label{def:sdp}
+A \emph{semidefinite program} (SDP) has the form
+\begin{equation}\label{eq:sdp}
+  \min_{x \in \R^n} \; c^\top x \quad
+  \text{s.t.} \quad F_0 + \sum_{i=1}^n x_i F_i \succeq 0, \quad
+  Ax = b,
+\end{equation}
+where $c \in \R^n$, $F_i \in \R^{k \times k}$ symmetric, $A \in \R^{p \times n}$,
+$b \in \R^p$.
+\end{definition}
+
+\begin{proposition}[LMI defines a convex set]\label{prop:lmi-convex}
+The set $\{x \in \R^n : F_0 + \sum_i x_i F_i \succeq 0\}$ is convex.
+\end{proposition}
+
+\begin{proof}
+Let $x$ and $y$ satisfy the LMI, and let $t \in [0,1]$. Then
+\[
+  F_0 + \sum_i ((1-t)x_i + t y_i) F_i
+  = (1-t)\Bigl(F_0 + \sum_i x_i F_i\Bigr) + t\Bigl(F_0 + \sum_i y_i F_i\Bigr).
+\]
+A convex combination of positive semidefinite matrices is positive semidefinite,
+so the constraint is satisfied at $(1-t)x + ty$.
+\end{proof}
+
+\begin{proposition}[SOCP embeds in SDP]\label{prop:socp-in-sdp}
+Every second-order cone constraint $\|u\|_2 \le t$ can be written as an LMI:
+\begin{equation}\label{eq:soc-as-lmi}
+  \begin{pmatrix} t I & u \\ u^\top & t \end{pmatrix} \succeq 0.
+\end{equation}
+Hence $\text{SOCP} \subseteq \text{SDP}$.
+\end{proposition}
+
+\begin{proof}
+The matrix in~\eqref{eq:soc-as-lmi} is positive semidefinite if and only if
+$t \ge 0$ and $t \cdot t - u^\top u \ge 0$ (by the Schur complement condition),
+i.e., $\|u\|_2^2 \le t^2$ with $t \ge 0$, which is equivalent to
+$\|u\|_2 \le t$.
+\end{proof}
+
+\begin{example}[Maximum eigenvalue minimization]\label{ex:max-eig}
+Given symmetric matrices $A_0, A_1, \dots, A_n$, the problem
+\[
+  \min_{x \in \R^n} \; \lambda_{\max}\Bigl(A_0 + \sum_{i=1}^n x_i A_i\Bigr)
+\]
+can be written as an SDP: $\min\, t$ subject to
+$tI - A_0 - \sum_i x_i A_i \succeq 0$.
+\end{example}
+
+%% ============================================================
+%% SECTION 8: Hierarchy
+%% ============================================================
+
+\section{The Hierarchy of Convex Programs}\label{sec:hierarchy}
+
+\begin{theorem}[Inclusion hierarchy]\label{thm:hierarchy}
+The following strict inclusions hold among classes of convex programs:
+\begin{equation}\label{eq:hierarchy}
+  \text{LP} \subsetneq \text{QP} \subsetneq \text{QCQP}
+  \subsetneq \text{SOCP} \subsetneq \text{SDP}
+  \subsetneq \text{Convex Programs}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The inclusions $\subseteq$ were established above:
+\begin{itemize}
+  \item $\text{LP} \subseteq \text{QP}$: set $P = 0$
+    (Remark~\ref{rem:qp-contains-lp}).
+  \item $\text{QP} \subseteq \text{QCQP}$: a QP is a QCQP with linear
+    constraints (set $P_i = 0$ in the constraints).
+  \item $\text{QCQP} \subseteq \text{SOCP}$: each convex quadratic constraint
+    can be rewritten as a second-order cone constraint
+    (Proposition~\ref{prop:qp-in-socp}).
+  \item $\text{SOCP} \subseteq \text{SDP}$: by the Schur complement encoding
+    (Proposition~\ref{prop:socp-in-sdp}).
+  \item $\text{SDP} \subseteq \text{Convex Programs}$: an SDP is a convex
+    program because the LMI constraint defines a convex set
+    (Proposition~\ref{prop:lmi-convex}) and the objective is linear.
+\end{itemize}
+For strictness, we exhibit a member of each larger class not in the
+smaller class:
+\begin{itemize}
+  \item $\min\, \frac{1}{2}x^2$ is a QP but not an LP (objective is
+    quadratic).
+  \item $\min\, x$ s.t. $x^2 \le 1$ is a QCQP but not a standard QP
+    (quadratic constraint).
+  \item $\min\, x$ s.t. $\|(y, z)\|_2 \le x$ involves a cone in 3
+    dimensions that is not equivalent to any single quadratic constraint.
+  \item The constraint $\lambda_{\max}(X) \le 1$ on a matrix variable
+    is an LMI but cannot be written as finitely many SOC constraints in
+    general.
+  \item Geometric programs (after log-transformation) are convex but
+    involve exponential cones, which are not LMIs.
+\end{itemize}
+\end{proof}
+
+\begin{remark}[Computational complexity]\label{rem:complexity}
+Problems higher in the hierarchy are generally harder to solve:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Class} & \textbf{Interior-point cost per iteration} & \textbf{Typical solver} \\
+\midrule
+LP & $O(n^2)$ & Simplex, barrier \\
+QP & $O(n^3)$ & Active set, barrier \\
+SOCP & $O(n^3)$ & Barrier \\
+SDP & $O(n^3 k + n^2 k^2)$ & Barrier \\
+\bottomrule
+\end{tabular}
+\end{center}
+Here $n$ is the number of variables and $k$ is the size of the LMI.
+\end{remark}
+
+%% ============================================================
+%% SECTION 9: Detailed Examples
+%% ============================================================
+
+\section{Detailed Examples}\label{sec:examples}
+
+\begin{example}[Portfolio optimization as QP]\label{ex:portfolio}
+An investor allocates wealth among $n$ assets with expected returns
+$\mu \in \R^n$ and covariance matrix $\Sigma \succ 0$. The
+mean-variance problem is:
+\[
+  \min_{w \in \R^n} \; \frac{1}{2} w^\top \Sigma w \quad
+  \text{s.t.} \quad \mu^\top w \ge r_{\min}, \quad
+  \mathbf{1}^\top w = 1, \quad w \ge 0,
+\]
+where $r_{\min}$ is a target return. This is a QP with $P = \Sigma \succ 0$,
+so $f_0$ is strictly convex. By Theorem~\ref{thm:local-global}, any local
+minimizer is the unique global minimizer.
+\end{example}
+
+\begin{example}[Minimum-norm point in polyhedron]\label{ex:min-norm}
+Given a polyhedron $\mathcal{P} = \{x : Ax \le b\}$, the problem
+$\min_{x \in \mathcal{P}} \|x\|_2^2$ is a QP with $P = 2I \succ 0$.
+The solution is the point in $\mathcal{P}$ closest to the origin.
+\end{example}
+
+\begin{example}[SDP relaxation of combinatorial optimization]\label{ex:sdp-relax}
+The MAX-CUT problem for a graph with weight matrix $W$ can be relaxed from
+$\max_{x_i \in \{-1,+1\}} \frac{1}{4} \sum_{ij} W_{ij}(1 - x_i x_j)$
+to the SDP:
+\[
+  \max_{X \succeq 0} \; \frac{1}{4} \tr(L X) \quad \text{s.t.} \quad
+  X_{ii} = 1,
+\]
+where $L = \diag(W\mathbf{1}) - W$ is the graph Laplacian.
+The Goemans--Williamson rounding algorithm guarantees at least $0.878$ of
+the optimal value.
+\end{example}
+
 \begin{rlconnection}
-In RL, linear programs arise in the LP formulation of MDPs (minimize
-$\sum_s c(s) V(s)$ subject to Bellman feasibility constraints). Semidefinite
-programs appear in robust MDP formulations and certain Lyapunov-based safety
-constraints. Quadratic programs arise in trust-region policy optimization when
-the surrogate objective is approximated to second order.
+\textbf{LP formulation of MDPs.} As shown in Example~\ref{ex:lp-mdp}, the
+value function of a discounted MDP solves a linear program. This LP has
+$|\mathcal{S}|$ variables and $|\mathcal{S}||\mathcal{A}|$ constraints, and
+its dual yields the state-action occupancy measure, which characterizes
+the optimal policy.
+
+\textbf{SDP relaxations.} In multi-agent RL, computing Nash equilibria
+in certain classes of games can be relaxed to SDPs. Lyapunov-based safety
+certificates also lead to SDP feasibility problems, where one searches
+for a matrix $P \succ 0$ satisfying linear matrix inequalities derived
+from the system dynamics.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 3: Lagrangian Duality
+%% SECTION 10: Equivalent Reformulations
 %% ============================================================
 
+\section{Equivalent Reformulations}\label{sec:reformulations}
+
+\begin{proposition}[Epigraph reformulation]\label{prop:epigraph}
+The problem $\min_{x} f_0(x)$ subject to $f_i(x) \le 0$, $Ax = b$
+is equivalent to
+\[
+  \min_{x, t} \; t \quad \text{s.t.} \quad f_0(x) \le t, \;\;
+  f_i(x) \le 0, \;\; Ax = b.
+\]
+This transforms a possibly nonlinear objective into a linear one at the cost
+of one additional variable and one additional constraint.
+\end{proposition}
+
+\begin{proof}
+If $(x^*, t^*)$ solves the epigraph problem, then $t^* = f_0(x^*)$ at
+optimality (otherwise we could decrease $t^*$), and the constraints on $x^*$
+match the original. Conversely, if $x^*$ solves the original, then
+$(x^*, f_0(x^*))$ solves the epigraph formulation.
+\end{proof}
+
+\begin{example}[Chebyshev center]\label{ex:chebyshev}
+The \emph{Chebyshev center} of a polyhedron $\mathcal{P} = \{x : a_i^\top x \le b_i\}$
+is the center of the largest ball inscribed in $\mathcal{P}$:
+\[
+  \max_{x_c, r} \; r \quad \text{s.t.} \quad a_i^\top x_c + r\|a_i\|_2 \le b_i,
+  \quad r \ge 0.
+\]
+This is an LP in the variables $(x_c, r)$.
+\end{example}
+
+%% ============================================================
+%% SECTION 11: Exercises
+%% ============================================================
+
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Uniqueness under strict convexity]\label{ex:unique}
+Suppose $f_0$ is \emph{strictly convex} (i.e.,
+$f_0((1-t)x + ty) < (1-t)f_0(x) + tf_0(y)$ for $x \neq y$ and
+$t \in (0,1)$). Prove that if an optimal point $x^*$ exists, it is unique.
+\emph{Hint:} Assume two distinct optima and use the definition of strict
+convexity to reach a contradiction.
+\end{exercise}
+
+\begin{exercise}[Convex feasibility as optimization]\label{ex:feasibility}
+Show that the \emph{feasibility problem}---determining whether
+$\mathcal{F} \neq \emptyset$ for a convex program---can be reformulated as
+a convex optimization problem.
+\emph{Hint:} Minimize $\max_i f_i(x)$ subject to $Ax = b$.
+\end{exercise}
+
+\begin{exercise}[LP relaxation tightness]\label{ex:lp-tight}
+Consider a finite MDP with $|\mathcal{S}| = 3$ states and
+$|\mathcal{A}| = 2$ actions. Write the LP for the value function
+explicitly. Show that the LP optimal solution $V^*$ satisfies the Bellman
+equation $V^*(s) = \max_a [r(s,a) + \gamma \sum_{s'} P(s'|s,a) V^*(s')]$
+for all $s$.
+\end{exercise}
+
+\begin{exercise}[SOCP from norm constraints]\label{ex:socp-norm}
+Show that the problem $\min\, c^\top x$ subject to $\|x\|_2 \le 1$ is an
+SOCP. Write it in the standard form~\eqref{eq:socp}.
+\end{exercise}
+
+\begin{exercise}[SDP feasibility for Lyapunov stability]\label{ex:lyapunov}
+Given a matrix $A \in \R^{n \times n}$, show that the system
+$\dot{x} = Ax$ is stable (all trajectories converge to the origin) if and
+only if there exists $P \succ 0$ such that $A^\top P + PA \prec 0$. Explain
+why searching for such $P$ is an SDP feasibility problem.
+\end{exercise}
+
+\begin{exercise}[Hierarchy verification]\label{ex:hierarchy}
+Give an explicit example of a convex optimization problem that is an SOCP but
+not a QCQP. \emph{Hint:} Consider a constraint involving the sum of norms
+$\|A_1 x + b_1\| + \|A_2 x + b_2\| \le 1$.
+\end{exercise}
+
+\begin{exercise}[Optimality set structure]\label{ex:opt-set}
+Let $f_0(x_1, x_2) = |x_1| + |x_2|$ and $\mathcal{F} = \{(x_1, x_2) :
+x_1 + x_2 = 1, \; x_1 \ge 0, \; x_2 \ge 0\}$. Find the optimal value
+$p^*$ and the optimal set $X_{\text{opt}}$. Verify that $X_{\text{opt}}$ is
+convex.
+\end{exercise}
+
+\bibliography{optimization-refs}
 
 \end{document}

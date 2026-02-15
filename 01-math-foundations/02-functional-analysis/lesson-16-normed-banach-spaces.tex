@@ -1,101 +1,20 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 6: Metric and Normed Spaces}}
+\fancyhead[L]{\textsc{Lesson 16: Normed Spaces and Banach Spaces}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\diam}{diam}
-\DeclareMathOperator{\Int}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\Span}{span}
-\DeclareMathOperator{\id}{id}
-
-% ---- Title ----
 \title{Lesson 16: Normed Spaces and Banach Spaces}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{2}
+%% ============================================================
+%% SECTION 1: NORMED SPACES
+%% ============================================================
 
 \section{Normed Spaces}
 \label{sec:normed}
@@ -107,46 +26,85 @@
 \label{def:normed}
 A \emph{normed space} (or \emph{normed vector space}) is a pair $(X, \|\cdot\|)$
 where $X$ is a vector space over $\R$ (or $\C$) and
-$\|\cdot\| \colon X \to [0,\infty)$ is a \emph{norm}, i.e., for all
-$x, y \in X$ and $\alpha$ scalar:
+$\|\cdot\| \colon X \to [0,\infty)$ is a \emph{norm}, satisfying for all
+$x, y \in X$ and scalars $\alpha$:
 \begin{enumerate}[nosep,label=(N\arabic*)]
-    \item \label{N1} $\|x\| = 0$ if and only if $x = 0$.
-    \hfill(positive definiteness)
-    \item \label{N2} $\|\alpha x\| = |\alpha| \, \|x\|$.
-    \hfill(absolute homogeneity)
-    \item \label{N3} $\|x + y\| \le \|x\| + \|y\|$.
-    \hfill(triangle inequality)
+  \item \label{N1} $\|x\| = 0$ if and only if $x = 0$.
+    \hfill (positive definiteness)
+  \item \label{N2} $\|\alpha x\| = |\alpha| \, \|x\|$.
+    \hfill (absolute homogeneity)
+  \item \label{N3} $\|x + y\| \le \|x\| + \|y\|$.
+    \hfill (triangle inequality)
 \end{enumerate}
 \end{definition}
 
+\begin{remark}
+Non-negativity follows from the axioms: $0 = \|x + (-x)\| \le \|x\| +
+\|{-x}\| = 2\|x\|$ by \ref{N2} with $\alpha = -1$, so $\|x\| \ge 0$. Also,
+the reverse triangle inequality $|\|x\| - \|y\|| \le \|x - y\|$ follows by
+applying \ref{N3} to $x = (x-y) + y$ and $y = (y-x) + x$.
+\end{remark}
+
 \begin{proposition}[Every Norm Induces a Metric]
 \label{prop:norm_metric}
-If $(X, \|\cdot\|)$ is a normed space, then $d(x,y) = \|x - y\|$ defines a metric
-on $X$. This metric is \emph{translation-invariant} ($d(x+z, y+z) = d(x,y)$) and
-\emph{homogeneous} ($d(\alpha x, \alpha y) = |\alpha| d(x,y)$).
+If $(X, \|\cdot\|)$ is a normed space, then $d(x,y) = \|x - y\|$ defines a
+metric on $X$. This metric is \emph{translation-invariant}
+($d(x+z, y+z) = d(x,y)$) and \emph{homogeneous}
+($d(\alpha x, \alpha y) = |\alpha|\, d(x,y)$).
 \end{proposition}
 
 \begin{proof}
-\ref{M1}: $d(x,y) = \|x - y\| = 0 \iff x - y = 0 \iff x = y$.
-\ref{M2}: $d(x,y) = \|x - y\| = \|{-(y-x)}\| = |{-1}| \cdot \|y - x\| = d(y,x)$.
-\ref{M3}: $d(x,z) = \|x - z\| = \|(x-y)+(y-z)\| \le \|x-y\| + \|y-z\| = d(x,y) + d(y,z)$.
-Translation invariance: $d(x+z, y+z) = \|(x+z)-(y+z)\| = \|x-y\| = d(x,y)$.
-Homogeneity: $d(\alpha x, \alpha y) = \|\alpha x - \alpha y\| = |\alpha| \|x - y\| = |\alpha| d(x,y)$.
+\textbf{(M1):} $d(x,y) = \|x - y\| = 0 \iff x - y = 0 \iff x = y$ by
+\ref{N1}.
+\textbf{(M2):} $d(x,y) = \|x - y\| = \|{-(y-x)}\| = |{-1}|\|y-x\| =
+d(y,x)$ by \ref{N2}.
+\textbf{(M3):} $d(x,z) = \|x-z\| = \|(x-y)+(y-z)\| \le \|x-y\|+\|y-z\| =
+d(x,y)+d(y,z)$ by \ref{N3}.
+Translation invariance: $d(x+z,y+z) = \|(x+z)-(y+z)\| = \|x-y\| = d(x,y)$.
+Homogeneity: $d(\alpha x,\alpha y) = \|\alpha(x-y)\| = |\alpha|\|x-y\| =
+|\alpha|\,d(x,y)$ by \ref{N2}.
 \end{proof}
 
-\begin{remark}
-Not every metric comes from a norm. The discrete metric on $\R^n$ (with $n \ge 1$)
-is not translation-invariant (take $x = 0$, $y = z$ with $z \ne 0$:
-$d(x,y) = 1$ but $d(x+z, y+z) = d(z, 2z) = 1$, which happens to be invariant in
-this case, but it is not homogeneous: $d(2x, 2y) = 1 \ne 2 = 2 d(x,y)$ when
-$x \ne y$). A metric arises from a norm if and only if it is translation-invariant
-and absolutely homogeneous.
-\end{remark}
+\subsection{Important Examples of Normed Spaces}
+\label{subsec:norm_examples}
 
-\subsection{H\"{o}lder's and Minkowski's Inequalities}
+\begin{example}[$\R^n$ with $p$-Norms]
+\label{ex:Rn_norms}
+For $1 \le p \le \infty$, $(\R^n, \|\cdot\|_p)$ is a normed space, where
+$\|x\|_p = (\sum_{i=1}^n |x_i|^p)^{1/p}$ for $p < \infty$ and
+$\|x\|_\infty = \max_i |x_i|$. Axioms \ref{N1} and \ref{N2} are immediate.
+The triangle inequality for $1 < p < \infty$ is Minkowski's inequality
+(Proposition~\ref{prop:minkowski}); for $p = \infty$:
+$\|x+y\|_\infty = \max_i |x_i+y_i| \le \max_i|x_i| + \max_i|y_i|$.
+\end{example}
 
-To show that $\ell^p$ norms are indeed norms, we need the following fundamental
-inequalities.
+\begin{example}[{$C[a,b]$ with Supremum and $L^1$ Norms}]
+\label{ex:Cab}
+$C[a,b]$ with $\|f\|_\infty = \max_{t \in [a,b]} |f(t)|$ is a normed space
+(the max exists by the extreme value theorem). Alternatively,
+$\|f\|_1 = \int_a^b |f(t)|\, dt$ also defines a norm on $C[a,b]$, but
+$C[a,b]$ is \emph{not} complete under $\|\cdot\|_1$.
+\end{example}
+
+\begin{example}[Sequence Spaces $\ell^p$]
+\label{ex:ell_p}
+For $1 \le p \le \infty$, $(\ell^p, \|\cdot\|_p)$ is a normed space by
+Minkowski's inequality (extended to infinite sums), where
+$\ell^p = \{x = (x_n) : \|x\|_p < \infty\}$.
+\end{example}
+
+%% ============================================================
+%% SECTION 3: THE Lp INEQUALITY CHAIN
+%% ============================================================
+
+\section{The $L^p$ Inequality Chain}
+\label{sec:lp_ineq}
+
+To verify that $\|\cdot\|_p$ satisfies the triangle inequality for
+$1 < p < \infty$, we establish the chain Young $\Rightarrow$ H\"older
+$\Rightarrow$ Minkowski.
+
+\subsection{Young's Inequality}
 
 \begin{lemma}[Young's Inequality]
 \label{lem:young}
@@ -154,110 +112,153 @@ For $a, b \ge 0$ and $p, q > 1$ with $\frac{1}{p} + \frac{1}{q} = 1$:
 \[
 ab \le \frac{a^p}{p} + \frac{b^q}{q}.
 \]
+Equality holds if and only if $a^p = b^q$.
 \end{lemma}
 
 \begin{proof}
-The function $\varphi(t) = e^t$ is convex. By the definition of convexity,
-$e^{\lambda s + (1-\lambda)t} \le \lambda e^s + (1-\lambda) e^t$ for
-$\lambda \in [0,1]$. Set $\lambda = 1/p$, $s = p \ln a$, $t = q \ln b$ (assuming
-$a, b > 0$):
+If $a = 0$ or $b = 0$, the inequality is trivial (both sides are
+non-negative and the left side is zero). Assume $a, b > 0$.
+
+The exponential function $t \mapsto e^t$ is convex. By Jensen's inequality
+(or equivalently, by the definition of convexity applied to two points):
 \[
-ab = e^{\ln a + \ln b} = e^{(1/p)(p \ln a) + (1/q)(q \ln b)} \le
-\frac{1}{p} e^{p \ln a} + \frac{1}{q} e^{q \ln b} = \frac{a^p}{p} + \frac{b^q}{q}.
+e^{\lambda s + (1-\lambda) t} \le \lambda \, e^s + (1 - \lambda)\, e^t
+\quad \text{for all } s, t \in \R,\ \lambda \in [0,1].
 \]
-The case $a = 0$ or $b = 0$ is trivial.
+Set $\lambda = 1/p$, so $1 - \lambda = 1/q$. Set $s = p \ln a$ and
+$t = q \ln b$. Then:
+\begin{align*}
+ab &= e^{\ln a + \ln b}
+   = e^{(1/p)(p \ln a) + (1/q)(q \ln b)} \\
+   &\le \frac{1}{p}\, e^{p \ln a} + \frac{1}{q}\, e^{q \ln b}
+   = \frac{a^p}{p} + \frac{b^q}{q}.
+\end{align*}
+
+For the equality condition: equality holds in Jensen's inequality if and only
+if $s = t$, i.e., $p \ln a = q \ln b$, i.e., $a^p = b^q$.
 \end{proof}
 
-\begin{proposition}[H\"{o}lder's Inequality]
+\subsection{H\"older's Inequality}
+
+\begin{proposition}[H\"older's Inequality]
 \label{prop:holder}
 Let $1 < p < \infty$ and $q = p/(p-1)$ (so $1/p + 1/q = 1$). For
-$x = (x_i), y = (y_i) \in \R^n$ (or sequences in $\ell^p, \ell^q$):
+$x = (x_i)$, $y = (y_i)$ in $\R^n$ (or sequences in $\ell^p$, $\ell^q$):
 \[
 \sum_{i} |x_i y_i| \le \|x\|_p \, \|y\|_q.
 \]
+Equality holds if and only if there exist constants $\alpha, \beta \ge 0$
+(not both zero) with $\alpha |x_i|^p = \beta |y_i|^q$ for all $i$.
 \end{proposition}
 
 \begin{proof}
-If $\|x\|_p = 0$ or $\|y\|_q = 0$, the result is trivial. Otherwise, set
-$a_i = |x_i|/\|x\|_p$ and $b_i = |y_i|/\|y\|_q$. By Young's inequality:
-$a_i b_i \le a_i^p/p + b_i^q/q$. Summing:
+If $\|x\|_p = 0$ then $x = 0$ and both sides are zero. Similarly for
+$\|y\|_q = 0$. Assume $\|x\|_p > 0$ and $\|y\|_q > 0$.
+
+Define the normalized vectors $a_i = |x_i| / \|x\|_p$ and
+$b_i = |y_i| / \|y\|_q$. Apply Young's inequality
+(Lemma~\ref{lem:young}) to each pair $(a_i, b_i)$:
 \[
-\sum_i a_i b_i \le \frac{1}{p} \sum_i \frac{|x_i|^p}{\|x\|_p^p} +
-\frac{1}{q} \sum_i \frac{|y_i|^q}{\|y\|_q^q} = \frac{1}{p} + \frac{1}{q} = 1.
+a_i b_i \le \frac{a_i^p}{p} + \frac{b_i^q}{q}.
+\]
+Sum over $i$:
+\[
+\sum_i a_i b_i
+\le \frac{1}{p} \sum_i \frac{|x_i|^p}{\|x\|_p^p}
+  + \frac{1}{q} \sum_i \frac{|y_i|^q}{\|y\|_q^q}
+= \frac{1}{p} \cdot 1 + \frac{1}{q} \cdot 1
+= 1.
+\]
+That is,
+\[
+\sum_i \frac{|x_i|}{\|x\|_p} \cdot \frac{|y_i|}{\|y\|_q} \le 1.
 \]
 Multiplying both sides by $\|x\|_p \|y\|_q$ gives the result.
 \end{proof}
 
+\subsection{Minkowski's Inequality}
+
 \begin{proposition}[Minkowski's Inequality]
 \label{prop:minkowski}
 For $1 \le p < \infty$ and $x, y \in \R^n$ (or $\ell^p$):
-$\|x + y\|_p \le \|x\|_p + \|y\|_p$.
+\[
+\|x + y\|_p \le \|x\|_p + \|y\|_p.
+\]
 \end{proposition}
 
 \begin{proof}
-The case $p = 1$ is the ordinary triangle inequality for absolute values. For
-$p > 1$, let $q = p/(p-1)$. We have:
+\textbf{Case $p = 1$:} $\|x+y\|_1 = \sum_i |x_i + y_i| \le
+\sum_i (|x_i| + |y_i|) = \|x\|_1 + \|y\|_1$ by the ordinary triangle
+inequality for real numbers.
+
+\textbf{Case $1 < p < \infty$:} Let $q = p/(p-1)$, so $1/p + 1/q = 1$ and
+$(p-1)q = p$. If $\|x+y\|_p = 0$, the inequality is trivial. Assume
+$\|x+y\|_p > 0$. We compute:
 \begin{align*}
-\|x + y\|_p^p &= \sum_i |x_i + y_i|^p = \sum_i |x_i + y_i|^{p-1} |x_i + y_i| \\
-&\le \sum_i |x_i + y_i|^{p-1} |x_i| + \sum_i |x_i + y_i|^{p-1} |y_i|.
+\|x + y\|_p^p
+&= \sum_i |x_i + y_i|^p
+= \sum_i |x_i + y_i|^{p-1} |x_i + y_i| \\
+&\le \sum_i |x_i + y_i|^{p-1} |x_i|
+  + \sum_i |x_i + y_i|^{p-1} |y_i|.
 \end{align*}
-Apply H\"{o}lder's inequality to each sum with exponents $q$ and $p$. Note that
-$(p-1)q = p$, so $\bigl(\sum_i |x_i + y_i|^{(p-1)q}\bigr)^{1/q} =
-\|x + y\|_p^{p/q}$. Therefore:
+Apply H\"older's inequality (Proposition~\ref{prop:holder}) to each sum.
+The sequence $(|x_i + y_i|^{p-1})_i$ has $\ell^q$ norm:
+\[
+\Bigl(\sum_i \bigl(|x_i + y_i|^{p-1}\bigr)^q\Bigr)^{1/q}
+= \Bigl(\sum_i |x_i + y_i|^{(p-1)q}\Bigr)^{1/q}
+= \Bigl(\sum_i |x_i + y_i|^p\Bigr)^{1/q}
+= \|x+y\|_p^{p/q}.
+\]
+Therefore:
+\begin{align*}
+\sum_i |x_i + y_i|^{p-1} |x_i|
+  &\le \|x+y\|_p^{p/q} \, \|x\|_p, \\
+\sum_i |x_i + y_i|^{p-1} |y_i|
+  &\le \|x+y\|_p^{p/q} \, \|y\|_p.
+\end{align*}
+Combining:
 \[
 \|x + y\|_p^p \le \|x + y\|_p^{p/q} \bigl(\|x\|_p + \|y\|_p\bigr).
 \]
-Dividing both sides by $\|x + y\|_p^{p/q}$ (if nonzero) and using $p - p/q = 1$
-gives $\|x + y\|_p \le \|x\|_p + \|y\|_p$.
+Dividing both sides by $\|x + y\|_p^{p/q}$ (which is positive) and using
+$p - p/q = p(1 - 1/q) = p \cdot 1/p = 1$:
+\[
+\|x + y\|_p^{p - p/q} = \|x + y\|_p \le \|x\|_p + \|y\|_p. \qedhere
+\]
 \end{proof}
 
-\subsection{Important Examples of Normed Spaces}
-\label{subsec:norm_examples}
+\begin{keyresult}[title={The $L^p$ Inequality Chain}]
+Young's inequality $\Rightarrow$ H\"older's inequality $\Rightarrow$
+Minkowski's inequality. This chain establishes that $\|\cdot\|_p$ is a valid
+norm for $1 \le p \le \infty$, on both $\R^n$ and $\ell^p$. Every step in
+the chain has a clear logical dependency: Young provides the pointwise bound,
+H\"older aggregates it into a sum, and Minkowski converts it into the
+triangle inequality.
+\end{keyresult}
 
-\begin{example}[$\R^n$ with $p$-norms]
-\label{ex:Rn_norms}
-For $1 \le p \le \infty$, $(\R^n, \|\cdot\|_p)$ is a normed space.
-Positive definiteness and homogeneity are immediate; the triangle inequality
-for $1 \le p < \infty$ is Minkowski's inequality. For $p = \infty$,
-$\|x + y\|_\infty = \max_i |x_i + y_i| \le \max_i (|x_i| + |y_i|) \le
-\max_i |x_i| + \max_i |y_i| = \|x\|_\infty + \|y\|_\infty$.
-\end{example}
+%% ============================================================
+%% SECTION 4: EQUIVALENCE OF NORMS
+%% ============================================================
 
-\begin{example}[$C[a,b]$ with Supremum Norm]
-\label{ex:Cab_sup}
-$C[a,b]$ with $\|f\|_\infty = \max_{t \in [a,b]} |f(t)|$ is a normed space. The
-maximum exists because $f$ is continuous on the compact set $[a,b]$.
-\end{example}
-
-\begin{example}[$C[a,b]$ with $L^1$ Norm]
-\label{ex:Cab_L1}
-$C[a,b]$ with $\|f\|_1 = \int_a^b |f(t)|\, dt$ is a normed space. This norm
-captures ``average'' rather than ``worst-case'' behavior.
-\end{example}
-
-\begin{example}[Sequence Spaces $\ell^p$]
-\label{ex:ell_p_norm}
-For $1 \le p \le \infty$, $(\ell^p, \|\cdot\|_p)$ is a normed space by
-Minkowski's inequality (extended to infinite sums).
-\end{example}
-
-\subsection{Equivalence of Norms in Finite Dimensions}
-\label{subsec:norm_equiv}
+\section{Equivalence of Norms in Finite Dimensions}
+\label{sec:norm_equiv}
 
 \begin{definition}[Equivalent Norms]
 \label{def:norm_equiv}
 Two norms $\|\cdot\|_a$ and $\|\cdot\|_b$ on a vector space $X$ are
 \emph{equivalent} if there exist constants $c, C > 0$ such that
 \[
-c \|x\|_a \le \|x\|_b \le C \|x\|_a \quad \text{for all } x \in X.
+c\, \|x\|_a \le \|x\|_b \le C\, \|x\|_a \quad \text{for all } x \in X.
 \]
 \end{definition}
 
 \begin{remark}
+\label{rem:equiv_topology}
 Equivalent norms define the same topology: they determine the same open sets,
-convergent sequences, Cauchy sequences, and continuous functions. In particular,
-a space is complete under one norm if and only if it is complete under any
-equivalent norm.
+convergent sequences, Cauchy sequences, and continuous functions. In
+particular, a space is complete under one norm if and only if it is complete
+under any equivalent norm. Equivalence of norms is an equivalence relation
+(reflexivity, symmetry, and transitivity are straightforward).
 \end{remark}
 
 \begin{theorem}[All Norms on $\R^n$ Are Equivalent]
@@ -266,73 +267,99 @@ On $\R^n$, every two norms are equivalent.
 \end{theorem}
 
 \begin{proof}
-It suffices to show that any norm $\|\cdot\|$ on $\R^n$ is equivalent to
-$\|\cdot\|_\infty$, since equivalence is transitive.
+It suffices to show that any norm $\|\cdot\|$ on $\R^n$ is equivalent to the
+fixed norm $\|\cdot\|_\infty$, since equivalence is transitive.
 
-\textbf{Step 1: $\|\cdot\|$ is bounded above by a multiple of $\|\cdot\|_\infty$.}
-Let $e_1, \ldots, e_n$ be the standard basis. For $x = \sum_{i=1}^n x_i e_i$:
+\textbf{Step 1: Upper bound.} Let $e_1, \ldots, e_n$ be the standard basis
+vectors. For $x = \sum_{i=1}^n x_i e_i$:
 \[
-\|x\| = \Bigl\|\sum_{i=1}^n x_i e_i\Bigr\| \le \sum_{i=1}^n |x_i| \, \|e_i\|
-\le \|x\|_\infty \sum_{i=1}^n \|e_i\| = C \|x\|_\infty,
+\|x\| = \Bigl\|\sum_{i=1}^n x_i e_i\Bigr\|
+\le \sum_{i=1}^n |x_i| \, \|e_i\|
+\le \Bigl(\max_{1 \le i \le n} |x_i|\Bigr) \sum_{i=1}^n \|e_i\|
+= C \, \|x\|_\infty,
 \]
-where $C = \sum_{i=1}^n \|e_i\|$.
+where $C = \sum_{i=1}^n \|e_i\| > 0$.
 
-\textbf{Step 2: $\|\cdot\|$ is continuous with respect to $\|\cdot\|_\infty$.}
-By Step 1, $|\|x\| - \|y\|| \le \|x - y\| \le C \|x - y\|_\infty$, so
-$x \mapsto \|x\|$ is Lipschitz (hence continuous) on $(\R^n, \|\cdot\|_\infty)$.
+\textbf{Step 2: Continuity.} The map $f \colon (\R^n, \|\cdot\|_\infty)
+\to \R$ defined by $f(x) = \|x\|$ is Lipschitz continuous:
+\[
+|f(x) - f(y)| = \bigl| \|x\| - \|y\| \bigr| \le \|x - y\| \le C \,
+\|x - y\|_\infty,
+\]
+where the first inequality is the reverse triangle inequality for $\|\cdot\|$
+and the second is Step 1.
 
-\textbf{Step 3: $\|\cdot\|$ is bounded below by a multiple of $\|\cdot\|_\infty$.}
-The unit sphere $S = \{x \in \R^n : \|x\|_\infty = 1\}$ is closed and bounded in
-$(\R^n, \|\cdot\|_\infty)$, hence compact (by the Heine--Borel theorem). The
-continuous function $x \mapsto \|x\|$ attains its minimum on $S$: let
-$c = \min_{x \in S} \|x\|$. Since $0 \notin S$ (because $\|x\|_\infty = 1$ implies
-$x \ne 0$, so $\|x\| > 0$ by \ref{N1}), we have $c > 0$. For any $x \ne 0$,
-$x/\|x\|_\infty \in S$, so $\|x/\|x\|_\infty\| \ge c$, giving
-$\|x\| \ge c \|x\|_\infty$.
+\textbf{Step 3: Lower bound via compactness.} The unit sphere
+$S = \{x \in \R^n : \|x\|_\infty = 1\}$ is closed and bounded in
+$(\R^n, \|\cdot\|_\infty)$, hence compact by the Heine--Borel theorem. The
+continuous function $f(x) = \|x\|$ attains its minimum on $S$: let
+$c = \min_{x \in S} f(x) = \min_{x \in S} \|x\|$.
 
-Combining Steps 1 and 3: $c \|x\|_\infty \le \|x\| \le C \|x\|_\infty$.
+We claim $c > 0$. If $x \in S$, then $\|x\|_\infty = 1$, so $x \ne 0$,
+and therefore $\|x\| > 0$ by \ref{N1}. Since $f$ is continuous on the compact
+set $S$ and strictly positive on $S$, its minimum $c$ is strictly positive.
+
+For any $x \ne 0$, the vector $x / \|x\|_\infty \in S$, so:
+\[
+\Bigl\|\frac{x}{\|x\|_\infty}\Bigr\| \ge c,
+\]
+which by homogeneity gives $\|x\| \ge c \, \|x\|_\infty$. This inequality
+holds trivially for $x = 0$ as well.
+
+\textbf{Conclusion.} Combining Steps 1 and 3:
+$c \, \|x\|_\infty \le \|x\| \le C \, \|x\|_\infty$ for all $x \in \R^n$.
 \end{proof}
 
-\begin{keyresult}[Finite-Dimensional Norm Equivalence]
+\begin{keyresult}[title={Finite-Dimensional Norm Equivalence}]
 On a finite-dimensional vector space, all norms are equivalent. This means
-convergence, completeness, compactness, and continuity are norm-independent in
-$\R^n$. This fails dramatically in infinite dimensions (see
-Warning~\ref{warn:inf_dim_norms}).
+convergence, completeness, compactness, and continuity are
+\emph{norm-independent} in $\R^n$. This fails dramatically in infinite
+dimensions.
 \end{keyresult}
 
-\begin{corollary}
+\begin{corollary}[Finite-Dimensional Normed Spaces Are Complete]
 \label{cor:finite_dim_complete}
-Every finite-dimensional normed space is complete (i.e., is a Banach space).
+Every finite-dimensional normed space is a Banach space.
 \end{corollary}
 
 \begin{proof}
-Any norm on $\R^n$ is equivalent to $\|\cdot\|_\infty$, and $(\R^n, \|\cdot\|_\infty)$
-is complete by Theorem~\ref{thm:Rn_complete}. Since equivalent norms have the
-same Cauchy sequences and convergent sequences, completeness is preserved.
+Let $(X, \|\cdot\|)$ be a finite-dimensional normed space of dimension $n$.
+Fix a basis $e_1, \ldots, e_n$ for $X$ and consider the coordinate
+isomorphism $\Phi \colon \R^n \to X$ defined by
+$\Phi(\alpha_1, \ldots, \alpha_n) = \sum_i \alpha_i e_i$. The map $\Phi$
+is a linear bijection, and $\|\cdot\|_X := \|\cdot\| \circ \Phi$ defines a
+norm on $\R^n$.
+
+By Theorem~\ref{thm:norm_equiv}, $\|\cdot\|_X$ is equivalent to
+$\|\cdot\|_\infty$ on $\R^n$. Since $(\R^n, \|\cdot\|_\infty)$ is complete
+(coordinatewise limits of Cauchy sequences converge), and equivalent norms
+share the same Cauchy sequences and convergent sequences
+(Remark~\ref{rem:equiv_topology}), $(\R^n, \|\cdot\|_X)$ is complete. Since
+$\Phi$ is an isometric isomorphism between $(\R^n, \|\cdot\|_X)$ and
+$(X, \|\cdot\|)$, the space $(X, \|\cdot\|)$ is complete.
 \end{proof}
 
-\begin{warning}[Infinite-Dimensional Spaces Are Different]
+\begin{warning}[title={Norms on Infinite-Dimensional Spaces Are Not Equivalent}]
 \label{warn:inf_dim_norms}
-On $C[0,1]$, the norms $\|f\|_\infty = \max |f|$ and $\|f\|_1 = \int_0^1 |f|$
-are \emph{not} equivalent. Consider $f_n(t) = t^n$: then $\|f_n\|_\infty = 1$ but
-$\|f_n\|_1 = 1/(n+1) \to 0$. If the norms were equivalent, $\|f_n\|_1 \to 0$
-would imply $\|f_n\|_\infty \to 0$, a contradiction. This has profound consequences:
-$C[0,1]$ is complete under $\|\cdot\|_\infty$ but \emph{not} under $\|\cdot\|_1$.
+On $C[0,1]$, the norms $\|f\|_\infty = \max |f|$ and
+$\|f\|_1 = \int_0^1 |f|$ are \emph{not} equivalent. Consider
+$f_n(t) = t^n$: then $\|f_n\|_\infty = 1$ for all $n$, but
+$\|f_n\|_1 = 1/(n+1) \to 0$. If the norms were equivalent, we would have
+$c \, \|f_n\|_\infty \le \|f_n\|_1$ for some $c > 0$, giving $c \le 1/(n+1)
+\to 0$, a contradiction. Consequently, $C[0,1]$ is complete under
+$\|\cdot\|_\infty$ but \emph{not} under $\|\cdot\|_1$.
 \end{warning}
 
-\begin{rlconnection}[Norm Choice in RL]
-The choice of norm matters for the convergence properties of RL algorithms.
-Value iteration contracts in the $\|\cdot\|_\infty$ norm with factor $\gamma$,
-but the same operator need not contract in the $\|\cdot\|_2$ norm. For finite
-state spaces all norms are equivalent (Theorem~\ref{thm:norm_equiv}), so
-convergence in one norm implies convergence in all. For infinite state spaces
-with function approximation, the norm matters critically, and
-non-equivalence of norms (Warning~\ref{warn:inf_dim_norms}) is the root of
-many difficulties in approximate dynamic programming.
+\begin{rlconnection}[title={Norm Choice in RL}]
+Value iteration contracts in $\|\cdot\|_\infty$ with factor $\gamma$, but
+need not contract in $\|\cdot\|_2$. For finite state spaces all norms are
+equivalent, so convergence in one implies convergence in all. For infinite
+state spaces with function approximation, non-equivalence of norms is at the
+root of many difficulties in approximate dynamic programming.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 4: BANACH SPACES
+%% SECTION 5: BANACH SPACES
 %% ============================================================
 
 \section{Banach Spaces}
@@ -340,163 +367,320 @@ many difficulties in approximate dynamic programming.
 
 \begin{definition}[Banach Space]
 \label{def:banach}
-A \emph{Banach space} is a complete normed space, i.e., a normed space $(X, \|\cdot\|)$
-that is complete as a metric space under the induced metric $d(x,y) = \|x - y\|$.
+A \emph{Banach space} is a complete normed space, i.e., a normed space
+$(X, \|\cdot\|)$ in which every Cauchy sequence converges (with respect to
+the metric $d(x,y) = \|x - y\|$).
 \end{definition}
 
-\subsection{Examples and Non-Examples}
+\subsection{Completeness of $\ell^p$}
 
-\begin{theorem}[$\ell^p$ is a Banach Space]
+\begin{theorem}[$\ell^p$ Is a Banach Space]
 \label{thm:ell_p_banach}
-For $1 \le p \le \infty$, $(\ell^p, \|\cdot\|_p)$ is a Banach space.
+For $1 \le p \le \infty$, the space $(\ell^p, \|\cdot\|_p)$ is a Banach
+space.
 \end{theorem}
 
 \begin{proof}
-We prove the case $1 \le p < \infty$; the case $p = \infty$ is analogous.
+We give the proof for $1 \le p < \infty$; the case $p = \infty$ is
+analogous (replacing sums with suprema).
+
 Let $(x^{(k)})_{k=1}^\infty$ be a Cauchy sequence in $\ell^p$, where
 $x^{(k)} = (x_1^{(k)}, x_2^{(k)}, \ldots)$.
 
 \textbf{Step 1: Identify the candidate limit.}
-For each fixed $i$, $|x_i^{(k)} - x_i^{(m)}| \le \|x^{(k)} - x^{(m)}\|_p \to 0$,
-so $(x_i^{(k)})_k$ is Cauchy in $\R$, hence convergent. Define
-$x_i = \lim_{k \to \infty} x_i^{(k)}$ and $x = (x_1, x_2, \ldots)$.
-
-\textbf{Step 2: Show $x \in \ell^p$.}
-Fix $\varepsilon > 0$ and choose $K$ such that $\|x^{(k)} - x^{(m)}\|_p < \varepsilon$
-for $k, m \ge K$. For any finite $N$:
+For each fixed index $i \in \N$,
 \[
-\Bigl(\sum_{i=1}^N |x_i^{(k)} - x_i^{(m)}|^p\Bigr)^{1/p} \le
-\|x^{(k)} - x^{(m)}\|_p < \varepsilon.
+|x_i^{(k)} - x_i^{(m)}| \le
+\Bigl(\sum_{j=1}^\infty |x_j^{(k)} - x_j^{(m)}|^p\Bigr)^{1/p}
+= \|x^{(k)} - x^{(m)}\|_p \to 0
+\quad \text{as } k, m \to \infty.
 \]
-Taking $m \to \infty$ (with $N$ fixed): $\bigl(\sum_{i=1}^N |x_i^{(k)} - x_i|^p\bigr)^{1/p}
-\le \varepsilon$. Since this holds for all $N$,
-$\|x^{(k)} - x\|_p \le \varepsilon < \infty$. By the triangle inequality,
-$\|x\|_p \le \|x - x^{(k)}\|_p + \|x^{(k)}\|_p < \infty$, so $x \in \ell^p$.
+So $(x_i^{(k)})_{k=1}^\infty$ is a Cauchy sequence in $\R$ for each $i$, and
+by completeness of $\R$, it converges. Define $x_i = \lim_{k \to \infty}
+x_i^{(k)}$ and set $x = (x_1, x_2, \ldots)$.
 
-\textbf{Step 3: Show $x^{(k)} \to x$ in $\ell^p$.}
-From Step 2, $\|x^{(k)} - x\|_p \le \varepsilon$ for all $k \ge K$, so
-$x^{(k)} \to x$ in $\ell^p$.
+\textbf{Step 2: Show $x \in \ell^p$ and $x^{(k)} \to x$.}
+Fix $\varepsilon > 0$ and choose $K \in \N$ such that
+$\|x^{(k)} - x^{(m)}\|_p < \varepsilon$ for all $k, m \ge K$. For any
+finite $N \in \N$ and $k, m \ge K$:
+\[
+\Bigl(\sum_{i=1}^N |x_i^{(k)} - x_i^{(m)}|^p\Bigr)^{1/p}
+\le \|x^{(k)} - x^{(m)}\|_p < \varepsilon.
+\]
+Fix $k \ge K$ and let $m \to \infty$. By continuity of $|\cdot|^p$ and of
+finite sums:
+\[
+\Bigl(\sum_{i=1}^N |x_i^{(k)} - x_i|^p\Bigr)^{1/p} \le \varepsilon.
+\]
+Since this holds for every $N$, taking $N \to \infty$:
+\[
+\|x^{(k)} - x\|_p = \Bigl(\sum_{i=1}^\infty |x_i^{(k)} - x_i|^p
+\Bigr)^{1/p} \le \varepsilon.
+\]
+In particular, $x^{(k)} - x \in \ell^p$, and by the triangle inequality
+$\|x\|_p \le \|x - x^{(k)}\|_p + \|x^{(k)}\|_p \le \varepsilon +
+\|x^{(K)}\|_p < \infty$, so $x \in \ell^p$.
+
+\textbf{Step 3: Convergence.} From Step 2,
+$\|x^{(k)} - x\|_p \le \varepsilon$ for all $k \ge K$. Since $\varepsilon$
+was arbitrary, $x^{(k)} \to x$ in $\ell^p$.
 \end{proof}
 
-\begin{theorem}[$C[a,b]$ is Banach Under the Sup Norm]
+\subsection{Completeness of $C[a,b]$}
+
+\begin{theorem}[{$C[a,b]$ Is Banach Under the Sup Norm}]
 \label{thm:Cab_banach}
 $(C[a,b], \|\cdot\|_\infty)$ is a Banach space.
 \end{theorem}
 
 \begin{proof}
-Let $(f_n)$ be Cauchy in $(C[a,b], \|\cdot\|_\infty)$. For each fixed $t \in [a,b]$,
-$|f_n(t) - f_m(t)| \le \|f_n - f_m\|_\infty \to 0$, so $(f_n(t))$ is Cauchy in
-$\R$, hence convergent. Define $f(t) = \lim_{n \to \infty} f_n(t)$.
+Let $(f_n)_{n=1}^\infty$ be a Cauchy sequence in $(C[a,b], \|\cdot\|_\infty)$.
 
-\textbf{Uniform convergence.}
-Given $\varepsilon > 0$, choose $N$ such that $\|f_n - f_m\|_\infty < \varepsilon$
-for $n, m \ge N$. For each $t$, $|f_n(t) - f_m(t)| < \varepsilon$. Letting
-$m \to \infty$: $|f_n(t) - f(t)| \le \varepsilon$ for all $t$ and $n \ge N$.
-Hence $\|f_n - f\|_\infty \le \varepsilon$, so $f_n \to f$ uniformly.
+\textbf{Step 1: Pointwise convergence.} For each $t \in [a,b]$,
+$|f_n(t) - f_m(t)| \le \|f_n - f_m\|_\infty \to 0$, so $(f_n(t))_n$ is
+Cauchy in $\R$, hence convergent. Define $f(t) = \lim_{n \to \infty} f_n(t)$.
 
-\textbf{Continuity of $f$.}
-The uniform limit of continuous functions is continuous: for any $t_0 \in [a,b]$ and
-$\varepsilon > 0$, choose $n$ with $\|f_n - f\|_\infty < \varepsilon/3$, then
-$\delta > 0$ with $|f_n(t) - f_n(t_0)| < \varepsilon/3$ for $|t - t_0| < \delta$.
-Then $|f(t) - f(t_0)| \le |f(t) - f_n(t)| + |f_n(t) - f_n(t_0)| +
-|f_n(t_0) - f(t_0)| < \varepsilon$.
+\textbf{Step 2: Uniform convergence.} Given $\varepsilon > 0$, choose $N$
+such that $\|f_n - f_m\|_\infty < \varepsilon$ for all $n, m \ge N$. For
+each $t \in [a,b]$ and all $n \ge N$:
+$|f_n(t) - f_m(t)| < \varepsilon$ for all $m \ge N$. Letting $m \to \infty$:
+$|f_n(t) - f(t)| \le \varepsilon$. Since this holds for \emph{all}
+$t \in [a,b]$, we have $\|f_n - f\|_\infty \le \varepsilon$. Hence
+$f_n \to f$ uniformly on $[a,b]$.
 
+\textbf{Step 3: The limit is continuous.} The uniform limit of continuous
+functions is continuous. Fix $t_0 \in [a,b]$ and $\varepsilon > 0$. Choose
+$n$ with $\|f_n - f\|_\infty < \varepsilon/3$, then $\delta > 0$ with
+$|f_n(t) - f_n(t_0)| < \varepsilon/3$ for $|t - t_0| < \delta$ (by
+continuity of $f_n$). For $|t - t_0| < \delta$:
+\[
+|f(t) - f(t_0)| \le |f(t) - f_n(t)| + |f_n(t) - f_n(t_0)|
+  + |f_n(t_0) - f(t_0)| < \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+  + \frac{\varepsilon}{3} = \varepsilon.
+\]
 So $f \in C[a,b]$ and $f_n \to f$ in $\|\cdot\|_\infty$.
 \end{proof}
 
-\begin{example}[$C[a,b]$ Is Not Banach Under $\|\cdot\|_1$]
-\label{ex:Cab_not_banach}
+\begin{example}[{$C[a,b]$ Is Not Complete Under $\|\cdot\|_1$}]
+\label{ex:Cab_not_banach_L1}
 The space $(C[0,1], \|\cdot\|_1)$ is \emph{not} complete. Define
 $f_n \colon [0,1] \to \R$ by
 \[
 f_n(t) = \begin{cases}
-0 & \text{if } 0 \le t \le 1/2,\\
-n(t - 1/2) & \text{if } 1/2 < t \le 1/2 + 1/n,\\
-1 & \text{if } 1/2 + 1/n < t \le 1.
+0 & \text{if } 0 \le t \le \tfrac{1}{2}, \\
+n(t - \tfrac{1}{2}) & \text{if } \tfrac{1}{2} < t \le \tfrac{1}{2} +
+  \tfrac{1}{n}, \\
+1 & \text{if } \tfrac{1}{2} + \tfrac{1}{n} < t \le 1.
 \end{cases}
 \]
-Each $f_n$ is continuous, and $(f_n)$ is Cauchy under $\|\cdot\|_1$ (since
-$\|f_n - f_m\|_1 \le 1/\min(m,n) \to 0$). But the pointwise limit is the
-discontinuous step function $\indicator_{(1/2, 1]}$, which is not in $C[0,1]$.
-No continuous function can be the $\|\cdot\|_1$-limit either, since $\|f_n - g\|_1
-\to 0$ and $\|f_n - \indicator_{(1/2,1]}\|_1 \to 0$ would give
-$g = \indicator_{(1/2,1]}$ a.e., contradicting continuity of $g$.
+Each $f_n$ is continuous, and for $m > n$:
+$\|f_n - f_m\|_1 = \int_0^1 |f_n - f_m| \le 1/n \to 0$, so $(f_n)$ is
+Cauchy. The pointwise limit is the discontinuous step function
+$\indicator_{(1/2, 1]}$, which is not in $C[0,1]$. Moreover, no continuous
+function can be the $L^1$-limit: if $g \in C[0,1]$ with $\|f_n - g\|_1 \to 0$,
+then $g = \indicator_{(1/2,1]}$ almost everywhere, contradicting continuity.
 \end{example}
 
-\subsection{Series in Banach Spaces}
+%% ============================================================
+%% SECTION 6: SERIES AND BANACH SPACE CHARACTERIZATION
+%% ============================================================
+
+\section{Series in Banach Spaces}
+\label{sec:series}
 
 \begin{definition}[Absolute Convergence]
 \label{def:abs_conv}
-A series $\sum_{n=1}^\infty x_n$ in a normed space is \emph{absolutely convergent}
-if $\sum_{n=1}^\infty \|x_n\| < \infty$. It is \emph{(unconditionally) convergent}
-if the partial sums $S_N = \sum_{n=1}^N x_n$ converge in norm.
+A series $\sum_{n=1}^\infty x_n$ in a normed space $(X, \|\cdot\|)$ is
+\emph{absolutely convergent} if $\sum_{n=1}^\infty \|x_n\| < \infty$.
+It is \emph{convergent} if the partial sums
+$S_N = \sum_{n=1}^N x_n$ converge in norm to some $S \in X$.
 \end{definition}
+
+\begin{remark}
+In $\R$ (or $\C$), absolute convergence implies convergence. This is
+essentially a restatement of completeness. In a general normed space,
+absolute convergence need not imply convergence -- the space must be
+complete.
+\end{remark}
 
 \begin{theorem}[Characterization of Banach Spaces via Series]
 \label{thm:banach_series}
-A normed space $X$ is a Banach space if and only if every absolutely convergent
-series in $X$ converges.
+A normed space $(X, \|\cdot\|)$ is a Banach space if and only if every
+absolutely convergent series in $X$ converges.
 \end{theorem}
 
 \begin{proof}
-($\Rightarrow$) Suppose $X$ is Banach and $\sum \|x_n\| < \infty$. The partial
-sums $S_N = \sum_{n=1}^N x_n$ form a Cauchy sequence: for $M > N$,
+\textbf{($\Rightarrow$)} Suppose $X$ is Banach and
+$\sum_{n=1}^\infty \|x_n\| < \infty$. We show that the partial sums
+$S_N = \sum_{n=1}^N x_n$ form a Cauchy sequence. For $M > N$:
 \[
-\|S_M - S_N\| = \Bigl\|\sum_{n=N+1}^M x_n\Bigr\| \le \sum_{n=N+1}^M \|x_n\| \to 0
+\|S_M - S_N\| = \Bigl\|\sum_{n=N+1}^M x_n\Bigr\|
+\le \sum_{n=N+1}^M \|x_n\|
+\le \sum_{n=N+1}^\infty \|x_n\| \to 0
 \]
-as $N, M \to \infty$ (tail of a convergent series). Since $X$ is complete, $(S_N)$
-converges.
+as $N \to \infty$ (tail of a convergent real series). Since $X$ is complete,
+the Cauchy sequence $(S_N)$ converges.
 
-($\Leftarrow$) Suppose every absolutely convergent series converges. Let $(y_n)$
-be a Cauchy sequence. Choose a subsequence $(y_{n_k})$ with
-$\|y_{n_{k+1}} - y_{n_k}\| < 2^{-k}$ (possible since $(y_n)$ is Cauchy). Define
-$x_1 = y_{n_1}$ and $x_k = y_{n_k} - y_{n_{k-1}}$ for $k \ge 2$. Then the partial
-sums satisfy $\sum_{k=1}^K x_k = y_{n_K}$, and
-$\sum_{k=2}^\infty \|x_k\| \le \sum_{k=1}^\infty 2^{-k} = 1 < \infty$. So
-$\sum x_k$ converges absolutely, hence converges by hypothesis: $y_{n_K} \to y$ for
-some $y \in X$. Since $(y_n)$ is Cauchy and has a convergent subsequence, the full
-sequence converges to $y$ (by the argument: $\|y_n - y\| \le
-\|y_n - y_{n_K}\| + \|y_{n_K} - y\| \to 0$ for suitable $K$).
+\textbf{($\Leftarrow$)} Suppose every absolutely convergent series converges.
+Let $(y_n)_{n=1}^\infty$ be a Cauchy sequence in $X$. We must show that
+$(y_n)$ converges.
+
+\emph{Step 1: Extract a fast subsequence.} Since $(y_n)$ is Cauchy, for each
+$k \ge 1$ there exists $n_k$ such that $\|y_m - y_\ell\| < 2^{-k}$ for all
+$m, \ell \ge n_k$. By choosing $n_1 < n_2 < n_3 < \cdots$ (taking $n_k$
+large enough at each step), we obtain a subsequence $(y_{n_k})_{k=1}^\infty$
+with
+\[
+\|y_{n_{k+1}} - y_{n_k}\| < 2^{-k} \quad \text{for all } k \ge 1.
+\]
+
+\emph{Step 2: Write the subsequence as a telescoping series.} Define
+$z_1 = y_{n_1}$ and $z_k = y_{n_k} - y_{n_{k-1}}$ for $k \ge 2$. Then the
+partial sums satisfy $\sum_{k=1}^K z_k = y_{n_K}$, and:
+\[
+\sum_{k=1}^\infty \|z_k\|
+= \|y_{n_1}\| + \sum_{k=2}^\infty \|y_{n_k} - y_{n_{k-1}}\|
+\le \|y_{n_1}\| + \sum_{k=1}^\infty 2^{-k}
+= \|y_{n_1}\| + 1 < \infty.
+\]
+So $\sum z_k$ converges absolutely, hence converges by hypothesis: there
+exists $y \in X$ with $y_{n_K} = \sum_{k=1}^K z_k \to y$.
+
+\emph{Step 3: The full sequence converges.} Given $\varepsilon > 0$, choose
+$N_0$ with $\|y_m - y_\ell\| < \varepsilon/2$ for $m, \ell \ge N_0$, and
+$K_0$ with $\|y_{n_K} - y\| < \varepsilon/2$ for $K \ge K_0$. For
+$n \ge N_0$, pick $K \ge K_0$ with $n_K \ge N_0$. Then:
+\[
+\|y_n - y\| \le \|y_n - y_{n_K}\| + \|y_{n_K} - y\|
+< \frac{\varepsilon}{2} + \frac{\varepsilon}{2} = \varepsilon.
+\]
+Hence $y_n \to y$, and $X$ is complete.
 \end{proof}
 
-\begin{keyresult}[Banach Space Characterization]
+\begin{keyresult}[title={Banach Space Characterization}]
 A normed space is Banach if and only if every absolutely convergent series
 converges. This characterization is often the most convenient way to verify
-completeness: one constructs a convergent series rather than chasing arbitrary
-Cauchy sequences.
+completeness, because one constructs a convergent series rather than chasing
+arbitrary Cauchy sequences.
 \end{keyresult}
 
-\begin{rlconnection}[Why Completeness Matters for RL]
-The Banach fixed-point theorem (proved in the next lesson) states: if $T$ is a
-contraction on a \emph{complete} metric space, then $T$ has a unique fixed point
-and $T^n x \to x^*$ for any starting point $x$. The Bellman operator is a
-$\gamma$-contraction on the Banach space of bounded functions with the sup norm.
-Without completeness, we cannot guarantee that the sequence of value iterates
-converges to anything in our space. This is the mathematical reason we work in
-Banach spaces, not just normed spaces.
+\begin{rlconnection}[title={Why Completeness Matters for RL}]
+The Banach fixed-point theorem guarantees that a contraction on a complete
+metric space has a unique fixed point. The Bellman operator is a
+$\gamma$-contraction on the Banach space of bounded functions. Without
+completeness, the value iterates might ``converge'' to a limit outside the
+space. This is why we work in Banach spaces, not merely normed spaces.
 \end{rlconnection}
 
-\subsection{Schauder Basis}
-\label{subsec:schauder}
+%% ============================================================
+%% SECTION 7: SCHAUDER BASIS
+%% ============================================================
+
+\section{Schauder Basis}
+\label{sec:schauder}
+
+In finite-dimensional spaces, every vector has a unique representation as a
+finite linear combination of basis vectors. In infinite-dimensional Banach
+spaces, we replace finite sums with convergent series.
 
 \begin{definition}[Schauder Basis]
 \label{def:schauder}
-A sequence $(e_n)_{n=1}^\infty$ in a Banach space $X$ is a \emph{Schauder basis}
-if every $x \in X$ has a unique representation $x = \sum_{n=1}^\infty \alpha_n e_n$
-(convergent in norm).
+A sequence $(e_n)_{n=1}^\infty$ in a Banach space $X$ is a \emph{Schauder
+basis} if every $x \in X$ has a unique representation
+\[
+x = \sum_{n=1}^\infty \alpha_n e_n,
+\]
+where the series converges in norm and the coefficients
+$\alpha_n \in \R$ are uniquely determined by $x$.
 \end{definition}
 
-\begin{example}
-The standard unit vectors $(e_n)$ form a Schauder basis for $\ell^p$ ($1 \le p < \infty$):
-every $x = (x_1, x_2, \ldots) \in \ell^p$ satisfies
-$x = \sum_{n=1}^\infty x_n e_n$ in $\|\cdot\|_p$.
-Note that $(e_n)$ is \emph{not} a Schauder basis for $\ell^\infty$, because the
-partial sums $\sum_{n=1}^N x_n e_n$ need not converge to $x$ in $\|\cdot\|_\infty$.
+\begin{example}[Schauder Basis for $\ell^p$]
+\label{ex:schauder_lp}
+The standard unit vectors $e_n = (0, \ldots, 0, 1, 0, \ldots)$ (with $1$ in
+position $n$) form a Schauder basis for $\ell^p$ when $1 \le p < \infty$.
+Indeed, every $x = (x_1, x_2, \ldots) \in \ell^p$ satisfies:
+\[
+\Bigl\|x - \sum_{n=1}^N x_n e_n\Bigr\|_p
+= \Bigl(\sum_{n=N+1}^\infty |x_n|^p\Bigr)^{1/p} \to 0
+\quad \text{as } N \to \infty,
+\]
+since $\sum |x_n|^p < \infty$. The coefficients are unique because if
+$\sum \alpha_n e_n = \sum \beta_n e_n$, evaluating at coordinate $k$ gives
+$\alpha_k = \beta_k$.
 \end{example}
 
+\begin{remark}
+The standard unit vectors do \emph{not} form a Schauder basis for
+$\ell^\infty$: for $x = (1,1,1,\ldots)$,
+$\|x - \sum_{n=1}^N e_n\|_\infty = 1$ for all $N$. More generally,
+$\ell^\infty$ has no Schauder basis because it is not separable.
+\end{remark}
+
 %% ============================================================
-%% SECTION 5: BOUNDED LINEAR OPERATORS
+%% SECTION 8: EXERCISES
 %% ============================================================
 
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Parallelogram Law]
+\label{ex:parallelogram}
+Prove that in any inner product space (a normed space whose norm arises from
+an inner product $\|x\|^2 = \langle x, x \rangle$), the following identity
+holds:
+\[
+\|x + y\|^2 + \|x - y\|^2 = 2\|x\|^2 + 2\|y\|^2
+\quad \text{for all } x, y.
+\]
+Show that $\|\cdot\|_p$ on $\R^n$ (with $n \ge 2$) satisfies the
+parallelogram law if and only if $p = 2$.
+
+\emph{Hint:} For the second part, test with $x = e_1$ and $y = e_2$.
+\end{exercise}
+
+\begin{exercise}[Completeness of $\ell^\infty$]
+\label{ex:ell_inf_complete}
+Prove directly (without using Theorem~\ref{thm:banach_series}) that
+$(\ell^\infty, \|\cdot\|_\infty)$ is a Banach space.
+
+\emph{Hint:} Let $(x^{(k)})$ be Cauchy in $\ell^\infty$. Show that
+coordinatewise limits exist, the limit sequence is bounded, and convergence
+holds in $\|\cdot\|_\infty$.
+\end{exercise}
+
+\begin{exercise}[Norm Equivalence on $\R^2$]
+\label{ex:norm_equiv_R2}
+On $\R^2$, find the best (sharpest) constants $c$ and $C$ such that
+$c \, \|x\|_2 \le \|x\|_1 \le C \, \|x\|_2$ for all $x \in \R^2$.
+
+\emph{Hint:} For the upper bound, use Cauchy--Schwarz. For the lower bound,
+find the minimum of $\|x\|_1 / \|x\|_2$ on the unit circle.
+\end{exercise}
+
+\begin{exercise}[Banach Characterization Application]
+\label{ex:banach_char}
+Use Theorem~\ref{thm:banach_series} to prove that the space
+$c_0 = \{x \in \ell^\infty : \lim_{n \to \infty} x_n = 0\}$ with the
+sup norm $\|\cdot\|_\infty$ is a Banach space.
+
+\emph{Hint:} Let $\sum_{k=1}^\infty x^{(k)}$ be absolutely convergent in
+$c_0$. First show the series converges in $\ell^\infty$ (which is Banach).
+Then show the limit belongs to $c_0$, i.e., it is a sequence converging to
+zero.
+\end{exercise}
+
+\begin{exercise}[H\"older's Inequality: Equality Case]
+\label{ex:holder_equality}
+Let $1 < p < \infty$ with $1/p + 1/q = 1$, and let $x \in \ell^p$,
+$y \in \ell^q$ with $\|x\|_p = \|y\|_q = 1$. Prove that
+$\sum_{i=1}^\infty |x_i y_i| = 1$ if and only if $|x_i|^p = |y_i|^q$ for
+all $i$.
+
+\emph{Hint:} Trace back through the proof of Proposition~\ref{prop:holder}
+and use the equality condition in Young's inequality
+(Lemma~\ref{lem:young}).
+\end{exercise}
+
+\bibliography{functional-analysis-refs}
 
 \end{document}

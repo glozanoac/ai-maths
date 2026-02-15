@@ -1,106 +1,31 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 11: Static and Extensive-Form Games}}
+\fancyhead[L]{\textsc{Lesson 35: Extensive-Form Games and Subgame Perfection}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\supp}{supp}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\argmax}{argmax}
-\DeclareMathOperator{\argmin}{argmin}
-\DeclareMathOperator{\BR}{BR}
-
-% ---- Title ----
 \title{Lesson 35: Extensive-Form Games and Subgame Perfection}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
+
+\DeclareMathOperator{\BR}{BR}
 
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{7}
+%% SECTION 1: EXTENSIVE-FORM GAMES
 
 \section{Extensive-Form Games}
 \label{sec:extensive}
 
-\subsection{Game Trees}
+Normal-form games capture simultaneous interaction. Many strategic
+situations, however, unfold sequentially: players observe previous moves
+before choosing their own. The extensive form models such sequential
+structure via game trees.
+
+\subsection{Game Trees and Information Sets}
 \label{subsec:game_trees}
 
 \begin{definition}[Extensive-Form Game]
@@ -108,203 +33,312 @@
 An \emph{extensive-form game} is a tuple
 $\Gamma = (N, H, P, (\mathcal{I}_i)_{i \in N}, u)$ where:
 \begin{enumerate}[nosep,label=(\roman*)]
-    \item $N = \{1, \ldots, n\}$ is the set of players. We may include a ``chance''
-    player~0 (nature).
-    \item $H$ is a set of \emph{histories} (finite sequences of actions), including the
-    empty sequence $\emptyset$ (the root). $H$ is closed under prefixes: if
-    $(a_1, \ldots, a_k) \in H$ then $(a_1, \ldots, a_l) \in H$ for all $l \leq k$.
-    A history $h \in H$ is \emph{terminal} if there is no $a$ with $(h, a) \in H$.
-    The set of terminal histories is $Z \subseteq H$.
-    \item $P : H \setminus Z \to N \cup \{0\}$ is the \emph{player function}, assigning
-    to each non-terminal history the player who moves at that point.
-    \item For each player $i \in N$, $\mathcal{I}_i$ is a partition of
+    \item $N = \{1, \ldots, n\}$ is the set of players. We may include a
+    ``chance'' player~$0$ (nature).
+    \item $H$ is a set of \emph{histories} (finite sequences of actions),
+    including the empty sequence $\emptyset$ (the root). $H$ is prefix-closed:
+    if $(a_1, \ldots, a_k) \in H$ then $(a_1, \ldots, a_l) \in H$ for all
+    $l \leq k$. A history $h \in H$ is \emph{terminal} if there is no action
+    $a$ with $(h, a) \in H$. The set of terminal histories is $Z \subseteq H$.
+    \item $P : H \setminus Z \to N \cup \{0\}$ is the \emph{player function},
+    assigning to each non-terminal history the player who acts there.
+    \item For each $i \in N$, $\mathcal{I}_i$ is a partition of
     $\{h \in H \setminus Z : P(h) = i\}$ into \emph{information sets}. If
-    $h, h'$ are in the same information set $I \in \mathcal{I}_i$, then the
-    set of available actions $A(h) = A(h')$ is the same (denoted $A(I)$).
-    \item $u = (u_1, \ldots, u_n) : Z \to \R^n$ assigns payoffs to terminal histories.
+    $h, h'$ belong to the same information set $I \in \mathcal{I}_i$, then
+    the available actions satisfy $A(h) = A(h')$, denoted $A(I)$.
+    \item $u = (u_1, \ldots, u_n) : Z \to \R^n$ assigns payoffs to terminal
+    histories.
 \end{enumerate}
 \end{definition}
 
 \begin{definition}[Perfect Information]
 \label{def:perfect_info}
-An extensive-form game has \emph{perfect information} if every information set is a
-singleton: $|I| = 1$ for all $I \in \mathcal{I}_i$, for all $i \in N$. In a game
-with perfect information, every player knows exactly which node the game has reached
-when it is their turn to move.
+An extensive-form game has \emph{perfect information} if every information
+set is a singleton: $|I| = 1$ for all $I \in \mathcal{I}_i$, all $i \in N$.
+At each decision point, the acting player knows the complete history of play.
 \end{definition}
 
 \begin{definition}[Perfect Recall]
 \label{def:perfect_recall}
-Player~$i$ has \emph{perfect recall} if, for any two histories $h, h'$ in the same
-information set $I \in \mathcal{I}_i$, player~$i$'s sequence of information sets and
-actions leading to $h$ and $h'$ is the same. Informally, no player forgets their own
-past actions or information.
+Player $i$ has \emph{perfect recall} if for any two histories $h, h'$ in the
+same information set $I \in \mathcal{I}_i$, the sequence of player~$i$'s
+information sets and actions along the path from the root to $h$ equals the
+corresponding sequence along the path to $h'$. Informally, no player forgets
+their own past actions or past information.
 \end{definition}
 
 \begin{example}[Entry Game]
 \label{ex:entry}
-An incumbent (player~2) faces a potential entrant (player~1). The entrant first
-decides whether to \emph{Enter} ($E$) or \emph{Stay Out} ($O$). If the entrant enters,
-the incumbent decides whether to \emph{Fight} ($F$) or \emph{Accommodate} ($A$):
+An incumbent (player~2) faces a potential entrant (player~1). The entrant
+first decides to \emph{Enter} ($E$) or \emph{Stay Out} ($O$). If the
+entrant enters, the incumbent decides to \emph{Fight} ($F$) or
+\emph{Accommodate} ($A$). Payoffs:
 \begin{itemize}[nosep]
-    \item $O$: payoffs $(0, 2)$.
-    \item $(E, F)$: payoffs $(-1, -1)$.
-    \item $(E, A)$: payoffs $(1, 1)$.
+    \item $O$: $(0, 2)$.
+    \item $(E, F)$: $(-1, -1)$.
+    \item $(E, A)$: $(1, 1)$.
 \end{itemize}
-This is a game with perfect information (all information sets are singletons).
+This is a perfect-information game: all information sets are singletons.
+The histories are $H = \{\emptyset, O, E, (E,F), (E,A)\}$, with
+$Z = \{O, (E,F), (E,A)\}$.
+\end{example}
+
+\begin{example}[Simultaneous Move as Imperfect Information]
+\label{ex:simultaneous}
+A simultaneous $2 \times 2$ game can be represented in extensive form as
+follows: player~1 moves first (choosing $T$ or $B$), then player~2 moves
+without observing player~1's choice. Player~2's two decision nodes
+(after $T$ and after $B$) belong to a single information set. This shows
+that \emph{simultaneous} games are a special case of extensive-form games
+with imperfect information.
 \end{example}
 
 \subsection{Strategies in Extensive-Form Games}
-\label{subsec:strategies_extensive}
+\label{subsec:strategies}
 
 \begin{definition}[Pure Strategy in Extensive Form]
 \label{def:strategy_extensive}
-A \emph{pure strategy} for player~$i$ in an extensive-form game is a function
+A \emph{pure strategy} for player $i$ in an extensive-form game is a function
 $s_i : \mathcal{I}_i \to \bigcup_{I \in \mathcal{I}_i} A(I)$ satisfying
 $s_i(I) \in A(I)$ for each $I \in \mathcal{I}_i$.
 \end{definition}
 
-\begin{remark}[Strategies as Complete Contingent Plans]
+\begin{remark}[Complete Contingent Plans]
 \label{rem:contingent}
-A strategy specifies an action at \emph{every} information set, including those that
-cannot be reached given earlier choices. In the Entry Game (Example~\ref{ex:entry}),
-player~2's strategy must specify what to do if the entrant enters, even if that
-node is never reached. This redundancy is essential for the normal-form representation
-and for defining subgame perfection.
+A strategy specifies an action at \emph{every} information set, including
+those unreachable given earlier choices. In the Entry Game
+(Example~\ref{ex:entry}), player~2 has two pure strategies ($F$ and $A$)
+even though their decision node is reached only if player~1 enters. This
+apparent redundancy is essential for defining Nash equilibrium and subgame
+perfection.
 \end{remark}
 
 \begin{definition}[Behavioral Strategy]
 \label{def:behavioral}
-A \emph{behavioral strategy} for player~$i$ is a function
+A \emph{behavioral strategy} for player $i$ is a function
 $b_i : \mathcal{I}_i \to \bigcup_{I \in \mathcal{I}_i} \Delta(A(I))$
 satisfying $b_i(I) \in \Delta(A(I))$. That is, $b_i$ assigns a probability
-distribution over actions at each information set, with independent randomization
-at different information sets.
+distribution over actions at each information set, with independent
+randomization across information sets.
 \end{definition}
 
 \begin{proposition}[Normal-Form Representation]
 \label{prop:normal_form_rep}
-Every extensive-form game has a corresponding normal-form game: the pure strategy
+Every extensive-form game has a corresponding normal-form game: the strategy
 sets are as in Definition~\ref{def:strategy_extensive}, and the payoff
-$u_i(s_1, \ldots, s_n)$ is determined by tracing the unique path through the game
-tree when each player follows their strategy (resolving chance moves by expectation).
+$u_i(s_1, \ldots, s_n)$ is determined by following the unique path through
+the tree dictated by the strategy profile (with expectations over chance moves).
 \end{proposition}
 
 \begin{proof}
-Given a strategy profile $(s_1, \ldots, s_n)$, the unique path from the root to a
-terminal node is determined inductively: at each non-terminal history $h$, the next
-action is $s_{P(h)}(I)$ where $I$ is the information set containing $h$ (or a
-probability distribution if $P(h) = 0$, i.e., nature moves). Since the game tree is
-finite, this process terminates at some terminal history $z \in Z$. Define
-$u_i(s_1, \ldots, s_n)$ as the expected value of $u_i(z)$ where the expectation is
-over any chance moves. The resulting tuple $(N, (S_i), (u_i))$ is a well-defined
-normal-form game.
+Given a strategy profile $(s_1, \ldots, s_n)$, define the path from the root
+inductively. At each non-terminal history $h$:
+\begin{itemize}[nosep]
+    \item If $P(h) = i \in N$, the next action is $s_i(I)$ where $I$ is the
+    information set containing $h$.
+    \item If $P(h) = 0$ (chance), the next action is drawn from the
+    prescribed chance distribution.
+\end{itemize}
+Since the game tree is finite, this terminates at a terminal history $z \in Z$.
+Define $u_i(s_1, \ldots, s_n) = \E[u_i(z)]$, where the expectation is over
+chance moves. The tuple $(N, (S_i), (u_i))$ is a well-defined normal-form
+game.
 \end{proof}
 
-\begin{theorem}[Kuhn's Theorem]
+%% SECTION 2: KUHN'S THEOREM
+
+\section{Kuhn's Theorem}
+\label{sec:kuhn}
+
+The relationship between mixed strategies (distributions over pure strategies)
+and behavioral strategies (local randomization at each information set) is
+fundamental. In general, behavioral strategies are a strict subset of what
+mixed strategies can achieve. Kuhn's theorem identifies the exact condition
+under which they coincide.
+
+\begin{keyresult}
+\begin{theorem}[Kuhn, 1953]
 \label{thm:kuhn}
-In a finite extensive-form game with perfect recall, every mixed strategy of player~$i$
-has a \emph{realization-equivalent} behavioral strategy: a behavioral strategy that
-induces the same probability distribution over terminal histories for every strategy
-profile of the other players. Conversely, every behavioral strategy has a
-realization-equivalent mixed strategy.
+In a finite extensive-form game with perfect recall, every mixed strategy of
+player $i$ has a \emph{realization-equivalent} behavioral strategy: a
+behavioral strategy inducing the same probability distribution over terminal
+histories for every strategy profile of the opponents. Conversely, every
+behavioral strategy has a realization-equivalent mixed strategy.
 \end{theorem}
+\end{keyresult}
 
 \begin{proof}
-We prove the direction from mixed to behavioral, which is the more useful one.
+We prove both directions.
 
-Let $\sigma_i$ be a mixed strategy (a distribution over pure strategies) for player~$i$
-in a game with perfect recall. We construct a behavioral strategy $b_i$ as follows.
+\textbf{Direction 1: Mixed to behavioral.}
+Let $\sigma_i$ be a mixed strategy (a distribution over pure strategies
+$S_i$) for player $i$ in a game with perfect recall. We construct a
+behavioral strategy $b_i$ and show realization equivalence.
 
-For each information set $I \in \mathcal{I}_i$ and action $a \in A(I)$, define
+For each information set $I \in \mathcal{I}_i$, define the \emph{reach
+probability} $\rho_i(I) = \sigma_i(\{s_i \in S_i : s_i \text{ reaches } I\})$,
+where ``$s_i$ reaches $I$'' means there exists some opponent profile under
+which the path of play passes through a history in $I$ when player $i$
+follows $s_i$. Under perfect recall, whether $s_i$ reaches $I$ depends only
+on $s_i$'s actions at player $i$'s information sets on the path to $I$
+(not on actions at information sets after or disjoint from $I$).
+
+For each action $a \in A(I)$, define:
 \[
-    b_i(a | I) = \frac{\sigma_i\big(\{s_i : s_i(I) = a \text{ and }
-    s_i \text{ reaches } I\}\big)}
-    {\sigma_i\big(\{s_i : s_i \text{ reaches } I\}\big)},
+    b_i(a | I) = \begin{cases}
+    \displaystyle\frac{\sigma_i(\{s_i : s_i(I) = a \text{ and }
+    s_i \text{ reaches } I\})}{\rho_i(I)}
+    & \text{if } \rho_i(I) > 0, \\[6pt]
+    \displaystyle\frac{1}{|A(I)|} & \text{if } \rho_i(I) = 0.
+    \end{cases}
 \]
-where ``$s_i$ reaches $I$'' means that the pure strategy $s_i$, together with some
-strategy profile of the opponents, leads to a history in $I$. In a game with perfect
-recall, whether $s_i$ reaches $I$ depends only on $s_i$'s earlier actions, so this
-is well-defined. If the denominator is zero (no pure strategy in the support of
-$\sigma_i$ reaches $I$), set $b_i(\cdot | I)$ arbitrarily.
+When $\rho_i(I) > 0$, the numerator sums probabilities of pure strategies
+that both reach $I$ and play $a$ there, so $b_i(\cdot | I)$ is a well-defined
+distribution.
 
-The key property of perfect recall is that it makes the randomization at different
-information sets conditionally independent: knowing that player~$i$ reaches information
-set $I$ does not reveal what $\sigma_i$ prescribes at other information sets that are
-not on the path to $I$. This ensures that the behavioral strategy $b_i$ produces the
-same realization probabilities (probability of reaching each terminal node) as $\sigma_i$.
+We verify realization equivalence. The \emph{realization probability} of a
+terminal history $z$ under $\sigma_i$ (with opponents playing $s_{-i}$) is:
+\[
+    \Prob_{\sigma_i}(z \mid s_{-i})
+    = \sigma_i\big(\{s_i : (s_i, s_{-i}) \text{ leads to } z\}\big).
+\]
+Under the behavioral strategy $b_i$, the probability of the same terminal
+history is:
+\[
+    \Prob_{b_i}(z \mid s_{-i})
+    = \prod_{I \in \mathcal{I}_i^z} b_i(a_I^z \mid I),
+\]
+where $\mathcal{I}_i^z$ is the set of player $i$'s information sets on the
+path to $z$, and $a_I^z$ is the action taken at $I$ on this path.
 
-The converse (behavioral to mixed) follows by defining $\sigma_i(s_i) = \prod_I b_i(s_i(I)|I)$,
-viewing each pure strategy as specifying an action at each information set.
+The key step uses perfect recall. Under perfect recall, the information sets
+$\mathcal{I}_i^z$ are linearly ordered along the path, and the set of pure
+strategies reaching $z$ factors as:
+\[
+    \{s_i : (s_i, s_{-i}) \text{ leads to } z\}
+    = \bigcap_{I \in \mathcal{I}_i^z} \{s_i : s_i(I) = a_I^z
+    \text{ and } s_i \text{ reaches } I\}.
+\]
+By perfect recall, knowing that $s_i$ reaches $I$ and plays $a_I^z$ there
+determines that $s_i$ reaches the next information set $I'$ on the path.
+This gives a telescoping product:
+\begin{align*}
+    \Prob_{\sigma_i}(z \mid s_{-i})
+    &= \sigma_i\bigg(\bigcap_{I \in \mathcal{I}_i^z}
+    \{s_i : s_i(I) = a_I^z, s_i \text{ reaches } I\}\bigg) \\
+    &= \prod_{I \in \mathcal{I}_i^z}
+    \frac{\sigma_i(\{s_i : s_i(I) = a_I^z, s_i \text{ reaches } I\})}
+    {\sigma_i(\{s_i : s_i \text{ reaches } I\})} \\
+    &= \prod_{I \in \mathcal{I}_i^z} b_i(a_I^z \mid I)
+    = \Prob_{b_i}(z \mid s_{-i}).
+\end{align*}
+The second equality uses the chain rule and the perfect recall structure: the
+conditional probability of playing $a_I^z$ at $I$ given reaching $I$ is
+independent of what happens at other information sets not on the path
+between the previous information set and $I$.
+
+\textbf{Direction 2: Behavioral to mixed.}
+Given a behavioral strategy $b_i$, define a mixed strategy by
+$\sigma_i(s_i) = \prod_{I \in \mathcal{I}_i} b_i(s_i(I) | I)$.
+This treats each information set as an independent randomization device.
+By construction, the probability that the path passes through any sequence
+of information-set/action pairs is the same product under both $\sigma_i$
+and $b_i$, establishing realization equivalence.
 \end{proof}
 
-\begin{rlconnection}[Behavioral Strategies and RL Policies]
-A behavioral strategy is exactly an RL policy: it maps information states (information
-sets) to probability distributions over actions. Kuhn's theorem justifies the standard
-RL assumption that we can restrict attention to behavioral strategies (policies)
-without loss of generality. The perfect recall condition is the Markov property in
-disguise: the agent's policy can depend on the current information state without
-needing to recall the randomization device used to reach that state.
+\begin{remark}[Computational Significance]
+\label{rem:kuhn_computational}
+A behavioral strategy requires $O(\sum_I |A(I)|)$ parameters (one
+distribution per information set), while a mixed strategy over pure strategies
+may require exponentially many parameters (one probability per complete
+contingent plan). Kuhn's theorem says we lose nothing by working with the
+compact behavioral representation.
+\end{remark}
+
+\begin{proposition}[Failure Without Perfect Recall]
+\label{prop:no_perfect_recall}
+In games without perfect recall, mixed and behavioral strategies may yield
+different sets of reachable outcome distributions.
+\end{proposition}
+
+\begin{proof}
+Consider a one-player game where the player moves twice but forgets their
+first action. Specifically: the player first chooses $L$ or $R$, then (in
+a single information set containing both post-$L$ and post-$R$ nodes)
+chooses $A$ or $B$. Payoffs: $(L,A) \mapsto 1$, $(L,B) \mapsto 0$,
+$(R,A) \mapsto 0$, $(R,B) \mapsto 1$.
+
+A behavioral strategy specifies $p = \Prob(L)$ at the first node and
+$q = \Prob(A)$ at the second information set. The expected payoff is
+$pq + (1-p)(1-q) = 1 - p - q + 2pq$, which has maximum $1/2$ (at
+$p = q = 1/2$).
+
+The mixed strategy playing $(L,A)$ with probability $1/2$ and $(R,B)$ with
+probability $1/2$ achieves expected payoff $1/2 \cdot 1 + 1/2 \cdot 1 = 1$.
+This correlates the two moves, which no behavioral strategy can do, since
+behavioral strategies randomize independently at each information set.
+\end{proof}
+
+\begin{rlconnection}
+A behavioral strategy is precisely an RL policy: it maps information states
+(information sets) to distributions over actions. Kuhn's theorem justifies
+the standard RL practice of parameterizing policies as functions
+$\pi(a|s)$ rather than distributions over complete plans. The perfect recall
+condition corresponds to the Markov property: the agent's policy depends
+only on the current information state, not on the randomization device
+used to reach it.
 \end{rlconnection}
 
-%% ============================================================
-%% SECTION 9: SUBGAME PERFECT EQUILIBRIUM
-%% ============================================================
+%% SECTION 3: SUBGAME PERFECT EQUILIBRIUM
 
 \section{Subgame Perfect Equilibrium}
 \label{sec:spe}
 
-\subsection{Motivation: Non-Credible Threats}
+\subsection{Non-Credible Threats}
 \label{subsec:noncredible}
 
 \begin{example}[Non-Credible Threat in the Entry Game]
 \label{ex:noncredible}
-In the Entry Game (Example~\ref{ex:entry}), consider the strategy profile where
-player~1 plays $O$ (stay out) and player~2 plays $F$ (fight). The payoffs are
-$(0, 2)$. Is this a NE?
+In the Entry Game (Example~\ref{ex:entry}), consider the strategy profile
+$(O, F)$: player~1 stays out, player~2 threatens to fight. Payoffs: $(0,2)$.
 
-Player~1's payoff from deviating to $E$ (enter): given player~2's strategy $F$,
-the payoff is $-1 < 0$. So player~1 has no incentive to deviate.
-
-Player~2's strategy $F$ is not tested because player~1 stays out, so player~2's
-information set is not reached. Player~2 trivially has no incentive to deviate
-(any strategy gives the same outcome of $(0,2)$ when player~1 plays $O$).
-
-Therefore $(O, F)$ is a NE. But it relies on a \emph{non-credible threat}:
-player~2 threatens to fight, but if the entrant actually entered, fighting
-gives player~2 a payoff of $-1$ versus $1$ for accommodating. Rational player~2
-would never actually fight. The Nash equilibrium concept fails to exclude such
-non-credible threats because it does not require rational behavior at unreached
-information sets.
+Is this a NE? Player~1's deviation to $E$ yields $-1$ (since player~2
+plays $F$), so player~1 has no incentive to deviate. Player~2's information
+set is never reached, so any strategy gives the same outcome. Hence $(O,F)$
+is a NE. However, if player~1 did enter, player~2 would prefer to
+accommodate (payoff $1$) over fighting (payoff $-1$). The threat to fight
+is \emph{non-credible}: it would not be carried out if the relevant decision
+point were actually reached. Subgame perfection eliminates such equilibria.
 \end{example}
 
-\subsection{Subgames and Subgame Perfection}
+\subsection{Subgames}
 \label{subsec:subgame_def}
 
 \begin{definition}[Subgame]
 \label{def:subgame}
-A \emph{subgame} of an extensive-form game $\Gamma$ beginning at history $h \in H \setminus Z$
-is the restriction of $\Gamma$ to the histories that extend $h$, provided:
+A \emph{subgame} of $\Gamma$ beginning at history $h \in H \setminus Z$ is
+the restriction of $\Gamma$ to histories extending $h$, provided:
 \begin{enumerate}[nosep,label=(\roman*)]
-    \item $h$ is a singleton information set: $\{h\}$ is an information set for
-    player $P(h)$.
-    \item Every information set that contains a successor of $h$ is entirely contained
-    within the subtree rooted at $h$.
+    \item $\{h\}$ is a singleton information set for player $P(h)$.
+    \item Every information set containing a successor of $h$ is entirely
+    contained within the subtree rooted at $h$.
 \end{enumerate}
-The subgame includes all histories $h' \in H$ such that $h$ is a prefix of $h'$,
-with the same player function, information sets (restricted to the subtree), and payoffs.
+The subgame inherits the player function, information partition (restricted
+to the subtree), and payoffs from $\Gamma$.
 \end{definition}
 
 \begin{remark}
-In a game with perfect information, every non-terminal history $h$ begins a subgame
-(since all information sets are singletons). In games with imperfect information,
-subgames may be rare --- the entire game is always a subgame (beginning at the root).
+\label{rem:subgame_count}
+In a game with perfect information, every non-terminal history begins a
+subgame (since all information sets are singletons and condition (ii) is
+automatic). In games with imperfect information, subgames may be rare. The
+entire game (rooted at $\emptyset$) is always a subgame.
 \end{remark}
 
 \begin{definition}[Subgame Perfect Equilibrium]
 \label{def:spe}
-A strategy profile $s^*$ is a \emph{subgame perfect equilibrium} (SPE) if its
-restriction to every subgame is a Nash equilibrium of that subgame.
+A strategy profile $s^*$ is a \emph{subgame perfect equilibrium} (SPE) if
+its restriction to every subgame is a Nash equilibrium of that subgame.
 \end{definition}
 
 \begin{proposition}[SPE Refines NE]
@@ -313,417 +347,336 @@ Every subgame perfect equilibrium is a Nash equilibrium.
 \end{proposition}
 
 \begin{proof}
-The entire game is itself a subgame (beginning at the root). If $s^*$ is an SPE,
-then it is a NE of the entire game by definition.
+The entire game is a subgame (beginning at the root $\emptyset$). If $s^*$
+is an SPE, then by definition it is a NE of every subgame, including the
+entire game.
 \end{proof}
 
-\begin{proposition}[SPE in the Entry Game]
-\label{prop:spe_entry}
-The Entry Game (Example~\ref{ex:entry}) has a unique SPE: $(E, A)$ (Enter, Accommodate)
-with payoffs $(1, 1)$.
-\end{proposition}
+\begin{example}[SPE in the Entry Game]
+\label{ex:spe_entry}
+The Entry Game has two subgames: the whole game (rooted at $\emptyset$) and
+the subgame starting after $E$ (where player~2 chooses $F$ or $A$).
 
-\begin{proof}
-The game has two subgames: the entire game (rooted at the empty history) and the
-subgame starting after player~1 chooses $E$ (where player~2 decides between $F$ and $A$).
+In the subgame after $E$: player~2 chooses $A$ (payoff $1 > -1$). The unique
+NE of this subgame is $A$.
 
-In the subgame after $E$: player~2 chooses between $F$ (payoff $-1$) and $A$ (payoff $1$).
-The unique NE of this subgame is $A$.
+In the full game: player~1 anticipates player~2 accommodating, so entry gives
+payoff $1 > 0$ (staying out). Hence player~1 enters.
 
-Given that player~2 plays $A$ in the subgame, player~1 in the full game chooses between
-$O$ (payoff $0$) and $E$ (payoff $1$, since player~2 accommodates). Player~1 chooses $E$.
-
-The unique SPE is $(E, A)$. The non-credible equilibrium $(O, F)$ is eliminated because
-$F$ is not a NE in the subgame after entry.
-\end{proof}
+The unique SPE is $(E, A)$ with payoffs $(1, 1)$. The NE $(O, F)$ is
+eliminated because $F$ is not a NE in the post-entry subgame.
+\end{example}
 
 \subsection{Backward Induction}
 \label{subsec:backward_induction}
 
 \begin{definition}[Backward Induction]
 \label{def:backward_induction}
-For a finite game with perfect information, \emph{backward induction} is the following
-procedure:
+For a finite game with perfect information, \emph{backward induction}
+proceeds as follows:
 \begin{enumerate}[nosep]
-    \item Identify all ``penultimate'' nodes: non-terminal histories $h$ such that all
-    successors $(h, a)$ are terminal. At each such $h$, the player $P(h)$ chooses the
-    action maximizing their payoff: $a^*(h) = \argmax_{a \in A(h)} u_{P(h)}(h, a)$.
+    \item Identify all \emph{penultimate nodes}: non-terminal histories $h$
+    such that all successors $(h, a)$ are terminal. At each such $h$, player
+    $P(h)$ chooses the action maximizing their payoff:
+    $a^*(h) = \argmax_{a \in A(h)} u_{P(h)}(h, a)$.
     \item Replace each penultimate node $h$ with a terminal node having payoff
     $u(h, a^*(h))$.
     \item Repeat until the root is reached.
 \end{enumerate}
-The resulting strategy profile specifies an action at every node of the original tree.
+The resulting strategy profile assigns an action at every node of the
+original tree.
 \end{definition}
 
+\begin{keyresult}
 \begin{theorem}[Backward Induction Yields SPE]
 \label{thm:bi_spe}
-In a finite game with perfect information and no ties (i.e., the payoff function is
-injective when restricted to any player's choices at any node), backward induction
-produces the unique subgame perfect equilibrium.
-\end{theorem}
-
-\begin{proof}
-We prove by strong induction on the depth $d$ of the game tree (the maximum number of
-actions in any history).
-
-\textbf{Base case ($d = 1$):} The game consists of a single player choosing an action
-at the root, with all successors being terminal. The backward induction strategy
-(choose the payoff-maximizing action) is trivially the unique NE and SPE.
-
-\textbf{Inductive step:} Assume the result holds for all games of depth $< d$.
-Consider a game $\Gamma$ of depth $d$ with perfect information and no ties.
-
-At the root, player $P(\emptyset)$ chooses action $a \in A(\emptyset)$. Each action $a$
-leads to a subgame $\Gamma_a$ of depth $< d$. By the inductive hypothesis, each
-$\Gamma_a$ has a unique SPE $s^*_a$ with a well-defined payoff vector $v(a)$.
-
-In the full game, backward induction assigns to the root the action
-$a^* = \argmax_{a \in A(\emptyset)} v_{P(\emptyset)}(a)$, which is unique (no ties).
-
-We show the resulting strategy profile $s^*$ is the unique SPE.
-
-\emph{$s^*$ is an SPE}: In any subgame $\Gamma_a$, the restriction of $s^*$ is $s^*_a$,
-which is an SPE of $\Gamma_a$ by the inductive hypothesis. It remains to check that no
-player wants to deviate at the root. But the root player $P(\emptyset)$ anticipates the
-SPE outcome in each subgame (by the inductive hypothesis, the SPE outcome is unique),
-and $a^*$ maximizes over these outcomes. The other players do not move at the root.
-
-\emph{Uniqueness}: Any SPE $\hat{s}$ must restrict to the unique SPE in each subgame
-$\Gamma_a$ (by the inductive hypothesis), so the root player faces the same payoffs
-$v(a)$ and, with no ties, must choose $a^*$. Hence $\hat{s} = s^*$.
-\end{proof}
-
-\subsection{Zermelo's Theorem}
-\label{subsec:zermelo}
-
-\begin{keyresult}[Zermelo's Theorem]
-\begin{theorem}[Zermelo, 1913]
-\label{thm:zermelo}
-Every finite extensive-form game with perfect information has a pure strategy subgame
-perfect equilibrium. If the game also has no ties (each player has distinct payoffs at
-all terminal nodes reachable from any decision node), the SPE is unique.
+In a finite game with perfect information and no ties (the payoff function
+is injective when restricted to any player's choices at any node), backward
+induction produces the unique subgame perfect equilibrium.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-\textbf{Existence.} We prove by strong induction on the number of non-terminal
-histories $|H \setminus Z|$.
+We proceed by strong induction on the depth $d$ of the game tree (the
+maximum number of actions in any history).
 
-\emph{Base case}: If $|H \setminus Z| = 1$, the game has a single decision node (the
-root) followed by terminal nodes. The player at the root has at least one action
-maximizing their payoff (the strategy set is finite and non-empty). Any such action
+\textbf{Base case ($d = 1$):} The game consists of a single player choosing
+at the root, with all successors terminal. Backward induction selects the
+payoff-maximizing action, which is unique (no ties). This is trivially the
+unique SPE.
+
+\textbf{Inductive step:} Assume the result holds for all games of depth $< d$.
+Consider a game $\Gamma$ of depth $d$ with perfect information and no ties.
+At the root, player $P(\emptyset)$ has actions $A(\emptyset) = \{a_1, \ldots, a_l\}$.
+Each action $a_j$ leads to a subgame $\Gamma_{a_j}$ of depth $< d$. By the
+inductive hypothesis, backward induction produces the unique SPE $s^*_{a_j}$
+of $\Gamma_{a_j}$, with payoff vector $v(a_j) \in \R^n$.
+
+Backward induction assigns to the root the action
+$a^* = \argmax_{a_j} v_{P(\emptyset)}(a_j)$, which is unique since there
+are no ties. Define $s^*$ as: play $a^*$ at the root, and follow $s^*_{a_j}$
+in each subgame $\Gamma_{a_j}$.
+
+\emph{$s^*$ is an SPE:} In each subgame $\Gamma_{a_j}$, the restriction of
+$s^*$ is $s^*_{a_j}$, an SPE by hypothesis. In the full game: the root
+player chooses $a^*$ optimally given the unique SPE continuations, and no
+other player moves at the root. Hence no player has a profitable deviation
+in any subgame.
+
+\emph{Uniqueness:} Any SPE $\hat{s}$ must restrict to the unique SPE in each
+$\Gamma_{a_j}$ (by the inductive hypothesis), so the root player faces the
+same payoffs $v(a_j)$ and, with no ties, must choose $a^*$. Hence
+$\hat{s} = s^*$.
+\end{proof}
+
+%% SECTION 4: ZERMELO'S THEOREM
+
+\section{Zermelo's Theorem}
+\label{sec:zermelo}
+
+\begin{keyresult}
+\begin{theorem}[Zermelo, 1913]
+\label{thm:zermelo}
+Every finite extensive-form game with perfect information has a pure strategy
+subgame perfect equilibrium. If the game also has no ties (each player has
+distinct payoffs at all terminal nodes reachable from any decision node), the
+SPE is unique.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Existence.} We prove by strong induction on $|H \setminus Z|$, the
+number of non-terminal histories.
+
+\emph{Base case ($|H \setminus Z| = 1$):} The game has a single decision
+node (the root) with terminal successors. The acting player has at least
+one payoff-maximizing action (finite, non-empty action set). Any such action
 constitutes a pure strategy SPE.
 
-\emph{Inductive step}: Let $\Gamma$ have $|H \setminus Z| = k > 1$. The root player
-$P(\emptyset)$ has actions $A(\emptyset) = \{a_1, \ldots, a_l\}$, and each action $a_j$
-leads to a subgame $\Gamma_{a_j}$ with strictly fewer non-terminal histories. By the
-inductive hypothesis, each $\Gamma_{a_j}$ has a pure strategy SPE $s^*_{a_j}$ with
-payoff vector $v(a_j) \in \R^n$.
+\emph{Inductive step:} Let $\Gamma$ have $|H \setminus Z| = k > 1$. The
+root player $P(\emptyset)$ has actions $a_1, \ldots, a_l$. Each $a_j$ leads
+to a subgame $\Gamma_{a_j}$ with strictly fewer non-terminal histories. By
+the inductive hypothesis, each $\Gamma_{a_j}$ has a pure strategy SPE
+$s^*_{a_j}$ with payoff vector $v(a_j)$.
 
-Define the strategy profile $s^*$ as follows: at the root, choose
-$a^* \in \argmax_{a_j} v_{P(\emptyset)}(a_j)$ (this set is non-empty since $l$ is
-finite). In each subgame $\Gamma_{a_j}$, follow $s^*_{a_j}$.
+Define $s^*$: at the root, choose
+$a^* \in \argmax_{a_j} v_{P(\emptyset)}(a_j)$ (non-empty since $l$ is
+finite); in each subgame $\Gamma_{a_j}$, follow $s^*_{a_j}$.
 
-We verify $s^*$ is an SPE. For any subgame not containing the root, the restriction
-of $s^*$ is $s^*_{a_j}$ for the appropriate $j$, which is an SPE by hypothesis.
-For the entire game (which is also a subgame): the root player is choosing
-optimally given the SPE continuations (by construction), and no other player moves at the
-root, so no player has a profitable deviation. Hence $s^*$ is an SPE.
+We verify $s^*$ is an SPE. For any subgame not containing the root, the
+restriction of $s^*$ is $s^*_{a_j}$ for the appropriate $j$, which is an SPE
+by hypothesis. For the entire game: the root player optimizes given the SPE
+continuations (by construction), and no other player moves at the root. Hence
+$s^*$ is an SPE.
 
-\textbf{Uniqueness under no ties.} This follows from the backward induction argument
-in Theorem~\ref{thm:bi_spe}: at each node, the argmax is unique when payoffs are
-distinct, so the SPE is unique.
+\textbf{Uniqueness under no ties.} By Theorem~\ref{thm:bi_spe}, backward
+induction produces the unique SPE when all choices have distinct payoffs.
 \end{proof}
 
 \begin{corollary}[Chess Has a Determined Outcome]
 \label{cor:chess}
-In chess (viewed as a finite game with perfect information --- the 50-move rule and
-threefold repetition ensure finiteness), exactly one of the following holds: White has
-a winning strategy, Black has a winning strategy, or both players can force a draw.
+In chess (viewed as a finite game with perfect information---the 50-move
+rule and threefold repetition ensure finiteness), exactly one of the
+following holds: White has a winning strategy, Black has a winning strategy,
+or both players can force a draw.
 \end{corollary}
 
 \begin{proof}
-Chess is a two-player, finite, perfect-information game with three outcomes: White wins,
-Black wins, or draw. By Zermelo's theorem, a pure strategy SPE exists. In this SPE,
-the outcome is determined: it is either a White win, a Black win, or a draw. The SPE
-strategy for the favored player (or both in the draw case) is the ``winning'' (or
-``drawing'') strategy that guarantees this outcome regardless of the opponent's play.
+Chess is a two-player, finite, perfect-information game with three possible
+outcomes: White wins, Black wins, or draw. By Zermelo's theorem, a pure
+strategy SPE exists. In this SPE, the outcome is determined (it is one of
+the three possibilities). The SPE strategy for the favored side (or both
+sides in the draw case) guarantees this outcome regardless of the opponent's
+play, since in any subgame the SPE prescribes optimal behavior.
 \end{proof}
 
-\begin{rlconnection}[Backward Induction and Dynamic Programming]
-Backward induction in game theory is the multi-agent analog of dynamic programming in
-single-agent MDPs. In both cases, we work backward from terminal states, computing
-optimal decisions at each stage given the optimal continuation. The difference is:
-\begin{itemize}[nosep]
-    \item \textbf{Single-agent DP}: The Bellman equation $V(s) = \max_a [r(s,a) +
-    \gamma V(s')]$ has a unique optimal value function (contraction mapping theorem).
-    \item \textbf{Multi-agent backward induction}: At each node, the ``optimal''
-    action depends on the other player's SPE strategy, making it a game-theoretic
-    rather than optimization problem. With perfect information and no ties, the
-    SPE is still unique. With imperfect information or ties, multiplicity arises.
-\end{itemize}
-AlphaGo and AlphaZero use MCTS (Monte Carlo Tree Search) to approximately perform
-backward induction in game trees too large for exact computation.
-\end{rlconnection}
-
-\subsection{Behavioral Strategies vs.\ Mixed Strategies in Extensive Form}
-\label{subsec:behavioral_vs_mixed}
-
-\begin{remark}[Kuhn's Theorem Revisited]
-\label{rem:kuhn_revisited}
-Theorem~\ref{thm:kuhn} establishes that in games with perfect recall, we can work
-with behavioral strategies (RL policies) without loss of generality. This is
-crucial for computational purposes: a behavioral strategy specifies a distribution at
-each information set independently, requiring $O(\sum_I |A(I)|)$ parameters, whereas
-a mixed strategy over pure strategies may require exponentially many parameters
-(one probability for each complete contingent plan).
+\begin{remark}[Zermelo vs.\ Minimax]
+\label{rem:zermelo_minimax}
+For two-player zero-sum perfect-information games, Zermelo's theorem and the
+minimax theorem (Lesson~34, Theorem~\ref{thm:minimax}) are related but
+distinct. Zermelo guarantees a pure SPE in the extensive form. The minimax
+theorem guarantees saddle-point equality in the normal form (possibly
+requiring mixed strategies in general). For finite perfect-information
+zero-sum games, both results apply, and the backward induction value equals
+the minimax value.
 \end{remark}
 
-\begin{proposition}[Failure Without Perfect Recall]
-\label{prop:no_perfect_recall}
-In games without perfect recall, mixed and behavioral strategies may yield different
-sets of reachable outcome distributions. There exist games without perfect recall
-in which a mixed strategy NE exists but no behavioral strategy NE does.
-\end{proposition}
+\begin{example}[Tic-Tac-Toe]
+\label{ex:tictactoe}
+Tic-tac-toe is a finite, two-player, perfect-information game with three
+outcomes (X wins, O wins, draw). By Zermelo's theorem, the game has a
+determined outcome. It is known (by exhaustive computation of the game tree,
+which has fewer than $9! = 362880$ terminal nodes) that both players can
+force a draw. The SPE consists of optimal strategies guaranteeing at least a
+draw for each player.
+\end{example}
 
-\begin{proof}
-Consider a one-player game where the player moves twice but forgets their first action
-at the second move. Specifically: the player first chooses $L$ or $R$, then (in a
-single information set containing both post-$L$ and post-$R$ histories) chooses
-$A$ or $B$. Payoffs:
+%% SECTION 5: RL CONNECTIONS
+
+\section{Connections to Reinforcement Learning}
+\label{sec:rl_connections}
+
+\begin{rlconnection}
+\textbf{MDPs as single-player extensive-form games.} A finite-horizon MDP
+with deterministic transitions is a single-player game with perfect
+information. The ``player'' is the agent, the ``histories'' are sequences of
+state-action pairs, and the ``payoff'' at a terminal history is the
+cumulative reward. Backward induction is precisely dynamic programming: the
+Bellman equation $V_t(s) = \max_a [r(s,a) + V_{t+1}(s')]$ computes the
+optimal action at each state by working backward from the horizon.
+
+With stochastic transitions, nature (player~0) acts between the agent's
+moves, introducing chance nodes. The backward induction computation becomes
+$V_t(s) = \max_a [r(s,a) + \E_{s'}[V_{t+1}(s')]]$, which is the standard
+Bellman optimality equation.
+\end{rlconnection}
+
+\begin{rlconnection}
+\textbf{Multi-agent backward induction.} In multi-agent settings (stochastic
+games), backward induction at each state requires solving a game rather than
+an optimization. This is the foundation of:
 \begin{itemize}[nosep]
-    \item $(L, A)$: payoff $1$, \quad $(L, B)$: payoff $0$,
-    \item $(R, A)$: payoff $0$, \quad $(R, B)$: payoff $1$.
+    \item \textbf{Minimax-Q} \citep{shoham2008}: backward induction with
+    minimax stage games in zero-sum stochastic games.
+    \item \textbf{AlphaGo/AlphaZero}: Monte Carlo Tree Search (MCTS)
+    approximately performs backward induction on enormous game trees by
+    sampling trajectories and using neural network value estimates.
+    \item \textbf{Subgame solving} in poker: computing SPE (or
+    approximations) in subgames of imperfect-information games.
 \end{itemize}
-A behavioral strategy specifies $p = \Prob(\text{choose } L)$ at the first node and
-$q = \Prob(\text{choose } A)$ at the second information set (which contains both
-post-$L$ and post-$R$). The expected payoff is $pq + (1-p)(1-q) = 1 - p - q + 2pq$.
-The maximum over behavioral strategies is $1/2$ (achieved, e.g., at $p = q = 1/2$).
+\end{rlconnection}
 
-However, the mixed strategy that plays $(L, A)$ with probability $1/2$ and $(R, B)$
-with probability $1/2$ achieves expected payoff $1/2 \cdot 1 + 1/2 \cdot 1 = 1 > 1/2$.
-This mixed strategy has no realization-equivalent behavioral strategy, since the
-behavioral strategy cannot correlate the first and second moves.
-\end{proof}
-
-%% ============================================================
-%% SECTION 10: EXERCISES
-%% ============================================================
+%% SECTION 6: EXERCISES
 
 \section{Exercises}
 \label{sec:exercises}
 
-\begin{exercise}[Pure NE Enumeration]
-\label{ex:pure_ne}
-Find all pure strategy Nash equilibria of the following game:
-\[
-\begin{array}{c|ccc}
- & L & C & R \\ \hline
-T & (2,1) & (0,4) & (1,2) \\
-M & (3,2) & (1,1) & (0,3) \\
-B & (1,0) & (2,3) & (3,1)
-\end{array}
-\]
-For each NE, verify the best response condition.
-\end{exercise}
-
-\begin{exercise}[IESDS Application]
-\label{ex:iesds}
-Apply iterated elimination of strictly dominated strategies to the game:
-\[
-\begin{array}{c|ccc}
- & L & C & R \\ \hline
-T & (3,1) & (0,0) & (1,3) \\
-M & (1,2) & (2,4) & (3,0) \\
-B & (0,3) & (4,2) & (2,1)
-\end{array}
-\]
-At each step, identify the dominated strategy and the strategy that dominates it.
-State the surviving strategy profiles.
-\end{exercise}
-
-\begin{exercise}[Mixed NE in $2 \times 2$ Games]
-\label{ex:mixed_2x2}
-Compute all Nash equilibria (pure and mixed) of the Stag Hunt
-(Example~\ref{ex:stag}). Verify the indifference principle for the mixed NE.
-\end{exercise}
-
-\begin{exercise}[Minimax Computation]
-\label{ex:minimax}
-For the zero-sum game with payoff matrix
-\[
-A = \begin{pmatrix} 3 & -1 \\ -2 & 4 \end{pmatrix},
-\]
-compute the value of the game and the optimal mixed strategies for both players.
-Formulate the problem as a linear program and verify the minimax theorem directly.
-\end{exercise}
-
-\begin{exercise}[Correlated Equilibrium Construction]
-\label{ex:ce_construct}
-Consider the game of Chicken:
-\[
-\begin{array}{c|cc}
- & D & S \\ \hline
-D & (-5,-5) & (2,-1) \\
-S & (-1,2) & (0,0)
-\end{array}
-\]
+\begin{exercise}[Normal-Form Representation]
+\label{ex:normal_form}
+Consider the Entry Game (Example~\ref{ex:entry}).
 \begin{enumerate}[nosep,label=(\alph*)]
-    \item Find all pure and mixed Nash equilibria.
-    \item Construct a correlated equilibrium that Pareto-dominates the mixed NE.
-    \item Verify that your CE satisfies the incentive-compatibility constraints.
+    \item List all pure strategies for each player.
+    \item Write the normal-form (bimatrix) representation.
+    \item Find all pure strategy NE of the normal form.
+    \item Identify which NE are subgame perfect.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Backward Induction]
-\label{ex:backward}
-Consider the following three-stage perfect-information game: Player~1 chooses $A$ or $B$.
-If $A$, player~2 chooses $C$ or $D$. If $B$, player~2 chooses $E$ or $F$.
-If $D$, player~1 chooses $G$ or $H$. Terminal payoffs (player~1, player~2):
+\begin{exercise}[Three-Stage Backward Induction]
+\label{ex:three_stage}
+Player~1 chooses $A$ or $B$. If $A$: player~2 chooses $C$ or $D$.
+If $B$: player~2 chooses $E$ or $F$. If $A \to D$: player~1 chooses
+$G$ or $H$. Terminal payoffs (player~1, player~2):
 \begin{itemize}[nosep]
-    \item $A \to C$: $(3,2)$, \quad $A \to D \to G$: $(4,1)$, \quad $A \to D \to H$: $(1,3)$,
+    \item $A \to C$: $(3,2)$, \quad $A \to D \to G$: $(4,1)$,
+    \quad $A \to D \to H$: $(1,3)$.
     \item $B \to E$: $(2,4)$, \quad $B \to F$: $(5,0)$.
 \end{itemize}
-Apply backward induction to find the SPE. List the complete strategy for each player.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Apply backward induction step by step.
+    \item Write the complete SPE strategy for each player.
+    \item How many pure strategy NE does the normal form have? Which are
+    subgame perfect?
+\end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Non-Credible Threats]
-\label{ex:noncredible}
-Consider a modified entry game: an entrant chooses $E$ or $O$. If $E$, the incumbent
-chooses $F$, $A$, or $P$ (where $P$ means ``price war''). Payoffs:
+\begin{exercise}[Kuhn's Theorem Verification]
+\label{ex:kuhn_verify}
+In a two-player game, player~1 observes a private type $t \in \{H, L\}$
+(each equally likely) and sends a message $m \in \{h, l\}$. Player~2
+observes the message but not the type, and chooses $U$ or $D$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item How many pure strategies does each player have?
+    \item Verify that this game has perfect recall.
+    \item Construct a behavioral strategy for player~1 that plays $h$ with
+    probability $3/4$ when $t = H$ and $l$ with probability $1$ when $t = L$.
+    Write the realization-equivalent mixed strategy over pure strategies.
+    \item Explain why Kuhn's theorem applies and state its consequence.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Non-Credible Threats in a Richer Game]
+\label{ex:noncredible_rich}
+An entrant chooses $E$ or $O$. If $E$, the incumbent chooses $F$
+(fight), $A$ (accommodate), or $P$ (price war). Payoffs:
 \begin{itemize}[nosep]
-    \item $O$: $(0, 3)$, \quad $(E, F)$: $(-2, -1)$, \quad $(E, A)$: $(1, 1)$, \quad $(E, P)$: $(-3, -2)$.
+    \item $O$: $(0, 3)$, \quad $(E, F)$: $(-2, -1)$, \quad $(E, A)$: $(1, 1)$,
+    \quad $(E, P)$: $(-3, -2)$.
 \end{itemize}
 \begin{enumerate}[nosep,label=(\alph*)]
     \item Find all pure strategy NE of the normal-form representation.
-    \item Identify which NE involve non-credible threats.
+    \item Identify which NE involve non-credible threats and explain why.
     \item Find the unique SPE.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Kuhn's Theorem Application]
-\label{ex:kuhn}
-In a two-player signaling game, player~1 (the sender) observes a private type
-$t \in \{H, L\}$ (each equally likely) and sends a message $m \in \{h, l\}$.
-Player~2 (the receiver) observes the message but not the type, and chooses an action
-$a \in \{U, D\}$. Player~1 has four pure strategies (mapping types to messages).
+\begin{exercise}[Subgame Count]
+\label{ex:subgame_count}
+Consider a three-player game: player~1 chooses $L$ or $R$. If $L$:
+players~2 and~3 move simultaneously (player~2 chooses $A$ or $B$, player~3
+chooses $X$ or $Y$, neither observing the other's choice). If $R$: player~2
+chooses $C$ or $D$ (with player~3 not moving).
 \begin{enumerate}[nosep,label=(\alph*)]
-    \item How many pure strategies does player~1 have? Player~2?
-    \item Write down the normal-form representation.
-    \item Verify that this game has perfect recall.
-    \item Construct a behavioral strategy for player~1 and its realization-equivalent
-    mixed strategy.
+    \item Draw the game tree with information sets.
+    \item How many subgames does this game have?
+    \item Explain why the simultaneous move after $L$ does not generate
+    additional subgames.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Properties of NE]
-\label{ex:ne_properties}
-Prove or disprove the following statements for finite games:
+\begin{exercise}[Zermelo and Nim]
+\label{ex:nim}
+In the game of Nim with a single pile of $n$ stones, two players alternate
+removing $1$, $2$, or $3$ stones. The player who takes the last stone wins
+(payoff $1$; the loser gets $0$).
 \begin{enumerate}[nosep,label=(\alph*)]
-    \item Every game with a dominant strategy equilibrium has a unique NE.
-    \item If IESDS yields a unique strategy profile, it is a NE.
-    \item The set of NE is always convex.
-    \item In a two-player zero-sum game, if $(x^*, y^*)$ and $(x^{**}, y^{**})$ are
-    both NE, then $(x^*, y^{**})$ is also a NE.
+    \item Show this is a finite perfect-information game.
+    \item Use backward induction to determine the winner for $n = 1, 2, 3, 4$.
+    \item Prove by induction that player~1 wins if and only if $n$ is not
+    divisible by $4$.
+    \item Relate this to Zermelo's theorem.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[SPE Existence Without Perfect Information]
+\begin{exercise}[SPE in a Bargaining Game]
+\label{ex:bargaining}
+Two players divide a dollar. In round~1, player~1 proposes a split
+$(x, 1-x)$ with $x \in \{0, 0.5, 1\}$. Player~2 accepts (game ends with
+these payoffs) or rejects. If rejected, in round~2, player~2 proposes
+$(y, 1-y)$ with $y \in \{0, 0.5, 1\}$, and player~1 accepts or rejects.
+If rejected again, both get $0$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Model this as an extensive-form game and count the subgames.
+    \item Apply backward induction to find the SPE.
+    \item How does the SPE change if round~2 payoffs are discounted by
+    $\delta \in (0,1)$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Failure of SPE Refinement Under Imperfect Information]
 \label{ex:spe_imperfect}
-Construct a two-player extensive-form game with imperfect information that has:
-\begin{enumerate}[nosep,label=(\alph*)]
-    \item Exactly one subgame (the entire game).
-    \item A NE that is not ``sequentially rational'' at the non-singleton information set.
-\end{enumerate}
-This illustrates why SPE has limited refinement power in games with imperfect information,
-motivating stronger concepts like sequential equilibrium.
+Construct a two-player extensive-form game with imperfect information that
+has exactly one subgame (the entire game) and a NE in which some player's
+strategy is not ``sequentially rational'' at a non-singleton information set.
+Explain why SPE fails to refine NE in this case and what stronger solution
+concept is needed.
 \end{exercise}
-
-%% ============================================================
-%% SECTION 11: SUMMARY
-%% ============================================================
-
-\section{Summary of Key Results}
-\label{sec:summary}
-
-\begin{center}
-\renewcommand{\arraystretch}{1.4}
-\begin{tabular}{p{4.5cm} p{8.5cm} l}
-\toprule
-\textbf{Result} & \textbf{Statement} & \textbf{Ref.} \\
-\midrule
-Order Independence of IESDS &
-In finite games, the set of strategies surviving iterated elimination of strictly
-dominated strategies is independent of the elimination order. &
-Thm.~\ref{thm:iesds_order} \\
-
-NE as Mutual Best Response &
-$s^*$ is a NE iff $s_i^* \in \BR_i(s_{-i}^*)$ for all~$i$. &
-Prop.~\ref{prop:ne_br} \\
-
-Indifference Principle &
-In a mixed NE, all pure strategies in the support yield equal expected payoff;
-strategies outside the support yield weakly less. &
-Thm.~\ref{thm:indifference} \\
-
-Nash's Existence Theorem &
-Every finite game has at least one mixed strategy NE.
-Proved via Kakutani's fixed point theorem. &
-Thm.~\ref{thm:nash_existence} \\
-
-Kakutani's Fixed Point Thm &
-A uhc correspondence with non-empty convex values on a compact convex set
-has a fixed point. Proved via Brouwer. &
-Thm.~\ref{thm:kakutani} \\
-
-Von Neumann's Minimax Thm &
-$\max_x \min_y x^\top A y = \min_y \max_x x^\top A y$ for any matrix~$A$.
-Proved via LP duality. &
-Thm.~\ref{thm:minimax} \\
-
-NE in Zero-Sum Games &
-NE strategies are interchangeable and all yield the game value. &
-Cor.~\ref{cor:ne_zero_sum} \\
-
-NE $\subseteq$ CE &
-Every NE (as a product distribution) is a correlated equilibrium. &
-Thm.~\ref{thm:ne_is_ce} \\
-
-CE via LP &
-The CE set is a convex polytope; optimizing over it is an LP. &
-Prop.~\ref{prop:ce_lp} \\
-
-Kuhn's Theorem &
-With perfect recall, mixed and behavioral strategies are realization-equivalent. &
-Thm.~\ref{thm:kuhn} \\
-
-SPE Refines NE &
-Every subgame perfect equilibrium is a Nash equilibrium. &
-Prop.~\ref{prop:spe_refines} \\
-
-Backward Induction $\Rightarrow$ SPE &
-In finite perfect-information games with no ties, backward induction yields
-the unique SPE. &
-Thm.~\ref{thm:bi_spe} \\
-
-Zermelo's Theorem &
-Every finite perfect-information game has a pure strategy SPE.
-Unique if no ties. &
-Thm.~\ref{thm:zermelo} \\
-\bottomrule
-\end{tabular}
-\end{center}
 
 \bigskip
 
-\noindent\textbf{Looking ahead.} This lesson establishes the static and single-shot
-extensive-form game theory needed for multi-agent RL. The next game theory topics ---
-repeated games, stochastic games, and mechanism design --- build directly on these
-foundations. In Phase~02 (Core RL), the MDP framework can be viewed as a single-agent
-``game against nature.'' In Phase~05 (MARL), stochastic games combine MDPs with the
-multi-player game-theoretic structure developed here: at each state, agents play a
-stage game whose solution concept (Nash, minimax, correlated) determines the Bellman
-operator for the multi-agent value function.
+\noindent\textbf{Summary.} This lesson developed: (1) the extensive-form
+game model with histories, information sets, and the distinction between
+perfect and imperfect information; (2) pure and behavioral strategies, with
+Kuhn's theorem establishing their equivalence under perfect recall; (3)
+subgame perfection as a refinement of Nash equilibrium that eliminates
+non-credible threats; (4) backward induction as a constructive algorithm
+that produces the unique SPE in perfect-information games without ties; and
+(5) Zermelo's theorem guaranteeing SPE existence in all finite
+perfect-information games. The connection to RL is direct: backward induction
+is single-agent dynamic programming, and behavioral strategies are RL
+policies.
 
+\bigskip
+\bibliography{game-theory-refs}
 
 \end{document}
