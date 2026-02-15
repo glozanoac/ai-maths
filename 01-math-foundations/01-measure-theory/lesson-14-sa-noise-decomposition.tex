@@ -1,207 +1,938 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 14: Stochastic Approximation Noise Decomposition}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 14: Stochastic Approximation Noise Decomposition}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{15}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
 
-\section{The Stochastic Approximation Noise Decomposition}
-\label{sec:noise}
+\section{Motivation and Overview}
+\label{sec:motivation}
 
-This section collects the key expectation facts into the single pattern that drives all TD convergence proofs.
+This is the capstone lesson of the Measure Theory track (Lessons
+1--14).  Over the preceding thirteen lessons we assembled a complete
+probability toolkit: sigma-algebras and measures (Lessons~1--2),
+measurable functions and expectation (Lessons~3--5), conditional
+expectation and variance (Lessons~6--7), filtrations and
+martingale difference sequences (Lesson~8), concentration
+inequalities (Lesson~9), modes of convergence and
+Borel--Cantelli (Lesson~10), limit theorems (Lesson~11), Markov
+chains (Lesson~12), and martingale convergence theory including
+the Robbins--Siegmund theorem (Lesson~13).
+
+The purpose of this lesson is twofold.  First, we prove the
+\emph{TD noise decomposition theorem}, which shows that the noise
+in a temporal-difference update is a martingale difference sequence
+with bounded conditional variance.  This single result is the
+bridge between measure theory and the stochastic approximation
+convergence theorems developed in the Optimization track
+(Lessons~31--32).  Second, we provide a comprehensive summary of
+every key result from Lessons~1--14, organized by its role in RL
+theory.
+
+\begin{rlconnection}[title={Why This Matters for RL}]
+\begin{itemize}[nosep]
+  \item \textbf{TD(0), SARSA, Q-learning convergence:}
+    Every convergence proof for a tabular RL algorithm
+    reduces the update to Robbins--Monro form:
+    $\theta_{n+1} = \theta_n + \alpha_n [h(\theta_n) + w_n]$.
+    The TD noise decomposition proves that $\{w_n\}$ is an MDS
+    with the right variance bound, which is the main
+    probabilistic ingredient.
+  \item \textbf{Two-timescale actor-critic:}
+    Actor-critic algorithms run two coupled SA recursions.
+    Each recursion needs its own MDS noise decomposition; the
+    structure of the proof is identical to the one given here.
+  \item \textbf{From theory to practice:}
+    Understanding \emph{why} the noise is an MDS (and not
+    just ``mean zero'') clarifies which algorithm modifications
+    preserve convergence guarantees and which break them.
+\end{itemize}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.}
+All of Lessons~1--13, especially: conditional expectation and the
+tower property (Lesson~6), martingale difference sequences
+(Lesson~8), and the Robbins--Siegmund theorem (Lesson~13).
+
+\noindent\textbf{Learning objectives.}
+\begin{itemize}[nosep]
+  \item State and prove the TD noise decomposition theorem.
+  \item Verify the MDS and bounded-variance conditions for
+    TD(0), Q-learning, and expected SARSA.
+  \item Connect the noise decomposition to the Robbins--Monro
+    framework and state the resulting convergence theorem.
+  \item Summarize the role of every key measure-theoretic
+    result in RL convergence proofs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[nosep]
+  \item \citet{borkar2008}, Chapter~2: Stochastic approximation
+    framework and noise conditions.
+  \item \citet{sutton2018}, Chapters~6 and 12: TD learning
+    algorithms and eligibility traces.
+  \item \citet{szepesvari2010}, Chapter~4: Convergence of TD
+    and Q-learning with detailed noise analysis.
+  \item \citet{bertsekas2012}, Chapter~6: Approximate dynamic
+    programming and stochastic approximation convergence.
+  \item \citet{williams1991}, Chapters~10--12: Martingales and
+    conditional expectation---the probabilistic backbone.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE MDP FRAMEWORK
+%% ============================================================
+
+\section{The MDP Framework and Bellman Operators}
+\label{sec:mdp}
+
+We fix the notation used throughout this lesson.  A \emph{finite
+Markov Decision Process} (MDP) is a tuple
+$(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ where
+$\mathcal{S}$ is a finite state space,
+$\mathcal{A}$ is a finite action space,
+$P(s'|s,a) = \Prob(S_{t+1}=s' \mid S_t=s, A_t=a)$ is the
+transition kernel,
+$r: \mathcal{S} \times \mathcal{A} \times \mathcal{S} \to \R$
+is a bounded reward function with $|r(s,a,s')| \leq R_{\max}$,
+and $\gamma \in [0,1)$ is the discount factor.
+
+\begin{definition}[Stationary Policy]
+\label{def:policy}
+A stationary (randomized) policy is a mapping
+$\pi: \mathcal{S} \to \Delta(\mathcal{A})$, where
+$\pi(a|s)$ denotes the probability of selecting action $a$ in
+state $s$.
+\end{definition}
+
+\begin{definition}[Value Function]
+\label{def:value}
+The state-value function under policy $\pi$ is
+\begin{equation}
+  V^\pi(s)
+  = \E_\pi\!\left[\sum_{t=0}^{\infty} \gamma^t R_{t+1}
+    \;\middle|\; S_0 = s\right],
+  \qquad s \in \mathcal{S}.
+  \label{eq:value}
+\end{equation}
+The action-value function is
+$Q^\pi(s,a)
+= \E_\pi[\sum_{t=0}^{\infty} \gamma^t R_{t+1}
+  \mid S_0=s, A_0=a]$.
+\end{definition}
+
+\begin{definition}[Bellman Operator]
+\label{def:bellman}
+The Bellman operator $\mathcal{T}^\pi: \R^{|\mathcal{S}|}
+\to \R^{|\mathcal{S}|}$ is defined by
+\begin{equation}
+  (\mathcal{T}^\pi V)(s)
+  = \sum_{a \in \mathcal{A}} \pi(a|s)
+    \sum_{s' \in \mathcal{S}} P(s'|s,a)
+    \bigl[r(s,a,s') + \gamma V(s')\bigr].
+  \label{eq:bellman_op}
+\end{equation}
+The value function $V^\pi$ is the unique fixed point of
+$\mathcal{T}^\pi$.
+\end{definition}
+
+\begin{remark}
+\label{rem:contraction}
+The operator $\mathcal{T}^\pi$ is a $\gamma$-contraction in
+the supremum norm: $\|\mathcal{T}^\pi V - \mathcal{T}^\pi W
+\|_\infty \leq \gamma \|V - W\|_\infty$.  This is proved
+using the linearity in $V$ and the fact that
+$\sum_{a}\pi(a|s)\sum_{s'}P(s'|s,a) = 1$.  The Banach
+fixed-point theorem (Lesson~22) then guarantees existence and
+uniqueness of $V^\pi$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: THE TD UPDATE AND ITS NOISE
+%% ============================================================
+
+\section{The TD(0) Update and Its Noise Structure}
+\label{sec:td_noise}
+
+We now derive the noise structure of the simplest
+temporal-difference algorithm: tabular TD(0) for policy evaluation.
+
+\subsection{The TD(0) Update Rule}
+
+An agent follows policy $\pi$ and observes a trajectory
+$S_0, A_0, R_1, S_1, A_1, R_2, \ldots$  The TD(0) update at
+time $t$ modifies the value estimate at the visited state:
+\begin{equation}
+  V_{t+1}(S_t)
+  = V_t(S_t) + \alpha_t(S_t)
+    \bigl[R_{t+1} + \gamma V_t(S_{t+1}) - V_t(S_t)\bigr],
+  \label{eq:td0}
+\end{equation}
+where $\alpha_t(s) \geq 0$ is the step size applied to state~$s$
+at the $t$-th visit, and $V_{t+1}(s) = V_t(s)$ for all
+$s \neq S_t$.
+
+\begin{definition}[TD Error]
+\label{def:td_error}
+The temporal-difference error at time $t$ is
+\begin{equation}
+  \delta_t
+  = R_{t+1} + \gamma V_t(S_{t+1}) - V_t(S_t).
+  \label{eq:td_error}
+\end{equation}
+\end{definition}
+
+\subsection{Rewriting TD(0) in Robbins--Monro Form}
+
+To apply stochastic approximation theory, we rewrite
+\eqref{eq:td0} by adding and subtracting
+$(\mathcal{T}^\pi V_t)(S_t)$:
+\begin{align}
+  V_{t+1}(S_t)
+  &= V_t(S_t) + \alpha_t(S_t)
+    \bigl[(\mathcal{T}^\pi V_t)(S_t) - V_t(S_t) + w_t(S_t)
+    \bigr],
+  \label{eq:td_rm}
+\end{align}
+where the \emph{noise term} is
+\begin{equation}
+  w_t(s)
+  = R_{t+1} + \gamma V_t(S_{t+1})
+    - (\mathcal{T}^\pi V_t)(s).
+  \label{eq:noise_def}
+\end{equation}
+The term $h(V_t)(s) = (\mathcal{T}^\pi V_t)(s) - V_t(s)$ is
+the \emph{mean field}: it equals zero exactly when
+$V_t = V^\pi$.  The noise $w_t(s)$ captures the randomness
+from the single-sample transition $(S_t, A_t, R_{t+1}, S_{t+1})$.
+
+\subsection{The Filtration}
+
+\begin{definition}[Natural Filtration of the MDP Trajectory]
+\label{def:filtration}
+Define the filtration
+$\{\mathcal{F}_t\}_{t \geq 0}$ by
+\begin{equation}
+  \mathcal{F}_t
+  = \sigma\bigl(S_0, A_0, R_1, S_1, \ldots,
+    S_{t-1}, A_{t-1}, R_t, S_t\bigr).
+  \label{eq:filtration}
+\end{equation}
+Crucially, $V_t$ and $S_t$ are $\mathcal{F}_t$-measurable,
+while $A_t$, $R_{t+1}$, and $S_{t+1}$ are
+$\mathcal{F}_{t+1}$-measurable but \emph{not}
+$\mathcal{F}_t$-measurable.
+\end{definition}
+
+%% ============================================================
+%% SECTION 5: THE TD NOISE DECOMPOSITION THEOREM
+%% ============================================================
+
+\section{The TD Noise Decomposition Theorem}
+\label{sec:decomposition}
+
+The following theorem is the main result of this lesson.  It
+establishes the two conditions---zero conditional mean and
+bounded conditional variance---that connect the TD noise to
+the Robbins--Monro framework.
 
 \begin{theorem}[TD Noise Decomposition]
-\label{thm:noise_decomp}
-In a finite MDP under policy $\pi$, define the noise at state visit $k$ of state $s$:
-\begin{equation}
-    w_k(s) = R_{n_k+1} + \gamma V_k(S_{n_k+1}) - (\mathcal{T}^\pi V_k)(s),
-    \label{eq:noise_def}
-\end{equation}
-where $n_k$ is the time of the $k$-th visit to $s$. Then:
-\begin{enumerate}[nosep]
-    \item $\E[w_k(s) \mid \mathcal{F}_k] = 0$ \hfill (martingale difference)
-    \item $\E[w_k(s)^2 \mid \mathcal{F}_k] \leq C(1 + \|V_k\|_\infty^2)$ for some constant $C$ \hfill (bounded variance)
+\label{thm:td_noise}
+Let $(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ be a finite
+MDP with $|r(s,a,s')| \leq R_{\max}$.  Let $\pi$ be a
+stationary policy, and let $\{V_t\}$ be the sequence of value
+estimates produced by TD(0) with the noise $w_t(s)$ defined
+in \eqref{eq:noise_def}.  Then for all $t \geq 0$ and all
+$s \in \mathcal{S}$:
+\begin{enumerate}
+  \item \textbf{(Martingale difference property)}
+    $\E[w_t(s) \mid \mathcal{F}_t] = 0$.
+  \item \textbf{(Bounded conditional variance)}
+    There exists a constant $C > 0$ (depending only on
+    $R_{\max}$, $\gamma$, and $|\mathcal{S}|$) such that
+    \begin{equation}
+      \E\bigl[w_t(s)^2 \mid \mathcal{F}_t\bigr]
+      \leq C\bigl(1 + \|V_t\|_\infty^2\bigr).
+      \label{eq:variance_bound}
+    \end{equation}
 \end{enumerate}
 \end{theorem}
 
 \begin{proof}
-\textbf{Part 1.} Conditioning on $\mathcal{F}_k$ (which includes $V_k$ and $S_{n_k} = s$), and using Proposition~\ref{prop:filtration_refine} to reduce conditioning on $\mathcal{F}_k$ to conditioning on $S_{n_k} = s$:
+\textbf{Part 1 (MDS property).}
+Conditioned on $\mathcal{F}_t$, the quantities $V_t$ and
+$S_t = s$ are known constants.  The randomness comes from the
+action $A_t \sim \pi(\cdot|s)$ and the next state
+$S_{t+1} \sim P(\cdot|s, A_t)$.  Compute:
 \begin{align}
-    \E[w_k(s) \mid \mathcal{F}_k]
-    &= \E[R_{n_k+1} + \gamma V_k(S_{n_k+1}) \mid S_{n_k} = s, V_k] - (\mathcal{T}^\pi V_k)(s). \label{eq:noise_step1}
+  \E[w_t(s) \mid \mathcal{F}_t]
+  &= \E\bigl[R_{t+1} + \gamma V_t(S_{t+1})
+    \mid \mathcal{F}_t\bigr]
+    - (\mathcal{T}^\pi V_t)(s).
+  \label{eq:mds_step1}
 \end{align}
-By Theorem~\ref{thm:mdp_expansion} (MDP expectation expansion) applied to the function $f(a, s') = r(s,a,s') + \gamma V_k(s')$:
+For the first term, we apply the law of total expectation
+(tower property, Lesson~6) by conditioning on $A_t$:
 \begin{align}
-    \E[R_{n_k+1} + \gamma V_k(S_{n_k+1}) \mid S_{n_k} = s, V_k]
-    &= \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V_k(s')\bigr] \nonumber\\
-    &= (\mathcal{T}^\pi V_k)(s). \label{eq:noise_step2}
+  &\E\bigl[R_{t+1} + \gamma V_t(S_{t+1})
+    \mid \mathcal{F}_t\bigr] \nonumber\\
+  &\quad= \sum_{a \in \mathcal{A}} \pi(a|s)\,
+    \E\bigl[R_{t+1} + \gamma V_t(S_{t+1})
+    \mid S_t = s,\, A_t = a\bigr] \nonumber\\
+  &\quad= \sum_{a \in \mathcal{A}} \pi(a|s)
+    \sum_{s' \in \mathcal{S}} P(s'|s,a)
+    \bigl[r(s,a,s') + \gamma V_t(s')\bigr] \nonumber\\
+  &\quad= (\mathcal{T}^\pi V_t)(s).
+  \label{eq:mds_step2}
 \end{align}
-Substituting~\eqref{eq:noise_step2} into~\eqref{eq:noise_step1}: $\E[w_k(s) \mid \mathcal{F}_k] = (\mathcal{T}^\pi V_k)(s) - (\mathcal{T}^\pi V_k)(s) = 0$.
+In the second equality we used the Markov property:
+conditioned on $(S_t, A_t)$, the pair $(R_{t+1}, S_{t+1})$ is
+independent of all earlier history, so conditioning on
+$\mathcal{F}_t$ reduces to conditioning on $(S_t, A_t)$.
+Substituting \eqref{eq:mds_step2} into \eqref{eq:mds_step1}:
+\[
+  \E[w_t(s) \mid \mathcal{F}_t]
+  = (\mathcal{T}^\pi V_t)(s)
+    - (\mathcal{T}^\pi V_t)(s)
+  = 0.
+\]
 
-\textbf{Part 2.} Since the MDP is finite, rewards are bounded: $|R_{n_k+1}| \leq R_{\max}$. The value estimate satisfies $|V_k(s')| \leq \|V_k\|_\infty$. Therefore:
+\textbf{Part 2 (Bounded conditional variance).}
+Since $|r(s,a,s')| \leq R_{\max}$ and
+$|V_t(s')| \leq \|V_t\|_\infty$ for all $s'$, we bound
+each component of $w_t(s)$:
 \begin{align}
-    |w_k(s)| &\leq |R_{n_k+1}| + \gamma |V_k(S_{n_k+1})| + |(\mathcal{T}^\pi V_k)(s)| \nonumber\\
-    &\leq R_{\max} + \gamma \|V_k\|_\infty + (R_{\max} + \gamma \|V_k\|_\infty) \nonumber\\
-    &= 2R_{\max} + 2\gamma \|V_k\|_\infty. \label{eq:noise_bound_step}
+  |R_{t+1}| &\leq R_{\max}, \nonumber\\
+  |\gamma V_t(S_{t+1})| &\leq \gamma \|V_t\|_\infty, \nonumber\\
+  |(\mathcal{T}^\pi V_t)(s)|
+    &\leq \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)
+      \bigl[R_{\max} + \gamma \|V_t\|_\infty\bigr]
+    = R_{\max} + \gamma \|V_t\|_\infty.
+  \label{eq:component_bounds}
 \end{align}
-Therefore $w_k(s)^2 \leq (2R_{\max} + 2\gamma \|V_k\|_\infty)^2 \leq C(1 + \|V_k\|_\infty^2)$ for $C = 8\max(R_{\max}^2, \gamma^2)$.
+Therefore
+\begin{align}
+  |w_t(s)|
+  &\leq |R_{t+1}| + \gamma|V_t(S_{t+1})|
+    + |(\mathcal{T}^\pi V_t)(s)| \nonumber\\
+  &\leq 2R_{\max} + 2\gamma \|V_t\|_\infty.
+  \label{eq:noise_bound}
+\end{align}
+Squaring and using $(a+b)^2 \leq 2a^2 + 2b^2$:
+\begin{align}
+  w_t(s)^2
+  &\leq (2R_{\max} + 2\gamma\|V_t\|_\infty)^2 \nonumber\\
+  &\leq 2(2R_{\max})^2 + 2(2\gamma\|V_t\|_\infty)^2
+  \nonumber\\
+  &= 8R_{\max}^2 + 8\gamma^2 \|V_t\|_\infty^2.
+  \label{eq:noise_sq_bound}
+\end{align}
+Setting $C = 8\max(R_{\max}^2, \gamma^2)$, we obtain
+\[
+  \E\bigl[w_t(s)^2 \mid \mathcal{F}_t\bigr]
+  \leq C\bigl(1 + \|V_t\|_\infty^2\bigr). \qedhere
+\]
 \end{proof}
 
-\begin{remark}
-Theorem~\ref{thm:noise_decomp} shows that the TD update fits precisely into the Robbins-Monro framework (Theorem~\ref{thm:robbins_siegmund}): $V_{k+1}(s) = V_k(s) + \alpha_k(s)[h(V_k)(s) + w_k(s)]$ where $h(V)(s) = (\mathcal{T}^\pi V)(s) - V(s)$ has unique root $V^\pi$, and $w_k(s)$ is zero-mean noise with bounded variance. The convergence then follows from stochastic approximation theory.
+\begin{keyresult}[title={TD Noise is a Martingale Difference Sequence}]
+The noise $w_t(s) = R_{t+1} + \gamma V_t(S_{t+1})
+- (\mathcal{T}^\pi V_t)(s)$ satisfies:
+\begin{enumerate}[nosep]
+  \item $\E[w_t(s) \mid \mathcal{F}_t] = 0$
+    \quad (MDS property),
+  \item $\E[w_t(s)^2 \mid \mathcal{F}_t]
+    \leq C(1 + \|V_t\|_\infty^2)$
+    \quad (bounded variance).
+\end{enumerate}
+These are precisely the noise conditions required by the
+Robbins--Monro theorem (Lesson~31) and the ODE method
+(Lesson~32) to guarantee almost-sure convergence.
+\end{keyresult}
+
+\begin{remark}[Role of the Markov Property]
+\label{rem:markov}
+The key step in Part~1 is that conditioning on the full
+history $\mathcal{F}_t$ reduces to conditioning on
+$(S_t, A_t)$.  This is the \emph{Markov property} of the
+MDP.  Without it---for example, in a POMDP where the agent
+cannot observe the true state---the noise would depend on the
+entire history and the MDS property would generally fail.
 \end{remark}
 
 %% ============================================================
-%% SECTION 17: SUMMARY
+%% SECTION 6: EXTENSIONS TO OTHER RL ALGORITHMS
 %% ============================================================
 
-\section{Summary of Key Results}
-\label{sec:summary}
+\section{Extensions to Other Algorithms}
+\label{sec:extensions}
 
-The following table collects the main results and their roles in the RL documents.
+The noise decomposition argument of Theorem~\ref{thm:td_noise}
+extends to other tabular RL algorithms with minor modifications.
+
+\subsection{Q-Learning}
+
+In Q-learning, the update target replaces the policy average
+with the greedy action:
+\begin{equation}
+  Q_{t+1}(S_t, A_t)
+  = Q_t(S_t, A_t) + \alpha_t
+    \bigl[R_{t+1} + \gamma \max_{a'} Q_t(S_{t+1}, a')
+    - Q_t(S_t, A_t)\bigr].
+  \label{eq:qlearning}
+\end{equation}
+The Bellman optimality operator is
+$(\mathcal{T}^* Q)(s,a) = \sum_{s'} P(s'|s,a)
+[r(s,a,s') + \gamma \max_{a'} Q(s',a')]$, and the noise is
+\begin{equation}
+  w_t^Q(s,a)
+  = R_{t+1} + \gamma \max_{a'} Q_t(S_{t+1}, a')
+    - (\mathcal{T}^* Q_t)(s,a).
+  \label{eq:qnoise}
+\end{equation}
+
+\begin{proposition}[Q-Learning Noise Decomposition]
+\label{prop:q_noise}
+Under the same setup as Theorem~\ref{thm:td_noise}, the
+Q-learning noise $w_t^Q(s,a)$ satisfies:
+\begin{enumerate}[nosep]
+  \item $\E[w_t^Q(s,a) \mid \mathcal{F}_t] = 0$,
+  \item $\E[w_t^Q(s,a)^2 \mid \mathcal{F}_t]
+    \leq C'(1 + \|Q_t\|_\infty^2)$
+    for a constant $C'$ depending only on $R_{\max}$ and
+    $\gamma$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+The proof is essentially identical to that of
+Theorem~\ref{thm:td_noise}.  For Part~1, conditioned on
+$\mathcal{F}_t$ (which includes $Q_t$ and $S_t = s$,
+$A_t = a$), the next-state transition
+$S_{t+1} \sim P(\cdot|s,a)$ and reward $R_{t+1}$ are
+independent of all prior history by the Markov property.  Then
+\begin{align}
+  \E\bigl[R_{t+1} + \gamma \max_{a'} Q_t(S_{t+1}, a')
+    \mid \mathcal{F}_t\bigr]
+  &= \sum_{s'} P(s'|s,a)
+    \bigl[r(s,a,s')
+    + \gamma \max_{a'} Q_t(s', a')\bigr] \nonumber\\
+  &= (\mathcal{T}^* Q_t)(s,a),
+\end{align}
+giving $\E[w_t^Q \mid \mathcal{F}_t] = 0$.  Part~2 follows
+from $|R_{t+1}| \leq R_{\max}$,
+$|\max_{a'} Q_t(s',a')| \leq \|Q_t\|_\infty$, and the same
+triangle-inequality and squaring argument.
+\end{proof}
+
+\subsection{Expected SARSA}
+
+Expected SARSA replaces the sample next-action with its
+expectation under the behavior policy $b$:
+\begin{equation}
+  V_{t+1}(S_t)
+  = V_t(S_t) + \alpha_t
+    \bigl[R_{t+1} + \gamma \textstyle\sum_{a'}
+    b(a'|S_{t+1}) Q_t(S_{t+1}, a')
+    - Q_t(S_t, A_t)\bigr].
+  \label{eq:expected_sarsa}
+\end{equation}
+The noise decomposition again yields an MDS with bounded
+conditional variance.  The key observation is that
+$\sum_{a'} b(a'|S_{t+1}) Q_t(S_{t+1}, a')$ is a bounded
+function of $S_{t+1}$ (given $Q_t$), so the same argument
+applies.
+
+\begin{warning}[title={When the MDS Property Fails}]
+The MDS property relies on:
+\begin{enumerate}[nosep]
+  \item \textbf{Markov transitions:} If the environment is
+    non-Markovian (e.g., a POMDP), the conditional expectation
+    given the full history does not simplify.
+  \item \textbf{Fixed target network:} If $V_t$ is updated
+    between computing the target and the current estimate
+    (as in some batched implementations), the cancellation
+    in Part~1 may not hold exactly.
+  \item \textbf{Bounded rewards:} If rewards are unbounded,
+    Part~2 fails.  Extensions require sub-Gaussian or
+    sub-exponential tail conditions.
+\end{enumerate}
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: CONVERGENCE VIA ROBBINS--MONRO
+%% ============================================================
+
+\section{Convergence via the Robbins--Monro Framework}
+\label{sec:convergence}
+
+We now state how the noise decomposition feeds into the
+convergence machinery.
+
+\subsection{The Robbins--Monro Template}
+
+The Robbins--Monro stochastic approximation theorem
+(Lesson~31) considers iterations of the form
+\begin{equation}
+  \theta_{n+1} = \theta_n + \alpha_n
+    \bigl[h(\theta_n) + w_n\bigr],
+  \label{eq:rm}
+\end{equation}
+and guarantees $\theta_n \to \theta^*$ (the root of $h$)
+almost surely, provided:
+\begin{enumerate}[label=(RM\arabic*)]
+  \item $h$ has a unique root $\theta^*$ and is ``well
+    behaved'' (e.g., $\langle \theta - \theta^*,
+    h(\theta) \rangle < 0$ for $\theta \neq \theta^*$).
+    \label{rm:drift}
+  \item The step sizes satisfy $\sum_n \alpha_n = \infty$
+    and $\sum_n \alpha_n^2 < \infty$.
+    \label{rm:step}
+  \item $\{w_n\}$ is a martingale difference sequence:
+    $\E[w_n \mid \mathcal{F}_n] = 0$.
+    \label{rm:mds}
+  \item The noise has bounded conditional variance:
+    $\E[w_n^2 \mid \mathcal{F}_n]
+    \leq C(1 + \|\theta_n\|^2)$.
+    \label{rm:var}
+\end{enumerate}
+
+\subsection{Applying the Template to TD(0)}
+
+\begin{theorem}[Convergence of TD(0)]
+\label{thm:td_convergence}
+Let $(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ be a finite
+MDP.  Let $\pi$ be a stationary policy such that the induced
+Markov chain is ergodic.  If the step sizes satisfy
+$\sum_t \alpha_t(s) = \infty$ and
+$\sum_t \alpha_t(s)^2 < \infty$ for every state $s$, and
+every state is visited infinitely often, then the TD(0)
+iterates satisfy
+\begin{equation}
+  V_t(s) \cas V^\pi(s)
+  \qquad \text{for all } s \in \mathcal{S}.
+  \label{eq:td_convergence}
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+We verify the four Robbins--Monro conditions:
+\begin{enumerate}
+  \item \ref{rm:drift}: The mean field
+    $h(V)(s) = (\mathcal{T}^\pi V)(s) - V(s)$ has unique
+    root $V^\pi$ (the fixed point of $\mathcal{T}^\pi$).
+    Furthermore, $\mathcal{T}^\pi$ is a
+    $\gamma$-contraction, so
+    $\|h(V) + V - V^\pi\|_\infty
+    = \|\mathcal{T}^\pi V - V^\pi\|_\infty
+    \leq \gamma \|V - V^\pi\|_\infty$,
+    which implies the required stability condition.
+  \item \ref{rm:step}: This is a hypothesis of the theorem.
+  \item \ref{rm:mds}: Theorem~\ref{thm:td_noise}, Part~1.
+  \item \ref{rm:var}: Theorem~\ref{thm:td_noise}, Part~2.
+\end{enumerate}
+The convergence then follows from the Robbins--Monro theorem
+(Lesson~31, Theorem~2.1) or, equivalently, from the ODE
+method (Lesson~32) applied to the limiting ODE
+$\dot{v} = \mathcal{T}^\pi v - v$ whose globally
+asymptotically stable equilibrium is $V^\pi$.
+\end{proof}
+
+\begin{rlconnection}[title={The Architecture of RL Convergence Proofs}]
+Every convergence proof for a tabular RL algorithm follows
+the same three-step architecture:
+\begin{enumerate}[nosep]
+  \item \textbf{Rewrite} the update in Robbins--Monro form:
+    identify $h(\theta)$ and $w_n$.
+  \item \textbf{Verify the noise conditions} using the TD
+    noise decomposition (this lesson): show that $w_n$ is
+    an MDS with bounded conditional variance.
+  \item \textbf{Verify the mean-field conditions:}
+    show that $h$ has a unique root and satisfies a
+    stability/contraction condition.
+\end{enumerate}
+The probabilistic content is entirely in Step~2.
+Steps~1 and~3 are algebraic and analytic, respectively.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: COMPREHENSIVE SUMMARY TABLE
+%% ============================================================
+
+\section{Summary of Key Results (Lessons 1--14)}
+\label{sec:summary_table}
+
+The following table collects every key result from the
+Measure Theory track and explains its role in RL theory.
+Results are organized by lesson and type.
 
 \begin{center}
-\renewcommand{\arraystretch}{1.5}
-\begin{tabular}{p{3.8cm} p{5cm} p{5cm}}
+\renewcommand{\arraystretch}{1.4}
+\small
+\begin{tabular}{p{2.5cm} p{4.5cm} p{5.5cm}}
 \toprule
-\textbf{Result} & \textbf{Statement} & \textbf{Role in RL Proofs} \\
+\textbf{Result (Lesson)} & \textbf{Statement}
+  & \textbf{Role in RL} \\
 \midrule
-Linearity (\ref{thm:linearity}) & $\E[aX + bY] = a\E[X] + b\E[Y]$ & Splitting $G_t = R_{t+1} + \gamma G_{t+1}$ \\
+\multicolumn{3}{l}{\textit{Foundations (Lessons 1--5)}} \\
+\midrule
+Sigma-algebra axioms (L1)
+  & Closed under complement and countable union
+  & Event space of an MDP \\
 \addlinespace
-Pull-out (\ref{thm:pull_out}) & $\E[h(Z)X \mid Z] = h(Z)\E[X \mid Z]$ & Extracting $V(s)$ from $\E[\delta_t \mid S_t]$ \\
+Measure properties (L2)
+  & Countable additivity, continuity from below/above
+  & Probability axioms for $\Prob$ \\
 \addlinespace
-MDP expansion (\ref{thm:mdp_expansion}) & $\E_\pi[f(A,S') \mid S\!=\!s] = \sum_a \pi \sum_{s'} P \cdot f$ & Every Bellman derivation \\
+Measurable functions (L3)
+  & Preimage of Borel sets is measurable
+  & Random variables, policies as measurable maps \\
 \addlinespace
-Tower property (\ref{thm:tower}) & $\E[\E[X \mid Y]] = \E[X]$ & Bellman recursion, MDS $\Rightarrow$ zero mean \\
+Linearity of $\E$ (L5)
+  & $\E[aX + bY] = a\E[X] + b\E[Y]$
+  & Splitting $G_t = R_{t+1} + \gamma G_{t+1}$ \\
 \addlinespace
-Total variance (\ref{thm:total_variance}) & $\Var(X) = \E[\Var(X|Y)] + \Var(\E[X|Y])$ & Bias-variance tradeoff \\
+MCT / DCT (L5)
+  & Monotone and dominated convergence
+  & Interchanging limits and $\E$, infinite-horizon
+    value functions \\
+\midrule
+\multicolumn{3}{l}{\textit{Conditioning and Independence
+  (Lessons 6--7)}} \\
+\midrule
+Cond.\ expectation (L6)
+  & $\E[X|\mathcal{G}]$ as $L^2$ projection
+  & Foundation of Bellman equation derivation \\
 \addlinespace
-Bayes' theorem (\ref{thm:bayes}) & $\Prob(B|A) = \frac{\Prob(A|B)\Prob(B)}{\Prob(A)}$ & Importance sampling ratios \\
+Tower property (L6)
+  & $\E[\E[X|\mathcal{G}]] = \E[X]$
+  & Bellman recursion, MDS $\Rightarrow$ zero mean \\
 \addlinespace
-Product of expectations (\ref{thm:product_exp}) & $\E[\prod X_i] = \prod \E[X_i]$ if independent & Variance of sums, noise bounds \\
+Pull-out property (L6)
+  & $\E[h(Z)X | Z] = h(Z)\E[X|Z]$
+  & Extracting $V(s)$ from $\E[\delta_t | S_t]$ \\
 \addlinespace
-MDS condition (\ref{def:mds}) & $\E[w_n \mid \mathcal{F}_{n-1}] = 0$ & All convergence proofs \\
+Total variance (L7)
+  & $\Var(X) = \E[\Var(X|Y)] + \Var(\E[X|Y])$
+  & Bias-variance tradeoff in baselines \\
 \addlinespace
-Uncorrelated MDS (\ref{thm:mds_uncorrelated}) & $\E[w_m w_n] = 0$ for $m \neq n$ & Noise variance bounds \\
+Independence (L7)
+  & $\E[\prod X_i] = \prod \E[X_i]$
+  & Variance of sums, noise bounds \\
+\midrule
+\multicolumn{3}{l}{\textit{Martingales and Filtrations
+  (Lesson 8)}} \\
+\midrule
+MDS definition (L8)
+  & $\E[w_n | \mathcal{F}_{n-1}] = 0$
+  & All SA convergence proofs \\
 \addlinespace
-Modes of convergence (\ref{thm:conv_hierarchy}) & a.s.\ $\Rightarrow$ in prob.\ $\Rightarrow$ in dist.; $L^p \Rightarrow$ in prob. & Interpreting convergence theorems \\
+MDS uncorrelated (L8)
+  & $\E[w_m w_n] = 0$ for $m \neq n$
+  & Noise variance bounds in SA \\
+\midrule
+\multicolumn{3}{l}{\textit{Inequalities (Lesson 9)}} \\
+\midrule
+Markov (L9)
+  & $\Prob(X \geq a) \leq \E[X]/a$
+  & Foundation of all tail bounds \\
 \addlinespace
-Markov's inequality (\ref{thm:markov}) & $\Prob(X \geq a) \leq \E[X]/a$ & Foundation of all concentration bounds \\
+Chebyshev (L9)
+  & $\Prob(|X-\mu| \geq \varepsilon) \leq
+    \sigma^2/\varepsilon^2$
+  & Weak law of large numbers \\
 \addlinespace
-Chebyshev (\ref{thm:chebyshev}) & $\Prob(|X - \mu| \geq \varepsilon) \leq \sigma^2/\varepsilon^2$ & Weak law of large numbers \\
+Hoeffding (L9)
+  & Sub-Gaussian tail for bounded averages
+  & Finite-sample MC bounds \\
 \addlinespace
-Hoeffding (\ref{thm:hoeffding}) & Sub-Gaussian tail for bounded averages & Finite-sample bounds on MC estimates \\
+Azuma--Hoeffding (L9)
+  & Concentration for bounded MDS
+  & Finite-sample TD bounds \\
 \addlinespace
-Azuma--Hoeffding (\ref{thm:azuma}) & Concentration for bounded martingales & Finite-sample bounds on TD estimates \\
+Jensen (L9)
+  & $\varphi(\E[X]) \leq \E[\varphi(X)]$
+  & $\|\mathbf{P}_\pi \mathbf{v}\|_{d^\pi}$
+    contraction \\
+\midrule
+\multicolumn{3}{l}{\textit{Convergence and Limits
+  (Lessons 10--11)}} \\
+\midrule
+Convergence modes (L10)
+  & a.s.\ $\Rightarrow$ prob.\ $\Rightarrow$ dist.;\
+    $L^p \Rightarrow$ prob.
+  & Interpreting convergence theorems \\
 \addlinespace
-Jensen's (\ref{thm:jensen}) & $\varphi(\E[X]) \leq \E[\varphi(X)]$ & $\|\mathbf{P}_\pi \mathbf{v}\|_{d^\pi}$ contraction \\
+Borel--Cantelli (L10)
+  & $\sum \Prob(A_n) < \infty \Rightarrow
+    \Prob(A_n\text{ i.o.}) = 0$
+  & Upgrading to a.s.\ convergence \\
 \addlinespace
-Borel--Cantelli (\ref{thm:bc1}, \ref{thm:bc2}) & $\sum \Prob(A_n) < \infty \Rightarrow \Prob(A_n \text{ i.o.}) = 0$ & Upgrading to a.s.\ convergence \\
+Strong LLN (L11)
+  & $\bar{X}_n \cas \mu$
+  & MC value estimation \\
 \addlinespace
-Strong LLN (\ref{thm:slln}) & $\bar{X}_n \cas \mu$ & MC value estimation \\
+CLT (L11)
+  & $\sqrt{n}(\bar{X}_n - \mu) \cdist N(0,\sigma^2)$
+  & Confidence intervals for MC \\
+\midrule
+\multicolumn{3}{l}{\textit{Markov Chains (Lesson 12)}} \\
+\midrule
+Stationary dist.\ (L12)
+  & Unique $\boldsymbol{d} > 0$ for irreducible chains
+  & Weighting in $\overline{\text{VE}}$ \\
 \addlinespace
-Dom.\ convergence (\ref{thm:dct}) & $X_n \cas X$, $|X_n| \leq Y$ $\Rightarrow$ $\E[X_n] \to \E[X]$ & Interchanging limits and $\E$ \\
+Ergodic theorem (L12)
+  & Time avg.\ $\cas$ space avg.\ under $d^\pi$
+  & On-policy sampling justification \\
+\midrule
+\multicolumn{3}{l}{\textit{Martingale Convergence
+  (Lessons 13--14)}} \\
+\midrule
+Upcrossing ineq.\ (L13)
+  & $\E[U_n[a,b]] \leq \E[(X_n-a)^-]/(b-a)$
+  & Foundation of Doob convergence \\
 \addlinespace
-Ergodic theorem (\ref{thm:ergodic}) & Time avg.\ $\cas$ space avg.\ under $\pi$ & On-policy sampling justification \\
+Doob convergence (L13)
+  & Bounded submartingales converge a.s.
+  & Foundation of Robbins--Siegmund \\
 \addlinespace
-Stationary dist.\ (\ref{thm:stationary_existence}) & Unique $\boldsymbol{\pi} > 0$ for finite irreducible chains & Weighting in $\overline{\text{VE}}$ \\
+Robbins--Siegmund (L13)
+  & Almost-supermartingale convergence
+  & All SA convergence proofs \\
 \addlinespace
-Doob convergence (\ref{thm:doob_convergence}) & Bounded submartingales converge a.s. & Foundation of Robbins--Siegmund \\
-\addlinespace
-Robbins--Siegmund (\ref{thm:robbins_siegmund}) & Almost-supermartingale convergence & All stochastic approximation proofs \\
+TD noise (L14)
+  & $\E[w_t | \mathcal{F}_t] = 0$,\
+    $\E[w_t^2|\mathcal{F}_t] \leq C(1+\|V_t\|^2)$
+  & MDS + variance bound for Robbins--Monro \\
 \bottomrule
 \end{tabular}
 \end{center}
 
+\begin{rlconnection}[title={The Complete Pipeline}]
+The table above traces a complete logical chain from
+the axioms of probability to the convergence of TD(0):
+\[
+  \underbrace{\text{Sigma-algebras}}_{\text{L1--2}}
+  \;\to\;
+  \underbrace{\E,\; \E[\cdot|\cdot]}_{\text{L5--6}}
+  \;\to\;
+  \underbrace{\text{MDS}}_{\text{L8}}
+  \;\to\;
+  \underbrace{\text{Convergence}}_{\text{L10--11}}
+  \;\to\;
+  \underbrace{\text{Ergodic thm}}_{\text{L12}}
+  \;\to\;
+  \underbrace{\text{Robbins--Siegmund}}_{\text{L13}}
+  \;\to\;
+  \underbrace{\text{TD noise}}_{\text{L14}}
+\]
+Each arrow represents a logical dependency: every result on
+the right uses results from the left.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[SARSA Noise Decomposition ($\ast$)]
+\label{ex:sarsa}
+In SARSA, the update uses the actual next action $A_{t+1}$:
+\[
+  Q_{t+1}(S_t, A_t)
+  = Q_t(S_t, A_t) + \alpha_t
+    \bigl[R_{t+1} + \gamma Q_t(S_{t+1}, A_{t+1})
+    - Q_t(S_t, A_t)\bigr].
+\]
+Define the SARSA Bellman operator
+$(\mathcal{T}^\pi Q)(s,a) = \sum_{s'} P(s'|s,a)
+[r(s,a,s') + \gamma \sum_{a'} \pi(a'|s') Q(s',a')]$ and
+the noise $w_t^{\text{SARSA}}$.
+\begin{enumerate}[label=(\alph*)]
+  \item Write $w_t^{\text{SARSA}}$ explicitly.
+  \item Prove that
+    $\E[w_t^{\text{SARSA}} \mid \mathcal{F}_t] = 0$.
+  \item Show that
+    $\E[(w_t^{\text{SARSA}})^2 \mid \mathcal{F}_t]
+    \leq C(1 + \|Q_t\|_\infty^2)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Non-Markovian Noise ($\ast\ast$)]
+\label{ex:non_markov}
+Consider a POMDP where the agent observes $O_t = g(S_t)$
+instead of the true state $S_t$, and maintains value
+estimates $V_t(o)$ for observations $o$.
+\begin{enumerate}[label=(\alph*)]
+  \item Define the analogous noise term $w_t(o)$ for
+    a TD-like update on observations.
+  \item Show by counterexample (a simple 3-state POMDP
+    with 2 observations) that
+    $\E[w_t(o) \mid \mathcal{F}_t] \neq 0$ in general.
+  \item Explain intuitively why the Markov property is
+    essential for the MDS cancellation.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Variance Reduction via Baselines ($\ast\ast$)]
+\label{ex:baselines}
+Consider the modified TD noise with a state-dependent baseline
+$b(s)$:
+\[
+  \tilde{w}_t(s)
+  = R_{t+1} + \gamma V_t(S_{t+1}) - b(s).
+\]
+\begin{enumerate}[label=(\alph*)]
+  \item For what choice of $b(s)$ is $\tilde{w}_t(s)$
+    a martingale difference sequence?
+  \item Show that the conditional variance is minimized
+    (over deterministic baselines $b$) when
+    $b(s) = (\mathcal{T}^\pi V_t)(s)$, which recovers the
+    original noise $w_t(s)$.
+  \item Use the total variance formula (Lesson~7) to
+    decompose $\Var(\tilde{w}_t(s) \mid \mathcal{F}_t)$
+    into contributions from action randomness and
+    transition randomness.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Noise in $n$-Step TD ($\ast\ast\ast$)]
+\label{ex:nstep}
+In $n$-step TD, the update target is
+$G_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k R_{t+k+1}
++ \gamma^n V_t(S_{t+n})$.  Define the noise
+$w_t^{(n)} = G_t^{(n)} - (\mathcal{T}^\pi)^n V_t(S_t)$.
+\begin{enumerate}[label=(\alph*)]
+  \item Prove that $\E[w_t^{(n)} \mid \mathcal{F}_t] = 0$.
+    \textit{Hint:} Use induction on $n$ and the tower
+    property.
+  \item Show that
+    $\E[(w_t^{(n)})^2 \mid \mathcal{F}_t]
+    \leq C_n(1 + \|V_t\|_\infty^2)$ where $C_n$ grows
+    with $n$.
+  \item Discuss the bias-variance tradeoff: why does
+    increasing $n$ reduce bias (since
+    $(\mathcal{T}^\pi)^n V \to V^\pi$) but increase
+    variance (since $C_n$ grows)?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Verifying Robbins--Monro Conditions ($\ast$)]
+\label{ex:verify_rm}
+For the Q-learning update \eqref{eq:qlearning} in a finite
+MDP with $\gamma = 0.9$ and $R_{\max} = 1$:
+\begin{enumerate}[label=(\alph*)]
+  \item Write the update in Robbins--Monro form
+    $Q_{t+1}(s,a) = Q_t(s,a)
+    + \alpha_t[h(Q_t)(s,a) + w_t^Q(s,a)]$.
+    Identify $h$ explicitly.
+  \item Compute the constant $C'$ from
+    Proposition~\ref{prop:q_noise} for these parameters.
+  \item Verify that
+    $h(Q)(s,a) = (\mathcal{T}^* Q)(s,a) - Q(s,a) = 0$
+    if and only if $Q = Q^*$ (the optimal action-value
+    function).
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+This lesson established the central probabilistic result
+connecting measure theory to reinforcement learning:
+
+\begin{itemize}[nosep]
+  \item The \textbf{TD noise decomposition}
+    (Theorem~\ref{thm:td_noise}) shows that the noise in
+    temporal-difference updates is a martingale difference
+    sequence with bounded conditional variance.  The proof
+    uses two ingredients: the Markov property (to collapse
+    conditioning on the full history to the current
+    state-action pair) and reward boundedness (to control
+    the variance).
+
+  \item The same decomposition extends to \textbf{Q-learning}
+    (Proposition~\ref{prop:q_noise}) and \textbf{expected
+    SARSA}, with essentially identical proofs.
+
+  \item Combined with the \textbf{Robbins--Monro framework}
+    (Lessons~31--32), the noise decomposition yields the
+    convergence of TD(0), Q-learning, and SARSA under
+    standard step-size conditions.
+
+  \item The \textbf{comprehensive summary table}
+    (Section~\ref{sec:summary_table}) traces the logical
+    dependencies from sigma-algebras (Lesson~1) through
+    the TD noise decomposition (this lesson), showing how
+    every measure-theoretic result contributes to the
+    convergence proof pipeline.
+\end{itemize}
+
+This completes the Measure Theory track.  The tools
+developed in Lessons~1--14 will be used repeatedly in
+Phases~2--4 whenever we prove convergence of an RL algorithm.
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}[nosep]
+  \item \textbf{Stochastic approximation theory:}
+    \citet{borkar2008} provides a comprehensive treatment
+    of the Robbins--Monro and ODE methods with applications
+    to RL.  See especially Chapters~2--3 for the noise
+    conditions and Chapter~5 for two-timescale SA.
+
+  \item \textbf{RL convergence proofs:}
+    \citet{szepesvari2010}, Chapter~4, presents detailed
+    convergence proofs for TD(0) and Q-learning with
+    explicit noise decomposition.
+    \citet{bertsekas2012}, Chapter~6, covers the same
+    material from a dynamic programming perspective.
+
+  \item \textbf{Martingale theory background:}
+    \citet{williams1991} is an excellent introduction to
+    the probability theory underlying this lesson.
+    \citet{durrett2019}, Chapters~4--5, provides a more
+    advanced treatment of martingale convergence.
+
+  \item \textbf{Next steps:}
+    Lesson~15 begins the Functional Analysis track, which
+    provides the operator-theoretic framework (contraction
+    mappings, projections) that complements the
+    probabilistic tools from this track.  Lessons~31--32
+    in the Optimization track formalize the Robbins--Monro
+    and ODE methods that consume the noise conditions
+    proved here.
+\end{itemize}
+
+\bibliography{measure-theory-refs}
 
 \end{document}

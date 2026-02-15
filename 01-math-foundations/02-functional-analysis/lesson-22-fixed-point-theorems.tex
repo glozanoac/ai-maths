@@ -1,343 +1,552 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 7: Hilbert Spaces and Operators}}
+\fancyhead[L]{\textsc{Lesson 22: Fixed Point Theorems}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\interior}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\spn}{span}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\range}{range}
-\DeclareMathOperator{\nullspace}{null}
-\DeclareMathOperator{\diam}{diam}
-
-% ---- Title ----
 \title{Lesson 22: Fixed Point Theorems}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{7}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
 
-\section{Fixed Point Theorems}\label{sec:fixed-point}
+\section{Motivation and Overview}
+\label{sec:motivation}
 
-Fixed point theorems guarantee the existence (and sometimes uniqueness) of
-solutions to equations of the form $T(x) = x$. They are among the most
-powerful tools in analysis, with direct applications to existence and
-convergence theorems in RL.
+The equation $T(x) = x$---find a point that a map sends to itself---is
+one of the most universal formulations in mathematics.  Differential
+equations, integral equations, game-theoretic equilibria, and the
+Bellman equation of dynamic programming can all be cast as fixed point
+problems.  The theorems in this lesson provide conditions under which
+such equations have solutions, and in the most favorable case (the
+Banach contraction theorem) they also supply an algorithm and a
+convergence rate.
 
-\subsection{Banach Contraction Mapping Theorem}
-
-\begin{definition}[Contraction]\label{def:contraction}
-Let $(X, d)$ be a metric space. A map $T \colon X \to X$ is a
-\emph{contraction} (or \emph{contraction mapping}) if there exists
-$\gamma \in [0, 1)$ such that
-\[
-    d(Tx, Ty) \leq \gamma \, d(x, y) \quad \text{for all } x, y \in X.
-\]
-The constant $\gamma$ is called the \emph{contraction factor}.
-\end{definition}
-
-\begin{theorem}[Banach Contraction Mapping Theorem]\label{thm:banach-contraction}
-Let $(X, d)$ be a nonempty complete metric space and $T \colon X \to X$ a
-contraction with factor $\gamma \in [0,1)$. Then:
-\begin{enumerate}[label=(\roman*)]
-    \item $T$ has a unique fixed point $x^* \in X$ (i.e., $Tx^* = x^*$).
-    \item For any $x_0 \in X$, the iterates $x_{n+1} = Tx_n$ satisfy
-          $x_n \to x^*$.
-    \item The rate of convergence is geometric:
-          $d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma} d(x_0, x_1)$.
+We develop four fixed point theorems of increasing generality:
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item The \textbf{Banach Contraction Mapping Theorem}, which
+          guarantees existence, uniqueness, and geometric convergence
+          of iterates for contractions on complete metric spaces.
+    \item The \textbf{Brouwer Fixed Point Theorem}, which guarantees
+          existence (but not uniqueness) for continuous self-maps of
+          compact convex subsets of $\R^n$.
+    \item The \textbf{Schauder Fixed Point Theorem}, which extends
+          Brouwer to infinite-dimensional Banach spaces by requiring
+          the map to be compact.
+    \item The \textbf{Kakutani Fixed Point Theorem}, which extends
+          Brouwer to set-valued maps (correspondences), providing the
+          standard route to Nash equilibrium existence.
 \end{enumerate}
-\end{theorem}
 
-\begin{proof}
-\textbf{(i) and (ii): Existence and convergence.}
-Fix $x_0 \in X$ and define $x_{n+1} = Tx_n$. First,
-\[
-    d(x_{n+1}, x_n) = d(Tx_n, Tx_{n-1}) \leq \gamma \, d(x_n, x_{n-1})
-    \leq \cdots \leq \gamma^n d(x_1, x_0).
-\]
-For $m > n$, by the triangle inequality:
-\begin{align*}
-    d(x_m, x_n) &\leq \sum_{k=n}^{m-1} d(x_{k+1}, x_k)
-    \leq \sum_{k=n}^{m-1} \gamma^k d(x_1, x_0)
-    \leq \frac{\gamma^n}{1 - \gamma} d(x_1, x_0).
-\end{align*}
-Since $\gamma < 1$, $\gamma^n \to 0$, so $(x_n)$ is Cauchy. By completeness,
-$x_n \to x^*$ for some $x^* \in X$.
-
-Since $T$ is continuous (in fact, Lipschitz), $Tx^* = T(\lim x_n) = \lim Tx_n
-= \lim x_{n+1} = x^*$.
-
-\textbf{Uniqueness.} If $Tx^* = x^*$ and $Ty^* = y^*$, then
-$d(x^*, y^*) = d(Tx^*, Ty^*) \leq \gamma \, d(x^*, y^*)$, so
-$(1 - \gamma) d(x^*, y^*) \leq 0$, giving $d(x^*, y^*) = 0$.
-
-\textbf{(iii): Rate of convergence.}
-Letting $m \to \infty$ in the estimate above:
-$d(x^*, x_n) = \lim_{m \to \infty} d(x_m, x_n)
-\leq \frac{\gamma^n}{1 - \gamma} d(x_1, x_0)$.
-\end{proof}
-
-\begin{keyresult}[Banach Contraction Mapping Theorem]
-In a complete metric space, a contraction has a unique fixed point, iterative
-computation converges from any starting point, and the convergence rate is
-geometric: $d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma} d(x_0, Tx_0)$.
-\end{keyresult}
-
-\begin{rlconnection}[Value Iteration Convergence]
-Let $\mathcal{S}$ be a finite state space and consider the Banach space
-$(V(\mathcal{S}), \|\cdot\|_\infty)$ of bounded value functions. The
-\textbf{Bellman optimality operator} $T \colon V(\mathcal{S}) \to V(\mathcal{S})$
-is defined by
-\[
-    (TV)(s) = \max_{a \in \mathcal{A}} \Bigl[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s')\Bigr].
-\]
-One verifies that $T$ is a $\gamma$-contraction in $\|\cdot\|_\infty$:
-\[
-    \|TV - TW\|_\infty \leq \gamma \|V - W\|_\infty.
-\]
-By the Banach Contraction Mapping Theorem:
-\begin{enumerate}[leftmargin=2em]
-    \item There exists a unique optimal value function $V^*$ with $TV^* = V^*$
-          (the Bellman equation).
-    \item \textbf{Value iteration} $V_{n+1} = TV_n$ converges to $V^*$ from
-          any initialization.
-    \item The convergence rate is
-          $\|V_n - V^*\|_\infty \leq \frac{\gamma^n}{1 - \gamma} \|V_1 - V_0\|_\infty$.
+\begin{rlconnection}[title={Fixed Point Theorems in Reinforcement Learning}]
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item \textbf{Value iteration.}  The Bellman optimality operator
+          $T$ is a $\gamma$-contraction on the space of bounded value
+          functions.  By the Banach contraction theorem, the iterates
+          $V_{n+1} = TV_n$ converge geometrically to the unique
+          optimal value function $V^*$, regardless of initialization.
+    \item \textbf{Policy iteration.}  The policy evaluation step
+          solves $V^\pi = T^\pi V^\pi$, which is again a contraction
+          fixed point problem.
+    \item \textbf{Stationary distributions.}  Brouwer's and
+          Schauder's theorems guarantee the existence of stationary
+          distributions for transition operators on compact state
+          spaces, since the simplex of probability distributions is
+          compact and convex.
+    \item \textbf{Nash equilibrium.}  The best-response
+          correspondence in a finite game satisfies the hypotheses of
+          Kakutani's theorem on the product of mixed strategy
+          simplices.  The resulting fixed point is a Nash equilibrium
+          ---the foundational existence result of game theory and
+          multi-agent RL.
 \end{enumerate}
-This is the \emph{fundamental convergence guarantee} for value iteration.
-The same argument applies to the Bellman evaluation operator for policy
-evaluation, and to $Q$-value iteration.
 \end{rlconnection}
 
-\subsection{Brouwer Fixed Point Theorem}
+\medskip
+\noindent\textbf{Prerequisites.}  Metric spaces, completeness, and
+compactness (Lessons 15 and 18).  Banach spaces and bounded linear
+operators (Lessons 16--17).  The Baire Category Theorem (Lesson 18)
+is used in one remark but is not essential.
 
-\begin{theorem}[Brouwer Fixed Point Theorem]\label{thm:brouwer}
-Let $C \subset \R^n$ be a nonempty compact convex set and $f \colon C \to C$
-a continuous map. Then $f$ has a fixed point: there exists $x^* \in C$ with
-$f(x^*) = x^*$.
-\end{theorem}
+\medskip
+\noindent\textbf{Outline.}
+Section~\ref{sec:references} lists references.
+Section~\ref{sec:banach} proves the Banach Contraction Mapping
+Theorem with the geometric convergence rate.
+Section~\ref{sec:brouwer} proves the Brouwer Fixed Point Theorem via
+the retraction argument.
+Section~\ref{sec:schauder} extends Brouwer to infinite dimensions
+through the Schauder Fixed Point Theorem.
+Section~\ref{sec:kakutani} proves the Kakutani Fixed Point Theorem
+for set-valued maps.
+Section~\ref{sec:hierarchy} summarizes the relationship between the
+four theorems.
+Section~\ref{sec:exercises} provides exercises.
+Section~\ref{sec:summary} summarizes the key results.
+Section~\ref{sec:further} offers further reading.
 
-\begin{proof}
-We prove the theorem for $C = \overline{B}^n = \{x \in \R^n : \|x\| \leq 1\}$
-(the closed unit ball). The general case follows since any nonempty compact
-convex set in $\R^n$ is homeomorphic to $\overline{B}^n$ (or a lower-dimensional
-ball, where the argument is analogous).
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
 
-\textbf{Proof by contradiction using the retraction argument.}
-Suppose $f$ has no fixed point, i.e., $f(x) \neq x$ for all $x \in \overline{B}^n$.
-Define $r \colon \overline{B}^n \to S^{n-1}$ (the boundary sphere) as follows:
-for each $x$, draw the ray from $f(x)$ through $x$; let $r(x)$ be the point
-where this ray hits $S^{n-1}$.
+\section{References}
+\label{sec:references}
 
-Explicitly, $r(x) = x + t(x)(x - f(x))$ where $t(x) \geq 0$ is chosen so
-that $\|r(x)\| = 1$. This leads to a quadratic equation in $t$ which has a
-unique nonnegative solution depending continuously on $x$ (since $f(x) \neq x$).
+The Banach contraction mapping theorem is proved in
+\citet{kreyszig1989}, Section~5.1, and \citet{granas2003}, Chapter~1.
+The original paper is \citet{banach1922}.  Brouwer's theorem appears
+in \citet{granas2003}, Chapters~6--10, with the original formulation
+in \citet{brouwer1911}.  The Schauder theorem is presented in
+\citet{granas2003}, Chapter~8; the original is
+\citet{schauder1930}.  Kakutani's theorem and its application to game
+theory are in \citet{kakutani1941} and \citet{granas2003},
+Chapter~10.  For the connection to Markov decision processes, see
+\citet{puterman2014}, Chapter~6.  General treatments of fixed point
+theory in functional analysis appear in \citet{brezis2011},
+\citet{rudin1991}, and \citet{dunford1988}.
 
-The map $r$ is continuous, and for $x \in S^{n-1}$, we have
-$\|x\| = 1$ and the ray from $f(x)$ through $x$ hits $S^{n-1}$ at $x$ itself
-(taking $t = 0$), so $r(x) = x$.
+%% ============================================================
+%% SECTION 3: BANACH CONTRACTION MAPPING THEOREM
+%% ============================================================
 
-Thus $r \colon \overline{B}^n \to S^{n-1}$ is a \emph{retraction}: a
-continuous map that is the identity on $S^{n-1}$.
+\section{The Banach Contraction Mapping Theorem}
+\label{sec:banach}
 
-\textbf{Claim:} No such retraction exists. This is the
-``no-retraction theorem,'' which can be proved via:
-\begin{enumerate}[leftmargin=2em]
-    \item \emph{Algebraic topology:} $r$ would induce a surjection
-          $r_* \colon \pi_{n-1}(\overline{B}^n) \to \pi_{n-1}(S^{n-1})$,
-          but $\pi_{n-1}(\overline{B}^n) = 0$ (the ball is contractible)
-          while $\pi_{n-1}(S^{n-1}) \cong \Z$ (for $n \geq 2$), contradiction.
-    \item \emph{Smooth approximation + degree theory:} Approximate $r$ by a
-          smooth map; the degree of the restriction $r|_{S^{n-1}} = \mathrm{id}$
-          is 1, but the degree of any map extending to the ball must be 0.
-    \item \emph{Combinatorial (Sperner's lemma):} Triangulate $\overline{B}^n$
-          and use Sperner's lemma to show that any continuous map satisfying
-          the boundary condition must have a ``completely labeled'' simplex,
-          from which a fixed point is obtained in the limit of refinements.
-\end{enumerate}
-Each approach yields the contradiction. Hence the assumption that $f$ has no
-fixed point is false.
-\end{proof}
-
-\begin{remark}\label{rem:brouwer-nonconstructive}
-Brouwer's theorem is a pure existence result: it gives no algorithm for
-finding the fixed point (in fact, computing Brouwer fixed points is
-PPAD-complete). For algorithmic purposes, the Banach contraction theorem
-is far more useful when it applies.
-\end{remark}
-
-\subsection{Schauder Fixed Point Theorem}
-
-The Schauder theorem generalizes Brouwer's theorem to infinite-dimensional
-spaces. The key idea is to approximate a compact operator by finite-dimensional
-maps and apply Brouwer.
-
-\begin{definition}[Compact Operator]\label{def:compact-op}
-A map $T \colon C \to X$ (where $C \subset X$) is \emph{compact} if $T$ is
-continuous and maps bounded sets to relatively compact sets (i.e., sets whose
-closure is compact).
+\begin{definition}[Contraction Mapping]
+\label{def:contraction}
+Let $(X, d)$ be a metric space.  A map $T \colon X \to X$ is a
+\emph{contraction} (or \emph{contraction mapping}) if there exists a
+constant $\gamma \in [0, 1)$ such that
+\[
+    d(Tx, Ty) \leq \gamma \, d(x, y)
+    \quad \text{for all } x, y \in X.
+\]
+The constant $\gamma$ is called the \emph{contraction factor}
+(or \emph{Lipschitz constant}).  A contraction is automatically
+continuous (in fact, Lipschitz continuous).
 \end{definition}
 
-\begin{theorem}[Schauder Fixed Point Theorem]\label{thm:schauder}
-Let $X$ be a Banach space, $C \subset X$ a nonempty closed bounded convex set,
-and $T \colon C \to C$ a compact map. Then $T$ has a fixed point.
+\begin{remark}
+\label{rem:nonexpansive}
+A map satisfying $d(Tx, Ty) \leq d(x, y)$ (i.e., $\gamma = 1$) is
+called \emph{nonexpansive}.  Nonexpansive maps on complete metric
+spaces need not have fixed points (consider a translation on $\R$),
+and even when they do, iterates need not converge.  The strict
+inequality $\gamma < 1$ is essential for the contraction theorem.
+\end{remark}
+
+\begin{theorem}[Banach Contraction Mapping Theorem]
+\label{thm:banach}
+Let $(X, d)$ be a nonempty complete metric space and
+$T \colon X \to X$ a contraction with factor $\gamma \in [0, 1)$.
+Then:
+\begin{enumerate}[label=(\roman*)]
+    \item $T$ has a unique fixed point $x^* \in X$ (i.e.,
+          $Tx^* = x^*$).
+    \item For any initial point $x_0 \in X$, the iterates
+          $x_{n+1} = Tx_n$ converge to $x^*$.
+    \item The convergence is geometric: for all $n \geq 0$,
+          \[
+              d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma}
+              \, d(x_0, Tx_0).
+          \]
+\end{enumerate}
 \end{theorem}
 
 \begin{proof}
-Since $T(C)$ is relatively compact (as $C$ is bounded and $T$ is compact),
-$K = \overline{T(C)}$ is compact. For each $n \in \N$, cover $K$ by finitely
-many balls of radius $1/n$: there exist $y_1^n, \ldots, y_{k_n}^n \in T(C)$
-with $K \subset \bigcup_{i=1}^{k_n} B(y_i^n, 1/n)$.
-
-Define $C_n = \conv\{y_1^n, \ldots, y_{k_n}^n\} \subset C$ (since $C$ is
-convex and $y_i^n \in T(C) \subset C$). This is a compact convex subset of
-a finite-dimensional subspace.
-
-Define $P_n \colon K \to C_n$ by
+\textbf{Existence and convergence.}
+Fix $x_0 \in X$ and define $x_{n+1} = Tx_n$ for $n \geq 0$.
+By the contraction property applied inductively,
 \[
-    P_n(x) = \frac{\sum_{i=1}^{k_n} \lambda_i^n(x)\, y_i^n}{\sum_{i=1}^{k_n} \lambda_i^n(x)},
-    \quad \text{where } \lambda_i^n(x) = \max\bigl(0, 1/n - \|x - y_i^n\|\bigr).
+    d(x_{n+1}, x_n) = d(Tx_n, Tx_{n-1})
+    \leq \gamma\, d(x_n, x_{n-1})
+    \leq \cdots \leq \gamma^n\, d(x_1, x_0).
 \]
-This is the \emph{Schauder projection}. Note that $\sum_i \lambda_i^n(x) > 0$
-for $x \in K$ (since $K \subset \bigcup_i B(y_i^n, 1/n)$), so $P_n$ is
-well-defined. Moreover, $P_n$ is continuous, maps into $C_n$, and satisfies
-\[
-    \|P_n(x) - x\| \leq 1/n \quad \text{for all } x \in K.
-\]
-To see this: $\lambda_i^n(x) > 0$ only when $\|x - y_i^n\| < 1/n$, so
-$P_n(x)$ is a convex combination of points within distance $1/n$ of $x$,
-hence $\|P_n(x) - x\| < 1/n$.
+For $m > n \geq 0$, the triangle inequality gives
+\begin{align}
+    d(x_m, x_n)
+    &\leq \sum_{k=n}^{m-1} d(x_{k+1}, x_k)
+    \leq \sum_{k=n}^{m-1} \gamma^k\, d(x_1, x_0)
+    \notag\\
+    &\leq \gamma^n \sum_{j=0}^{\infty} \gamma^j\, d(x_1, x_0)
+    = \frac{\gamma^n}{1 - \gamma}\, d(x_1, x_0).
+    \label{eq:cauchy-estimate}
+\end{align}
+Since $\gamma < 1$, the right-hand side tends to $0$ as
+$n \to \infty$, so $(x_n)$ is a Cauchy sequence.  By completeness of
+$X$, there exists $x^* \in X$ with $x_n \to x^*$.
 
-Now consider $T_n = P_n \circ T|_{C_n} \colon C_n \to C_n$. This is a
-continuous self-map of a compact convex subset of a finite-dimensional space.
-By the Brouwer Fixed Point Theorem, there exists $x_n \in C_n$ with
+Since $T$ is Lipschitz (hence continuous),
+\[
+    Tx^* = T\!\left(\lim_{n \to \infty} x_n\right)
+    = \lim_{n \to \infty} Tx_n
+    = \lim_{n \to \infty} x_{n+1}
+    = x^*.
+\]
+
+\textbf{Uniqueness.}
+Suppose $Tx^* = x^*$ and $Ty^* = y^*$.  Then
+$d(x^*, y^*) = d(Tx^*, Ty^*) \leq \gamma\, d(x^*, y^*)$.
+Since $\gamma < 1$, this forces $(1 - \gamma)\, d(x^*, y^*) \leq 0$,
+so $d(x^*, y^*) = 0$ and $x^* = y^*$.
+
+\textbf{Geometric convergence rate.}
+Let $m \to \infty$ in \eqref{eq:cauchy-estimate}:
+\[
+    d(x_n, x^*)
+    = \lim_{m \to \infty} d(x_m, x_n)
+    \leq \frac{\gamma^n}{1 - \gamma}\, d(x_1, x_0)
+    = \frac{\gamma^n}{1 - \gamma}\, d(x_0, Tx_0).
+    \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[title={Banach Contraction Mapping Theorem}]
+In a complete metric space, every contraction $T$ with factor
+$\gamma < 1$ has a \emph{unique} fixed point $x^*$.  Iterating $T$
+from any starting point converges to $x^*$ at the geometric rate
+$d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma}\, d(x_0, Tx_0)$.
+After $n \geq \frac{1}{1 - \gamma} \log \frac{d(x_0, Tx_0)}
+{(1-\gamma)\varepsilon}$ iterations,
+$d(x_n, x^*) \leq \varepsilon$.
+\end{keyresult}
+
+\begin{rlconnection}[title={Value Iteration as a Contraction}]
+Let $\mathcal{S}$ be a finite state space and consider the Banach
+space $(B(\mathcal{S}), \|\cdot\|_\infty)$ of bounded real-valued
+functions on $\mathcal{S}$.  The \textbf{Bellman optimality operator}
+\[
+    (TV)(s) = \max_{a \in \mathcal{A}}
+    \Bigl[ R(s,a) + \gamma \sum_{s'} P(s' \mid s, a)\, V(s') \Bigr]
+\]
+is a $\gamma$-contraction in $\|\cdot\|_\infty$ (this is proved in
+Exercise~\ref{ex:bellman}).  By the Banach contraction theorem:
+\begin{itemize}[nosep]
+    \item There exists a unique $V^*$ with $TV^* = V^*$ (the Bellman
+          equation).
+    \item Value iteration $V_{n+1} = TV_n$ converges to $V^*$ from
+          any initialization.
+    \item The iteration count for $\varepsilon$-optimality is
+          $O\!\left(\frac{1}{1-\gamma}
+          \log \frac{1}{(1-\gamma)\varepsilon}\right)$.
+\end{itemize}
+Policy evaluation ($T^\pi$ instead of $T$) is likewise a contraction,
+so the same guarantees apply.
+\end{rlconnection}
+
+\begin{example}[Picard--Lindelof via Contraction]
+\label{ex:picard}
+Consider the initial value problem $y'(t) = f(t, y(t))$, $y(0) = y_0$,
+where $f$ is Lipschitz in $y$ with constant $L$.  The equivalent
+integral equation $y(t) = y_0 + \int_0^t f(s, y(s))\, ds$ defines an
+operator $T$ on $C([0, h])$ for $h > 0$.  On a sufficiently short
+interval ($h < 1/L$), the operator $T$ is a contraction in
+$\|\cdot\|_\infty$, giving existence and uniqueness of the solution.
+More precisely, by using the weighted norm
+$\|y\|_w = \sup_{t \in [0,h]} e^{-2Lt} |y(t)|$, one can show $T$ is
+a contraction with factor $1/2$ on any interval, thereby recovering
+the global Picard--Lindelof theorem.
+\end{example}
+
+%% ============================================================
+%% SECTION 4: BROUWER FIXED POINT THEOREM
+%% ============================================================
+
+\section{The Brouwer Fixed Point Theorem}
+\label{sec:brouwer}
+
+The Banach contraction theorem requires a quantitative condition
+($\gamma < 1$) that is too strong for many applications.  The Brouwer
+theorem drops the contraction requirement entirely, asking only that
+the map be continuous and the domain be compact and convex.  The price
+is that we lose uniqueness and any constructive iteration scheme.
+
+\begin{theorem}[Brouwer Fixed Point Theorem]
+\label{thm:brouwer}
+Let $C \subseteq \R^n$ be a nonempty compact convex set and
+$f \colon C \to C$ a continuous map.  Then $f$ has a fixed point:
+there exists $x^* \in C$ with $f(x^*) = x^*$.
+\end{theorem}
+
+We prove the theorem for $C = \overline{B}^n = \{x \in \R^n :
+\|x\| \leq 1\}$ (the closed unit ball).  The general case follows
+because every nonempty compact convex subset of $\R^n$ is
+homeomorphic to a closed ball of the appropriate dimension.
+
+The proof proceeds by contradiction, using the no-retraction lemma.
+
+\begin{definition}[Retraction]
+\label{def:retraction}
+Let $A \subseteq X$ be a subspace of a topological space $X$.  A
+\emph{retraction} of $X$ onto $A$ is a continuous map
+$r \colon X \to A$ such that $r(a) = a$ for all $a \in A$.
+\end{definition}
+
+\begin{lemma}[No-Retraction Lemma]
+\label{lem:no-retraction}
+There is no retraction of the closed ball $\overline{B}^n$ onto the
+sphere $S^{n-1} = \{x \in \R^n : \|x\| = 1\}$.
+\end{lemma}
+
+\begin{proof}
+We give the proof for $n = 2$ via a smooth approximation and degree
+argument; the general case is analogous.
+
+Suppose $r \colon \overline{B}^2 \to S^1$ is a retraction.  By the
+Weierstrass approximation theorem, $r$ can be uniformly approximated
+by smooth maps.  Composing with the normalization map
+$x \mapsto x / \|x\|$ (which is smooth away from the origin), one
+obtains a smooth map $\tilde{r} \colon \overline{B}^2 \to S^1$ with
+$\tilde{r}|_{S^1}$ homotopic to the identity on $S^1$.
+
+The \emph{degree} of the identity map $\mathrm{id} \colon S^1 \to S^1$
+is $1$.  However, any smooth map $\overline{B}^2 \to S^1$ that
+extends to the whole disk must have degree $0$ on the boundary
+(since the disk is contractible, any map from it to $S^1$ can be
+lifted to a map into $\R$, and such lifted maps have winding number
+$0$).
+
+Since $\tilde{r}|_{S^1}$ is homotopic to $\mathrm{id}_{S^1}$ (which
+has degree $1$) but must have degree $0$, we reach a contradiction.
+Hence no such retraction exists.
+\end{proof}
+
+\begin{proof}[Proof of the Brouwer Fixed Point Theorem
+  (Theorem~\ref{thm:brouwer})]
+Suppose for contradiction that $f(x) \neq x$ for all
+$x \in \overline{B}^n$.  For each $x \in \overline{B}^n$, consider
+the ray starting at $f(x)$ and passing through $x$.  Since
+$f(x) \neq x$, this ray is well-defined.  Let $r(x)$ be the unique
+point where this ray intersects the sphere $S^{n-1}$ on the side of
+$x$ (i.e., $r(x) = x + t(x - f(x))$ for the unique $t \geq 0$ with
+$\|r(x)\| = 1$).
+
+\textbf{Continuity of $r$.}
+The parameter $t = t(x)$ is determined by the equation
+$\|x + t(x - f(x))\|^2 = 1$, which expands to a quadratic in $t$
+with coefficients depending continuously on $x$ (since $f$ is
+continuous).  The discriminant is strictly positive (because $f(x)
+\neq x$ guarantees the ray from $f(x)$ through $x$ exits the ball),
+so $t(x)$ is a continuous function of $x$ by the continuous
+dependence of roots of polynomials on their coefficients.  Hence $r$
+is continuous.
+
+\textbf{$r$ is a retraction.}
+For $x \in S^{n-1}$, we have $\|x\| = 1$, so $t = 0$ satisfies
+$\|x + 0 \cdot (x - f(x))\| = \|x\| = 1$.  Thus $r(x) = x$ for all
+$x \in S^{n-1}$.
+
+Therefore $r \colon \overline{B}^n \to S^{n-1}$ is a retraction,
+contradicting Lemma~\ref{lem:no-retraction}.  The assumption that $f$
+has no fixed point must be false.
+\end{proof}
+
+\begin{remark}
+\label{rem:brouwer-nonconstructive}
+The Brouwer theorem is a pure existence result and provides no
+algorithm for finding the fixed point.  Computing approximate Brouwer
+fixed points is PPAD-complete---widely believed to be intractable.
+When the contraction structure of the Banach theorem is available, it
+provides the far more useful algorithmic guarantee.
+\end{remark}
+
+\begin{rlconnection}[title={Stationary Distributions via Brouwer}]
+Let $P$ be the transition matrix of a Markov chain on a finite state
+space $\mathcal{S}$ with $|\mathcal{S}| = n$.  A stationary
+distribution is a vector $\mu \in \Delta_n$ (the probability simplex)
+satisfying $\mu^\top P = \mu^\top$.  Equivalently, $\mu$ is a fixed
+point of the map $f(\mu) = \mu^\top P$ restricted to $\Delta_n$.
+Since $\Delta_n$ is a nonempty compact convex subset of $\R^n$ and
+$f$ is linear (hence continuous) with $f(\Delta_n) \subseteq
+\Delta_n$ (the image of a probability vector under a stochastic
+matrix is again a probability vector), the Brouwer theorem guarantees
+the existence of at least one stationary distribution.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: SCHAUDER FIXED POINT THEOREM
+%% ============================================================
+
+\section{The Schauder Fixed Point Theorem}
+\label{sec:schauder}
+
+In infinite-dimensional Banach spaces, the closed unit ball is not
+compact (by Riesz's lemma), so the Brouwer theorem does not directly
+apply.  The Schauder theorem overcomes this obstacle by requiring the
+map to be \emph{compact}---a condition that recovers enough
+finite-dimensional structure to invoke Brouwer.
+
+\begin{definition}[Compact Operator]
+\label{def:compact-op}
+Let $X$ be a Banach space and $C \subseteq X$.  A map
+$T \colon C \to X$ is \emph{compact} if $T$ is continuous and maps
+bounded subsets of $C$ to relatively compact subsets of $X$ (i.e.,
+subsets whose closure is compact).
+\end{definition}
+
+\begin{remark}
+\label{rem:compact-finite-rank}
+Every continuous map with finite-dimensional range is compact (since
+bounded subsets of finite-dimensional spaces are relatively compact).
+Compact operators are the ``next best thing'' to
+finite-dimensional operators, and they arise naturally as integral
+operators with continuous kernels (by the Arzela--Ascoli theorem).
+\end{remark}
+
+\begin{theorem}[Schauder Fixed Point Theorem]
+\label{thm:schauder}
+Let $X$ be a Banach space, $C \subseteq X$ a nonempty closed bounded
+convex set, and $T \colon C \to C$ a compact map.  Then $T$ has a
+fixed point.
+\end{theorem}
+
+\begin{proof}
+Since $T$ is compact and $C$ is bounded, the set $K = \overline{T(C)}$
+is compact.  We approximate $T$ by finite-dimensional maps and apply
+the Brouwer theorem.
+
+\textbf{Step 1: Schauder projections.}
+For each $n \in \N$, cover $K$ by finitely many open balls of radius
+$1/n$: there exist points $y_1^{(n)}, \ldots, y_{k_n}^{(n)} \in T(C)$
+such that $K \subseteq \bigcup_{i=1}^{k_n} B(y_i^{(n)}, 1/n)$.
+Define the weight functions
+\[
+    \lambda_i^{(n)}(x)
+    = \max\!\bigl(0,\; 1/n - \|x - y_i^{(n)}\|\bigr),
+    \qquad i = 1, \ldots, k_n.
+\]
+For $x \in K$, at least one ball covers $x$, so
+$\sum_{i=1}^{k_n} \lambda_i^{(n)}(x) > 0$.  The
+\emph{Schauder projection} $P_n \colon K \to X$ is
+\[
+    P_n(x)
+    = \frac{\sum_{i=1}^{k_n} \lambda_i^{(n)}(x)\, y_i^{(n)}}
+           {\sum_{i=1}^{k_n} \lambda_i^{(n)}(x)}.
+\]
+Then $P_n$ is continuous, its range lies in
+$C_n = \conv\{y_1^{(n)}, \ldots, y_{k_n}^{(n)}\} \subseteq C$ (since
+$C$ is convex and $y_i^{(n)} \in T(C) \subseteq C$), and
+\begin{equation}
+\label{eq:schauder-approx}
+    \|P_n(x) - x\| < 1/n
+    \quad \text{for all } x \in K.
+\end{equation}
+Indeed, $\lambda_i^{(n)}(x) > 0$ only when
+$\|x - y_i^{(n)}\| < 1/n$, so $P_n(x)$ is a convex combination of
+points within distance $1/n$ of $x$.
+
+\textbf{Step 2: Finite-dimensional fixed points.}
+The set $C_n$ is a compact convex subset of a finite-dimensional
+subspace of $X$.  Define $T_n \colon C_n \to C_n$ by
+$T_n = P_n \circ T|_{C_n}$.  This is a continuous self-map of a
+compact convex set in finite dimensions.  By the Brouwer Fixed Point
+Theorem~\ref{thm:brouwer}, there exists $x_n \in C_n$ with
 $T_n(x_n) = x_n$, i.e.,
 \[
     x_n = P_n(Tx_n).
 \]
-Then $\|x_n - Tx_n\| = \|P_n(Tx_n) - Tx_n\| < 1/n$.
+By~\eqref{eq:schauder-approx},
+$\|x_n - Tx_n\| = \|P_n(Tx_n) - Tx_n\| < 1/n$.
 
-Since $(x_n)$ is a sequence in $C$ and $T$ is compact, $(Tx_n)$ has a
-convergent subsequence. Along this subsequence, $x_n - Tx_n \to 0$ and
-$Tx_n \to y$, so $x_n \to y$ as well. Since $C$ is closed, $y \in C$.
-By continuity of $T$: $Ty = \lim T(x_n) = y$.
+\textbf{Step 3: Passing to the limit.}
+The sequence $(x_n)_{n \geq 1}$ lies in $C$ (which is bounded), so
+$(Tx_n)_{n \geq 1}$ lies in $T(C)$, whose closure $K$ is compact.
+Hence $(Tx_n)$ has a convergent subsequence, say
+$Tx_{n_j} \to y \in K$.  Since
+$\|x_{n_j} - Tx_{n_j}\| < 1/n_j \to 0$, we also have
+$x_{n_j} \to y$.  Since $C$ is closed, $y \in C$.  By continuity
+of $T$,
+\[
+    Ty = T\!\left(\lim_{j \to \infty} x_{n_j}\right)
+    = \lim_{j \to \infty} Tx_{n_j} = y.
+    \qedhere
+\]
 \end{proof}
 
-\begin{remark}\label{rem:schauder-variants}
-There are several variants of Schauder's theorem. The version above
-(sometimes called the Schauder--Tychonoff theorem for the compact convex
-set case) is the most commonly used. A more general version states:
-if $C$ is a nonempty convex subset of a Banach space (not necessarily closed
-or bounded) and $T \colon C \to C$ is continuous with $T(C)$ relatively
-compact, then $T$ has a fixed point. The proof is similar.
+\begin{remark}
+\label{rem:schauder-variants}
+A more general version states: if $C$ is a nonempty convex subset of
+a Banach space (not necessarily closed or bounded) and
+$T \colon C \to C$ is continuous with $T(C)$ relatively compact, then
+$T$ has a fixed point.  The proof is similar---the closure of $T(C)$
+is compact, and the argument of Steps 1--3 applies with minor
+modifications.
 \end{remark}
 
-\subsection{Kakutani Fixed Point Theorem}
+\begin{rlconnection}[title={Schauder and Continuous MDPs}]
+In continuous-state MDPs, the state space $\mathcal{S}$ is a compact
+subset of $\R^d$ and value functions live in the Banach space
+$C(\mathcal{S})$.  When the transition kernel has a continuous
+density, the Bellman evaluation operator $T^\pi$ maps bounded sets of
+continuous functions to equicontinuous families (by the integral
+smoothing effect), so $T^\pi$ is compact by the Arzela--Ascoli
+theorem.  The Schauder theorem then guarantees the existence of a
+fixed point $V^\pi \in C(\mathcal{S})$---the value function of
+policy $\pi$.  When the discount factor $\gamma < 1$, the Banach
+contraction theorem also applies and gives the stronger conclusion of
+uniqueness and geometric convergence; the Schauder theorem is
+relevant in undiscounted settings where the contraction property
+fails.
+\end{rlconnection}
 
-\begin{definition}[Set-Valued Map / Correspondence]\label{def:set-valued}
-A \emph{set-valued map} (or \emph{correspondence}) from a set $X$ to a set $Y$
-is a map $\Phi \colon X \rightrightarrows Y$ that assigns to each $x \in X$
-a subset $\Phi(x) \subset Y$. A \emph{fixed point} of $\Phi \colon X
-\rightrightarrows X$ is a point $x^*$ with $x^* \in \Phi(x^*)$.
+%% ============================================================
+%% SECTION 6: KAKUTANI FIXED POINT THEOREM
+%% ============================================================
+
+\section{The Kakutani Fixed Point Theorem}
+\label{sec:kakutani}
+
+The Brouwer and Schauder theorems apply to single-valued maps.  In
+game theory and mathematical economics, one frequently encounters
+\emph{set-valued maps} (correspondences), such as the best-response
+correspondence that assigns to each opponent strategy profile the set
+of optimal strategies.  Kakutani's theorem extends Brouwer's result to
+this setting.
+
+\begin{definition}[Set-Valued Map / Correspondence]
+\label{def:correspondence}
+A \emph{set-valued map} (or \emph{correspondence}) from a set $X$ to
+a set $Y$ is a map $\Phi \colon X \rightrightarrows Y$ that assigns
+to each $x \in X$ a subset $\Phi(x) \subseteq Y$.  A \emph{fixed
+point} of $\Phi \colon X \rightrightarrows X$ is a point $x^*$ with
+$x^* \in \Phi(x^*)$.
 \end{definition}
 
-\begin{definition}[Upper Hemicontinuity]\label{def:uhc}
-A set-valued map $\Phi \colon X \rightrightarrows Y$ between topological
-spaces is \emph{upper hemicontinuous} (u.h.c.) if for every open set
-$V \subset Y$, the set $\{x \in X : \Phi(x) \subset V\}$ is open in $X$.
-Equivalently (when $Y$ is compact): if $x_n \to x$ and $y_n \in \Phi(x_n)$
-with $y_n \to y$, then $y \in \Phi(x)$ (closed graph property when the
-image sets are compact).
+\begin{definition}[Upper Hemicontinuity]
+\label{def:uhc}
+A set-valued map $\Phi \colon X \rightrightarrows Y$ between
+topological spaces is \emph{upper hemicontinuous} (u.h.c.) if for
+every open set $V \subseteq Y$, the upper inverse
+$\Phi^+(V) = \{x \in X : \Phi(x) \subseteq V\}$ is open in $X$.
+
+Equivalently, when $X$ and $Y$ are metric spaces and $\Phi$ has
+compact values: $\Phi$ is u.h.c.\ if and only if it has a closed
+graph, meaning that $x_n \to x$, $y_n \in \Phi(x_n)$, and
+$y_n \to y$ together imply $y \in \Phi(x)$.
 \end{definition}
 
-\begin{theorem}[Kakutani Fixed Point Theorem]\label{thm:kakutani}
-Let $C \subset \R^n$ be a nonempty compact convex set and
-$\Phi \colon C \rightrightarrows C$ a set-valued map such that:
+\begin{remark}
+\label{rem:lhc}
+A correspondence is \emph{lower hemicontinuous} if for every open
+$V \subseteq Y$, the lower inverse
+$\Phi^-(V) = \{x \in X : \Phi(x) \cap V \neq \emptyset\}$ is open.
+Kakutani's theorem requires upper hemicontinuity; lower
+hemicontinuity is not needed.
+\end{remark}
+
+\begin{theorem}[Kakutani Fixed Point Theorem]
+\label{thm:kakutani}
+Let $C \subseteq \R^n$ be a nonempty compact convex set and
+$\Phi \colon C \rightrightarrows C$ a set-valued map satisfying:
 \begin{enumerate}[label=(\roman*)]
-    \item $\Phi(x)$ is nonempty and convex for every $x \in C$.
+    \item For every $x \in C$, the set $\Phi(x)$ is nonempty and
+          convex.
     \item $\Phi$ is upper hemicontinuous.
 \end{enumerate}
 Then $\Phi$ has a fixed point: there exists $x^* \in C$ with
@@ -345,324 +554,375 @@ $x^* \in \Phi(x^*)$.
 \end{theorem}
 
 \begin{proof}
-We prove this by approximation with single-valued maps and application of
-Brouwer's theorem.
+We reduce to the Brouwer theorem by approximating $\Phi$ with
+continuous single-valued maps.
 
 \textbf{Step 1: Approximate selections.}
-For each $k \in \N$, we construct a continuous function
-$f_k \colon C \to C$ such that the graph of $f_k$ is ``close'' to the
-graph of $\Phi$.
+For each $k \in \N$, since $C$ is compact, we can cover it by finitely
+many open balls $\{B(x_i, 1/k)\}_{i=1}^{m_k}$ with centers
+$x_i \in C$.  Let $\{\lambda_i\}_{i=1}^{m_k}$ be a continuous
+partition of unity subordinate to this cover, i.e., each
+$\lambda_i \colon C \to [0,1]$ is continuous,
+$\supp(\lambda_i) \subseteq B(x_i, 1/k)$, and
+$\sum_{i=1}^{m_k} \lambda_i(x) = 1$ for all $x \in C$.
 
-For each $k$, cover $C$ by finitely many open balls $B(x_i, 1/k)$,
-$i = 1, \ldots, m_k$, with $x_i \in C$. Let $\{\lambda_i\}$ be a partition
-of unity subordinate to this cover. For each $i$, pick any
-$y_i \in \Phi(x_i)$. Define
+For each $i$, choose any $y_i \in \Phi(x_i)$ (possible since
+$\Phi(x_i)$ is nonempty).  Define the continuous function
 \[
-    f_k(x) = \sum_{i=1}^{m_k} \lambda_i(x) \, y_i.
+    f_k(x) = \sum_{i=1}^{m_k} \lambda_i(x)\, y_i.
 \]
-This is continuous, and $f_k(x) \in C$ since $y_i \in C$ and $C$ is convex.
+Since each $y_i \in C$ and $C$ is convex, $f_k(x)$ is a convex
+combination of points in $C$, so $f_k \colon C \to C$.
 
-\textbf{Step 2: Apply Brouwer.}
-By Brouwer's Fixed Point Theorem, each $f_k$ has a fixed point
+\textbf{Step 2: Apply the Brouwer theorem.}
+By Theorem~\ref{thm:brouwer}, each $f_k$ has a fixed point
 $x_k \in C$ with $f_k(x_k) = x_k$.
 
 \textbf{Step 3: Pass to the limit.}
-Since $C$ is compact, $(x_k)$ has a convergent subsequence $x_{k_j} \to x^*$.
-We claim $x^* \in \Phi(x^*)$.
+Since $C$ is compact, $(x_k)$ has a convergent subsequence.  Passing
+to this subsequence (still denoted $(x_k)$), let $x_k \to x^*$.  We
+show $x^* \in \Phi(x^*)$.
 
-Fix $\varepsilon > 0$. Since $\Phi$ is u.h.c.\ and $\Phi(x^*)$ is convex
-(hence, being a convex compact subset of $\R^n$, it equals the intersection
-of all open convex sets containing it), let $V$ be an open convex set with
-$\Phi(x^*) \subset V$. By upper hemicontinuity, $\{x : \Phi(x) \subset V\}$
-is open and contains $x^*$, so for large $j$, $\Phi(x_{k_j}) \subset V$
-and $\|x_{k_j} - x^*\| < \varepsilon$.
+Let $V$ be any open convex set with $\Phi(x^*) \subseteq V$.  By
+upper hemicontinuity, $\Phi^+(V) = \{x \in C : \Phi(x) \subseteq V\}$
+is open and contains $x^*$.  Since $x_k \to x^*$, for all
+sufficiently large $k$:
+\begin{itemize}[nosep]
+    \item $x_k \in \Phi^+(V)$, so $\Phi(x_k) \subseteq V$.
+    \item $\|x_k - x^*\| < 1/k$.
+\end{itemize}
+For such large $k$, if $\lambda_i(x_k) > 0$ then
+$\|x_k - x_i\| < 1/k$, hence $\|x_i - x^*\| < 2/k$.  For $k$
+large enough, $x_i$ lies in $\Phi^+(V)$ as well, so
+$\Phi(x_i) \subseteq V$, and in particular $y_i \in V$.
 
-For large $k_j > 1/\varepsilon$: $\lambda_i(x_{k_j}) > 0$ only when
-$\|x_{k_j} - x_i\| < 1/k_j < \varepsilon$, so $\|x_i - x^*\| < 2\varepsilon$.
-For such $i$, when $j$ is large enough, $x_i$ is close to $x^*$, so
-$\Phi(x_i) \subset V$ (by upper hemicontinuity), hence $y_i \in V$.
-Then $f_{k_j}(x_{k_j}) = x_{k_j}$ is a convex combination of $y_i$'s in $V$.
-Since $V$ is convex, $x_{k_j} \in V$.
+Therefore $x_k = f_k(x_k) = \sum_i \lambda_i(x_k)\, y_i$ is a convex
+combination of points $y_i \in V$.  Since $V$ is convex, $x_k \in V$.
 
-Since $V$ was an arbitrary open convex neighborhood of $\Phi(x^*)$, and
-$x_{k_j} \to x^*$, we get $x^* \in \overline{V}$ for every such $V$.
-Since $\Phi(x^*)$ is compact and convex,
-$x^* \in \bigcap \{\overline{V} : V \supset \Phi(x^*), V \text{ open convex}\}
-= \Phi(x^*)$.
+Since this holds for every open convex $V \supseteq \Phi(x^*)$ and
+$x_k \to x^*$, we conclude $x^* \in \overline{V}$ for every such $V$.
+Because $\Phi(x^*)$ is compact and convex,
+\[
+    x^* \in \bigcap
+    \bigl\{\overline{V} : V \supseteq \Phi(x^*),\;
+    V \text{ open and convex}\bigr\}
+    = \Phi(x^*).
+    \qedhere
+\]
 \end{proof}
 
-\begin{rlconnection}[Nash Equilibrium Existence via Kakutani]
-Consider a finite $n$-player game. Player $i$ has a finite action set $A_i$
-and a payoff function $u_i \colon \prod_j A_j \to \R$. A \emph{mixed strategy}
-for player $i$ is a probability distribution $\sigma_i \in \Delta(A_i)$
-(the simplex over $A_i$).
-
-The \textbf{best-response correspondence} of player $i$ is
+\begin{rlconnection}[title={Nash Equilibrium Existence via Kakutani}]
+Consider a finite $n$-player game.  Player $i$ has a finite action
+set $A_i$ and a payoff function $u_i \colon \prod_{j=1}^n A_j \to \R$.
+A \emph{mixed strategy} for player $i$ is $\sigma_i \in \Delta(A_i)$
+(the simplex of probability distributions over $A_i$).  The
+\emph{best-response correspondence} of player $i$ is
 \[
-    BR_i(\sigma_{-i}) = \arg\max_{\sigma_i \in \Delta(A_i)}
-    \sum_{a \in A} \Bigl(\prod_j \sigma_j(a_j)\Bigr) u_i(a).
+    BR_i(\sigma_{-i})
+    = \argmax_{\sigma_i \in \Delta(A_i)}
+    \sum_{a \in A} \biggl(\prod_{j=1}^n \sigma_j(a_j)\biggr) u_i(a),
 \]
-Define the joint best-response $\Phi(\sigma) = \prod_i BR_i(\sigma_{-i})$
-on $C = \prod_i \Delta(A_i)$, which is a nonempty compact convex set in
-$\R^{\sum_i |A_i|}$.
+where $\sigma_{-i} = (\sigma_j)_{j \neq i}$.  Define the joint
+best-response $\Phi(\sigma) = \prod_{i=1}^n BR_i(\sigma_{-i})$ on the
+compact convex set $C = \prod_{i=1}^n \Delta(A_i)$.
 
 One verifies:
-\begin{enumerate}[leftmargin=2em]
-    \item Each $BR_i(\sigma_{-i})$ is nonempty and convex (it is the set of
-          maximizers of a linear function over a simplex).
-    \item $\Phi$ is upper hemicontinuous (by Berge's Maximum Theorem: the
-          payoff is continuous and the constraint set is constant).
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item Each $BR_i(\sigma_{-i})$ is nonempty and convex (it is the
+          set of maximizers of a linear function over a simplex).
+    \item $\Phi$ is upper hemicontinuous (by the Berge Maximum
+          Theorem: the objective is continuous and the constraint set
+          is constant).
 \end{enumerate}
 
-By Kakutani's theorem, $\Phi$ has a fixed point $\sigma^*$, which is
-precisely a \textbf{Nash equilibrium}: every player is best-responding to the
-others. This is the original proof by Nash (1950).
+By Kakutani's theorem, $\Phi$ has a fixed point $\sigma^*$, which
+is precisely a \textbf{Nash equilibrium}: every player is
+best-responding to the others.  This is the original proof of
+\citet{kakutani1941} as applied by Nash (1950).
 \end{rlconnection}
 
-\begin{remark}\label{rem:fixed-point-hierarchy}
-The fixed point theorems form a hierarchy:
-\[
-    \text{Banach} \subset \text{Brouwer} \subset \text{Schauder}
-    \quad \text{and} \quad
-    \text{Brouwer} \subset \text{Kakutani}.
-\]
-Banach gives uniqueness and algorithms (iterative computation);
-Brouwer/Schauder/Kakutani give only existence. The choice depends on the
-structure available:
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-\textbf{Theorem} & \textbf{Setting} & \textbf{Gives} \\
-\midrule
-Banach & Complete metric, contraction & Unique FP + algorithm \\
-Brouwer & Compact convex $\subset \R^n$, continuous & Existence \\
-Schauder & Bounded closed convex, compact map & Existence \\
-Kakutani & Compact convex $\subset \R^n$, u.h.c.\ correspondence & Existence \\
-\bottomrule
-\end{tabular}
-\end{center}
-\end{remark}
+%% ============================================================
+%% SECTION 7: HIERARCHY OF FIXED POINT THEOREMS
+%% ============================================================
 
+\section{Hierarchy and Comparison}
+\label{sec:hierarchy}
 
-%% ============================================================================
-%% SECTION 9: EXERCISES
-%% ============================================================================
-
-\section{Exercises}\label{sec:exercises}
-
-\begin{exercise}[Parallelogram Law Characterization]\label{ex:parallelogram}
-Let $(X, \|\cdot\|)$ be a normed space satisfying the parallelogram law:
-$\|x + y\|^2 + \|x - y\|^2 = 2(\|x\|^2 + \|y\|^2)$ for all $x, y \in X$.
-Show that the formula
-\[
-    \langle x, y \rangle = \frac{1}{4}(\|x+y\|^2 - \|x-y\|^2)
-\]
-defines an inner product on $X$ whose induced norm equals $\|\cdot\|$.
-\emph{Hint:} Verify additivity $\langle x + z, y \rangle = \langle x, y \rangle
-+ \langle z, y \rangle$ first for $z = x$, then for $z = y$, extend to
-rational scalars, then use continuity.
-\end{exercise}
-
-\begin{exercise}[Non-Inner-Product Spaces]\label{ex:non-ip}
-Show that $\ell^1$ and $\ell^\infty$ do not satisfy the parallelogram law,
-and therefore are not inner product spaces. Find explicit vectors $x, y$
-witnessing the failure.
-\end{exercise}
-
-\begin{exercise}[Orthogonal Projection Computation]\label{ex:proj-computation}
-Let $H = L^2([0, 1])$ and $M = \spn\{1, t, t^2\}$ (polynomials of degree
-$\leq 2$). Compute the orthogonal projection of $f(t) = e^t$ onto $M$ using:
-\begin{enumerate}[label=(\alph*)]
-    \item The Gram--Schmidt process applied to $\{1, t, t^2\}$.
-    \item The normal equations $\langle f - Pf, g \rangle = 0$ for all $g \in M$.
-\end{enumerate}
-\end{exercise}
-
-\begin{exercise}[Riesz Representation and Gradient]\label{ex:riesz-gradient}
-Let $f \colon \R^n \to \R$ be differentiable. The derivative $Df(x)$ at a
-point $x$ is a bounded linear functional on $\R^n$. Use the Riesz
-Representation Theorem to show that there exists a unique $\nabla f(x) \in \R^n$
-such that $Df(x)[h] = \langle \nabla f(x), h \rangle$ for all $h \in \R^n$.
-This justifies calling $\nabla f(x)$ ``the gradient.'' How does the gradient
-depend on the choice of inner product?
-\end{exercise}
-
-\begin{exercise}[Banach Contraction and Successive Approximation]\label{ex:banach-ode}
-Consider the integral equation $x(t) = \int_0^t K(t,s) x(s)\, ds + g(t)$ on
-$C[0, 1]$ with $\|K\|_\infty \leq M$. Show that the operator
-$T(x)(t) = \int_0^t K(t,s) x(s)\, ds + g(t)$ may not be a contraction in
-$\|\cdot\|_\infty$, but $T^n$ is a contraction for large $n$, and deduce
-that $T$ has a unique fixed point. \emph{Hint:} Show
-$\|T^n x - T^n y\|_\infty \leq \frac{(Mt)^n}{n!} \|x - y\|_\infty$
-and use the fact that a map with a contractive iterate has a unique fixed point.
-\end{exercise}
-
-\begin{exercise}[Bellman Operator is a Contraction]\label{ex:bellman-contraction}
-Let $\mathcal{S}$ and $\mathcal{A}$ be finite sets, $R \colon \mathcal{S}
-\times \mathcal{A} \to \R$ a reward function, $P(\cdot | s, a)$ a transition
-kernel, and $\gamma \in (0, 1)$ a discount factor. Define the Bellman
-optimality operator $T$ on $V(\mathcal{S})$ (bounded real-valued functions on
-$\mathcal{S}$ with the sup norm) by
-\[
-    (TV)(s) = \max_{a \in \mathcal{A}}\Bigl[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s')\Bigr].
-\]
-\begin{enumerate}[label=(\alph*)]
-    \item Prove that $T$ is a $\gamma$-contraction:
-          $\|TV - TW\|_\infty \leq \gamma \|V - W\|_\infty$.
-          \emph{Hint:} For each $s$, let $a^*$ achieve the max for $TV(s)$;
-          then bound $TV(s) - TW(s) \leq \gamma \sum_{s'} P(s'|s,a^*)|V(s') - W(s')|$.
-    \item Deduce from the Banach contraction theorem that value iteration
-          converges geometrically and that $V^*$ is the unique solution of
-          the Bellman equation.
-    \item How many iterations are needed to guarantee
-          $\|V_n - V^*\|_\infty \leq \varepsilon$?
-\end{enumerate}
-\end{exercise}
-
-\begin{exercise}[Closed Graph Theorem Application]\label{ex:closed-graph-app}
-Let $H$ be a Hilbert space and $T \colon H \to H$ a linear operator satisfying
-$\langle Tx, y \rangle = \langle x, Ty \rangle$ for all $x, y \in H$.
-Use the Closed Graph Theorem to show that $T$ is bounded.
-\emph{Hint:} Show that $T$ has a closed graph by using the symmetry condition
-to identify the limit.
-\end{exercise}
-
-\begin{exercise}[Uniform Boundedness Application]\label{ex:ubp-app}
-Let $(f_n)$ be a sequence in $H^*$ (the dual of a Hilbert space $H$) such
-that $\sum_{n=1}^\infty |f_n(x)|^2 < \infty$ for every $x \in H$. Show that
-$\sup_n \|f_n\| < \infty$.
-\emph{Hint:} The partial sums $S_N(x) = \sum_{n=1}^N |f_n(x)|^2$ are
-pointwise bounded; apply the Uniform Boundedness Principle to appropriate
-operators.
-\end{exercise}
-
-\begin{exercise}[Kakutani and Two-Player Zero-Sum Games]\label{ex:kakutani-zerosum}
-Let $A \in \R^{m \times n}$ be a payoff matrix for a two-player zero-sum game.
-Player 1 chooses $p \in \Delta_m$ (the $m$-simplex) and Player 2 chooses
-$q \in \Delta_n$, with payoff $p^\top A q$ to Player 1.
-\begin{enumerate}[label=(\alph*)]
-    \item Define the best-response correspondences $BR_1(q)$ and $BR_2(p)$.
-    \item Verify the hypotheses of Kakutani's theorem for the joint
-          best-response $\Phi(p,q) = BR_1(q) \times BR_2(p)$ on
-          $\Delta_m \times \Delta_n$.
-    \item Conclude that a Nash equilibrium (saddle point) exists and relate
-          this to the minimax theorem.
-\end{enumerate}
-\end{exercise}
-
-\begin{exercise}[Schauder Theorem Application]\label{ex:schauder-app}
-Let $K \colon [0,1] \times [0,1] \to \R$ be continuous and define
-$T \colon C[0,1] \to C[0,1]$ by $(Tf)(t) = \int_0^1 K(t,s) f(s)\, ds$.
-\begin{enumerate}[label=(\alph*)]
-    \item Show that $T$ maps the closed ball
-          $\overline{B}(0, R) \subset C[0,1]$ into itself for
-          $R \geq \|K\|_\infty \cdot R$ (choose $R$ appropriately).
-    \item Show that $T(\overline{B}(0, R))$ is equicontinuous (use uniform
-          continuity of $K$).
-    \item Apply the Arzel\`{a}--Ascoli theorem to conclude $T$ is compact.
-    \item Apply Schauder's theorem to find a fixed point.
-\end{enumerate}
-\end{exercise}
-
-
-%% ============================================================================
-%% SECTION 10: SUMMARY
-%% ============================================================================
-
-\section{Summary of Key Results}\label{sec:summary}
+The four fixed point theorems form a natural hierarchy, summarized in
+the following table.
 
 \begin{center}
 \small
-\begin{tabular}{p{4.0cm} p{5.5cm} p{4.5cm}}
+\begin{tabular}{llll}
 \toprule
-\textbf{Result} & \textbf{Statement (Informal)} & \textbf{RL/ML Connection} \\
+\textbf{Theorem} & \textbf{Setting} & \textbf{Map requirement}
+    & \textbf{Conclusion} \\
 \midrule
-Cauchy--Schwarz (Thm.~\ref{thm:cauchy-schwarz})
-    & $|\langle x,y \rangle| \leq \|x\|\|y\|$
-    & Bounds on correlations; kernel evaluations \\
-\addlinespace
-Parallelogram Law (Thm.~\ref{thm:parallelogram})
-    & $\|x+y\|^2 + \|x-y\|^2 = 2(\|x\|^2 + \|y\|^2)$
-    & Characterizes inner product spaces \\
-\addlinespace
-Projection Theorem (Thm.~\ref{thm:projection})
-    & $H = M \oplus M^\perp$ for closed $M$
-    & LSTD projection; least-squares approximation \\
-\addlinespace
-Bessel's Inequality (Thm.~\ref{thm:bessel})
-    & $\sum |\langle x, e_n \rangle|^2 \leq \|x\|^2$
-    & Energy bounds for Fourier coefficients \\
-\addlinespace
-Parseval's Identity (Thm.~\ref{thm:parseval})
-    & $\|x\|^2 = \sum |\langle x, e_n \rangle|^2$ for ONB
-    & Isometry between signal and coefficient spaces \\
-\addlinespace
-Riesz Representation (Thm.~\ref{thm:riesz})
-    & Every $f \in H^*$ is $\langle \cdot, y \rangle$
-    & RKHS theory; gradient = Riesz representative \\
-\addlinespace
-Hahn--Banach (Thm.~\ref{thm:hahn-banach})
-    & Linear functionals extend with norm preserved
-    & Dual characterizations; separation theorems \\
-\addlinespace
-Uniform Boundedness (Thm.~\ref{thm:ubp})
-    & Pointwise bounded $\Rightarrow$ uniformly bounded
-    & Convergence of operator sequences \\
-\addlinespace
-Open Mapping (Thm.~\ref{thm:open-mapping})
-    & Surjective bounded linear maps are open
-    & Bounded inverse theorem \\
-\addlinespace
-Closed Graph (Thm.~\ref{thm:closed-graph})
-    & Closed graph $\Leftrightarrow$ bounded (Banach spaces)
-    & Proving operator continuity \\
-\addlinespace
-Banach Contraction (Thm.~\ref{thm:banach-contraction})
-    & Contraction has unique FP; iterates converge at rate $\gamma^n$
-    & Value iteration; policy evaluation; $Q$-learning \\
-\addlinespace
-Brouwer FPT (Thm.~\ref{thm:brouwer})
-    & Continuous self-map of compact convex set has FP
-    & Existence results in finite dimensions \\
-\addlinespace
-Schauder FPT (Thm.~\ref{thm:schauder})
-    & Compact self-map of closed bounded convex set has FP
-    & Existence of solutions to integral equations \\
-\addlinespace
-Kakutani FPT (Thm.~\ref{thm:kakutani})
-    & u.h.c.\ convex-valued correspondence has FP
-    & Nash equilibrium existence \\
+Banach & Complete metric space
+    & Contraction ($\gamma < 1$)
+    & Unique FP + algorithm \\
+Brouwer & Compact convex $\subseteq \R^n$
+    & Continuous, single-valued
+    & Existence \\
+Schauder & Closed bdd.\ convex in Banach sp.
+    & Compact (continuous + bdd $\to$ rel.\ cpt.)
+    & Existence \\
+Kakutani & Compact convex $\subseteq \R^n$
+    & u.h.c., convex-valued corresp.
+    & Existence \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\bigskip
+\begin{remark}
+\label{rem:hierarchy}
+The logical dependencies are:
+\[
+    \text{Brouwer} \;\xrightarrow{\text{compact approx.}}\;
+    \text{Schauder}
+    \qquad \text{and} \qquad
+    \text{Brouwer} \;\xrightarrow{\text{approx.\ selections}}\;
+    \text{Kakutani}.
+\]
+The Banach theorem is independent of the others: it uses completeness
+and a metric contraction condition, while the topological theorems
+use compactness and convexity.  The Banach theorem gives uniqueness
+and an algorithm; the others give only existence.
+\end{remark}
 
-\noindent\textbf{Key Takeaways:}
-\begin{enumerate}[leftmargin=2em]
-    \item \textbf{Inner products provide geometry.} The Cauchy--Schwarz
-          inequality, projections, and orthogonal decompositions are all
-          consequences of the inner product structure. This geometry is
-          what makes Hilbert spaces the natural setting for least-squares
-          and projection methods.
-    \item \textbf{Hilbert spaces are self-dual.} The Riesz Representation
-          Theorem identifies $H$ with $H^*$, vastly simplifying the theory
-          compared to general Banach spaces.
-    \item \textbf{The four fundamental theorems are structural results} about
-          Banach spaces. They guarantee that linear operators and functionals
-          behave well: they can be extended (Hahn--Banach), pointwise bounds
-          imply uniform bounds (UBP), surjections are open (OMT), and
-          closed-graph operators are bounded (CGT).
-    \item \textbf{Fixed point theorems bridge analysis and algorithms.}
-          The Banach contraction theorem provides both existence, uniqueness,
-          and an algorithm. Brouwer/Schauder/Kakutani provide existence in
-          settings where contractions are not available, notably for Nash
-          equilibria.
-    \item \textbf{The hierarchy of fixed point theorems} matches the hierarchy
-          of RL/ML problems: contraction for value iteration, Kakutani for
-          Nash equilibria, Schauder for existence of solutions to
-          functional equations.
+\begin{warning}[title={Choosing the Right Theorem}]
+\begin{itemize}[nosep]
+    \item Use \textbf{Banach} when you have a complete metric space
+          and a contraction---this is the case for value iteration
+          with $\gamma < 1$.
+    \item Use \textbf{Brouwer} for existence arguments in
+          finite-dimensional compact convex sets (e.g., stationary
+          distributions, equilibria in simplex-valued problems).
+    \item Use \textbf{Schauder} when working in infinite-dimensional
+          spaces with compact operators (e.g., integral operators on
+          function spaces).
+    \item Use \textbf{Kakutani} when the ``solution map'' is
+          set-valued (e.g., best-response correspondences in game
+          theory).
+\end{itemize}
+\end{warning}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Bellman Operator Is a Contraction (**)]\label{ex:bellman}
+Let $\mathcal{S}$ and $\mathcal{A}$ be finite sets,
+$R \colon \mathcal{S} \times \mathcal{A} \to \R$ a reward function,
+$P(\cdot \mid s, a)$ a transition kernel, and $\gamma \in (0, 1)$ a
+discount factor.  Define the Bellman optimality operator $T$ on the
+space $B(\mathcal{S})$ of bounded functions on $\mathcal{S}$ (equipped
+with $\|\cdot\|_\infty$) by
+\[
+    (TV)(s)
+    = \max_{a \in \mathcal{A}}
+    \Bigl[ R(s,a) + \gamma \sum_{s' \in \mathcal{S}}
+    P(s' \mid s, a)\, V(s') \Bigr].
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Prove that $T$ is a $\gamma$-contraction:
+          $\|TV - TW\|_\infty \leq \gamma\, \|V - W\|_\infty$.
+
+          \emph{Hint:}  For each $s$, let $a_s^*$ achieve the maximum
+          for $(TV)(s)$.  Then
+          $(TV)(s) - (TW)(s) \leq \gamma \sum_{s'} P(s' \mid s, a_s^*)
+          (V(s') - W(s'))$.  By symmetry, obtain the reverse
+          inequality and take the supremum over $s$.
+    \item Deduce from the Banach contraction theorem that value
+          iteration converges geometrically and that $V^*$ is the
+          unique solution of the Bellman equation $TV = V$.
+    \item How many iterations $n$ are needed to guarantee
+          $\|V_n - V^*\|_\infty \leq \varepsilon$?  Express the
+          answer in terms of $\gamma$, $\varepsilon$, and
+          $\|V_1 - V_0\|_\infty$.
 \end{enumerate}
+\end{exercise}
 
+\begin{exercise}[Contractive Iterate (**)]\label{ex:contractive-iterate}
+Let $(X, d)$ be a complete metric space and $T \colon X \to X$ a
+continuous map such that $T^N$ is a contraction for some $N \geq 1$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $T^N$ has a unique fixed point $x^*$.
+    \item Show that $Tx^*$ is also a fixed point of $T^N$, and
+          conclude $Tx^* = x^*$.
+    \item Deduce that $T$ itself has a unique fixed point.
+\end{enumerate}
+\emph{Application:}  The Picard operator for an ODE on $[0, h]$ may
+not be a contraction in $\|\cdot\|_\infty$, but $T^N$ is for $N$
+large enough.  This exercise shows uniqueness still holds.
+\end{exercise}
+
+\begin{exercise}[Brouwer in One Dimension (*)]\label{ex:brouwer-1d}
+\begin{enumerate}[label=(\alph*)]
+    \item Prove the Brouwer Fixed Point Theorem for $n = 1$ directly:
+          if $f \colon [a, b] \to [a, b]$ is continuous, then $f$ has
+          a fixed point.
+
+          \emph{Hint:}  Apply the intermediate value theorem to
+          $g(x) = f(x) - x$.
+    \item Show by example that the conclusion fails if $[a,b]$ is
+          replaced by an open interval $(a, b)$.
+    \item Show by example that the conclusion fails if $[a,b]$ is
+          replaced by a non-convex compact set
+          $K = [0, 1] \cup [2, 3]$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Schauder and Integral Equations (**)]\label{ex:schauder-integral}
+Let $K \colon [0,1] \times [0,1] \to \R$ be continuous and define
+$T \colon C[0,1] \to C[0,1]$ by
+$(Tf)(t) = \int_0^1 K(t,s)\, f(s)\, ds$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $T$ maps the closed ball
+          $\overline{B}(0, R) = \{f \in C[0,1] : \|f\|_\infty
+          \leq R\}$ into itself for $R$ sufficiently large, provided
+          we add a continuous inhomogeneity:
+          $(Tf)(t) = g(t) + \int_0^1 K(t,s)\, f(s)\, ds$.
+          Find the condition on $R$ in terms of $\|g\|_\infty$ and
+          $\|K\|_\infty$.
+    \item Show that $T(\overline{B}(0, R))$ is equicontinuous.
+
+          \emph{Hint:} Use uniform continuity of $K$ on
+          $[0,1]^2$.
+    \item Conclude via the Arzela--Ascoli theorem that $T$ is a
+          compact operator.
+    \item Apply the Schauder theorem to deduce that the integral
+          equation $f = Tf$ has a solution.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Kakutani and Two-Player Zero-Sum Games (**)]
+\label{ex:kakutani-zerosum}
+Let $A \in \R^{m \times n}$ be a payoff matrix for a two-player
+zero-sum game.  Player 1 chooses $p \in \Delta_m$ and Player 2
+chooses $q \in \Delta_n$, with payoff $p^\top A q$ to Player 1.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the best-response correspondences $BR_1(q)$ and
+          $BR_2(p)$ explicitly.
+    \item Verify the hypotheses of the Kakutani theorem for the joint
+          best-response
+          $\Phi(p, q) = BR_1(q) \times BR_2(p)$ on
+          $\Delta_m \times \Delta_n$.
+    \item Conclude that a Nash equilibrium (saddle point) exists.
+    \item Explain how this relates to the minimax theorem
+          $\max_p \min_q p^\top A q = \min_q \max_p p^\top A q$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[No Fixed Point Without Compactness (*)]\label{ex:no-fp}
+Give an example of a continuous map $f \colon C \to C$ on a closed
+convex but \emph{unbounded} subset $C$ of $\R^n$ that has no fixed
+point.  This shows that compactness in the Brouwer theorem cannot be
+dropped.
+
+\emph{Hint:} Consider a translation on $C = \R$.
+\end{exercise}
+
+\begin{exercise}[Policy Iteration and Contraction (***)]\label{ex:policy-iter}
+In the MDP setting of Exercise~\ref{ex:bellman}, \emph{policy
+iteration} generates a sequence of policies $\pi_0, \pi_1, \ldots$ by:
+(i) evaluate $V^{\pi_k}$ as the unique fixed point of $T^{\pi_k}$
+(where $(T^\pi V)(s) = R(s, \pi(s)) + \gamma \sum_{s'} P(s' \mid s,
+\pi(s))\, V(s')$), and (ii) improve:
+$\pi_{k+1}(s) = \argmax_{a} [R(s,a) + \gamma \sum_{s'} P(s' \mid
+s, a)\, V^{\pi_k}(s')]$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $T^{\pi}$ is a $\gamma$-contraction for any
+          policy $\pi$, so $V^{\pi}$ is well-defined and unique.
+    \item Show that $V^{\pi_{k+1}} \geq V^{\pi_k}$ componentwise.
+
+          \emph{Hint:}
+          $T^{\pi_{k+1}} V^{\pi_k} \geq T^{\pi_k} V^{\pi_k}
+          = V^{\pi_k}$.  Now iterate.
+    \item Conclude that policy iteration converges to $V^*$ in
+          finitely many steps (there are finitely many deterministic
+          policies).
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}[leftmargin=2em,nosep]
+    \item \textbf{Contraction.}  A map $T$ on a metric space with
+          $d(Tx, Ty) \leq \gamma\, d(x, y)$ for some $\gamma < 1$.
+
+    \item \textbf{Banach Contraction Mapping Theorem.}  On a complete
+          metric space, every contraction has a unique fixed point.
+          The iterates $x_{n+1} = Tx_n$ converge from any starting
+          point at geometric rate
+          $d(x_n, x^*) \leq \frac{\gamma^n}{1-\gamma}\, d(x_0, Tx_0)$.
+          This is the theoretical foundation of value iteration.
+
+    \item \textbf{Brouwer Fixed Point Theorem.}  Every continuous
+          self-map of a nonempty compact convex subset of $\R^n$ has a
+          fixed point.  Proved via the no-retraction lemma.
+
+    \item \textbf{Compact operator.}  A continuous map that sends
+          bounded sets to relatively compact sets.
+
+    \item \textbf{Schauder Fixed Point Theorem.}  Every compact
+          self-map of a nonempty closed bounded convex subset of a
+          Banach space has a fixed point.  Proved by approximating
+          with finite-dimensional maps (Schauder projections) and
+          applying Brouwer.
+
+    \item \textbf{Set-valued map (correspondence).}
+          $\Phi \colon X \rightrightarrows Y$ assigns a subset
+          $\Phi(x) \subseteq Y$ to each $x$.  Upper hemicontinuity
+          requires $\{x : \Phi(x) \subseteq V\}$ to be open for
+          every open $V$.
+
+    \item \textbf{Kakutani Fixed Point Theorem.}  An upper
+          hemicontinuous correspondence with nonempty convex values on
+          a compact convex subset of $\R^n$ has a fixed point.  This
+          is the theorem used to prove Nash equilibrium existence.
+
+    \item \textbf{Hierarchy.}  Banach gives uniqueness and an
+          algorithm; Brouwer/Schauder/Kakutani give only existence.
+          Brouwer implies Schauder (via compact approximation) and
+          Kakutani (via approximate selections).
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further}
+
+The definitive reference on fixed point theory is
+\citet{granas2003}, which covers all four theorems with detailed
+proofs, historical notes, and numerous applications.  The Banach
+contraction theorem in the context of metric spaces is also treated
+in \citet{kreyszig1989}, Section 5.1, and \citet{rudin1991}.  For a
+proof of the Brouwer theorem via Sperner's lemma (a combinatorial
+alternative to the retraction argument), see
+\citet{granas2003}, Chapter 6.
+
+The connection between the Banach contraction theorem and Markov
+decision processes is developed rigorously in
+\citet{puterman2014}, Chapter 6.  The application of Kakutani's
+theorem to Nash equilibrium existence follows \citet{kakutani1941}.
+
+The preceding lesson (Lesson 21) proved the four fundamental theorems
+of functional analysis (Hahn--Banach, Uniform Boundedness, Open
+Mapping, Closed Graph).  The next topic in the curriculum (Lesson 23)
+begins the optimization sequence with convex sets and their
+structural properties.
+
+\bibliography{functional-analysis-refs}
 
 \end{document}
