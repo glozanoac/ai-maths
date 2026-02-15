@@ -1,0 +1,610 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 10: Stochastic Approximation}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{Lesson 31: Robbins--Monro and the ODE Method}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{0}
+
+\section{Introduction}
+\label{sec:intro}
+
+The central challenge in reinforcement learning is optimization under uncertainty: an
+agent must find an optimal policy when the environment dynamics are unknown and the only
+information available comes through noisy, sequential interactions. This is precisely the
+setting of \emph{stochastic approximation} --- finding the root (or optimum) of a
+function that can only be observed through noisy samples.
+
+The field of stochastic approximation was born with the seminal 1951 paper of Robbins
+and Monro, who proposed an iterative scheme for finding the root of a regression
+function from noisy observations. This idea was extended to optimization by Kiefer and
+Wolfowitz, and the theoretical foundations were deepened by Ljung, Kushner and Clark,
+and Borkar, who established the powerful \emph{ODE method}: under appropriate conditions,
+a stochastic approximation algorithm converges to the same limit as the solution of an
+associated ordinary differential equation.
+
+\medskip
+\noindent\textbf{Why this matters for RL.} Consider the following RL update rules:
+\begin{itemize}[leftmargin=2em]
+\item \textbf{TD(0):} $V(s_n) \leftarrow V(s_n) + \alpha_n \bigl[R_{n+1} + \gamma V(s_{n+1}) - V(s_n)\bigr]$
+\item \textbf{Q-learning:} $Q(s_n, a_n) \leftarrow Q(s_n,a_n) + \alpha_n \bigl[R_{n+1} + \gamma \max_{a'} Q(s_{n+1},a') - Q(s_n,a_n)\bigr]$
+\item \textbf{Actor-Critic:} Critic updates value, actor updates policy, at \emph{different rates}
+\item \textbf{REINFORCE:} $\theta_{n+1} = \theta_n + \alpha_n \widehat{\nabla J(\theta_n)}$
+\end{itemize}
+Every one of these is a stochastic approximation iteration. The convergence theorems
+in this document therefore provide the theoretical foundation for understanding
+\emph{when} and \emph{why} RL algorithms converge.
+
+\medskip
+\noindent\textbf{Document outline.}
+Section~\ref{sec:robbins-monro} introduces the Robbins--Monro algorithm and proves its
+convergence under classical conditions. Section~\ref{sec:ode-method} develops the ODE
+method, the most powerful general-purpose tool for SA convergence analysis.
+Section~\ref{sec:convergence-rate} establishes the convergence rate via the CLT for SA
+and Polyak--Ruppert averaging. Section~\ref{sec:two-timescale} presents Borkar's
+two-timescale SA theory, which is the backbone of actor-critic algorithms.
+Section~\ref{sec:linear-sa} treats the important special case of linear SA.
+Section~\ref{sec:rl-applications} maps the general theory to specific RL algorithms
+in detail. Section~\ref{sec:exercises} provides exercises, and
+Section~\ref{sec:summary} summarizes all key results.
+
+\medskip
+\noindent\textbf{Prerequisites.} Probability spaces, conditional expectation,
+martingale difference sequences, the law of large numbers, and basic ODE theory
+(existence and uniqueness of solutions, Lyapunov stability).
+
+%% ============================================================
+%% SECTION 2: THE ROBBINS-MONRO ALGORITHM
+%% ============================================================
+
+\section{The Robbins--Monro Algorithm}
+\label{sec:robbins-monro}
+
+\subsection{Problem formulation}
+
+Suppose we wish to find a root of a function $h : \R^d \to \R^d$, i.e., a point
+$x^* \in \R^d$ such that $h(x^*) = 0$. The difficulty is that we cannot evaluate $h$
+directly. Instead, for each query point $x$, we observe a noisy sample
+\[
+  H(x, Y) \quad \text{where} \quad h(x) = \E[H(x, Y)]
+\]
+and $Y$ is a random variable (or random element) representing the noise source.
+
+\begin{example}[Stochastic root-finding]
+\label{ex:root-finding}
+Let $h(\theta) = \E[f(X) - \theta]$ where $X$ is a random variable with unknown
+distribution. Then $h(\theta^*) = 0$ when $\theta^* = \E[f(X)]$. Given i.i.d.\ samples
+$X_1, X_2, \ldots$, the noisy observation is $H(\theta, X_n) = f(X_n) - \theta$.
+\end{example}
+
+\begin{definition}[Step-size sequence]
+\label{def:step-size}
+A \emph{step-size sequence} (or \emph{learning rate schedule}) is a sequence
+$\{a_n\}_{n \geq 0}$ of positive real numbers satisfying:
+\begin{enumerate}[label=(\roman*)]
+\item $\displaystyle\sum_{n=0}^{\infty} a_n = \infty$ \quad (the steps are large enough to reach any target),
+\item $\displaystyle\sum_{n=0}^{\infty} a_n^2 < \infty$ \quad (the steps are small enough that noise averages out).
+\end{enumerate}
+\end{definition}
+
+\begin{remark}[Why both conditions are needed]
+\label{rem:step-size-intuition}
+Condition (i) ensures the iterates can travel an unbounded total distance --- without
+it, the algorithm could ``freeze'' before reaching $x^*$ regardless of the initial
+condition. Condition (ii) controls the accumulated noise variance: since the noise at
+step $n$ is scaled by $a_n$, the total noise variance is proportional to
+$\sum a_n^2 \Var(\text{noise})$, which must be finite for convergence. The canonical
+choice is $a_n = c / n$ for some $c > 0$ (since $\sum 1/n = \infty$ while
+$\sum 1/n^2 < \infty$). More generally, $a_n = c / n^\alpha$ works for any
+$\alpha \in (1/2, 1]$.
+\end{remark}
+
+\subsection{The iteration}
+
+\begin{definition}[Robbins--Monro iteration]
+\label{def:rm-iteration}
+Given an initial point $x_0 \in \R^d$, the \emph{Robbins--Monro iteration} is
+\begin{equation}
+\label{eq:rm}
+  x_{n+1} = x_n + a_n H(x_n, Y_n), \quad n \geq 0,
+\end{equation}
+where $\{a_n\}$ satisfies Definition~\ref{def:step-size} and $Y_0, Y_1, \ldots$ are
+the noise samples.
+\end{definition}
+
+We decompose the update into its ``signal'' and ``noise'' components. Define the
+\emph{martingale difference noise}
+\begin{equation}
+\label{eq:mds-noise}
+  M_{n+1} \coloneqq H(x_n, Y_n) - h(x_n).
+\end{equation}
+Then the iteration becomes
+\begin{equation}
+\label{eq:rm-decomposed}
+  x_{n+1} = x_n + a_n\bigl[h(x_n) + M_{n+1}\bigr].
+\end{equation}
+This is the canonical form we shall use throughout: the iterate moves in the direction
+$h(x_n)$ (the ``drift'') plus additive noise $M_{n+1}$.
+
+\subsection{Classical convergence theorem}
+
+We state the assumptions precisely and then prove convergence.
+
+\begin{definition}[Standing assumptions for Robbins--Monro]
+\label{def:rm-assumptions}
+Let $\mathcal{F}_n = \sigma(x_0, Y_0, \ldots, Y_{n-1})$ be the natural filtration.
+We assume:
+\begin{enumerate}[label=(A\arabic*)]
+\item \label{A1} \textbf{Step sizes:} $\{a_n\}$ satisfies Definition~\ref{def:step-size}.
+\item \label{A2} \textbf{Martingale difference noise:} $\E[M_{n+1} \mid \mathcal{F}_n] = 0$ a.s.\ for all $n$.
+\item \label{A3} \textbf{Bounded noise variance:} There exists $K > 0$ such that
+  $\E[\|M_{n+1}\|^2 \mid \mathcal{F}_n] \leq K(1 + \|x_n\|^2)$ a.s.
+\item \label{A4} \textbf{Stability (monotonicity):} There exists a unique root
+  $x^* \in \R^d$ with $h(x^*) = 0$, and $\langle x - x^*, h(x) \rangle < 0$ for
+  all $x \neq x^*$. (That is, $h$ points ``inward'' toward $x^*$.)
+\item \label{A5} \textbf{Linear growth:} $\|h(x)\| \leq K(1 + \|x\|)$ for all $x$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Robbins--Monro convergence]
+\label{thm:rm-convergence}
+Under assumptions \ref{A1}--\ref{A5}, the Robbins--Monro iteration~\eqref{eq:rm}
+satisfies $x_n \cas x^*$.
+\end{theorem}
+
+\begin{proof}
+We use the Lyapunov function $V(x) = \|x - x^*\|^2$. Define $e_n = x_n - x^*$.
+Then
+\begin{align*}
+  \|e_{n+1}\|^2
+    &= \|e_n + a_n(h(x_n) + M_{n+1})\|^2 \\
+    &= \|e_n\|^2 + 2a_n \langle e_n, h(x_n)\rangle
+      + 2a_n \langle e_n, M_{n+1}\rangle \\
+    &\quad + a_n^2 \|h(x_n) + M_{n+1}\|^2.
+\end{align*}
+Taking conditional expectation with respect to $\mathcal{F}_n$ and using \ref{A2}:
+\begin{align}
+  \E[\|e_{n+1}\|^2 \mid \mathcal{F}_n]
+    &= \|e_n\|^2 + 2a_n \langle e_n, h(x_n)\rangle
+      + a_n^2 \E[\|h(x_n) + M_{n+1}\|^2 \mid \mathcal{F}_n]. \label{eq:rm-lyap}
+\end{align}
+For the last term, by the inequality $\|a+b\|^2 \leq 2\|a\|^2 + 2\|b\|^2$:
+\[
+  \E[\|h(x_n) + M_{n+1}\|^2 \mid \mathcal{F}_n]
+    \leq 2\|h(x_n)\|^2 + 2\E[\|M_{n+1}\|^2 \mid \mathcal{F}_n].
+\]
+Using \ref{A3} and \ref{A5}:
+\[
+  2\|h(x_n)\|^2 + 2\E[\|M_{n+1}\|^2 \mid \mathcal{F}_n]
+    \leq 2K^2(1 + \|x_n\|^2) + 2K(1 + \|x_n\|^2)
+    \leq C(1 + \|x_n\|^2)
+\]
+for some constant $C > 0$. Since $\|x_n\|^2 \leq 2\|e_n\|^2 + 2\|x^*\|^2$, we
+obtain
+\begin{equation}
+\label{eq:rm-lyap2}
+  \E[\|e_{n+1}\|^2 \mid \mathcal{F}_n]
+    \leq \|e_n\|^2 + 2a_n \langle e_n, h(x_n)\rangle + a_n^2 C'(1 + \|e_n\|^2)
+\end{equation}
+for some $C' > 0$.
+
+By \ref{A4}, $\langle e_n, h(x_n) \rangle < 0$ when $x_n \neq x^*$. Define
+$V_n = \|e_n\|^2$ and
+\[
+  W_n = \sum_{k=0}^{n-1} (-2a_k) \langle e_k, h(x_k)\rangle, \quad
+  U_n = \sum_{k=0}^{n-1} a_k^2 C'(1 + \|e_k\|^2).
+\]
+Then $V_n + W_n - U_n$ is a (nonnegative when adjusted) supermartingale. More
+precisely, writing $\beta_n = -2\langle e_n, h(x_n)\rangle > 0$ (for $x_n \neq x^*$),
+we have from~\eqref{eq:rm-lyap2}:
+\[
+  \E[V_{n+1} \mid \mathcal{F}_n] \leq V_n - a_n \beta_n + a_n^2 C'(1 + V_n + 2\|x^*\|^2).
+\]
+
+We apply the Robbins--Siegmund theorem (a standard supermartingale convergence result).
+
+\medskip\noindent
+\textbf{Robbins--Siegmund Theorem.} \emph{Let $\{V_n\}$, $\{\alpha_n\}$,
+$\{\beta_n\}$, $\{u_n\}$ be nonneg\-a\-tive adapted sequences with
+$\E[V_{n+1} \mid \mathcal{F}_n] \leq (1+\alpha_n)V_n - \beta_n + u_n$ and
+$\sum \alpha_n < \infty$, $\sum u_n < \infty$ a.s. Then $V_n$ converges a.s.\ and
+$\sum \beta_n < \infty$ a.s.}
+
+\medskip
+In our case, set $\alpha_n = a_n^2 C'$, $u_n = a_n^2 C'(1 + 2\|x^*\|^2)$, and
+$\beta_n = a_n(-2\langle e_n, h(x_n)\rangle)$. Since $\sum a_n^2 < \infty$ by
+\ref{A1}, we have $\sum \alpha_n < \infty$ and $\sum u_n < \infty$. By
+Robbins--Siegmund, $V_n = \|e_n\|^2$ converges a.s.\ (to some finite limit) and
+\begin{equation}
+\label{eq:beta-summable}
+  \sum_{n=0}^{\infty} a_n \bigl(-2\langle e_n, h(x_n)\rangle\bigr) < \infty
+  \quad \text{a.s.}
+\end{equation}
+
+Suppose for contradiction that $V_n \to L > 0$ with positive probability on some
+event $A$. On $A$, $\|e_n\| \to \sqrt{L} > 0$, so $x_n$ stays bounded away from
+$x^*$. By the continuity of $h$ and \ref{A4}, there exists $\delta > 0$ such that
+$-\langle e_n, h(x_n)\rangle \geq \delta$ for all large $n$ on $A$. Then
+\[
+  \sum_{n} a_n (-2\langle e_n, h(x_n)\rangle) \geq 2\delta \sum_n a_n = \infty,
+\]
+contradicting~\eqref{eq:beta-summable}. Therefore $V_n \to 0$ a.s., i.e.,
+$x_n \cas x^*$.
+\end{proof}
+
+\begin{keyresult}[Robbins--Monro Convergence]
+Under a monotonicity condition on $h$ (it points toward the root $x^*$),
+martingale difference noise with bounded conditional variance, and the step-size
+conditions $\sum a_n = \infty$, $\sum a_n^2 < \infty$, the iteration
+$x_{n+1} = x_n + a_n[h(x_n) + M_{n+1}]$ converges almost surely to $x^*$.
+\end{keyresult}
+
+\begin{rlconnection}[SGD as Robbins--Monro]
+Stochastic gradient descent (SGD) for minimizing $f(\theta) = \E_Z[\ell(\theta, Z)]$
+is the Robbins--Monro iteration with $h(\theta) = -\nabla f(\theta)$ and
+$H(\theta, Z) = -\nabla_\theta \ell(\theta, Z)$. The update is
+$\theta_{n+1} = \theta_n - a_n \nabla_\theta \ell(\theta_n, Z_n)$. Under
+convexity of $f$ (which implies the monotonicity condition \ref{A4} for $-\nabla f$),
+Theorem~\ref{thm:rm-convergence} guarantees $\theta_n \cas \theta^*$.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 3: THE ODE METHOD
+%% ============================================================
+
+\section{The ODE Method}
+\label{sec:ode-method}
+
+The Robbins--Monro analysis requires the strong monotonicity condition \ref{A4},
+which fails for many RL algorithms. The \emph{ODE method}, developed by Ljung (1977)
+and Kushner--Clark (1978), replaces this with a more natural condition: convergence of
+the SA iteration follows from the stability of the associated ODE. This is the
+primary tool for analyzing RL convergence.
+
+\subsection{The associated ODE}
+
+\begin{definition}[Associated ODE]
+\label{def:associated-ode}
+Given the SA iteration~\eqref{eq:rm-decomposed}, the \emph{associated ODE} is
+\begin{equation}
+\label{eq:ode}
+  \dot{x}(t) = h(x(t)), \quad x(0) = x_0.
+\end{equation}
+\end{definition}
+
+The key insight is that for small step sizes, the SA iteration
+$x_{n+1} \approx x_n + a_n h(x_n)$ behaves like an Euler discretization of the
+ODE~\eqref{eq:ode} with time step $a_n$, plus noise that averages out.
+
+\subsection{Interpolated trajectory}
+
+To make the connection between the discrete SA iteration and the continuous ODE
+precise, we construct an interpolated trajectory.
+
+\begin{definition}[Interpolated trajectory]
+\label{def:interpolated-traj}
+Define the time instants $t_0 = 0$ and $t_n = \sum_{k=0}^{n-1} a_k$ for $n \geq 1$.
+Note that $t_n \to \infty$ by condition (i) of Definition~\ref{def:step-size}. The
+\emph{interpolated trajectory} $\bar{x} : [0, \infty) \to \R^d$ is the piecewise
+constant function
+\[
+  \bar{x}(t) = x_n \quad \text{for } t \in [t_n, t_{n+1}).
+\]
+Equivalently, one may use the piecewise linear interpolation; both lead to the same
+asymptotic analysis.
+\end{definition}
+
+\subsection{Assumptions for the ODE method}
+
+\begin{definition}[ODE method assumptions]
+\label{def:ode-assumptions}
+We strengthen and modify the assumptions as follows:
+\begin{enumerate}[label=(B\arabic*)]
+\item \label{B1} \textbf{Step sizes:} As in \ref{A1}.
+\item \label{B2} \textbf{Lipschitz drift:} $h : \R^d \to \R^d$ is Lipschitz
+  continuous: $\|h(x) - h(y)\| \leq L\|x - y\|$ for all $x, y$ and some $L > 0$.
+\item \label{B3} \textbf{Martingale difference noise:}
+  $\E[M_{n+1} \mid \mathcal{F}_n] = 0$ a.s.\ and
+  $\E[\|M_{n+1}\|^2 \mid \mathcal{F}_n] \leq K(1 + \|x_n\|^2)$ a.s.
+\item \label{B4} \textbf{Stability (boundedness):} $\sup_n \|x_n\| < \infty$ a.s.
+\item \label{B5} \textbf{Asymptotic stability of the ODE:} The ODE~\eqref{eq:ode}
+  has a globally asymptotically stable equilibrium $x^*$ (i.e., $h(x^*) = 0$ and
+  $x(t) \to x^*$ as $t \to \infty$ for every initial condition $x(0) \in \R^d$).
+\end{enumerate}
+\end{definition}
+
+\begin{remark}[Stability assumption \ref{B4}]
+\label{rem:stability}
+Assumption \ref{B4} --- that the iterates remain bounded --- is the most delicate.
+In practice, one either (a) proves it from properties of $h$ (see the Borkar--Meyn
+theorem in Section~\ref{subsec:borkar-meyn}), (b) uses projection to a compact set,
+or (c) verifies it empirically. For many RL algorithms, boundedness follows from the
+structure of the MDP (e.g., bounded rewards and a discount factor $\gamma < 1$).
+\end{remark}
+
+\subsection{The noise vanishes asymptotically}
+
+The first step in the ODE method is to show that the accumulated noise becomes
+negligible.
+
+\begin{lemma}[Noise term vanishes]
+\label{lem:noise-vanishes}
+Under \ref{B1}, \ref{B3}, and \ref{B4}, the process
+$Z_n = \sum_{k=0}^{n-1} a_k M_{k+1}$ converges a.s. In particular, for any
+$T > 0$ and $\varepsilon > 0$,
+\[
+  \sup_{t_n \leq s \leq t_n + T}
+    \Bigl\|\sum_{k=n}^{m(s)-1} a_k M_{k+1}\Bigr\| \to 0 \quad \text{a.s.\ as } n \to \infty,
+\]
+where $m(s) = \min\{j : t_j > s\}$.
+\end{lemma}
+
+\begin{proof}
+The sequence $Z_n = \sum_{k=0}^{n-1} a_k M_{k+1}$ is a martingale with respect to
+$\mathcal{F}_n$. Its quadratic variation satisfies
+\[
+  \E[\|Z_n\|^2] = \sum_{k=0}^{n-1} a_k^2 \E[\|M_{k+1}\|^2]
+    \leq \sum_{k=0}^{n-1} a_k^2 K(1 + \E[\|x_k\|^2]).
+\]
+By \ref{B4}, $\|x_k\|$ is bounded a.s., so $\E[\|x_k\|^2] \leq C$ for some $C > 0$.
+Thus $\E[\|Z_n\|^2] \leq K(1 + C) \sum_{k=0}^{\infty} a_k^2 < \infty$ by \ref{B1}.
+By the martingale convergence theorem, $Z_n$ converges a.s.
+
+For the uniform convergence over windows of length $T$, note that for
+$t_n \leq s \leq t_n + T$, the ``tail sum'' $\sum_{k=n}^{m(s)-1} a_k M_{k+1}$
+is a portion of the convergent series $\sum a_k M_{k+1}$, so it tends to zero
+uniformly over bounded time windows. More precisely, since $Z_n$ converges a.s.,
+$\|Z_m - Z_n\| \to 0$ as $n, m \to \infty$, and the number of indices $k$ with
+$t_n \leq t_k \leq t_n + T$ increases but $a_k \to 0$, giving the claimed uniform
+convergence.
+\end{proof}
+
+\subsection{Main convergence theorem}
+
+\begin{theorem}[Convergence via the ODE method]
+\label{thm:ode-convergence}
+Under assumptions \ref{B1}--\ref{B5}, the SA iteration
+$x_{n+1} = x_n + a_n[h(x_n) + M_{n+1}]$ satisfies $x_n \cas x^*$.
+\end{theorem}
+
+\begin{proof}
+The proof proceeds in three steps.
+
+\medskip
+\noindent\textbf{Step 1: Shifted interpolated trajectories.}
+For each $n \geq 0$, define the shifted interpolated trajectory
+$x^{(n)} : [0, \infty) \to \R^d$ by
+\[
+  x^{(n)}(0) = x_n, \quad
+  x^{(n)}(t) = x_{n+k} \text{ for } t \in [t_{n+k} - t_n, t_{n+k+1} - t_n),
+  \quad k \geq 0.
+\]
+This is the piecewise constant interpolation of the SA iterates starting from time
+$t_n$, with the time axis reset to zero.
+
+\medskip
+\noindent\textbf{Step 2: Equicontinuity and convergence to ODE solutions.}
+By \ref{B4}, the iterates $\{x_n\}$ are bounded a.s. The drift $h$ is Lipschitz
+by \ref{B2}, so $\|h(x_n)\| \leq L\|x_n\| + \|h(0)\|$ is bounded. For any
+$T > 0$ and $s, t \in [0, T]$ with $s < t$, the trajectory satisfies
+\[
+  x^{(n)}(t) - x^{(n)}(s) = \sum_{k : t_k \in [s+t_n, t+t_n)} a_k [h(x_k) + M_{k+1}].
+\]
+The ``signal'' part is bounded by $\|h\|_\infty \cdot (t-s)$ (since
+$\sum a_k \approx t - s$ over the corresponding indices). By
+Lemma~\ref{lem:noise-vanishes}, the noise part vanishes as $n \to \infty$. Therefore,
+the family $\{x^{(n)}\}$ is equicontinuous on $[0, T]$ a.s.\ for large $n$.
+
+By the Arzela--Ascoli theorem, every subsequence of $\{x^{(n)}\}$ has a further
+subsequence that converges uniformly on $[0, T]$. Let $x^{(\infty)}$ be any such
+limit. We claim $x^{(\infty)}$ satisfies the ODE~\eqref{eq:ode}.
+
+Indeed, the SA iteration gives
+\[
+  x^{(n)}(t) = x^{(n)}(0) + \int_0^t h(x^{(n)}(s))\,ds + \varepsilon_n(t),
+\]
+where $\varepsilon_n(t)$ accounts for the discretization error and the noise, both
+of which vanish as $n \to \infty$ (the discretization error vanishes because
+$a_n \to 0$ by \ref{B1}, and the noise vanishes by Lemma~\ref{lem:noise-vanishes}).
+Taking the limit and using the Lipschitz continuity of $h$ to pass through the
+integral:
+\[
+  x^{(\infty)}(t) = x^{(\infty)}(0) + \int_0^t h(x^{(\infty)}(s))\,ds.
+\]
+Thus $x^{(\infty)}$ is a solution of the ODE~\eqref{eq:ode}.
+
+\medskip
+\noindent\textbf{Step 3: Convergence to the equilibrium.}
+By \ref{B5}, the equilibrium $x^*$ is globally asymptotically stable for the ODE.
+Therefore, for any solution $x(t)$ of the ODE, $x(t) \to x^*$ as $t \to \infty$.
+
+Now we argue that $x_n \to x^*$ a.s. The set of limit points of $\{x_n\}$ is
+nonempty (by boundedness \ref{B4}) and compact. From Step~2, any limit point of the
+discrete sequence is also an initial condition for an ODE trajectory that must
+converge to $x^*$. Moreover, the set of limit points is connected (as the image of
+a connected set under a continuous map) and invariant under the ODE flow.
+
+The only compact, connected, ODE-flow-invariant set that is attracted to $x^*$ under
+a globally asymptotically stable system is $\{x^*\}$ itself. To see this, suppose
+$\bar{x} \neq x^*$ is a limit point. Then there exists a subsequence $x_{n_k} \to
+\bar{x}$. The shifted trajectory $x^{(n_k)}$ converges to an ODE solution starting
+at $\bar{x}$, which satisfies $x(T) \to x^*$ for large $T$. But then the iterates
+after $n_k$ must eventually be close to $x^*$, and by the same argument, they
+cannot leave a neighborhood of $x^*$ (by Lyapunov stability of $x^*$). Hence $x^*$
+is the unique limit point, and $x_n \cas x^*$.
+\end{proof}
+
+\begin{keyresult}[ODE Method -- Main Principle]
+A stochastic approximation iteration $x_{n+1} = x_n + a_n[h(x_n) + M_{n+1}]$
+with decreasing step sizes converges to the set of asymptotically stable equilibria
+of the ODE $\dot{x} = h(x)$, provided the iterates remain bounded and the noise is
+a martingale difference sequence.
+\end{keyresult}
+
+\subsection{The Borkar--Meyn stability theorem}
+\label{subsec:borkar-meyn}
+
+Assumption \ref{B4} (boundedness of iterates) is often the hardest to verify. The
+Borkar--Meyn theorem provides sufficient conditions.
+
+\begin{definition}[Borkar--Meyn assumptions]
+\label{def:borkar-meyn-assumptions}
+In addition to \ref{B1}--\ref{B3}, assume:
+\begin{enumerate}[label=(C\arabic*)]
+\item \label{C1} $h$ is Lipschitz and the ``scaled'' function
+  $h_\infty(x) \coloneqq \lim_{r \to \infty} h(rx)/r$ exists uniformly on compact
+  sets.
+\item \label{C2} The ODE $\dot{x} = h_\infty(x)$ has the origin as its unique
+  globally asymptotically stable equilibrium.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Borkar--Meyn stability]
+\label{thm:borkar-meyn}
+Under \ref{B1}--\ref{B3} and \ref{C1}--\ref{C2}, the iterates $\{x_n\}$ are bounded
+almost surely: $\sup_n \|x_n\| < \infty$ a.s.
+\end{theorem}
+
+\begin{proof}
+We give the key steps of the proof.
+
+\medskip
+\noindent\textbf{Step 1: Rescaling.}
+Suppose, for contradiction, that $\|x_n\| \to \infty$ along a subsequence with
+positive probability. Let $r_n = \max(\|x_0\|, \|x_1\|, \ldots, \|x_n\|)$ and
+consider the rescaled iterates $\hat{x}_n = x_n / r_n$.
+
+\medskip
+\noindent\textbf{Step 2: Rescaled iteration.}
+Since $x_{n+1} = x_n + a_n[h(x_n) + M_{n+1}]$, dividing by $r_{n+1}$:
+\[
+  \hat{x}_{n+1} = \frac{r_n}{r_{n+1}} \hat{x}_n
+    + \frac{a_n}{r_{n+1}} [h(r_n \hat{x}_n) + M_{n+1}].
+\]
+When $r_n \to \infty$, $h(r_n \hat{x}_n) / r_n \to h_\infty(\hat{x}_n)$ by \ref{C1},
+and $r_n / r_{n+1} \to 1$ since $a_n \to 0$. The noise term $a_n M_{n+1}/r_{n+1}$
+becomes negligible.
+
+\medskip
+\noindent\textbf{Step 3: Limiting ODE.}
+By the same interpolation argument as in Theorem~\ref{thm:ode-convergence}, the
+rescaled trajectory converges (along subsequences) to solutions of the ODE
+$\dot{x} = h_\infty(x)$. But $\|\hat{x}_n\| \leq 1$ and $\|\hat{x}_n\| = 1$
+infinitely often (when $r_n$ increases). So the limiting trajectory is confined to
+the unit ball and visits its boundary.
+
+\medskip
+\noindent\textbf{Step 4: Contradiction.}
+By \ref{C2}, every solution of $\dot{x} = h_\infty(x)$ converges to the origin.
+But the limiting trajectory of $\hat{x}_n$ must repeatedly visit $\|\hat{x}\| = 1$,
+contradicting the global asymptotic stability of the origin for the $h_\infty$ ODE.
+Therefore $\sup_n \|x_n\| < \infty$ a.s.
+\end{proof}
+
+\begin{remark}[Practical significance]
+\label{rem:borkar-meyn-practical}
+The Borkar--Meyn theorem is crucial because it converts the verification of iterate
+boundedness into a condition on the ``behavior of $h$ at infinity.'' For linear SA
+where $h(x) = Ax + b$, we have $h_\infty(x) = Ax$, so \ref{C2} reduces to
+requiring that $A$ is Hurwitz (all eigenvalues have negative real parts). This is
+exactly the condition for TD(0) convergence with linear function approximation.
+\end{remark}
+
+
+%% ============================================================
+%% SECTION 4: CONVERGENCE RATE ANALYSIS
+%% ============================================================
+
+
+\end{document}

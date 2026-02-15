@@ -1,0 +1,239 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{Lesson 25: Convex Optimization Problems}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{0}
+
+\section{Introduction}\label{sec:intro}
+
+Optimization is the computational engine beneath virtually every algorithm in
+machine learning and reinforcement learning. Policy gradient methods solve
+surrogate optimization problems at each iteration; value function approximation
+minimizes projected Bellman error; and constrained MDPs reduce to saddle-point
+problems whose structure is governed by duality theory.
+
+This document develops the theory of convex optimization from first principles:
+the hierarchy of convex programs (Section~\ref{sec:convex-problems}), Lagrangian
+duality and the passage from primal to dual (Section~\ref{sec:duality}), the
+Karush--Kuhn--Tucker conditions (Section~\ref{sec:kkt}), gradient descent and
+its convergence guarantees (Section~\ref{sec:gd}), Nesterov's accelerated method
+(Section~\ref{sec:nesterov}), proximal methods for non-smooth objectives
+(Section~\ref{sec:proximal}), and interior-point methods
+(Section~\ref{sec:interior}). We close with exercises
+(Section~\ref{sec:exercises}) and a summary table of convergence rates
+(Section~\ref{sec:summary}).
+
+Throughout, we assume familiarity with real analysis (continuity, compactness)
+and linear algebra (eigenvalues, positive definiteness) at the level of the
+Phase~00 prerequisites.
+
+%% ============================================================
+%% SECTION 2: Convex Optimization Problems
+%% ============================================================
+
+\section{Convex Optimization Problems}\label{sec:convex-problems}
+
+\subsection{Standard Form}
+
+\begin{definition}[Convex optimization problem]\label{def:convex-opt}
+A \emph{convex optimization problem} in standard form is
+\begin{equation}\label{eq:std-form}
+\begin{aligned}
+  \min_{x \in \R^n} \quad & f_0(x) \\
+  \text{subject to} \quad & f_i(x) \le 0, \quad i = 1,\dots,m, \\
+                          & a_j^\top x = b_j, \quad j = 1,\dots,p,
+\end{aligned}
+\end{equation}
+where $f_0, f_1, \dots, f_m : \R^n \to \R$ are convex functions and the
+equality constraints are affine.
+\end{definition}
+
+\begin{definition}[Feasible set, optimal value]\label{def:feasible}
+The \emph{feasible set} is
+$\mathcal{F} = \{x \in \R^n : f_i(x) \le 0,\; a_j^\top x = b_j\}$.
+The \emph{optimal value} is $p^* = \inf\{f_0(x) : x \in \mathcal{F}\}$.
+A point $x^*$ with $f_0(x^*) = p^*$ is an \emph{optimal point} (or
+\emph{minimizer}).
+\end{definition}
+
+\begin{theorem}[Local optimality implies global optimality]\label{thm:local-global}
+For the convex program~\eqref{eq:std-form}, every local minimizer is a global
+minimizer.
+\end{theorem}
+
+\begin{proof}
+Let $x^*$ be a local minimizer: there exists $\delta > 0$ such that
+$f_0(x^*) \le f_0(x)$ for all feasible $x$ with $\|x - x^*\| \le \delta$.
+Suppose for contradiction there exists a feasible $y$ with $f_0(y) < f_0(x^*)$.
+Consider $z_t = (1-t)x^* + ty$ for $t \in (0,1)$. By convexity of each $f_i$
+and affinity of the equality constraints, $z_t$ is feasible. Moreover,
+\[
+  f_0(z_t) \le (1-t) f_0(x^*) + t f_0(y) < f_0(x^*)
+\]
+for all $t \in (0,1)$. Choosing $t$ small enough that
+$\|z_t - x^*\| = t\|y - x^*\| < \delta$ contradicts local optimality.
+\end{proof}
+
+\subsection{Important Special Cases}
+
+\begin{definition}[Linear program -- LP]\label{def:lp}
+A \emph{linear program} has the form
+\[
+  \min_{x} \; c^\top x \quad \text{s.t.} \quad Ax \le b, \; Cx = d,
+\]
+where all functions are affine (hence convex).
+\end{definition}
+
+\begin{definition}[Quadratic program -- QP]\label{def:qp}
+A \emph{quadratic program} minimizes a convex quadratic over a polyhedral
+feasible set:
+\[
+  \min_{x} \; \tfrac{1}{2} x^\top P x + q^\top x \quad \text{s.t.} \quad Ax \le b,
+\]
+with $P \succeq 0$ (positive semidefinite).
+\end{definition}
+
+\begin{definition}[Second-order cone program -- SOCP]\label{def:socp}
+An SOCP has constraints of the form $\|A_i x + b_i\|_2 \le c_i^\top x + d_i$
+(second-order cone constraints), which are convex.
+\end{definition}
+
+\begin{definition}[Semidefinite program -- SDP]\label{def:sdp}
+An SDP minimizes a linear objective subject to a linear matrix inequality:
+\[
+  \min_{x} \; c^\top x \quad \text{s.t.} \quad F_0 + \sum_{i=1}^n x_i F_i \succeq 0,
+\]
+where $F_0, \dots, F_n$ are symmetric matrices.
+\end{definition}
+
+\begin{remark}[Hierarchy]\label{rem:hierarchy}
+We have the strict inclusion chain:
+$\text{LP} \subset \text{QP} \subset \text{SOCP} \subset \text{SDP} \subset
+\text{convex programs}$.
+\end{remark}
+
+\begin{rlconnection}
+In RL, linear programs arise in the LP formulation of MDPs (minimize
+$\sum_s c(s) V(s)$ subject to Bellman feasibility constraints). Semidefinite
+programs appear in robust MDP formulations and certain Lyapunov-based safety
+constraints. Quadratic programs arise in trust-region policy optimization when
+the surrogate objective is approximated to second order.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: Lagrangian Duality
+%% ============================================================
+
+
+\end{document}

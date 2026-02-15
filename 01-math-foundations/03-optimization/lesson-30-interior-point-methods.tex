@@ -1,0 +1,427 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{Lesson 30: Interior-Point Methods}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{7}
+
+\section{Interior-Point Methods}\label{sec:interior}
+
+\subsection{Logarithmic Barrier}
+
+Interior-point methods solve constrained problems by converting inequality
+constraints into a smooth barrier term added to the objective, then following
+the ``central path'' as the barrier weight decreases.
+
+\begin{definition}[Logarithmic barrier]\label{def:barrier}
+For the convex program~\eqref{eq:std-form} (with equality constraints omitted
+for simplicity), the \emph{logarithmic barrier} is
+\begin{equation}\label{eq:barrier}
+  \phi(x) = -\sum_{i=1}^m \log(-f_i(x)),
+\end{equation}
+defined for $x$ in the strictly feasible set $\{x : f_i(x) < 0, \, i = 1,\dots,m\}$.
+\end{definition}
+
+\begin{proposition}[Barrier is convex]\label{prop:barrier-convex}
+If $f_1, \dots, f_m$ are convex, then the logarithmic barrier $\phi$ is convex
+on $\{x : f_i(x) < 0\}$.
+\end{proposition}
+
+\begin{proof}
+The function $-\log(-u)$ is convex and non-decreasing on $u < 0$. Since each
+$f_i$ is convex, the composition $-\log(-f_i(x))$ is convex (by the
+composition rule for convex non-decreasing outer function and convex inner
+function). The sum of convex functions is convex.
+\end{proof}
+
+\subsection{Central Path}
+
+\begin{definition}[Barrier problem and central path]\label{def:central-path}
+For parameter $t > 0$, the \emph{barrier problem} is
+\begin{equation}\label{eq:barrier-prob}
+  \min_x \; t\, f_0(x) + \phi(x).
+\end{equation}
+Assuming a unique minimizer $x^*(t)$ exists for each $t > 0$, the curve
+$\{x^*(t) : t > 0\}$ is called the \emph{central path}.
+\end{definition}
+
+\begin{theorem}[Central path optimality bound]\label{thm:central-path}
+Each point $x^*(t)$ on the central path satisfies
+\begin{equation}\label{eq:central-bound}
+  f_0(x^*(t)) - p^* \le \frac{m}{t},
+\end{equation}
+where $p^*$ is the optimal value and $m$ is the number of inequality
+constraints.
+\end{theorem}
+
+\begin{proof}
+At $x^*(t)$, the gradient of the barrier objective vanishes:
+\[
+  t\, \nabla f_0(x^*(t)) + \nabla \phi(x^*(t)) = 0.
+\]
+The gradient of the barrier is
+$\nabla \phi(x) = \sum_{i=1}^m \frac{-\nabla f_i(x)}{-f_i(x)}
+= \sum_{i=1}^m \frac{\nabla f_i(x)}{-f_i(x)}$.
+
+Define the dual variables $\lambda^*_i(t) = \frac{1}{t(-f_i(x^*(t)))} > 0$.
+Then the stationarity condition becomes
+\[
+  \nabla f_0(x^*(t)) + \sum_{i=1}^m \lambda^*_i(t) \nabla f_i(x^*(t)) = 0.
+\]
+Thus $x^*(t)$ minimizes $L(x, \lambda^*(t), 0) = f_0(x) + \sum_i \lambda^*_i(t) f_i(x)$ over $x$,
+so the dual function evaluates to
+\begin{align*}
+  g(\lambda^*(t), 0)
+  &= f_0(x^*(t)) + \sum_i \lambda^*_i(t) f_i(x^*(t)) \\
+  &= f_0(x^*(t)) + \sum_i \frac{f_i(x^*(t))}{t(-f_i(x^*(t)))} \\
+  &= f_0(x^*(t)) - \frac{m}{t}.
+\end{align*}
+By weak duality, $g(\lambda^*(t), 0) \le p^*$, so
+$f_0(x^*(t)) - m/t \le p^*$, giving $f_0(x^*(t)) - p^* \le m/t$.
+\end{proof}
+
+\subsection{Barrier Method}
+
+\begin{definition}[Barrier method]\label{def:barrier-method}
+The \emph{barrier method} (or \emph{path-following method}) proceeds as follows:
+\begin{enumerate}
+  \item Initialize with a strictly feasible $x^{(0)}$, $t^{(0)} > 0$,
+    and a growth factor $\sigma > 1$.
+  \item At iteration $\ell$: solve (approximately) the barrier problem
+    $\min_x \; t^{(\ell)} f_0(x) + \phi(x)$ starting from $x^{(\ell)}$,
+    using Newton's method. Set $x^{(\ell+1)}$ to the result.
+  \item Update $t^{(\ell+1)} = \sigma \cdot t^{(\ell)}$.
+  \item Stop when $m/t^{(\ell)} \le \epsilon$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Complexity of the barrier method]\label{thm:barrier-complexity}
+To achieve $f_0(x) - p^* \le \epsilon$, the barrier method requires
+$O(\sqrt{m}\log(m/\epsilon))$ Newton steps (outer iterations), each involving
+the solution of a linear system of size $n \times n$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+By Theorem~\ref{thm:central-path}, we need $t \ge m/\epsilon$, so
+$\lceil \log_\sigma(m/(t^{(0)}\epsilon))\rceil$ outer iterations suffice.
+The key result from the theory of self-concordant barriers (Nesterov and
+Nemirovskii) is that with the optimal choice $\sigma = 1 + 1/\sqrt{m}$,
+each centering step (finding $x^*(t)$ to sufficient accuracy) requires
+$O(1)$ Newton steps (specifically, a constant number independent of $m$ and
+$n$). The total number of outer iterations is then
+$\log_\sigma(m/\epsilon) = O(\sqrt{m}\log(m/\epsilon))$,
+using $\log(1 + 1/\sqrt{m}) \approx 1/\sqrt{m}$.
+\end{proof}
+
+\begin{keyresult}[title={Interior-Point Complexity}]
+Interior-point methods solve convex programs with $m$ inequality constraints
+to $\epsilon$-accuracy in $O(\sqrt{m}\log(m/\epsilon))$ Newton iterations.
+Each Newton iteration costs $O(n^3)$ for a dense $n$-dimensional problem
+(or less with structure). This polynomial complexity in $m$, $n$, and
+$\log(1/\epsilon)$ makes interior-point methods highly efficient for
+moderate-dimensional problems.
+\end{keyresult}
+
+\begin{rlconnection}
+Interior-point methods are used to solve the linear programs that arise in the
+LP formulation of finite MDPs. For large-scale problems, they complement
+value iteration and policy iteration. In constrained RL (safe RL), solving
+the inner constrained optimization at each policy update step can be handled
+by interior-point methods when the constraint set has moderate dimension.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: Exercises
+%% ============================================================
+
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Dual of a linear program]\label{ex:lp-dual}
+Consider the LP $\min_x \; c^\top x$ subject to $Ax = b$, $x \ge 0$.
+\begin{enumerate}[label=(\alph*)]
+  \item Write the Lagrangian and derive the dual problem. Show it is
+    $\max_\nu \; b^\top \nu$ subject to $A^\top \nu \le c$.
+  \item Prove that strong duality always holds for feasible LPs (Hint: LP
+    feasible sets are polyhedral, so Slater's condition can be replaced by
+    the weaker condition of feasibility).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[KKT for least-squares with non-negativity]\label{ex:nnls}
+Consider the non-negative least-squares problem:
+$\min_{x \ge 0} \; \frac{1}{2}\|Ax - b\|^2$.
+Write the KKT conditions explicitly and show they reduce to:
+$x \ge 0$, $A^\top(Ax - b) \ge 0$, $x_i [A^\top(Ax - b)]_i = 0$ for all $i$.
+\end{exercise}
+
+\begin{exercise}[Convergence rate verification]\label{ex:gd-verify}
+Let $f(x) = \frac{1}{2}x^\top Q x$ where $Q$ is symmetric positive definite
+with eigenvalues $\mu = \lambda_{\min}(Q)$ and $L = \lambda_{\max}(Q)$.
+\begin{enumerate}[label=(\alph*)]
+  \item Verify that $f$ is $\mu$-strongly convex and $L$-smooth.
+  \item Run gradient descent with $\eta = 1/L$ and verify that
+    $f(x_k) \le (1 - \mu/L)^k f(x_0)$.
+  \item For $Q = \diag(1, 100)$, compute the condition number and determine
+    how many iterations are needed for $f(x_k)/f(x_0) \le 10^{-6}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Soft-thresholding derivation]\label{ex:soft-thresh}
+Derive the soft-thresholding operator: show that
+$\prox_{\tau|\cdot|}(v) = \text{sign}(v)\max(|v| - \tau, 0)$ for a scalar $v$.
+(Hint: consider the three cases $v > \tau$, $|v| \le \tau$, and $v < -\tau$
+separately.)
+\end{exercise}
+
+\begin{exercise}[Dual of SDP relaxation]\label{ex:sdp-dual}
+Consider the boolean optimization problem $\min_{x \in \{-1,+1\}^n} x^\top W x$.
+The standard SDP relaxation replaces $x x^\top$ with a matrix variable
+$X \succeq 0$, $X_{ii} = 1$.
+\begin{enumerate}[label=(\alph*)]
+  \item Write this relaxation as a standard SDP.
+  \item Derive its Lagrange dual.
+  \item Show that weak duality provides a lower bound on the original
+    combinatorial problem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Proving the PL inequality]\label{ex:pl}
+Let $f$ be $\mu$-strongly convex and differentiable.
+\begin{enumerate}[label=(\alph*)]
+  \item Prove that $\|\nabla f(x)\|^2 \ge 2\mu(f(x) - f(x^*))$ for all $x$.
+  \item Show by example that the PL inequality can hold for non-convex
+    functions (consider $f(x) = x^2 + 3\sin^2(x)$ near the origin; verify
+    numerically).
+  \item Prove that gradient descent converges linearly under the PL inequality
+    alone (without assuming convexity).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[FISTA for LASSO]\label{ex:fista-lasso}
+The LASSO problem is $\min_x \frac{1}{2}\|Ax - b\|^2 + \tau\|x\|_1$.
+\begin{enumerate}[label=(\alph*)]
+  \item Identify $f(x)$ and $h(x)$ in the composite formulation.
+  \item Write out the FISTA iteration explicitly (including the
+    soft-thresholding step).
+  \item What is the Lipschitz constant $L$ of $\nabla f$? Express it in terms
+    of $A$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Central path for LP]\label{ex:lp-barrier}
+For the LP $\min\; c^\top x$ subject to $x \ge 0$ (i.e., $f_i(x) = -x_i$):
+\begin{enumerate}[label=(\alph*)]
+  \item Write the barrier function $\phi(x) = -\sum_i \log(x_i)$.
+  \item Show that the central path satisfies $x^*_i(t) = 1/(tc_i)$ when $c > 0$.
+  \item Verify that $c^\top x^*(t) - p^* = n/t$ where $n$ is the dimension
+    and $p^* = 0$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Duality gap in constrained MDP]\label{ex:cmdp}
+Consider a constrained MDP with one constraint: $\max_\pi J(\pi)$ subject to
+$C(\pi) \le \alpha$, where $J$ and $C$ are the expected return and expected
+cost under policy $\pi$ over a finite MDP.
+\begin{enumerate}[label=(\alph*)]
+  \item Write the Lagrangian $L(\pi, \lambda)$ for this problem.
+  \item Show that the dual function $g(\lambda) = \max_\pi L(\pi, \lambda)$
+    corresponds to solving an unconstrained MDP with modified reward
+    $r(s,a) - \lambda c(s,a)$.
+  \item Under what condition does strong duality hold? (Hint: relate to
+    Slater's condition in the occupancy-measure LP formulation.)
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Moreau envelope and gradient]\label{ex:moreau}
+The \emph{Moreau envelope} of a convex function $h$ with parameter $\gamma > 0$ is
+$M_\gamma h(v) = \min_x \{h(x) + \frac{1}{2\gamma}\|x - v\|^2\}$.
+\begin{enumerate}[label=(\alph*)]
+  \item Show that $M_\gamma h$ is differentiable even when $h$ is not, with
+    gradient $\nabla M_\gamma h(v) = \frac{1}{\gamma}(v - \prox_{\gamma h}(v))$.
+  \item Prove that $M_\gamma h$ is $(1/\gamma)$-smooth.
+  \item Explain how this connects to the proximal point algorithm:
+    $x_{k+1} = \prox_{\gamma h}(x_k)$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: Summary
+%% ============================================================
+
+\section{Summary}\label{sec:summary}
+
+\subsection{Key Theorems Recap}
+
+The central results of this document are:
+\begin{enumerate}
+  \item \textbf{Weak duality} (Theorem~\ref{thm:weak-duality}): Always
+    $d^* \le p^*$.
+  \item \textbf{Strong duality} (Theorem~\ref{thm:strong-duality}): Under
+    Slater's condition, $d^* = p^*$.
+  \item \textbf{KKT conditions} (Theorems~\ref{thm:kkt-necessary}
+    and~\ref{thm:kkt-sufficient}): Necessary under strong duality, sufficient
+    for convex problems.
+  \item \textbf{Gradient descent} (Theorems~\ref{thm:gd-convex}
+    and~\ref{thm:gd-strong}): $O(1/k)$ for convex, $O(\rho^k)$ for strongly convex.
+  \item \textbf{Nesterov acceleration} (Theorem~\ref{thm:nesterov}): Optimal
+    $O(1/k^2)$ for smooth convex.
+  \item \textbf{Interior-point methods} (Theorem~\ref{thm:barrier-complexity}):
+    $O(\sqrt{m}\log(m/\epsilon))$ Newton steps.
+\end{enumerate}
+
+\subsection{Convergence Rate Summary}
+
+\begin{table}[h]
+\centering
+\caption{Convergence rates for first-order and interior-point methods.}
+\label{tab:rates}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Method} & \textbf{Assumption} & \textbf{Rate} & \textbf{Iterations for $\epsilon$} \\
+\midrule
+Gradient descent & Convex, $L$-smooth &
+  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
+Gradient descent & $\mu$-s.c., $L$-smooth &
+  $O((1-\mu/L)^k)$ & $O(\kappa\log(1/\epsilon))$ \\
+Nesterov accel. & Convex, $L$-smooth &
+  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
+Nesterov accel. & $\mu$-s.c., $L$-smooth &
+  $O((1-1/\sqrt{\kappa})^k)$ & $O(\sqrt{\kappa}\log(1/\epsilon))$ \\
+Prox.\ gradient & Convex, $L$-smooth $+$ $h$ &
+  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
+FISTA & Convex, $L$-smooth $+$ $h$ &
+  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
+Interior point & $m$ ineq.\ constraints &
+  $O(\sqrt{m}\log(m/\epsilon))$ & $O(\sqrt{m}\log(1/\epsilon))$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{remark}[Lower bounds]\label{rem:lower}
+The $O(1/k^2)$ rate for smooth convex functions and $O((1-1/\sqrt{\kappa})^k)$
+for smooth strongly convex functions match the information-theoretic lower bounds
+for first-order methods (Nesterov, 1983). These are not improvable by any
+method that accesses $f$ only through gradient evaluations.
+\end{remark}
+
+\begin{remark}[Stochastic extensions]\label{rem:stochastic}
+In ML and RL, we typically have access only to stochastic gradients. SGD with
+step size $\eta_k = O(1/k)$ achieves $O(1/\sqrt{k})$ for convex and $O(1/k)$
+for strongly convex problems (in expectation). Variance reduction techniques
+(SVRG, SARAH) recover the deterministic rates up to logarithmic factors. These
+stochastic methods are covered in a subsequent document.
+\end{remark}
+
+
+\end{document}

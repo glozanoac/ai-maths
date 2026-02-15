@@ -1,0 +1,276 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{tdconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{Lesson 13: Martingale Convergence Theory}
+\author{AI/ML Mathematics Series}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{14}
+
+\section{Martingale Convergence Theory}
+\label{sec:martingale_convergence}
+
+Martingales and martingale difference sequences were defined in Section~\ref{sec:mds}. Here we develop the convergence theory that underpins the stochastic approximation proofs.
+
+\subsection{Submartingales and Supermartingales}
+\label{subsec:sub_super}
+
+\begin{definition}[Submartingale and Supermartingale]
+\label{def:sub_super}
+Let $\{M_n\}$ be adapted to $\{\mathcal{F}_n\}$ with $\E[|M_n|] < \infty$.
+\begin{itemize}[nosep]
+    \item $\{M_n\}$ is a \emph{submartingale} if $\E[M_{n+1} \mid \mathcal{F}_n] \geq M_n$ a.s.\ for all $n$.
+    \item $\{M_n\}$ is a \emph{supermartingale} if $\E[M_{n+1} \mid \mathcal{F}_n] \leq M_n$ a.s.\ for all $n$.
+\end{itemize}
+\end{definition}
+
+\begin{remark}
+A martingale is both a submartingale and a supermartingale. A supermartingale has non-increasing expected values: $\E[M_{n+1}] \leq \E[M_n]$ (take unconditional expectations in the defining inequality using the tower property). Intuitively, a supermartingale represents a ``losing game'' where the expected future value is at most the current value.
+\end{remark}
+
+\begin{proposition}[Convex Functions of Martingales]
+\label{prop:convex_martingale}
+If $\{M_n\}$ is a martingale and $\varphi$ is convex with $\E[|\varphi(M_n)|] < \infty$, then $\{\varphi(M_n)\}$ is a submartingale.
+\end{proposition}
+
+\begin{proof}
+By Jensen's inequality (conditional version, Theorem~\ref{thm:jensen}):
+\begin{equation}
+    \E[\varphi(M_{n+1}) \mid \mathcal{F}_n] \geq \varphi(\E[M_{n+1} \mid \mathcal{F}_n]) = \varphi(M_n).
+\end{equation}
+\end{proof}
+
+\begin{corollary}
+\label{cor:squared_submartingale}
+If $\{M_n\}$ is a martingale with $\E[M_n^2] < \infty$, then $\{M_n^2\}$ is a submartingale.
+\end{corollary}
+
+\begin{proof}
+Apply Proposition~\ref{prop:convex_martingale} with $\varphi(x) = x^2$.
+\end{proof}
+
+\subsection{Doob's Upcrossing Inequality}
+\label{subsec:upcrossing}
+
+The upcrossing inequality is the key technical tool for proving the martingale convergence theorem.
+
+\begin{definition}[Upcrossings]
+\label{def:upcrossing}
+For a sequence $x_0, x_1, \ldots, x_n$ and real numbers $a < b$, an \emph{upcrossing} of $[a, b]$ is a pair of times $\sigma < \tau \leq n$ such that $x_\sigma \leq a$ and $x_\tau \geq b$. The \emph{number of upcrossings} $U_n([a,b])$ counts the maximum number of non-overlapping upcrossings of $[a,b]$ by $x_0, \ldots, x_n$.
+\end{definition}
+
+\begin{keyresult}[Doob's Upcrossing Inequality]
+\begin{theorem}[Doob's Upcrossing Inequality]
+\label{thm:upcrossing}
+If $\{M_n\}_{n=0}^N$ is a submartingale and $a < b$, then:
+\begin{equation}
+    \E[U_N([a,b])] \leq \frac{\E[(M_N - a)^+]}{b - a} \leq \frac{\E[|M_N|] + |a|}{b - a},
+    \label{eq:upcrossing}
+\end{equation}
+where $x^+ = \max(x, 0)$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Define $\tilde{M}_n = (M_n - a)^+$. Since $x \mapsto (x - a)^+$ is convex and non-decreasing, and $\{M_n\}$ is a submartingale, $\{\tilde{M}_n\}$ is also a submartingale (by Jensen). Moreover, $\tilde{M}_n \geq 0$, and the number of upcrossings of $[a, b]$ by $\{M_n\}$ equals the number of upcrossings of $[0, b-a]$ by $\{\tilde{M}_n\}$.
+
+It now suffices to prove the result for a non-negative submartingale $\{Y_n\}$ upcrossing $[0, c]$ with $c = b - a$. Each upcrossing contributes a gain of at least $c$. Between upcrossings, the process may decrease, but the submartingale property limits how much value can be ``lost.'' A careful accounting using optional stopping gives:
+\begin{equation}
+    c \cdot \E[U_N([0, c])] \leq \E[Y_N],
+\end{equation}
+which yields~\eqref{eq:upcrossing} after substituting back.
+\end{proof}
+
+\subsection{Doob's Martingale Convergence Theorem}
+\label{subsec:doob_convergence}
+
+\begin{keyresult}[Doob's Convergence Theorem]
+\begin{theorem}[Doob's Forward Convergence Theorem]
+\label{thm:doob_convergence}
+If $\{M_n\}$ is a submartingale with $\sup_n \E[M_n^+] < \infty$, then $M_\infty = \lim_{n \to \infty} M_n$ exists and is finite almost surely.
+
+In particular, every non-negative supermartingale converges almost surely.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+The limit $\lim_n M_n$ fails to exist (as an extended real number) if and only if $\liminf_n M_n < \limsup_n M_n$, which occurs if and only if $M_n$ upcrosses some rational interval $[a, b]$ with $a < b$ infinitely often:
+\begin{equation}
+    \{\lim M_n \text{ does not exist}\} = \bigcup_{\substack{a, b \in \mathbb{Q} \\ a < b}} \{U_\infty([a,b]) = \infty\}.
+\end{equation}
+By Doob's upcrossing inequality (Theorem~\ref{thm:upcrossing}):
+\begin{equation}
+    \E[U_N([a,b])] \leq \frac{\E[(M_N - a)^+]}{b - a} \leq \frac{\sup_n \E[M_n^+] + |a|}{b - a} < \infty.
+\end{equation}
+Since $U_N([a,b])$ is non-decreasing in $N$, the Monotone Convergence Theorem gives $\E[U_\infty([a,b])] < \infty$, so $U_\infty([a,b]) < \infty$ a.s. By the countable union bound over rational $a, b$:
+\begin{equation}
+    \Prob(\lim M_n \text{ does not exist}) \leq \sum_{\substack{a,b \in \mathbb{Q} \\ a < b}} \Prob(U_\infty([a,b]) = \infty) = 0.
+\end{equation}
+So $M_\infty = \lim M_n$ exists a.s. To show $|M_\infty| < \infty$ a.s.: since $\{M_n\}$ is a submartingale, $\E[M_n] \geq \E[M_0] > -\infty$, and $\E[M_n^+] \leq C < \infty$. By Fatou's lemma, $\E[M_\infty^+] < \infty$ and $\E[M_\infty^-] \leq \liminf \E[M_n^-] = \liminf(\E[M_n^+] - \E[M_n]) \leq C - \E[M_0] < \infty$. So $\E[|M_\infty|] < \infty$, hence $M_\infty$ is finite a.s.
+
+For the ``in particular'': if $\{M_n\}$ is a non-negative supermartingale, then $\{-M_n\}$ is a non-positive submartingale with $(-M_n)^+ = 0$, so $\sup_n \E[(-M_n)^+] = 0 < \infty$. Alternatively, directly: $M_n \geq 0$ implies $M_n^+ = M_n$, and $\E[M_n] \leq \E[M_0]$ (supermartingale), so $\sup_n \E[M_n^+] = \sup_n \E[M_n] \leq \E[M_0] < \infty$. Since $\{M_n\}$ is a supermartingale, $\{-M_n\}$ is a submartingale. Apply the theorem to $\{-M_n\}$: $\sup_n \E[(-M_n)^+] = \sup_n \E[M_n^-] = 0$ (since $M_n \geq 0$). So $-M_n$ converges a.s., hence $M_n$ converges a.s.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+Doob's convergence theorem is applied in the TD convergence proofs (Appendix A of the TD article) through the Robbins--Siegmund theorem below. The non-negative supermartingale case is used most directly: a Lyapunov function $\|V_t - V^\pi\|^2$ is shown to be (approximately) a non-negative supermartingale, guaranteeing that it converges a.s.\ --- which means $V_t \to V^\pi$.
+\end{rlconnection}
+
+\subsection{Robbins--Siegmund Theorem}
+\label{subsec:robbins_siegmund}
+
+\begin{keyresult}[Robbins--Siegmund Theorem]
+\begin{theorem}[Robbins--Siegmund (1971)]
+\label{thm:robbins_siegmund}
+Let $\{\mathcal{F}_n\}$ be a filtration and let $\{V_n\}$, $\{\alpha_n\}$, $\{\beta_n\}$, $\{\gamma_n\}$ be non-negative sequences adapted to $\{\mathcal{F}_n\}$ satisfying:
+\begin{equation}
+    \E[V_{n+1} \mid \mathcal{F}_n] \leq (1 + \alpha_n) V_n - \beta_n + \gamma_n \quad \text{a.s.\ for all } n,
+    \label{eq:robbins_siegmund}
+\end{equation}
+with $\sum_{n=0}^\infty \alpha_n < \infty$ and $\sum_{n=0}^\infty \gamma_n < \infty$ a.s. Then:
+\begin{enumerate}[nosep]
+    \item $V_n$ converges a.s.\ to a finite random variable $V_\infty \geq 0$.
+    \item $\sum_{n=0}^\infty \beta_n < \infty$ a.s.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Step 1: Construct a non-negative supermartingale.}
+Define $W_n = V_n \prod_{k=0}^{n-1}(1 + \alpha_k)^{-1}$ and $\Gamma_n = \sum_{k=0}^{n-1} \gamma_k \prod_{j=0}^{k-1}(1+\alpha_j)^{-1}$. Actually, a simpler approach: define $Z_n = V_n + \sum_{k=n}^\infty \gamma_k - \sum_{k=n}^\infty \alpha_k V_k$. Instead, we use the standard proof via the product:
+
+Let $A_n = \prod_{k=0}^{n-1}(1 + \alpha_k)$. Since $\sum \alpha_k < \infty$, the product $A_n$ converges to a finite limit $A_\infty = \prod_{k=0}^\infty(1+\alpha_k) \leq \exp(\sum \alpha_k) < \infty$.
+
+From~\eqref{eq:robbins_siegmund}: $\E[V_{n+1} \mid \mathcal{F}_n] + \beta_n \leq V_n + \alpha_n V_n + \gamma_n$. Define:
+\begin{equation}
+    U_n = V_n + \sum_{k=n}^\infty \gamma_k.
+\end{equation}
+Since $\sum \gamma_k < \infty$ a.s., $U_n$ is well defined and $U_n \geq V_n \geq 0$. Then:
+\begin{align}
+    \E[U_{n+1} \mid \mathcal{F}_n] &= \E[V_{n+1} \mid \mathcal{F}_n] + \sum_{k=n+1}^\infty \gamma_k \nonumber\\
+    &\leq (1 + \alpha_n) V_n - \beta_n + \gamma_n + \sum_{k=n+1}^\infty \gamma_k \nonumber\\
+    &= (1 + \alpha_n) V_n - \beta_n + \sum_{k=n}^\infty \gamma_k \nonumber\\
+    &= V_n + \alpha_n V_n - \beta_n + \sum_{k=n}^\infty \gamma_k \nonumber\\
+    &\leq U_n + \alpha_n V_n - \beta_n. \label{eq:rs_step1}
+\end{align}
+Since $\alpha_n V_n \leq \alpha_n U_n$, we get $\E[U_{n+1} \mid \mathcal{F}_n] \leq (1 + \alpha_n) U_n - \beta_n \leq (1+\alpha_n) U_n$.
+
+\textbf{Step 2: Apply Doob's theorem.}
+Define $\tilde{U}_n = U_n / A_n$ where $A_n = \prod_{k=0}^{n-1}(1+\alpha_k)$. Then:
+\begin{equation}
+    \E[\tilde{U}_{n+1} \mid \mathcal{F}_n] = \frac{\E[U_{n+1} \mid \mathcal{F}_n]}{A_{n+1}} \leq \frac{(1+\alpha_n) U_n}{A_{n+1}} = \frac{U_n}{A_n} = \tilde{U}_n.
+\end{equation}
+So $\{\tilde{U}_n\}$ is a non-negative supermartingale. By Doob's convergence theorem (Theorem~\ref{thm:doob_convergence}), $\tilde{U}_n \to \tilde{U}_\infty$ a.s.\ with $\tilde{U}_\infty$ finite. Since $A_n \to A_\infty < \infty$, $U_n = A_n \tilde{U}_n \to A_\infty \tilde{U}_\infty$ a.s., which is finite. Since $\sum \gamma_k < \infty$, $V_n = U_n - \sum_{k=n}^\infty \gamma_k \to A_\infty \tilde{U}_\infty - 0 = V_\infty$ a.s.
+
+\textbf{Step 3: Summability of $\beta_n$.}
+From~\eqref{eq:rs_step1}: $\beta_n \leq U_n + \alpha_n V_n - \E[U_{n+1} \mid \mathcal{F}_n]$. Summing and taking expectations:
+\begin{equation}
+    \E\!\left[\sum_{n=0}^N \beta_n\right] \leq \E[U_0] + \sum_{n=0}^N \alpha_n \E[V_n] - \E[U_{N+1}].
+\end{equation}
+Since $U_{N+1} \geq 0$ and the right side is bounded (using $V_n \leq U_n \leq A_\infty \tilde{U}_0$ eventually), the sum $\sum \beta_n$ converges a.s.\ by monotone convergence.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The Robbins--Siegmund theorem is the primary convergence tool for stochastic approximation in RL. In the TD(0) convergence proof, set:
+\begin{itemize}[nosep]
+    \item $V_n = \|V_n - V^\pi\|^2$ (the Lyapunov function --- squared error),
+    \item $\alpha_n = O(\alpha_n^2)$ (from the step-size squared term),
+    \item $\beta_n = c \alpha_n \|V_n - V^\pi\|^2$ (the drift toward the fixed point),
+    \item $\gamma_n = C \alpha_n^2$ (from the noise variance).
+\end{itemize}
+Conclusion (2) gives $\sum_n \alpha_n \|V_n - V^\pi\|^2 < \infty$, and since $\sum \alpha_n = \infty$, this forces $\|V_n - V^\pi\| \to 0$ a.s.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 16: STOCHASTIC APPROXIMATION NOISE DECOMPOSITION
+%% ============================================================
+
+
+\end{document}

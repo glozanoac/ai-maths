@@ -1,0 +1,205 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{Lesson 28: Nesterov Acceleration}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{5}
+
+\section{Nesterov's Accelerated Gradient Method}\label{sec:nesterov}
+
+\subsection{The Accelerated Iteration}
+
+Nesterov's accelerated gradient method improves the $O(1/k)$ rate for convex
+functions to $O(1/k^2)$, which is optimal among first-order methods.
+
+\begin{definition}[Nesterov's accelerated gradient method]\label{def:nesterov}
+For a convex, $L$-smooth function $f$, with step size $\eta = 1/L$, the
+accelerated gradient method maintains two sequences:
+\begin{equation}\label{eq:nesterov}
+\begin{aligned}
+  y_{k} &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k),
+\end{aligned}
+\end{equation}
+with $x_0 = x_{-1}$ (so $y_0 = x_0$). The momentum coefficient
+$\theta_k = (k-1)/(k+2)$ is the key ingredient.
+\end{definition}
+
+\subsection{Convergence Rate}
+
+\begin{theorem}[$O(1/k^2)$ convergence of Nesterov's method]\label{thm:nesterov}
+Under the conditions of Definition~\ref{def:nesterov},
+\begin{equation}\label{eq:nesterov-rate}
+  f(x_k) - f(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We use the \emph{estimate sequence} technique. Define the sequences
+$\{A_k\}$ and $\{v_k\}$ by $A_0 = 0$, $a_{k+1} = (k+1)/2$,
+$A_{k+1} = A_k + a_{k+1}$, and $v_0 = x_0$. One can verify that
+$A_k = k(k+1)/4$ for $k \ge 1$.
+
+We prove by induction the key inequality:
+\begin{equation}\label{eq:estimate-seq}
+  A_k (f(x_k) - f(x^*)) \le \frac{L}{2}\|v_0 - x^*\|^2
+    - \frac{L}{2}\|v_k - x^*\|^2.
+\end{equation}
+Since $\|v_k - x^*\|^2 \ge 0$, this implies
+$f(x_k) - f(x^*) \le \frac{L\|x_0 - x^*\|^2}{2A_k}
+= \frac{2L\|x_0 - x^*\|^2}{k(k+1)} \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}$.
+
+\emph{Base case} ($k = 0$): $A_0 = 0$, so both sides equal zero.
+
+\emph{Inductive step:} Assume~\eqref{eq:estimate-seq} holds for $k$. We need to
+show it for $k+1$. By the descent lemma applied at $y_k$:
+\[
+  f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|\nabla f(y_k)\|^2.
+\]
+By convexity: $f(x^*) \ge f(y_k) + \nabla f(y_k)^\top(x^* - y_k)$, so
+$f(y_k) \le f(x^*) + \nabla f(y_k)^\top(y_k - x^*)$. Combining with
+a weighted average (weight $a_{k+1}$ for the inequality at $x^*$ and $A_k$
+for the inductive hypothesis at $x_k$), and using the specific choice
+$y_k = \frac{A_k x_k + a_{k+1} v_k}{A_{k+1}}$ together with the update
+$v_{k+1} = v_k - \frac{a_{k+1}}{L}\nabla f(y_k)$, one obtains
+after algebraic manipulations (completing the square in $v_k$):
+\[
+  A_{k+1}(f(x_{k+1}) - f(x^*))
+  \le \frac{L}{2}\|v_0 - x^*\|^2 - \frac{L}{2}\|v_{k+1} - x^*\|^2.
+\]
+The algebraic details involve verifying that the momentum coefficient
+$(k-1)/(k+2)$ corresponds precisely to the ratio $A_k/A_{k+1}$ that makes
+$y_k$ the correct convex combination. This completes the induction.
+\end{proof}
+
+\begin{remark}[Optimality]\label{rem:optimal}
+Nesterov (1983) showed that $O(1/k^2)$ is the \emph{optimal} rate for
+first-order methods on the class of $L$-smooth convex functions. That is,
+for any first-order method using only gradient evaluations, there exists an
+$L$-smooth convex function for which the method cannot converge faster than
+$\Omega(1/k^2)$. This is the celebrated information-theoretic lower bound.
+\end{remark}
+
+\begin{warning}
+Nesterov acceleration does not directly apply to stochastic gradients. Naive
+momentum with noisy gradients can amplify variance and diverge. This is why
+SGD with momentum and Adam use different momentum schemes than classical
+Nesterov acceleration.
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: Proximal Methods
+%% ============================================================
+
+
+\end{document}

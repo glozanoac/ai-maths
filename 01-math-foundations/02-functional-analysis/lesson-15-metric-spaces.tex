@@ -1,0 +1,493 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 6: Metric and Normed Spaces}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\diam}{diam}
+\DeclareMathOperator{\Int}{int}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\Span}{span}
+\DeclareMathOperator{\id}{id}
+
+% ---- Title ----
+\title{Lesson 15: Metric Spaces}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{0}
+
+\section{Why Functional Analysis?}
+\label{sec:intro}
+
+Reinforcement learning algorithms operate on \emph{function spaces}. A value
+function $V \colon \mathcal{S} \to \R$ assigns a real number to every state; a
+Q-function $Q \colon \mathcal{S} \times \mathcal{A} \to \R$ assigns a value to
+every state-action pair. When we write the Bellman optimality equation
+\begin{equation}
+\label{eq:bellman_intro}
+V^*(s) = \max_{a \in \mathcal{A}} \left[ r(s,a) + \gamma \sum_{s'} p(s' \mid s,a)\, V^*(s') \right],
+\end{equation}
+we are asserting that $V^*$ is a \emph{fixed point} of an operator $T$ acting on
+a space of functions. The fundamental questions are:
+
+\begin{enumerate}[nosep]
+    \item Does a fixed point exist?
+    \item Is it unique?
+    \item Does the iteration $V_{n+1} = T V_n$ converge to $V^*$?
+    \item How fast does it converge?
+\end{enumerate}
+
+Answering these questions requires the language of functional analysis:
+
+\begin{itemize}[nosep]
+    \item \textbf{Metric spaces} (Section~\ref{sec:metric}) provide the notion of
+    distance needed to say ``$V_n$ converges to $V^*$.''
+    \item \textbf{Normed spaces} (Section~\ref{sec:normed}) give us a notion of
+    ``size'' for functions and a way to measure error $\|V_n - V^*\|$.
+    \item \textbf{Completeness} (Section~\ref{sec:banach}) ensures that Cauchy
+    sequences converge, which is essential for the Banach fixed-point theorem.
+    \item \textbf{Bounded linear operators} (Section~\ref{sec:operators}) formalize
+    the maps between function spaces that arise in approximation theory.
+    \item \textbf{Compactness} (Section~\ref{sec:compactness}) is the key to
+    existence results and understanding the behavior of infinite-dimensional spaces.
+    \item \textbf{The Baire category theorem} (Section~\ref{sec:baire}) underpins
+    the three pillars of linear functional analysis: the Uniform Boundedness
+    Principle, the Open Mapping Theorem, and the Closed Graph Theorem.
+\end{itemize}
+
+\begin{rlconnection}[The Bellman Operator as Motivation]
+The Bellman optimality operator $T$ defined by the right-hand side of
+\eqref{eq:bellman_intro} acts on the Banach space $(b(\mathcal{S}), \|\cdot\|_\infty)$
+of bounded real-valued functions on the state space, equipped with the supremum
+norm. The contraction mapping theorem (Banach fixed-point theorem, which we prove
+in the next lesson) guarantees that $T$ has a unique fixed point and that
+$\|T^n V_0 - V^*\|_\infty \le \gamma^n \|V_0 - V^*\|_\infty$. Understanding
+\emph{why} this works requires every concept in this lesson: metric, norm,
+completeness, and the operator framework.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 2: METRIC SPACES
+%% ============================================================
+
+\section{Metric Spaces}
+\label{sec:metric}
+
+\subsection{Definition and Examples}
+\label{subsec:metric_def}
+
+\begin{definition}[Metric Space]
+\label{def:metric}
+A \emph{metric} on a set $X$ is a function $d \colon X \times X \to [0,\infty)$
+satisfying, for all $x, y, z \in X$:
+\begin{enumerate}[nosep,label=(M\arabic*)]
+    \item \label{M1} $d(x,y) = 0$ if and only if $x = y$.
+    \hfill(identity of indiscernibles)
+    \item \label{M2} $d(x,y) = d(y,x)$.
+    \hfill(symmetry)
+    \item \label{M3} $d(x,z) \le d(x,y) + d(y,z)$.
+    \hfill(triangle inequality)
+\end{enumerate}
+The pair $(X,d)$ is called a \emph{metric space}. Elements of $X$ are called
+\emph{points}.
+\end{definition}
+
+\begin{remark}
+Non-negativity $d(x,y) \ge 0$ follows from the axioms: by \ref{M3} and \ref{M1},
+$0 = d(x,x) \le d(x,y) + d(y,x) = 2d(x,y)$ by \ref{M2}, so $d(x,y) \ge 0$.
+\end{remark}
+
+\begin{example}[Euclidean Metric]
+\label{ex:euclidean}
+$X = \R^n$ with $d(x,y) = \bigl(\sum_{i=1}^n (x_i - y_i)^2\bigr)^{1/2}$. The
+triangle inequality follows from the Cauchy--Schwarz inequality.
+\end{example}
+
+\begin{example}[$p$-Metrics on $\R^n$]
+\label{ex:p_metric}
+For $1 \le p \le \infty$, define $d_p(x,y) = \|x - y\|_p$ where
+\[
+\|x\|_p =
+\begin{cases}
+\bigl(\sum_{i=1}^n |x_i|^p\bigr)^{1/p} & \text{if } 1 \le p < \infty,\\
+\max_{1 \le i \le n} |x_i| & \text{if } p = \infty.
+\end{cases}
+\]
+Each $d_p$ is a metric. The triangle inequality for $1 < p < \infty$ is
+Minkowski's inequality (proved in Proposition~\ref{prop:minkowski}).
+\end{example}
+
+\begin{example}[Discrete Metric]
+\label{ex:discrete}
+On any set $X$, define $d(x,y) = 0$ if $x = y$ and $d(x,y) = 1$ if $x \ne y$.
+This is a metric. Every subset of $X$ is open (and closed), so $X$ with the
+discrete metric is a \emph{discrete topological space}.
+\end{example}
+
+\begin{example}[Function Space $C[a,b]$]
+\label{ex:Cab}
+Let $C[a,b]$ denote the set of continuous real-valued functions on $[a,b]$. Define
+\[
+d_\infty(f,g) = \max_{t \in [a,b]} |f(t) - g(t)|, \qquad
+d_1(f,g) = \int_a^b |f(t) - g(t)|\, dt.
+\]
+Both are metrics on $C[a,b]$. The metric $d_\infty$ measures uniform distance;
+$d_1$ measures average distance.
+\end{example}
+
+\begin{example}[Sequence Spaces $\ell^p$]
+\label{ex:ell_p}
+For $1 \le p < \infty$, define $\ell^p = \{(x_n)_{n=1}^\infty \subset \R :
+\sum_{n=1}^\infty |x_n|^p < \infty\}$ with metric
+$d(x,y) = \bigl(\sum_{n=1}^\infty |x_n - y_n|^p\bigr)^{1/p}$.
+For $p = \infty$, $\ell^\infty = \{(x_n) : \sup_n |x_n| < \infty\}$ with
+$d(x,y) = \sup_n |x_n - y_n|$.
+\end{example}
+
+\begin{rlconnection}[State Spaces as Metric Spaces]
+In RL with a finite state space $\mathcal{S} = \{s_1, \ldots, s_n\}$, a value
+function $V \colon \mathcal{S} \to \R$ is simply a vector in $\R^n$. The space of
+all value functions is $(\R^n, \|\cdot\|_\infty)$, which is a metric space. For
+infinite or continuous state spaces, value functions live in function spaces like
+$C(\mathcal{S})$ or $\ell^\infty(\mathcal{S})$, and the theory of this section
+becomes essential.
+\end{rlconnection}
+
+\subsection{Topology of Metric Spaces}
+\label{subsec:topology}
+
+\begin{definition}[Open Ball]
+\label{def:open_ball}
+In a metric space $(X,d)$, the \emph{open ball} of radius $r > 0$ centered at
+$x \in X$ is
+\[
+B(x,r) = \{y \in X : d(x,y) < r\}.
+\]
+The \emph{closed ball} is $\overline{B}(x,r) = \{y \in X : d(x,y) \le r\}$.
+\end{definition}
+
+\begin{definition}[Open and Closed Sets]
+\label{def:open_closed}
+Let $(X,d)$ be a metric space.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item A set $G \subseteq X$ is \emph{open} if for every $x \in G$ there exists
+    $r > 0$ such that $B(x,r) \subseteq G$.
+    \item A set $F \subseteq X$ is \emph{closed} if its complement $X \setminus F$
+    is open.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Properties of Open and Closed Sets]
+\label{prop:open_closed}
+In a metric space $(X,d)$:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item $\emptyset$ and $X$ are both open and closed.
+    \item Any union of open sets is open.
+    \item Any finite intersection of open sets is open.
+    \item Any intersection of closed sets is closed.
+    \item Any finite union of closed sets is closed.
+    \item Every open ball $B(x,r)$ is open.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(a)} $\emptyset$ is open vacuously. $X$ is open because $B(x,r) \subseteq X$
+for all $x$ and $r > 0$.
+
+\textbf{(b)} Let $\{G_\alpha\}_{\alpha \in I}$ be a family of open sets and let
+$x \in \bigcup_\alpha G_\alpha$. Then $x \in G_\beta$ for some $\beta$, so there
+exists $r > 0$ with $B(x,r) \subseteq G_\beta \subseteq \bigcup_\alpha G_\alpha$.
+
+\textbf{(c)} Let $G_1, \ldots, G_n$ be open and let $x \in \bigcap_{i=1}^n G_i$.
+For each $i$, there exists $r_i > 0$ with $B(x,r_i) \subseteq G_i$. Set
+$r = \min(r_1, \ldots, r_n) > 0$. Then $B(x,r) \subseteq \bigcap_{i=1}^n G_i$.
+
+\textbf{(d)--(e)} Follow from (b)--(c) by taking complements (De Morgan's laws).
+
+\textbf{(f)} Let $y \in B(x,r)$ and set $\varepsilon = r - d(x,y) > 0$. For any
+$z \in B(y,\varepsilon)$, we have $d(x,z) \le d(x,y) + d(y,z) < d(x,y) +
+\varepsilon = r$, so $z \in B(x,r)$. Thus $B(y,\varepsilon) \subseteq B(x,r)$.
+\end{proof}
+
+\begin{definition}[Interior, Closure, Boundary]
+\label{def:int_cl_bd}
+Let $A \subseteq X$ in a metric space $(X,d)$.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{interior} of $A$ is $\Int(A) = \bigcup \{G \subseteq A : G \text{ is open}\}$.
+    \item The \emph{closure} of $A$ is $\cl(A) = \bigcap \{F \supseteq A : F \text{ is closed}\}$.
+    \item The \emph{boundary} of $A$ is $\partial A = \cl(A) \setminus \Int(A)$.
+    \item $A$ is \emph{dense} in $X$ if $\cl(A) = X$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Closure Characterization]
+\label{prop:closure_char}
+$x \in \cl(A)$ if and only if for every $r > 0$, $B(x,r) \cap A \ne \emptyset$.
+Equivalently, $x \in \cl(A)$ if and only if there exists a sequence $(x_n)$ in $A$
+with $x_n \to x$.
+\end{proposition}
+
+\begin{proof}
+($\Rightarrow$) Suppose $x \in \cl(A)$ and there exists $r > 0$ with
+$B(x,r) \cap A = \emptyset$. Then $A \subseteq X \setminus B(x,r)$, which is
+closed. So $\cl(A) \subseteq X \setminus B(x,r)$, contradicting $x \in \cl(A)$.
+
+($\Leftarrow$) Suppose every ball around $x$ meets $A$, and let $F$ be any closed
+set containing $A$. If $x \notin F$, then $x \in X \setminus F$, which is open,
+so there exists $r > 0$ with $B(x,r) \subseteq X \setminus F$. But then
+$B(x,r) \cap A \subseteq B(x,r) \cap F = \emptyset$, contradicting our assumption.
+So $x \in F$ for every closed $F \supseteq A$, hence $x \in \cl(A)$.
+
+For the sequential characterization: if $B(x,1/n) \cap A \ne \emptyset$ for each
+$n$, pick $x_n \in B(x,1/n) \cap A$; then $d(x_n,x) < 1/n \to 0$. Conversely, if
+$x_n \to x$ with each $x_n \in A$, then every ball $B(x,r)$ contains $x_n$ for
+large $n$, so $B(x,r) \cap A \ne \emptyset$.
+\end{proof}
+
+\subsection{Convergence and Completeness}
+\label{subsec:convergence}
+
+\begin{definition}[Convergence]
+\label{def:convergence}
+A sequence $(x_n)$ in a metric space $(X,d)$ \emph{converges} to $x \in X$ if
+$d(x_n, x) \to 0$ as $n \to \infty$, i.e., for every $\varepsilon > 0$ there
+exists $N \in \N$ such that $d(x_n, x) < \varepsilon$ for all $n \ge N$. We write
+$x_n \to x$ or $\lim_{n \to \infty} x_n = x$.
+\end{definition}
+
+\begin{proposition}[Uniqueness of Limits]
+\label{prop:unique_limit}
+In a metric space, limits are unique: if $x_n \to x$ and $x_n \to y$, then $x = y$.
+\end{proposition}
+
+\begin{proof}
+$0 \le d(x,y) \le d(x,x_n) + d(x_n,y) \to 0 + 0 = 0$, so $d(x,y) = 0$, hence $x = y$.
+\end{proof}
+
+\begin{definition}[Cauchy Sequence]
+\label{def:cauchy}
+A sequence $(x_n)$ in $(X,d)$ is a \emph{Cauchy sequence} if for every
+$\varepsilon > 0$ there exists $N \in \N$ such that $d(x_m, x_n) < \varepsilon$
+for all $m, n \ge N$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:convergent_is_cauchy}
+Every convergent sequence is Cauchy.
+\end{proposition}
+
+\begin{proof}
+If $x_n \to x$, then for $\varepsilon > 0$ there exists $N$ such that
+$d(x_n, x) < \varepsilon/2$ for $n \ge N$. For $m, n \ge N$:
+$d(x_m, x_n) \le d(x_m, x) + d(x, x_n) < \varepsilon/2 + \varepsilon/2 = \varepsilon$.
+\end{proof}
+
+\begin{warning}[Cauchy Does Not Imply Convergent]
+The converse fails in general. In $\Q$ with the usual metric, the sequence of
+rational approximations to $\sqrt{2}$ (e.g., defined by $x_1 = 1$,
+$x_{n+1} = (x_n + 2/x_n)/2$) is Cauchy but does not converge in $\Q$.
+The ``missing limit'' is $\sqrt{2} \notin \Q$.
+\end{warning}
+
+\begin{definition}[Complete Metric Space]
+\label{def:complete}
+A metric space $(X,d)$ is \emph{complete} if every Cauchy sequence in $X$
+converges to a limit in $X$.
+\end{definition}
+
+\begin{theorem}[Completeness of $\R$]
+\label{thm:R_complete}
+$(\R, |\cdot|)$ is a complete metric space.
+\end{theorem}
+
+\begin{proof}
+Let $(x_n)$ be a Cauchy sequence in $\R$. First, $(x_n)$ is bounded: there exists
+$N$ such that $|x_m - x_n| < 1$ for all $m, n \ge N$, so
+$|x_n| \le |x_N| + 1$ for $n \ge N$, giving
+$|x_n| \le \max(|x_1|, \ldots, |x_{N-1}|, |x_N| + 1)$ for all $n$.
+
+By the Bolzano--Weierstrass theorem (every bounded sequence in $\R$ has a
+convergent subsequence), there is a subsequence $x_{n_k} \to x$ for some $x \in \R$.
+
+We show $x_n \to x$. Given $\varepsilon > 0$, choose $N_1$ such that
+$|x_m - x_n| < \varepsilon/2$ for $m, n \ge N_1$, and $N_2$ such that
+$|x_{n_k} - x| < \varepsilon/2$ for $k \ge N_2$. For $n \ge N_1$, pick $k$ with
+$n_k \ge \max(N_1, n_{N_2})$. Then
+$|x_n - x| \le |x_n - x_{n_k}| + |x_{n_k} - x| < \varepsilon/2 + \varepsilon/2 = \varepsilon$.
+\end{proof}
+
+\begin{theorem}[Completeness of $\R^n$]
+\label{thm:Rn_complete}
+$(\R^n, d_p)$ is complete for every $1 \le p \le \infty$.
+\end{theorem}
+
+\begin{proof}
+Let $(x^{(k)})_{k=1}^\infty$ be a Cauchy sequence in $(\R^n, d_p)$, where
+$x^{(k)} = (x_1^{(k)}, \ldots, x_n^{(k)})$. For each coordinate $i$,
+$|x_i^{(k)} - x_i^{(m)}| \le \|x^{(k)} - x^{(m)}\|_p$ (since the $\ell^p$ norm
+dominates each coordinate), so $(x_i^{(k)})_{k=1}^\infty$ is Cauchy in $\R$.
+By Theorem~\ref{thm:R_complete}, $x_i^{(k)} \to x_i$ for some $x_i \in \R$.
+Set $x = (x_1, \ldots, x_n)$. Then
+$\|x^{(k)} - x\|_p = \bigl(\sum_{i=1}^n |x_i^{(k)} - x_i|^p\bigr)^{1/p} \to 0$
+as $k \to \infty$ (each term goes to $0$; this is a finite sum). So $x^{(k)} \to x$.
+\end{proof}
+
+\begin{definition}[Dense Subset, Separable Space]
+\label{def:separable}
+A metric space $(X,d)$ is \emph{separable} if it contains a countable dense subset,
+i.e., there exists a countable set $D \subseteq X$ with $\cl(D) = X$.
+\end{definition}
+
+\begin{example}
+$\R^n$ is separable: $\Q^n$ is countable and dense. The space $C[a,b]$ with the
+sup metric is separable: by the Weierstrass approximation theorem, polynomials with
+rational coefficients form a countable dense subset.
+\end{example}
+
+\begin{theorem}[Completion of a Metric Space]
+\label{thm:completion}
+Every metric space $(X,d)$ has a \emph{completion}: there exists a complete metric
+space $(\hat{X}, \hat{d})$ and an isometry $\iota \colon X \to \hat{X}$ (i.e.,
+$\hat{d}(\iota(x), \iota(y)) = d(x,y)$ for all $x, y \in X$) such that
+$\iota(X)$ is dense in $\hat{X}$. The completion is unique up to isometry.
+\end{theorem}
+
+\begin{proof}
+\textbf{Construction.}
+Let $\mathcal{C}$ be the set of all Cauchy sequences in $X$. Define an equivalence
+relation: $(x_n) \sim (y_n)$ if $d(x_n, y_n) \to 0$. Let
+$\hat{X} = \mathcal{C}/{\sim}$ be the set of equivalence classes, and write
+$[(x_n)]$ for the class of $(x_n)$.
+
+\textbf{The metric is well defined.}
+For $(x_n), (y_n) \in \mathcal{C}$, the sequence $(d(x_n, y_n))$ is Cauchy in $\R$
+(since $|d(x_m,y_m) - d(x_n,y_n)| \le d(x_m,x_n) + d(y_m,y_n)$ by the triangle
+inequality), hence convergent. Define
+$\hat{d}([(x_n)], [(y_n)]) = \lim_{n \to \infty} d(x_n, y_n)$.
+One checks that this is independent of representatives (if $(x_n) \sim (x_n')$
+and $(y_n) \sim (y_n')$, then $|d(x_n,y_n) - d(x_n',y_n')| \le d(x_n,x_n') +
+d(y_n,y_n') \to 0$) and satisfies the metric axioms.
+
+\textbf{Isometric embedding.}
+Define $\iota(x) = [(x, x, x, \ldots)]$ (the class of the constant sequence).
+Then $\hat{d}(\iota(x), \iota(y)) = \lim_n d(x,y) = d(x,y)$, so $\iota$ is an
+isometry.
+
+\textbf{Density of $\iota(X)$.}
+Given $[(x_n)] \in \hat{X}$ and $\varepsilon > 0$, choose $N$ with
+$d(x_m, x_n) < \varepsilon/2$ for $m, n \ge N$. Then
+$\hat{d}([(x_n)], \iota(x_N)) = \lim_n d(x_n, x_N) \le \varepsilon/2 < \varepsilon$.
+
+\textbf{Completeness of $\hat{X}$.}
+Let $(p_k)$ be Cauchy in $\hat{X}$. Since $\iota(X)$ is dense, for each $k$ choose
+$z_k \in X$ with $\hat{d}(p_k, \iota(z_k)) < 1/k$. We claim $(z_k)$ is Cauchy in
+$X$: indeed, $d(z_k, z_m) = \hat{d}(\iota(z_k), \iota(z_m)) \le
+\hat{d}(\iota(z_k), p_k) + \hat{d}(p_k, p_m) + \hat{d}(p_m, \iota(z_m)) <
+1/k + \hat{d}(p_k, p_m) + 1/m \to 0$. Let $p = [(z_k)] \in \hat{X}$. Then
+$\hat{d}(p_k, p) \le \hat{d}(p_k, \iota(z_k)) + \hat{d}(\iota(z_k), p) <
+1/k + \hat{d}(\iota(z_k), p) \to 0$ since
+$\hat{d}(\iota(z_k), p) = \lim_n d(z_k, z_n) \to 0$ as $k \to \infty$.
+
+\textbf{Uniqueness.}
+If $(\hat{X}_1, \hat{d}_1, \iota_1)$ and $(\hat{X}_2, \hat{d}_2, \iota_2)$ are
+two completions, define $\varphi \colon \iota_1(X) \to \iota_2(X)$ by
+$\varphi(\iota_1(x)) = \iota_2(x)$. This is an isometry, hence uniformly
+continuous, and extends uniquely to an isometry $\hat{X}_1 \to \hat{X}_2$ by
+density and completeness.
+\end{proof}
+
+\begin{rlconnection}[Completion and Function Approximation]
+In RL with function approximation, we often work with a parametric class of
+functions (e.g., neural networks) that is not complete under the sup norm. The
+completion theorem guarantees that this class can be embedded into a complete
+space. Understanding which space we ``complete to'' is crucial for analyzing
+whether approximate value iteration converges.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: NORMED SPACES
+%% ============================================================
+
+
+\end{document}

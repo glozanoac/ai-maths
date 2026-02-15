@@ -1,0 +1,455 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 1: Measure Spaces}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\powerset}{\mathcal{P}}
+\newcommand{\Borel}{\mathcal{B}}
+
+% ---- Title ----
+\title{Lesson 2: Measures and the Carath\\{e}odory Extension}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{February 9, 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{2}
+
+\section{Measures}
+\label{sec:measures}
+
+\subsection{Definition and Fundamental Properties}
+\label{subsec:measure_def}
+
+\begin{definition}[Measure]
+\label{def:measure}
+A \emph{measure} on a measurable space $(\Omega, \mathcal{F})$ is a function
+$\mu: \mathcal{F} \to [0, \infty]$ satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\mu(\emptyset) = 0$.
+    \item \textbf{Countable additivity:} If $A_1, A_2, \ldots \in \mathcal{F}$ are
+    pairwise disjoint, then:
+    \begin{equation}
+        \mu\!\left(\bigsqcup_{n=1}^\infty A_n\right) = \sum_{n=1}^\infty \mu(A_n).
+        \label{eq:countable_additivity}
+    \end{equation}
+\end{enumerate}
+The triple $(\Omega, \mathcal{F}, \mu)$ is a \emph{measure space}. If
+$\mu(\Omega) = 1$, then $\mu$ is a \emph{probability measure} and we write
+$\Prob$ instead of $\mu$.
+\end{definition}
+
+\begin{example}[Standard Measures]
+\label{ex:measures}
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item \textbf{Counting measure:} $\mu(A) = |A|$ (number of elements) on any countable $\Omega$.
+    \item \textbf{Dirac measure:} $\delta_x(A) = \indicator_A(x) = \begin{cases} 1 & \text{if } x \in A \\ 0 & \text{if } x \notin A \end{cases}$.
+    \item \textbf{Lebesgue measure:} $\lambda((a,b]) = b - a$ on $(\R, \Borel(\R))$. (Existence proved in Section~\ref{sec:construction}.)
+    \item \textbf{Probability on a finite set:} $\Prob(\{s\}) = p(s)$ with $\sum_{s \in \mathcal{S}} p(s) = 1$.
+\end{enumerate}
+\end{example}
+
+\begin{theorem}[Properties of Measures]
+\label{thm:measure_props}
+Let $(\Omega, \mathcal{F}, \mu)$ be a measure space. For $A, B, A_n \in \mathcal{F}$:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item \textbf{Monotonicity:} $A \subseteq B \implies \mu(A) \leq \mu(B)$.
+    \item \textbf{Subtractivity:} $A \subseteq B$ and $\mu(A) < \infty \implies \mu(B \setminus A) = \mu(B) - \mu(A)$.
+    \item \textbf{Sub-additivity:} $\mu\!\left(\bigcup_{n=1}^\infty A_n\right) \leq \sum_{n=1}^\infty \mu(A_n)$.
+    \item \textbf{Continuity from below:} $A_n \uparrow A \implies \mu(A) = \lim_n \mu(A_n)$.
+    \item \textbf{Continuity from above:} $A_n \downarrow A$ and $\mu(A_1) < \infty \implies \mu(A) = \lim_n \mu(A_n)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(a)} $B = A \sqcup (B \setminus A)$, so $\mu(B) = \mu(A) + \mu(B \setminus A) \geq \mu(A)$.
+
+\textbf{(b)} From $\mu(B) = \mu(A) + \mu(B \setminus A)$ and $\mu(A) < \infty$, subtract $\mu(A)$.
+
+\textbf{(c)} Define $B_1 = A_1$, $B_n = A_n \setminus \bigcup_{k=1}^{n-1} A_k$ for $n \geq 2$. The $B_n$ are disjoint, $\bigcup B_n = \bigcup A_n$, and $B_n \subseteq A_n$. So:
+$\mu(\bigcup A_n) = \mu(\bigsqcup B_n) = \sum \mu(B_n) \leq \sum \mu(A_n)$.
+
+\textbf{(d)} Let $A_0 = \emptyset$. The sets $C_n = A_n \setminus A_{n-1}$ are disjoint and $A_n = \bigsqcup_{k=1}^n C_k$. Also $A = \bigsqcup_{k=1}^\infty C_k$. By countable additivity:
+\begin{equation}
+    \mu(A) = \sum_{k=1}^\infty \mu(C_k) = \lim_{n \to \infty} \sum_{k=1}^n \mu(C_k) = \lim_{n \to \infty} \mu(A_n).
+\end{equation}
+
+\textbf{(e)} Define $B_n = A_1 \setminus A_n$. Then $B_n \uparrow A_1 \setminus A$. By (d):
+$\mu(A_1 \setminus A) = \lim \mu(B_n) = \lim (\mu(A_1) - \mu(A_n))$, using (b) (valid since $\mu(A_n) \leq \mu(A_1) < \infty$). So $\mu(A_1) - \mu(A) = \mu(A_1) - \lim \mu(A_n)$, giving $\mu(A) = \lim \mu(A_n)$.
+\end{proof}
+
+\begin{warning}[Finiteness Condition in (e)]
+The condition $\mu(A_1) < \infty$ in continuity from above is essential. Consider
+counting measure on $\N$ with $A_n = \{n, n+1, n+2, \ldots\}$. Then $A_n \downarrow \emptyset$
+but $\mu(A_n) = \infty$ for all $n$, while $\mu(\emptyset) = 0$. For probability
+measures, this condition is always satisfied since $\Prob(A_1) \leq 1 < \infty$.
+\end{warning}
+
+\subsection{Null Sets and Complete Measures}
+\label{subsec:null_sets}
+
+\begin{definition}[Null Set, Complete Measure]
+\label{def:null_complete}
+A set $N \in \mathcal{F}$ is a \emph{$\mu$-null set} (or \emph{null set}) if $\mu(N) = 0$.
+A measure $\mu$ is \emph{complete} if whenever $N$ is $\mu$-null and $A \subseteq N$,
+then $A \in \mathcal{F}$ (and hence $\mu(A) = 0$).
+\end{definition}
+
+\begin{proposition}[Completion of a Measure]
+\label{prop:completion}
+Every measure space $(\Omega, \mathcal{F}, \mu)$ can be completed: there exists
+a smallest $\sigma$-algebra $\overline{\mathcal{F}} \supseteq \mathcal{F}$ and
+a measure $\bar{\mu}$ extending $\mu$ such that $(\Omega, \overline{\mathcal{F}}, \bar{\mu})$
+is complete. Explicitly:
+\begin{equation}
+    \overline{\mathcal{F}} = \{A \cup N' : A \in \mathcal{F},\; N' \subseteq N \text{ for some $\mu$-null } N \in \mathcal{F}\},
+\end{equation}
+and $\bar{\mu}(A \cup N') = \mu(A)$.
+\end{proposition}
+
+\begin{proof}
+We verify that $\overline{\mathcal{F}}$ is a $\sigma$-algebra. The key step is
+closure under complement: if $E = A \cup N'$ with $N' \subseteq N$ and $\mu(N) = 0$,
+then $E^c = A^c \cap (N')^c = (A^c \cap N^c) \cup (A^c \cap N \cap (N')^c)$.
+The first part is in $\mathcal{F}$, and the second is a subset of $N$ (a null set),
+so $E^c \in \overline{\mathcal{F}}$.
+
+For well-definedness of $\bar{\mu}$: if $A_1 \cup N_1' = A_2 \cup N_2'$, then
+$A_1 \triangle A_2 \subseteq N_1 \cup N_2$ (a null set), so
+$\mu(A_1 \triangle A_2) = 0$, hence $\mu(A_1) = \mu(A_2)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 4: CONSTRUCTION OF MEASURES
+%% ============================================================
+
+\section{Construction of Measures: Carath\'{e}odory's Theorem}
+\label{sec:construction}
+
+How do we actually \emph{build} measures? We cannot simply assign
+$\mu(A)$ for every $A \in \Borel(\R)$ individually --- the Borel $\sigma$-algebra
+is uncountably large. Instead, we specify $\mu$ on a small, manageable collection
+and extend it.
+
+\subsection{Algebras and Pre-Measures}
+\label{subsec:algebras}
+
+\begin{definition}[Algebra of Sets]
+\label{def:algebra}
+A collection $\mathcal{A} \subseteq \powerset(\Omega)$ is an \emph{algebra}
+(or \emph{field}) if:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\Omega \in \mathcal{A}$.
+    \item $A \in \mathcal{A} \implies A^c \in \mathcal{A}$.
+    \item $A, B \in \mathcal{A} \implies A \cup B \in \mathcal{A}$.
+    \hfill(closed under \emph{finite} union)
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+An algebra is like a $\sigma$-algebra but with only finite (not countable) closure.
+Every $\sigma$-algebra is an algebra, but not conversely.
+\end{remark}
+
+\begin{example}
+\label{ex:algebra}
+On $\R$, the collection $\mathcal{A}$ of all finite unions of half-open intervals
+$(a, b]$ (including $\emptyset$ and $\R = (-\infty, \infty)$) is an algebra
+but not a $\sigma$-algebra. For instance, $\bigcup_{n=1}^\infty (0, 1 - 1/n] = (0, 1)$
+is not a finite union of half-open intervals, so $(0,1) \notin \mathcal{A}$.
+\end{example}
+
+\begin{definition}[Pre-Measure]
+\label{def:premeasure}
+A \emph{pre-measure} on an algebra $\mathcal{A}$ is a function
+$\mu_0: \mathcal{A} \to [0, \infty]$ satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\mu_0(\emptyset) = 0$.
+    \item If $A_1, A_2, \ldots \in \mathcal{A}$ are disjoint and
+    $\bigsqcup_{n=1}^\infty A_n \in \mathcal{A}$, then
+    $\mu_0(\bigsqcup A_n) = \sum \mu_0(A_n)$.
+\end{enumerate}
+\end{definition}
+
+\subsection{Outer Measures}
+\label{subsec:outer}
+
+\begin{definition}[Outer Measure]
+\label{def:outer}
+An \emph{outer measure} on $\Omega$ is a function
+$\mu^*: \powerset(\Omega) \to [0, \infty]$ satisfying:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\mu^*(\emptyset) = 0$.
+    \item \textbf{Monotonicity:} $A \subseteq B \implies \mu^*(A) \leq \mu^*(B)$.
+    \item \textbf{Countable sub-additivity:} $\mu^*(\bigcup_{n=1}^\infty A_n) \leq \sum_{n=1}^\infty \mu^*(A_n)$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Pre-Measure Induces Outer Measure]
+\label{prop:induced_outer}
+Given a pre-measure $\mu_0$ on an algebra $\mathcal{A}$, define for any
+$E \subseteq \Omega$:
+\begin{equation}
+    \mu^*(E) = \inf\left\{\sum_{n=1}^\infty \mu_0(A_n) : A_n \in \mathcal{A},\; E \subseteq \bigcup_{n=1}^\infty A_n\right\}.
+    \label{eq:induced_outer}
+\end{equation}
+Then $\mu^*$ is an outer measure, and $\mu^*(A) = \mu_0(A)$ for all $A \in \mathcal{A}$.
+\end{proposition}
+
+\begin{proof}
+\textit{(i)} $\mu^*(\emptyset) = 0$: cover $\emptyset$ by $A_n = \emptyset$ for all $n$.
+
+\textit{(ii)} If $A \subseteq B$, every cover of $B$ is also a cover of $A$, so the infimum over covers of $A$ is at most the infimum over covers of $B$.
+
+\textit{(iii)} Let $E = \bigcup_n E_n$. For each $\varepsilon > 0$ and each $n$, choose
+a cover $\{A_{n,k}\}_{k} \subseteq \mathcal{A}$ with $E_n \subseteq \bigcup_k A_{n,k}$
+and $\sum_k \mu_0(A_{n,k}) \leq \mu^*(E_n) + \varepsilon/2^n$. Then
+$\{A_{n,k}\}_{n,k}$ covers $E$, so:
+\begin{equation}
+    \mu^*(E) \leq \sum_n \sum_k \mu_0(A_{n,k}) \leq \sum_n (\mu^*(E_n) + \varepsilon/2^n) = \sum_n \mu^*(E_n) + \varepsilon.
+\end{equation}
+Since $\varepsilon$ is arbitrary, $\mu^*(E) \leq \sum_n \mu^*(E_n)$.
+
+\textit{$\mu^*$ extends $\mu_0$:} For $A \in \mathcal{A}$, the single-set cover gives
+$\mu^*(A) \leq \mu_0(A)$. For the reverse: if $A \subseteq \bigcup_n A_n$ with
+$A_n \in \mathcal{A}$, define $B_n = A \cap A_n \cap (\bigcup_{k<n} A_k)^c \in \mathcal{A}$
+(since $\mathcal{A}$ is an algebra). Then $A = \bigsqcup B_n$ and $B_n \subseteq A_n$.
+By the pre-measure properties: $\mu_0(A) = \sum \mu_0(B_n) \leq \sum \mu_0(A_n)$.
+Taking the infimum: $\mu_0(A) \leq \mu^*(A)$.
+\end{proof}
+
+\subsection{Carath\'{e}odory's Extension Theorem}
+\label{subsec:caratheodory}
+
+\begin{definition}[Carath\'{e}odory Measurability]
+\label{def:cara_measurable}
+Given an outer measure $\mu^*$ on $\Omega$, a set $A \subseteq \Omega$ is
+\emph{$\mu^*$-measurable} (or \emph{Carath\'{e}odory measurable}) if for every
+$E \subseteq \Omega$:
+\begin{equation}
+    \mu^*(E) = \mu^*(E \cap A) + \mu^*(E \cap A^c).
+    \label{eq:cara_condition}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+By sub-additivity, $\mu^*(E) \leq \mu^*(E \cap A) + \mu^*(E \cap A^c)$ always holds.
+So the content of~\eqref{eq:cara_condition} is the reverse inequality: $A$ ``splits''
+every test set $E$ additively. This is a strong condition --- it must hold for
+\emph{all} $E \subseteq \Omega$, not just sets in some $\sigma$-algebra.
+\end{remark}
+
+\begin{keyresult}[Carath\'{e}odory's Extension Theorem]
+\begin{theorem}[Carath\'{e}odory]
+\label{thm:caratheodory}
+Let $\mu^*$ be an outer measure on $\Omega$. Then:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item The collection $\mathcal{M} = \{A \subseteq \Omega : A \text{ is $\mu^*$-measurable}\}$ is a $\sigma$-algebra.
+    \item The restriction $\mu = \mu^*|_{\mathcal{M}}$ is a complete measure on $(\Omega, \mathcal{M})$.
+\end{enumerate}
+Consequently, if $\mu_0$ is a pre-measure on an algebra $\mathcal{A}$ and $\mu^*$ is
+the induced outer measure~\eqref{eq:induced_outer}, then $\mathcal{A} \subseteq \mathcal{M}$
+and $\mu|_{\mathcal{A}} = \mu_0$. If additionally $\mu_0$ is $\sigma$-finite, then
+$\mu$ is the unique extension of $\mu_0$ to $\sigma(\mathcal{A})$.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Part (a): $\mathcal{M}$ is a $\sigma$-algebra.}
+
+\textit{Step 1: $\Omega \in \mathcal{M}$.} For any $E$: $\mu^*(E \cap \Omega) + \mu^*(E \cap \emptyset) = \mu^*(E) + 0 = \mu^*(E)$. \checkmark
+
+\textit{Step 2: Closure under complement.} The condition~\eqref{eq:cara_condition} is symmetric in $A$ and $A^c$, so $A \in \mathcal{M} \Leftrightarrow A^c \in \mathcal{M}$. \checkmark
+
+\textit{Step 3: Closure under finite union.} Let $A, B \in \mathcal{M}$. For any test set $E$:
+\begin{align}
+    \mu^*(E) &= \mu^*(E \cap A) + \mu^*(E \cap A^c) \tag{$A$ measurable}\\
+    &= \mu^*(E \cap A) + \mu^*(E \cap A^c \cap B) + \mu^*(E \cap A^c \cap B^c) \tag{$B$ measurable, applied to $E \cap A^c$}
+\end{align}
+We need $\mu^*(E) = \mu^*(E \cap (A \cup B)) + \mu^*(E \cap (A \cup B)^c)$.
+
+Note $(A \cup B)^c = A^c \cap B^c$, so the third term is correct. For the first:
+$E \cap (A \cup B) = (E \cap A) \cup (E \cap A^c \cap B)$, so by sub-additivity:
+$\mu^*(E \cap (A \cup B)) \leq \mu^*(E \cap A) + \mu^*(E \cap A^c \cap B)$.
+
+Combining: $\mu^*(E) \geq \mu^*(E \cap (A \cup B)) + \mu^*(E \cap (A \cup B)^c)$.
+The reverse holds by sub-additivity. So $A \cup B \in \mathcal{M}$. \checkmark
+
+\textit{Step 4: Closure under countable disjoint union.} Let $A_1, A_2, \ldots \in \mathcal{M}$ be disjoint. Set $S_n = \bigsqcup_{k=1}^n A_k$ and $S = \bigsqcup_{k=1}^\infty A_k$.
+
+By induction (using Step 3 and closure under complement, hence closure under intersection), $S_n \in \mathcal{M}$, and for any $E$:
+\begin{equation}
+    \mu^*(E \cap S_n) = \sum_{k=1}^n \mu^*(E \cap A_k).
+    \label{eq:cara_finite}
+\end{equation}
+This is proved by induction: $\mu^*(E \cap S_n) = \mu^*(E \cap S_n \cap A_n) + \mu^*(E \cap S_n \cap A_n^c) = \mu^*(E \cap A_n) + \mu^*(E \cap S_{n-1})$.
+
+Since $S_n \in \mathcal{M}$: $\mu^*(E) = \mu^*(E \cap S_n) + \mu^*(E \cap S_n^c)$.
+Since $S_n \subseteq S$, $S^c \subseteq S_n^c$, so $\mu^*(E \cap S_n^c) \geq \mu^*(E \cap S^c)$. Using~\eqref{eq:cara_finite}:
+\begin{equation}
+    \mu^*(E) \geq \sum_{k=1}^n \mu^*(E \cap A_k) + \mu^*(E \cap S^c).
+\end{equation}
+Letting $n \to \infty$:
+\begin{equation}
+    \mu^*(E) \geq \sum_{k=1}^\infty \mu^*(E \cap A_k) + \mu^*(E \cap S^c) \geq \mu^*(E \cap S) + \mu^*(E \cap S^c),
+\end{equation}
+where the last step uses sub-additivity $\mu^*(E \cap S) \leq \sum \mu^*(E \cap A_k)$.
+The reverse inequality holds by sub-additivity. So $S \in \mathcal{M}$. \checkmark
+
+\textit{Step 5: General countable unions.} For arbitrary (not necessarily disjoint)
+$A_n \in \mathcal{M}$, write $\bigcup A_n$ as a disjoint union using $B_n = A_n \setminus \bigcup_{k<n} A_k \in \mathcal{M}$, and apply Step 4.
+
+\textbf{Part (b): $\mu$ is a complete measure.}
+
+Countable additivity follows from~\eqref{eq:cara_finite} with $E = S$:
+$\mu(S) = \mu^*(S) = \sum \mu^*(A_k) = \sum \mu(A_k)$.
+
+Completeness: if $\mu^*(N) = 0$ and $A \subseteq N$, then for any $E$:
+$\mu^*(E \cap A) \leq \mu^*(A) \leq \mu^*(N) = 0$, so
+$\mu^*(E \cap A) + \mu^*(E \cap A^c) = \mu^*(E \cap A^c) \leq \mu^*(E)$.
+The reverse holds by monotonicity ($E \cap A^c \subseteq E$). Wait, actually we need
+$\mu^*(E \cap A^c) \geq \mu^*(E) - \mu^*(E \cap A) = \mu^*(E)$ and $\mu^*(E \cap A^c) \leq \mu^*(E)$. These give equality. So $A \in \mathcal{M}$.
+
+\textbf{Uniqueness under $\sigma$-finiteness:} follows from Corollary~\ref{cor:uniqueness}
+applied to the $\pi$-system $\mathcal{A}$, after reducing to the finite-measure case
+using the $\sigma$-finite decomposition.
+\end{proof}
+
+\subsection{Application: Lebesgue Measure}
+\label{subsec:lebesgue}
+
+\begin{theorem}[Existence of Lebesgue Measure]
+\label{thm:lebesgue}
+There exists a unique measure $\lambda$ on $(\R, \Borel(\R))$ such that
+$\lambda((a, b]) = b - a$ for all $a < b$. This measure is $\sigma$-finite and
+translation-invariant: $\lambda(A + x) = \lambda(A)$ for all $A \in \Borel(\R)$
+and $x \in \R$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Let $\mathcal{A}$ be the algebra of finite disjoint unions of half-open intervals
+$(a_i, b_i]$. Define $\mu_0(\bigsqcup_i (a_i, b_i]) = \sum_i (b_i - a_i)$. One
+verifies $\mu_0$ is a pre-measure on $\mathcal{A}$ (the key step is showing
+countable additivity, which uses the Heine--Borel theorem: if $(a, b]$ is covered
+by countably many $(a_n, b_n]$, then $b - a \leq \sum (b_n - a_n)$).
+
+By Carath\'{e}odory's theorem (Theorem~\ref{thm:caratheodory}), $\mu_0$ extends
+uniquely to $\sigma(\mathcal{A}) = \Borel(\R)$ since $\mu_0$ is $\sigma$-finite
+($\R = \bigcup_{n=1}^\infty (-n, n]$ with $\mu_0((-n, n]) = 2n < \infty$).
+\end{proof}
+
+\begin{theorem}[Non-Measurable Sets (Vitali)]
+\label{thm:vitali}
+There exists a set $V \subseteq [0, 1]$ that is not Lebesgue measurable.
+\end{theorem}
+
+\begin{proof}
+Define an equivalence relation on $[0,1)$: $x \sim y$ iff $x - y \in \Q$.
+By the Axiom of Choice, select one representative from each equivalence class;
+call this set $V$.
+
+For $q \in \Q \cap [0, 1)$, define $V_q = \{x + q \mod 1 : x \in V\}$
+(shift $V$ by $q$ modulo 1). The $V_q$ are disjoint (if $v_1 + q_1 \equiv v_2 + q_2$
+then $v_1 - v_2 \in \Q$, so $v_1 \sim v_2$, so $v_1 = v_2$ and $q_1 = q_2$).
+Also $[0, 1) = \bigsqcup_{q \in \Q \cap [0,1)} V_q$ (every $x$ is equivalent to
+some $v \in V$, and $x = v + q$ for some rational $q$).
+
+If $V$ were measurable, then each $V_q$ would have the same measure (by
+translation invariance of Lebesgue measure modulo 1). Call this $c$.
+
+By countable additivity: $1 = \lambda([0,1)) = \sum_{q} c$. But $\sum c$ is either
+$0$ (if $c = 0$) or $\infty$ (if $c > 0$) --- never $1$. Contradiction.
+\end{proof}
+
+\begin{remark}
+Vitali's theorem shows why we cannot define Lebesgue measure on $\powerset(\R)$:
+not all subsets of $\R$ are measurable. This is the fundamental reason for
+restricting to $\sigma$-algebras. In probability, this subtlety is rarely
+encountered (finite MDPs use $\powerset(\mathcal{S})$), but it justifies
+the formalism and is important for continuous state/action spaces.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: MEASURABLE FUNCTIONS
+%% ============================================================
+
+
+\end{document}

@@ -1,0 +1,249 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{Lesson 29: Proximal Methods}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{6}
+
+\section{Proximal Methods}\label{sec:proximal}
+
+\subsection{The Proximal Operator}
+
+Many problems in ML involve non-smooth regularizers (e.g., $\ell_1$ for
+sparsity). Proximal methods extend gradient descent to handle such terms.
+
+\begin{definition}[Proximal operator]\label{def:prox}
+For a closed convex function $h : \R^n \to \R \cup \{+\infty\}$, the
+\emph{proximal operator} $\prox_h : \R^n \to \R^n$ is
+\begin{equation}\label{eq:prox}
+  \prox_h(v) = \argmin_{x \in \R^n} \left\{h(x) + \frac{1}{2}\|x - v\|^2\right\}.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Well-definedness]\label{prop:prox-well}
+For any closed convex $h$ with $\dom h \ne \emptyset$, the proximal operator
+$\prox_h(v)$ exists and is unique for every $v \in \R^n$.
+\end{proposition}
+
+\begin{proof}
+The objective $h(x) + \frac{1}{2}\|x - v\|^2$ is strongly convex (with
+$\mu = 1$), hence has at most one minimizer. It is also coercive (goes to
+$+\infty$ as $\|x\| \to \infty$) and lower semicontinuous, so a minimizer
+exists.
+\end{proof}
+
+\begin{example}[$\ell_1$ proximal: soft thresholding]\label{ex:soft-thresh}
+For $h(x) = \tau \|x\|_1$ with $\tau > 0$, the proximal operator is the
+soft-thresholding operator applied componentwise:
+\[
+  [\prox_{\tau\|\cdot\|_1}(v)]_i = \text{sign}(v_i)\max(|v_i| - \tau, 0).
+\]
+\end{example}
+
+\begin{example}[Indicator function]\label{ex:indicator-prox}
+For $h = \iota_C$ (the indicator function of a closed convex set $C$, equal to
+$0$ on $C$ and $+\infty$ elsewhere), $\prox_h(v) = \Pi_C(v)$, the Euclidean
+projection onto $C$.
+\end{example}
+
+\subsection{Proximal Gradient Method}
+
+Consider the composite minimization problem:
+\begin{equation}\label{eq:composite}
+  \min_{x \in \R^n} \; F(x) = f(x) + h(x),
+\end{equation}
+where $f$ is convex and $L$-smooth, and $h$ is convex but possibly non-smooth.
+
+\begin{definition}[Proximal gradient method]\label{def:prox-grad}
+The \emph{proximal gradient method} with step size $\eta = 1/L$ is:
+\begin{equation}\label{eq:prox-grad}
+  x_{k+1} = \prox_{\eta h}\bigl(x_k - \eta \nabla f(x_k)\bigr).
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Convergence of proximal gradient]\label{thm:prox-grad}
+Under the composite model~\eqref{eq:composite} with $f$ convex and $L$-smooth,
+the proximal gradient method with $\eta = 1/L$ achieves
+\[
+  F(x_k) - F(x^*) \le \frac{L\|x_0 - x^*\|^2}{2k}.
+\]
+The convergence rate is $O(1/k)$, matching gradient descent.
+\end{theorem}
+
+\begin{proof}
+The key observation is that the proximal gradient step can be written as
+$x_{k+1} = \argmin_x \{f(x_k) + \nabla f(x_k)^\top(x - x_k) + \frac{L}{2}\|x - x_k\|^2 + h(x)\}$.
+By the descent lemma, $f(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k) + \frac{L}{2}\|x_{k+1} - x_k\|^2$.
+Adding $h(x_{k+1})$ to both sides:
+\[
+  F(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k)
+    + \frac{L}{2}\|x_{k+1} - x_k\|^2 + h(x_{k+1}).
+\]
+By the optimality condition for the proximal step, for any $x$:
+\[
+  f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k) + \frac{L}{2}\|x_{k+1} - x_k\|^2 + h(x_{k+1})
+  \le f(x_k) + \nabla f(x_k)^\top(x - x_k) + \frac{L}{2}\|x - x_k\|^2 + h(x).
+\]
+Setting $x = x^*$ and using convexity of $f$
+($f(x_k) + \nabla f(x_k)^\top(x^* - x_k) \le f(x^*)$):
+\[
+  F(x_{k+1}) \le F(x^*) + \frac{L}{2}\|x^* - x_k\|^2.
+\]
+A telescoping argument identical to the one in Theorem~\ref{thm:gd-convex}
+(tracking $\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2$) yields the result.
+\end{proof}
+
+\subsection{FISTA: Fast Iterative Shrinkage-Thresholding Algorithm}
+
+\begin{definition}[FISTA]\label{def:fista}
+FISTA applies Nesterov acceleration to the proximal gradient method:
+\begin{equation}\label{eq:fista}
+\begin{aligned}
+  y_k &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
+  x_{k+1} &= \prox_{\eta h}\bigl(y_k - \eta \nabla f(y_k)\bigr),
+\end{aligned}
+\end{equation}
+with $\eta = 1/L$ and $x_0 = x_{-1}$.
+\end{definition}
+
+\begin{theorem}[FISTA convergence]\label{thm:fista}
+Under the composite model~\eqref{eq:composite}, FISTA achieves
+\[
+  F(x_k) - F(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+\]
+This is the optimal $O(1/k^2)$ rate for first-order methods on this problem
+class.
+\end{theorem}
+
+\begin{proof}
+The proof follows the estimate-sequence technique of Theorem~\ref{thm:nesterov},
+replacing gradient steps with proximal gradient steps. The descent lemma for the
+smooth part $f$ and the convexity of $h$ allow the same inductive argument to
+go through with $F = f + h$ in place of $f$.
+\end{proof}
+
+\begin{rlconnection}
+Proximal methods are used in RL for imposing structure on learned policies.
+For example, $\ell_1$-regularized policy optimization promotes sparse feature
+representations. The mirror descent interpretation of proximal methods (with
+Bregman divergences replacing the Euclidean distance) connects to natural
+policy gradient, where the KL divergence plays the role of the Bregman
+divergence in policy space.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: Interior Point Methods
+%% ============================================================
+
+
+\end{document}

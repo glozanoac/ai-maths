@@ -1,0 +1,706 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 12: Repeated Games and Incomplete Information}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\argmax}{argmax}
+\DeclareMathOperator{\argmin}{argmin}
+\DeclareMathOperator{\BR}{BR}
+
+% ---- Title ----
+\title{Lesson 36: Repeated Games and Folk Theorems}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{0}
+
+\section{Introduction}
+\label{sec:introduction}
+
+In Lesson 11 we studied one-shot (normal-form) games: simultaneous moves, Nash
+equilibrium, and the minimax theorem. However, most real strategic interactions---and
+virtually all multi-agent reinforcement learning (MARL) scenarios---involve \emph{repeated
+interaction}. Agents meet the same opponents across many episodes, observe each other's
+past behavior, and adapt their strategies over time. Three fundamental phenomena emerge:
+
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Cooperation through repetition.} Even when one-shot incentives favor
+    defection (as in the Prisoner's Dilemma), the threat of future punishment can sustain
+    cooperative outcomes. The \emph{folk theorems} characterize exactly which payoff
+    vectors are achievable.
+
+    \item \textbf{Incomplete information.} In practice, agents rarely know each other's
+    payoff functions. A robot negotiating with a human does not know the human's utility;
+    competing firms do not know rivals' costs. \emph{Bayesian games} model this uncertainty,
+    and \emph{perfect Bayesian equilibrium} handles sequential decision-making under such
+    uncertainty.
+
+    \item \textbf{Structured interactions.} Many multi-agent problems possess special
+    structure---such as \emph{potential games}, where a single global function captures all
+    players' incentives. In these settings, simple learning rules (best-response dynamics,
+    log-linear learning) are guaranteed to converge.
+\end{enumerate}
+
+This document covers all three themes with complete proofs. The roadmap is as follows.
+\begin{itemize}
+    \item \textbf{Section~\ref{sec:finitely-repeated}}: Finitely repeated games and the
+    unraveling argument.
+    \item \textbf{Section~\ref{sec:infinitely-repeated}}: Infinitely repeated games, trigger
+    strategies, and feasible/individually rational payoffs.
+    \item \textbf{Section~\ref{sec:folk-theorems}}: The Nash folk theorem and the subgame
+    perfect folk theorem.
+    \item \textbf{Section~\ref{sec:zero-sum}}: Fictitious play, no-regret learning, and
+    convergence in zero-sum games.
+    \item \textbf{Section~\ref{sec:bayesian-games}}: Bayesian games and Bayesian Nash
+    equilibrium.
+    \item \textbf{Section~\ref{sec:pbe}}: Perfect Bayesian equilibrium and signaling games.
+    \item \textbf{Section~\ref{sec:potential-games}}: Potential games, congestion games, and
+    convergence of best-response dynamics.
+    \item \textbf{Section~\ref{sec:marl-connections}}: Connections to multi-agent RL.
+    \item \textbf{Section~\ref{sec:exercises}}: Exercises.
+    \item \textbf{Section~\ref{sec:summary}}: Summary of key results.
+\end{itemize}
+
+\begin{rlconnection}[Why This Matters for MARL]
+In multi-agent RL, agents interact repeatedly and update their policies based on
+observed outcomes. The folk theorems explain why independent Q-learners can converge to
+cooperative (or adversarial) outcomes that do not arise in single-episode analysis.
+Bayesian games formalize the partial observability inherent in opponent modeling.
+Potential games identify problem classes where independent learning is guaranteed to
+converge---a rare and valuable property in general-sum MARL.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 2: Finitely Repeated Games
+%% ============================================================
+
+\section{Finitely Repeated Games}
+\label{sec:finitely-repeated}
+
+\subsection{Model}
+
+We begin with a \emph{stage game} $G = (N, (A_i)_{i \in N}, (g_i)_{i \in N})$ where
+$N = [n]$ is the player set, $A_i$ is the finite action set of player $i$, and
+$g_i : A \to \R$ is the stage-game payoff function, with $A = \prod_{i \in N} A_i$.
+
+\begin{definition}[Finitely Repeated Game]
+\label{def:finitely-repeated}
+The \emph{$T$-fold repetition} of $G$, denoted $G^T$, is defined as follows:
+\begin{enumerate}[label=(\alph*)]
+    \item In each period $t \in \{1, 2, \ldots, T\}$, all players simultaneously choose
+    actions $a_i^t \in A_i$.
+    \item At the end of period $t$, all players observe the realized action profile
+    $a^t = (a_1^t, \ldots, a_n^t)$.
+    \item The \emph{history} at period $t$ is $h^t = (a^1, a^2, \ldots, a^{t-1}) \in A^{t-1}$.
+    The initial history is $h^1 = \emptyset$.
+    \item A \emph{(pure) strategy} for player $i$ is a sequence of functions
+    $s_i = (s_i^1, s_i^2, \ldots, s_i^T)$ where $s_i^t : A^{t-1} \to A_i$ maps
+    histories to actions.
+    \item The payoff to player $i$ under strategy profile $s = (s_1, \ldots, s_n)$ is
+    \[
+        u_i(s) = \frac{1}{T} \sum_{t=1}^T g_i\bigl(a^t(s, h^t)\bigr),
+    \]
+    where $a^t(s, h^t) = \bigl(s_1^t(h^t), \ldots, s_n^t(h^t)\bigr)$ and histories are
+    generated by the strategy profile.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+We use average payoffs $\frac{1}{T}\sum_t g_i(a^t)$ rather than total payoffs to keep
+the repeated-game payoffs on the same scale as stage-game payoffs, facilitating comparison
+with the infinite-horizon discounted case.
+\end{remark}
+
+\subsection{Subgame Perfect Equilibrium}
+
+The repeated game $G^T$ is an extensive-form game of perfect information (after each period,
+all actions are observed). Thus the natural solution concept is \emph{subgame perfect
+equilibrium} (SPE): a strategy profile that constitutes a Nash equilibrium in every subgame.
+
+\begin{definition}[Subgame Perfect Equilibrium]
+\label{def:spe}
+A strategy profile $s^*$ in $G^T$ is a \emph{subgame perfect equilibrium} (SPE) if, for
+every period $t \in \{1, \ldots, T\}$ and every history $h^t \in A^{t-1}$, the
+continuation strategy profile $(s_i^{*,\tau}(h^t, \cdot))_{\tau \geq t}$ is a Nash
+equilibrium of the subgame starting from $h^t$.
+\end{definition}
+
+\subsection{The Unraveling Argument}
+
+The fundamental result for finitely repeated games with a unique stage-game equilibrium is
+that repetition adds nothing: the unique SPE plays the stage-game NE in every period.
+
+\begin{theorem}[Unique NE Implies Unique SPE]
+\label{thm:unraveling}
+If the stage game $G$ has a unique Nash equilibrium $a^* = (a_1^*, \ldots, a_n^*)$, then
+the $T$-fold repeated game $G^T$ has a unique subgame perfect equilibrium in which
+$a^t = a^*$ for all $t \in \{1, \ldots, T\}$.
+\end{theorem}
+
+\begin{proof}
+We proceed by backward induction on $t$.
+
+\textbf{Base case ($t = T$):} In the final period, regardless of history $h^T$, the
+subgame is identical to the one-shot stage game $G$. Since $a^*$ is the unique NE of $G$,
+every SPE must play $a^*$ in period $T$.
+
+\textbf{Inductive step:} Suppose that in every SPE, $a^{\tau} = a^*$ for all $\tau \in
+\{t+1, \ldots, T\}$, regardless of the history at period $t+1$. Consider the subgame
+beginning at an arbitrary history $h^t$. The continuation payoffs from period $t+1$ onward
+are fixed at $\frac{1}{T}\sum_{\tau=t+1}^{T} g_i(a^*) = \frac{T-t}{T} g_i(a^*)$,
+independent of the action chosen at period $t$ (since all future play is $a^*$ regardless
+of history). Therefore, player $i$'s effective payoff at period $t$ is
+\[
+    \frac{1}{T} g_i(a^t) + \frac{T-t}{T} g_i(a^*),
+\]
+and maximizing this over $a_i^t$ is equivalent to maximizing $g_i(a_i^t, a_{-i}^t)$ in the
+stage game. Since $a^*$ is the unique NE, $a^t = a^*$ in every SPE.
+
+By induction, $a^t = a^*$ for all $t$, proving that the unique SPE is to play $a^*$ in
+every period.
+\end{proof}
+
+\begin{warning}[The Unraveling Trap]
+Theorem~\ref{thm:unraveling} shows that finite repetition of the Prisoner's Dilemma (which
+has a unique NE at mutual defection) cannot sustain cooperation under subgame perfection.
+This is counterintuitive and motivates the study of infinitely repeated games, where the
+``last period'' argument cannot be applied.
+\end{warning}
+
+\subsection{Multiple Stage-Game Equilibria}
+
+When the stage game has multiple Nash equilibria, repetition \emph{can} create new
+equilibrium outcomes.
+
+\begin{proposition}[New Equilibria Through Repetition]
+\label{prop:multiple-ne-repetition}
+If the stage game $G$ has at least two Nash equilibria yielding different payoffs for some
+player, then the two-fold repeated game $G^2$ may have SPE outcomes in which first-period
+play is not a stage-game NE.
+\end{proposition}
+
+\begin{proof}
+We give a constructive proof. Let $G$ have two Nash equilibria $a^*$ and $\hat{a}$ with
+$g_i(a^*) > g_i(\hat{a})$ for all $i$ (i.e., $a^*$ Pareto-dominates $\hat{a}$). Suppose
+there exists an action profile $\tilde{a}$ (not necessarily a NE) with
+$g_i(\tilde{a}) > g_i(a^*)$ for all $i$, and suppose the gain from deviating unilaterally
+in the stage game satisfies
+\[
+    \max_{a_i' \in A_i} g_i(a_i', \tilde{a}_{-i}) - g_i(\tilde{a})
+    < g_i(a^*) - g_i(\hat{a}).
+\]
+Consider the following strategy for each player $i$ in $G^2$:
+\begin{itemize}
+    \item Period 1: Play $\tilde{a}_i$.
+    \item Period 2: If $a^1 = \tilde{a}$, play $a_i^*$. Otherwise, play $\hat{a}_i$.
+\end{itemize}
+
+In period 2, players play a stage-game NE ($a^*$ or $\hat{a}$) depending on period-1
+history, so the strategy is sequentially rational in period 2.
+
+In period 1, if player $i$ deviates to $a_i'$ while others play $\tilde{a}_{-i}$, the
+payoff change is:
+\begin{align*}
+    &\frac{1}{2}\bigl[g_i(a_i', \tilde{a}_{-i}) + g_i(\hat{a})\bigr]
+    - \frac{1}{2}\bigl[g_i(\tilde{a}) + g_i(a^*)\bigr] \\
+    &= \frac{1}{2}\bigl[g_i(a_i', \tilde{a}_{-i}) - g_i(\tilde{a})\bigr]
+    - \frac{1}{2}\bigl[g_i(a^*) - g_i(\hat{a})\bigr] < 0,
+\end{align*}
+by the assumed inequality. Thus no player wants to deviate, and the profile is an SPE
+in which first-period play $\tilde{a}$ is \emph{not} a stage-game NE.
+\end{proof}
+
+\begin{example}[Coordination Game]
+\label{ex:coordination-repeated}
+Consider the two-player coordination game with payoffs:
+\[
+\begin{array}{c|cc}
+  & L & R \\ \hline
+T & 3,3 & 0,0 \\
+B & 0,0 & 1,1
+\end{array}
+\]
+This has two pure NE: $(T,L)$ with payoffs $(3,3)$ and $(B,R)$ with payoffs $(1,1)$.
+In the two-fold repetition, the ``punishment'' equilibrium $(B,R)$ can incentivize
+cooperation on outcomes that are not stage-game NE, provided the incentive condition is
+satisfied.
+\end{example}
+
+
+%% ============================================================
+%% SECTION 3: Infinitely Repeated Games
+%% ============================================================
+
+\section{Infinitely Repeated Games}
+\label{sec:infinitely-repeated}
+
+\subsection{Model}
+
+To circumvent the unraveling argument, we consider infinite repetition with discounting.
+
+\begin{definition}[Infinitely Repeated Game]
+\label{def:infinitely-repeated}
+Given a stage game $G$ and a discount factor $\delta \in (0,1)$, the \emph{infinitely
+repeated game} $G^\infty(\delta)$ is defined by:
+\begin{enumerate}[label=(\alph*)]
+    \item In each period $t \in \{1, 2, 3, \ldots\}$, players simultaneously choose
+    actions $a^t \in A$.
+    \item Histories, strategies are defined as in the finite case, but with $t$ ranging
+    over $\N$.
+    \item Player $i$'s payoff under strategy profile $s$ is the \emph{normalized discounted
+    sum}:
+    \[
+        u_i(s) = (1 - \delta) \sum_{t=1}^{\infty} \delta^{t-1} g_i(a^t).
+    \]
+\end{enumerate}
+The normalization factor $(1-\delta)$ ensures that payoffs lie in the same range as
+stage-game payoffs: if $a^t = a$ for all $t$, then $u_i = g_i(a)$.
+\end{definition}
+
+\subsection{Feasible and Individually Rational Payoffs}
+
+\begin{definition}[Feasible Payoff Set]
+\label{def:feasible-payoffs}
+The \emph{feasible payoff set} of the stage game $G$ is
+\[
+    V = \conv\{g(a) : a \in A\} = \conv\{(g_1(a), \ldots, g_n(a)) : a \in A\} \subset \R^n,
+\]
+the convex hull of all achievable stage-game payoff vectors.
+\end{definition}
+
+\begin{remark}
+In the infinitely repeated game, any payoff vector $v \in V$ is achievable by cycling
+through action profiles with appropriate frequencies. For instance, if $v = \lambda g(a) +
+(1-\lambda) g(a')$ for some $\lambda \in [0,1]$, then playing $a$ for a fraction $\lambda$
+of periods and $a'$ for the remaining fraction achieves payoff $v$ in the limit as
+$\delta \to 1$.
+\end{remark}
+
+\begin{definition}[Minimax Value and Individually Rational Payoffs]
+\label{def:minimax-ir}
+The \emph{minimax value} (or \emph{minmax value}) of player $i$ in pure strategies is
+\[
+    \underline{v}_i = \min_{a_{-i} \in A_{-i}} \max_{a_i \in A_i} g_i(a_i, a_{-i}).
+\]
+The \emph{mixed-strategy minimax value} is
+\[
+    \underline{v}_i^{\text{mix}} = \min_{\alpha_{-i} \in \Delta(A_{-i})} \max_{a_i \in A_i}
+    \E_{\alpha_{-i}}[g_i(a_i, a_{-i})],
+\]
+where $\Delta(A_{-i}) = \prod_{j \neq i} \Delta(A_j)$ is the set of independent mixed
+strategy profiles for $i$'s opponents. A payoff vector $v \in \R^n$ is
+\emph{individually rational} if $v_i \geq \underline{v}_i^{\text{mix}}$ for all $i$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:ne-payoff-lower-bound}
+In any Nash equilibrium of $G^\infty(\delta)$, each player $i$ receives payoff
+$u_i \geq \underline{v}_i^{\text{mix}}$.
+\end{proposition}
+
+\begin{proof}
+In any NE, player $i$ can deviate to the strategy of playing
+$\argmax_{a_i} \E_{\alpha_{-i}^t}[g_i(a_i, a_{-i}^t)]$ in every period $t$ (where
+$\alpha_{-i}^t$ is the marginal distribution of opponents' play at time $t$ induced by the
+equilibrium). This guarantees a stage payoff of at least $\underline{v}_i^{\text{mix}}$ in
+every period, hence a total payoff of at least $\underline{v}_i^{\text{mix}}$.
+Since the NE strategy must yield payoff at least as high as any deviation, we get
+$u_i \geq \underline{v}_i^{\text{mix}}$.
+\end{proof}
+
+\subsection{Trigger Strategies}
+
+\begin{definition}[Grim Trigger Strategy]
+\label{def:grim-trigger}
+Given a target action profile $a^* \in A$, the \emph{grim trigger strategy} for player $i$
+is:
+\[
+    s_i^t(h^t) = \begin{cases}
+        a_i^* & \text{if } a^\tau = a^* \text{ for all } \tau < t, \\
+        m_i   & \text{otherwise},
+    \end{cases}
+\]
+where $m_i \in \argmin_{\alpha_i} \max_{a_j} g_j(a_j, \alpha_{-j})$ is player $i$'s
+component of a minimax punishment profile against any deviator.
+\end{definition}
+
+\begin{example}[Cooperation in the Repeated Prisoner's Dilemma]
+\label{ex:repeated-pd}
+Consider the Prisoner's Dilemma with payoffs:
+\[
+\begin{array}{c|cc}
+  & C & D \\ \hline
+C & 3,3 & 0,4 \\
+D & 4,0 & 1,1
+\end{array}
+\]
+The unique stage-game NE is $(D,D)$ with payoffs $(1,1)$. The minimax value for each
+player is $\underline{v}_i = 1$. Consider the grim trigger strategy profile that plays
+$(C,C)$ and punishes with $(D,D)$ forever.
+
+\textbf{Cooperation payoff:} If both cooperate forever, each gets $u_i = 3$.
+
+\textbf{Deviation payoff:} If player $i$ defects in period $t$ (while the opponent
+cooperates), she gets $4$ in that period and $1$ thereafter:
+\[
+    u_i^{\text{dev}} = (1-\delta)\bigl[\delta^{t-1} \cdot 4 + \sum_{\tau=t+1}^{\infty}
+    \delta^{\tau-1} \cdot 1\bigr]
+    + (1-\delta) \sum_{\tau=1}^{t-1} \delta^{\tau-1} \cdot 3.
+\]
+The best deviation is at $t=1$:
+\[
+    u_i^{\text{dev}} = (1-\delta) \cdot 4 + \delta \cdot 1 = 4 - 3\delta.
+\]
+Cooperation is sustained iff $3 \geq 4 - 3\delta$, i.e., $\delta \geq \frac{1}{3}$.
+\end{example}
+
+\begin{rlconnection}[Discount Factors and Episode Length in RL]
+The discount factor $\delta$ in repeated games is analogous to the discount factor $\gamma$
+in MDPs. In MARL, if $\gamma$ is too small (agents are too myopic), cooperative equilibria
+may not be sustainable. This directly parallels the threshold $\delta \geq 1/3$ in the
+repeated Prisoner's Dilemma: myopic agents (small $\gamma$) cannot learn to cooperate.
+\end{rlconnection}
+
+\begin{definition}[Tit-for-Tat]
+\label{def:tit-for-tat}
+In a two-player game, the \emph{tit-for-tat} strategy for player $i$ is:
+\[
+    s_i^1 = C, \qquad s_i^t(h^t) = a_j^{t-1} \quad \text{for } t \geq 2,
+\]
+where $j \neq i$. That is, start by cooperating, then mimic the opponent's previous action.
+\end{definition}
+
+\begin{remark}
+Tit-for-tat is a ``forgiving'' strategy: unlike grim trigger, punishment is temporary.
+Axelrod's famous tournaments showed that tit-for-tat performs well in evolutionary settings,
+which connects to the multi-agent RL idea that simple, interpretable strategies can be
+surprisingly effective.
+\end{remark}
+
+
+%% ============================================================
+%% SECTION 4: Folk Theorems
+%% ============================================================
+
+\section{Folk Theorems}
+\label{sec:folk-theorems}
+
+The folk theorems characterize the equilibrium payoff set of infinitely repeated games.
+Informally, ``almost anything'' can be sustained as an equilibrium if players are patient
+enough.
+
+\subsection{Nash Folk Theorem}
+
+\begin{theorem}[Nash Folk Theorem]
+\label{thm:nash-folk}
+Let $G$ be a finite normal-form game and $V = \conv\{g(a) : a \in A\}$ the feasible payoff
+set. For any payoff vector $v \in V$ satisfying $v_i > \underline{v}_i^{\text{mix}}$ for
+all $i$ (strictly individually rational), there exists $\underline{\delta} \in (0,1)$ such
+that for all $\delta \in (\underline{\delta}, 1)$, there is a Nash equilibrium of
+$G^\infty(\delta)$ with payoff vector $v$.
+\end{theorem}
+
+\begin{proof}
+We construct a Nash equilibrium yielding payoff $v$.
+
+\textbf{Step 1: Achieving $v$ through action sequences.}
+Since $v \in V = \conv\{g(a) : a \in A\}$, there exist action profiles
+$a(1), a(2), \ldots, a(K) \in A$ and weights $\lambda_1, \ldots, \lambda_K \geq 0$ with
+$\sum_k \lambda_k = 1$ such that $v = \sum_k \lambda_k g(a(k))$. We can approximate $v$
+by cycling through these action profiles. Specifically, for any $\varepsilon > 0$ and
+$\delta$ close enough to 1, we can construct a deterministic sequence of action profiles
+$(a^t)_{t=1}^\infty$ such that the discounted average payoff
+$(1-\delta)\sum_{t=1}^\infty \delta^{t-1} g(a^t)$ is within $\varepsilon$ of $v$.
+
+More precisely, define a cycle of length $L$ where action profile $a(k)$ is played for
+$\lceil \lambda_k L \rceil$ periods (adjusting the last to make the total exactly $L$).
+As $\delta \to 1$, the discounted average of any periodic sequence converges to the
+time-average, which converges to $v$ as $L \to \infty$. Fix $\varepsilon > 0$ small enough
+that $v_i - \varepsilon > \underline{v}_i^{\text{mix}}$ for all $i$, and choose $L$ and
+$\underline{\delta}_1$ accordingly.
+
+\textbf{Step 2: Punishment strategies.}
+For each player $i$, let $\alpha_{-i}^{m,i} \in \Delta(A_{-i})$ be a mixed minimax
+punishment profile:
+$\max_{a_i} \E_{\alpha_{-i}^{m,i}}[g_i(a_i, a_{-i})] = \underline{v}_i^{\text{mix}}$.
+In the punishment phase, players $j \neq i$ play according to $\alpha_{-i}^{m,i}$
+independently.
+
+\textbf{Step 3: Strategy construction.}
+Define the following strategy for each player $j$:
+\begin{itemize}
+    \item \emph{Cooperation phase:} Play the sequence $(a^t)_{t=1}^\infty$ from Step 1.
+    \item \emph{Punishment phase:} If some player $i$ is the first to deviate from the
+    prescribed sequence in some period $\hat{t}$, then for all $t > \hat{t}$, all players
+    $j \neq i$ play according to $\alpha_{-i}^{m,i}$ (punishing $i$ forever).
+\end{itemize}
+
+\textbf{Step 4: Verifying the Nash equilibrium condition.}
+Consider whether player $i$ wants to deviate. If player $i$ follows the prescribed strategy,
+she receives payoff within $\varepsilon$ of $v_i$ (for $\delta > \underline{\delta}_1$).
+
+If player $i$ deviates at any period $\hat{t}$, she receives at most
+$\max_a g_i(a) \cdot (1-\delta)\delta^{\hat{t}-1}$ in that period, plus the punishment
+continuation payoff. In the punishment phase, the opponents play the mixed minimax strategy,
+so player $i$'s best response yields at most $\underline{v}_i^{\text{mix}}$ per period.
+Thus the deviation payoff is at most:
+\[
+    u_i^{\text{dev}} \leq (1-\delta) \sum_{\tau=1}^{\hat{t}} \delta^{\tau-1} M
+    + \delta^{\hat{t}} \underline{v}_i^{\text{mix}}
+\]
+where $M = \max_a |g_i(a)|$.
+
+As $\delta \to 1$, the first term (a finite number of periods) vanishes and
+$u_i^{\text{dev}} \to \underline{v}_i^{\text{mix}} < v_i - \varepsilon$. Therefore,
+for $\delta$ large enough (say $\delta > \underline{\delta}_2$), deviation is unprofitable.
+
+Taking $\underline{\delta} = \max(\underline{\delta}_1, \underline{\delta}_2)$ completes
+the proof.
+
+\textbf{Note on Nash vs.\ SPE:} This equilibrium is Nash but not necessarily subgame
+perfect: punishing players have no incentive to carry out the punishment (they are
+indifferent or may prefer not to punish). The subgame perfect folk theorem below addresses
+this.
+\end{proof}
+
+\begin{keyresult}[Nash Folk Theorem -- Interpretation]
+Any feasible, strictly individually rational payoff vector is achievable as a Nash
+equilibrium payoff for sufficiently patient players. This means the set of NE payoffs
+of the repeated game ``fills up'' the feasible individually rational region as
+$\delta \to 1$.
+\end{keyresult}
+
+\subsection{Subgame Perfect Folk Theorem}
+
+The Nash folk theorem has a weakness: punishment threats may not be credible. The punishers
+might prefer to deviate from punishment. The subgame perfect folk theorem (Fudenberg and
+Maskin, 1986) resolves this by constructing self-enforcing punishment schemes.
+
+\begin{definition}[Full Dimensionality Condition]
+\label{def:full-dim}
+The stage game $G$ satisfies the \emph{full dimensionality condition} if the feasible payoff
+set $V = \conv\{g(a) : a \in A\}$ has dimension $n$ (the number of players), i.e.,
+$V$ has nonempty interior in $\R^n$.
+\end{definition}
+
+\begin{theorem}[Subgame Perfect Folk Theorem (Fudenberg--Maskin)]
+\label{thm:spe-folk}
+Let $G$ be a finite $n$-player game satisfying the full dimensionality condition. For any
+feasible payoff vector $v \in V$ with $v_i > \underline{v}_i^{\text{mix}}$ for all $i$,
+there exists $\underline{\delta} \in (0,1)$ such that for all
+$\delta \in (\underline{\delta}, 1)$, there is a subgame perfect equilibrium of
+$G^\infty(\delta)$ with payoff vector $v$.
+\end{theorem}
+
+\begin{proof}
+The proof is constructive. We build a strategy profile with multiple phases: a cooperation
+phase and player-specific punishment phases, arranged so that each phase is self-enforcing.
+
+\textbf{Step 1: Setup.}
+Fix $v \in V$ with $v_i > \underline{v}_i^{\text{mix}}$ for all $i$. Since $V$ has full
+dimension, for each player $i$ there exists a feasible payoff vector $w^i \in V$ with:
+\begin{enumerate}[label=(\roman*)]
+    \item $w^i_j > \underline{v}_j^{\text{mix}}$ for all $j \neq i$ (the punishers receive
+    strictly above their minimax values during the punishment of $i$),
+    \item $w^i_i < v_i$ (player $i$'s payoff during her own punishment phase is below her
+    cooperative payoff; we can choose $w^i_i$ close to $\underline{v}_i^{\text{mix}}$).
+\end{enumerate}
+The full dimensionality condition ensures such $w^i$ exist: since $V$ has nonempty interior,
+we can find vectors that independently adjust each player's payoff.
+
+Let $m^i_{-i} \in \Delta(A_{-i})$ be a mixed minimax strategy profile against player $i$.
+
+\textbf{Step 2: Strategy construction (three-phase strategy).}
+
+\emph{Phase 0 (Cooperation):} Play the action sequence that yields payoff $v$ (as in the
+Nash folk theorem proof).
+
+\emph{Phase I$_i$ (Punishment of player $i$):} Lasts for $L$ periods. During this phase,
+the opponents of $i$ play the minimax strategy $m^i_{-i}$ in each period, and player $i$
+plays any best response (which yields at most $\underline{v}_i^{\text{mix}}$ per period).
+
+\emph{Phase II$_i$ (Reward after punishment):} After the $L$-period punishment phase, play
+switches to the action sequence yielding payoff $w^i$ forever. This rewards the punishers
+(who received above their minimax during punishment) and keeps $i$'s continuation payoff
+below $v_i$ if $L$ is large enough.
+
+\emph{Transitions:}
+\begin{itemize}
+    \item If player $j$ is the first to deviate in Phase 0, switch to Phase I$_j$.
+    \item If player $j$ deviates during Phase I$_i$ (and $j \neq i$), restart Phase I$_j$
+    (punish the deviating punisher).
+    \item If player $i$ deviates during her own punishment Phase I$_i$, restart Phase I$_i$.
+\end{itemize}
+
+\textbf{Step 3: Choosing $L$.}
+We need $L$ large enough that deviation is unprofitable. Let $M = \max_{a,i} |g_i(a)|$.
+During Phase I$_i$, player $i$ gets at most $\underline{v}_i^{\text{mix}}$ per period.
+After Phase I$_i$, player $i$ gets $w^i_i$ per period. Thus player $i$'s continuation payoff
+from Phase I$_i$ is:
+\[
+    (1-\delta) \sum_{t=1}^{L} \delta^{t-1} \underline{v}_i^{\text{mix}}
+    + \delta^L w^i_i
+    = (1 - \delta^L) \underline{v}_i^{\text{mix}} + \delta^L w^i_i.
+\]
+We need this to be less than $v_i$ (so punishment deters deviation from Phase 0) and for
+the punishers' payoffs to make Phase I self-enforcing.
+
+\textbf{Step 4: Verifying sequential rationality.}
+
+\emph{Phase 0 -- Player $i$ considers deviating:}
+Deviation yields at most $M$ in one period, then Phase I$_i$ begins. Compliance yields
+$v_i$ forever. The deviation is unprofitable when:
+\[
+    v_i \geq (1-\delta) M + \delta \bigl[(1 - \delta^L)
+    \underline{v}_i^{\text{mix}} + \delta^L w^i_i\bigr].
+\]
+As $\delta \to 1$, the right side approaches $(1-\delta)M + \delta[(1-\delta^L)
+\underline{v}_i^{\text{mix}} + \delta^L w^i_i]$. For $\delta$ close to 1 and $L$ large,
+$(1-\delta)M \to 0$ and the continuation approaches a weighted average of
+$\underline{v}_i^{\text{mix}}$ and $w^i_i$, both strictly below $v_i$ (since $w^i_i < v_i$
+and $\underline{v}_i^{\text{mix}} < v_i$). So the inequality holds for $\delta$ large
+enough.
+
+\emph{Phase I$_i$ -- Punisher $j \neq i$ considers deviating:}
+If $j$ deviates during Phase I$_i$, Phase I$_j$ begins (punishing $j$). Compliance with
+Phase I$_i$ yields: the minimax strategy payoff for $L-t$ remaining periods (at worst
+$-M$ per period but bounded), followed by $w^i_j > \underline{v}_j^{\text{mix}}$ forever.
+Deviation yields at most $M$ for one period, then Phase I$_j$ punishment.
+
+For $\delta$ close to 1, the continuation payoff from compliance converges to $w^i_j >
+\underline{v}_j^{\text{mix}}$, while deviation leads eventually to $w^j_j$ which can be
+chosen close to $\underline{v}_j^{\text{mix}}$. So compliance dominates for large $\delta$.
+
+\emph{Phase I$_i$ -- Player $i$ considers deviating:}
+Deviating restarts Phase I$_i$, gaining at most $M$ in one period but adding $L$ more
+punishment periods. Compliance ends the punishment sooner and leads to $w^i_i$ forever.
+For large $\delta$, the cost of extending punishment exceeds any one-period gain.
+
+Since all deviations are unprofitable for $\delta > \underline{\delta}$ (where
+$\underline{\delta}$ depends on the game parameters $M, v, w^i,
+\underline{v}_i^{\text{mix}}, L$), the constructed strategy profile is a subgame perfect
+equilibrium.
+\end{proof}
+
+\begin{remark}
+The full dimensionality condition is needed only for $n \geq 3$ players: it allows
+constructing punishment payoffs $w^i$ that reward the punishers while punishing the
+deviator. For two-player games, Fudenberg and Maskin (1986) showed the folk theorem holds
+without this condition, since minmaxing the opponent is the only thing the punisher can do.
+\end{remark}
+
+\begin{keyresult}[Subgame Perfect Folk Theorem -- Interpretation]
+For patient enough players (large $\delta$), the set of SPE payoffs of the infinitely
+repeated game is exactly the set of feasible, strictly individually rational payoff
+vectors (under the full dimensionality condition). This is a much stronger result than the
+Nash folk theorem because SPE requires credible (self-enforcing) punishments.
+\end{keyresult}
+
+\begin{rlconnection}[Folk Theorems and Multi-Agent RL]
+The folk theorems have profound implications for MARL:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Multiplicity of equilibria:} In repeated general-sum games, there are
+    typically \emph{many} equilibria. This means that independent learners may converge to
+    vastly different outcomes depending on initial conditions, learning rates, and
+    exploration schedules.
+    \item \textbf{Emergent cooperation:} The folk theorems show that cooperation can be
+    sustained by punishment threats, explaining why self-play agents sometimes learn
+    cooperative strategies in iterated social dilemmas.
+    \item \textbf{Reward shaping:} The discount factor $\delta$ (analogous to $\gamma$ in
+    RL) determines the set of achievable equilibria. Curriculum designers can influence
+    emergent behavior by adjusting $\gamma$.
+\end{enumerate}
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 5: Zero-Sum Games -- Deeper Treatment
+%% ============================================================
+
+
+\end{document}

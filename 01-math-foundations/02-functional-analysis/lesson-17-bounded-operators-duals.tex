@@ -1,0 +1,319 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 6: Metric and Normed Spaces}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\diam}{diam}
+\DeclareMathOperator{\Int}{int}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\Span}{span}
+\DeclareMathOperator{\id}{id}
+
+% ---- Title ----
+\title{Lesson 17: Bounded Linear Operators and Dual Spaces}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{4}
+
+\section{Bounded Linear Operators}
+\label{sec:operators}
+
+\subsection{Definitions and Basic Properties}
+
+\begin{definition}[Linear Operator]
+\label{def:linear_op}
+Let $X$ and $Y$ be normed spaces. A map $T \colon X \to Y$ is a \emph{linear
+operator} if $T(\alpha x + \beta y) = \alpha T(x) + \beta T(y)$ for all
+$x, y \in X$ and scalars $\alpha, \beta$.
+\end{definition}
+
+\begin{definition}[Bounded Linear Operator]
+\label{def:bounded_op}
+A linear operator $T \colon X \to Y$ is \emph{bounded} if there exists $c \ge 0$
+such that $\|Tx\|_Y \le c \|x\|_X$ for all $x \in X$. The \emph{operator norm} is
+\[
+\|T\| = \sup_{x \ne 0} \frac{\|Tx\|_Y}{\|x\|_X} = \sup_{\|x\|_X = 1} \|Tx\|_Y
+= \sup_{\|x\|_X \le 1} \|Tx\|_Y.
+\]
+\end{definition}
+
+\begin{proposition}[Equivalent Formulations of the Operator Norm]
+\label{prop:op_norm_equiv}
+The three suprema in Definition~\ref{def:bounded_op} are equal.
+\end{proposition}
+
+\begin{proof}
+Let $\alpha = \sup_{x \ne 0} \|Tx\|/\|x\|$, $\beta = \sup_{\|x\|=1} \|Tx\|$,
+$\gamma = \sup_{\|x\| \le 1} \|Tx\|$.
+
+$\alpha = \beta$: For $x \ne 0$, set $u = x/\|x\|$, so $\|u\| = 1$ and
+$\|Tx\|/\|x\| = \|Tu\|$. Thus $\sup_{x \ne 0} \|Tx\|/\|x\| =
+\sup_{\|u\|=1} \|Tu\|$.
+
+$\beta \le \gamma$: The set $\{\|x\| = 1\}$ is contained in $\{\|x\| \le 1\}$.
+
+$\gamma \le \alpha$: For $\|x\| \le 1$ with $x \ne 0$,
+$\|Tx\| = \|x\| \cdot \|Tx\|/\|x\| \le 1 \cdot \alpha = \alpha$. Also $\|T(0)\| = 0 \le \alpha$.
+So $\gamma \le \alpha = \beta \le \gamma$, giving equality.
+\end{proof}
+
+\begin{theorem}[Bounded $\Leftrightarrow$ Continuous]
+\label{thm:bounded_iff_cts}
+A linear operator $T \colon X \to Y$ between normed spaces is bounded if and only
+if it is continuous.
+\end{theorem}
+
+\begin{proof}
+($\Rightarrow$) If $T$ is bounded, then $\|Tx - Ty\| = \|T(x-y)\| \le \|T\| \|x - y\|$,
+so $T$ is Lipschitz, hence continuous.
+
+($\Leftarrow$) Suppose $T$ is continuous but not bounded. Then for each $n$, there
+exists $x_n$ with $\|x_n\| = 1$ and $\|Tx_n\| > n$. Set $y_n = x_n/n$. Then
+$\|y_n\| = 1/n \to 0$, so $y_n \to 0$, but $\|Ty_n\| = \|Tx_n\|/n > 1$. This
+contradicts the continuity of $T$ at $0$ (since $y_n \to 0$ should imply
+$Ty_n \to T(0) = 0$).
+\end{proof}
+
+\begin{remark}
+For linear operators, continuity at a single point (say $0$) implies continuity
+everywhere, because $T(x_n) - T(x) = T(x_n - x)$ and $x_n - x \to 0$.
+\end{remark}
+
+\begin{warning}[Unbounded Operators Exist]
+Not every linear operator is bounded. On the space of polynomials $P[0,1]$ (with
+the sup norm), the differentiation operator $D(f) = f'$ is linear but unbounded:
+$\|x^n\|_\infty = 1$ but $\|D(x^n)\|_\infty = \|n x^{n-1}\|_\infty = n \to \infty$.
+\end{warning}
+
+\subsection{The Space $B(X,Y)$}
+
+\begin{definition}[Space of Bounded Operators]
+\label{def:BXY}
+For normed spaces $X, Y$, we write $B(X,Y)$ for the set of all bounded linear
+operators $T \colon X \to Y$, equipped with the operator norm. When $Y = X$, we
+write $B(X) = B(X,X)$.
+\end{definition}
+
+\begin{theorem}[$B(X,Y)$ is a Normed Space]
+\label{thm:BXY_normed}
+$B(X,Y)$ is a normed space under the operator norm.
+\end{theorem}
+
+\begin{proof}
+$B(X,Y)$ is a vector space: for $T, S \in B(X,Y)$ and scalar $\alpha$,
+$(T + S)(x) = Tx + Sx$ and $(\alpha T)(x) = \alpha Tx$ are bounded linear operators
+(with $\|T + S\| \le \|T\| + \|S\|$ and $\|\alpha T\| = |\alpha| \|T\|$).
+
+The operator norm satisfies the norm axioms:
+\begin{itemize}[nosep]
+\item \ref{N1}: $\|T\| = 0 \iff \|Tx\| = 0$ for all $\|x\| \le 1 \iff Tx = 0$
+for all $x \iff T = 0$.
+\item \ref{N2}: $\|\alpha T\| = \sup_{\|x\| \le 1} \|\alpha Tx\| =
+|\alpha| \sup_{\|x\| \le 1} \|Tx\| = |\alpha| \|T\|$.
+\item \ref{N3}: $\|T + S\| = \sup_{\|x\| \le 1} \|(T+S)x\| \le
+\sup_{\|x\| \le 1} (\|Tx\| + \|Sx\|) \le \|T\| + \|S\|$.
+\end{itemize}
+\end{proof}
+
+\begin{theorem}[$B(X,Y)$ is Banach When $Y$ is Banach]
+\label{thm:BXY_banach}
+If $Y$ is a Banach space, then $B(X,Y)$ is a Banach space.
+\end{theorem}
+
+\begin{proof}
+Let $(T_n)$ be a Cauchy sequence in $B(X,Y)$. For each $x \in X$,
+$\|T_n x - T_m x\| \le \|T_n - T_m\| \|x\| \to 0$, so $(T_n x)$ is Cauchy in $Y$.
+Since $Y$ is Banach, the limit exists: define $Tx = \lim_{n \to \infty} T_n x$.
+
+\textbf{$T$ is linear.} $T(\alpha x + \beta y) = \lim T_n(\alpha x + \beta y) =
+\lim (\alpha T_n x + \beta T_n y) = \alpha Tx + \beta Ty$.
+
+\textbf{$T$ is bounded.} Since $(T_n)$ is Cauchy, it is bounded: $\|T_n\| \le M$
+for some $M$. For each $x$, $\|Tx\| = \lim \|T_n x\| \le M \|x\|$, so
+$\|T\| \le M$.
+
+\textbf{$T_n \to T$ in operator norm.} Given $\varepsilon > 0$, choose $N$ such
+that $\|T_n - T_m\| < \varepsilon$ for $n, m \ge N$. For any $x$ with $\|x\| \le 1$
+and $n \ge N$:
+$\|T_n x - T_m x\| \le \varepsilon$ for all $m \ge N$. Letting $m \to \infty$:
+$\|T_n x - Tx\| \le \varepsilon$. Taking the sup over $\|x\| \le 1$:
+$\|T_n - T\| \le \varepsilon$ for $n \ge N$.
+\end{proof}
+
+\subsection{Important Examples}
+
+\begin{example}[Matrix Operators]
+\label{ex:matrix_op}
+Every $m \times n$ real matrix $A$ defines a bounded linear operator
+$T_A \colon (\R^n, \|\cdot\|_p) \to (\R^m, \|\cdot\|_p)$ by $T_A(x) = Ax$.
+Boundedness follows from finite-dimensionality (all linear operators on
+finite-dimensional spaces are bounded, as we prove below).
+\end{example}
+
+\begin{proposition}[All Linear Operators on Finite-Dimensional Spaces are Bounded]
+\label{prop:finite_dim_bounded}
+If $X$ is a finite-dimensional normed space and $Y$ is any normed space, then
+every linear operator $T \colon X \to Y$ is bounded.
+\end{proposition}
+
+\begin{proof}
+Let $\{e_1, \ldots, e_n\}$ be a basis for $X$. For $x = \sum_{i=1}^n \alpha_i e_i$,
+by the equivalence of norms (Theorem~\ref{thm:norm_equiv}), there exists $c > 0$
+with $\sum |\alpha_i| \le c \|x\|_X$ (since $x \mapsto \sum |\alpha_i|$ is a norm
+on $X$, equivalent to $\|\cdot\|_X$). Then:
+\[
+\|Tx\| = \Bigl\|\sum_{i=1}^n \alpha_i Te_i\Bigr\| \le \sum_{i=1}^n |\alpha_i| \|Te_i\|
+\le c \|x\|_X \cdot \max_i \|Te_i\|.
+\]
+So $T$ is bounded with $\|T\| \le c \cdot \max_i \|Te_i\|$.
+\end{proof}
+
+\begin{example}[Integral Operator]
+\label{ex:integral_op}
+Let $k \in C([a,b] \times [a,b])$ and define $T \colon C[a,b] \to C[a,b]$ by
+\[
+(Tf)(s) = \int_a^b k(s,t)\, f(t)\, dt.
+\]
+This is a bounded linear operator with
+$\|T\| \le \max_{s \in [a,b]} \int_a^b |k(s,t)|\, dt$.
+Indeed, $|(Tf)(s)| \le \int_a^b |k(s,t)| |f(t)|\, dt \le \|f\|_\infty \int_a^b |k(s,t)|\, dt$.
+\end{example}
+
+\begin{example}[Right Shift Operator]
+\label{ex:shift}
+On $\ell^p$ ($1 \le p \le \infty$), the right shift $R(x_1, x_2, \ldots) =
+(0, x_1, x_2, \ldots)$ is a bounded linear operator with $\|R\| = 1$: clearly
+$\|Rx\|_p = \|x\|_p$ for all $x$.
+\end{example}
+
+\begin{rlconnection}[The Bellman Operator is Bounded]
+The Bellman expectation operator $T^\pi \colon b(\mathcal{S}) \to b(\mathcal{S})$
+defined by $(T^\pi V)(s) = r^\pi(s) + \gamma \sum_{s'} P^\pi(s'|s) V(s')$ is a
+bounded (in fact, affine) operator on the Banach space of bounded functions. Its
+``linear part'' $V \mapsto \gamma \sum_{s'} P^\pi(s'|s) V(s')$ has operator norm
+at most $\gamma < 1$ (under $\|\cdot\|_\infty$), which is why $T^\pi$ is a
+contraction. The framework of $B(X,Y)$ and operator norms gives us the precise
+language to state and prove this.
+\end{rlconnection}
+
+\subsection{Dual Spaces}
+
+\begin{definition}[Dual Space]
+\label{def:dual}
+The \emph{(continuous) dual space} of a normed space $X$ is
+$X^* = B(X, \R)$ (or $B(X, \C)$ if $X$ is a complex space): the space of all
+bounded linear functionals on $X$, equipped with the operator norm
+$\|f\|_{X^*} = \sup_{\|x\| \le 1} |f(x)|$.
+\end{definition}
+
+\begin{corollary}
+\label{cor:dual_banach}
+For any normed space $X$, the dual space $X^*$ is a Banach space.
+\end{corollary}
+
+\begin{proof}
+$\R$ (or $\C$) is a Banach space, so $X^* = B(X, \R)$ is Banach by
+Theorem~\ref{thm:BXY_banach}.
+\end{proof}
+
+\begin{remark}
+The dual space is always complete, even if $X$ itself is not.
+\end{remark}
+
+\begin{example}[Dual of $\ell^p$]
+\label{ex:dual_lp}
+For $1 \le p < \infty$ with $1/p + 1/q = 1$ (where $q = \infty$ when $p = 1$),
+$(\ell^p)^* \cong \ell^q$ isometrically: every bounded linear functional on
+$\ell^p$ has the form $f(x) = \sum_{n=1}^\infty y_n x_n$ for a unique
+$y = (y_n) \in \ell^q$, with $\|f\| = \|y\|_q$. This is the Riesz representation
+theorem for $\ell^p$ spaces.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: COMPACTNESS
+%% ============================================================
+
+
+\end{document}

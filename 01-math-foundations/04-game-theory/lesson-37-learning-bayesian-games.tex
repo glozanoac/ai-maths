@@ -1,0 +1,524 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 12: Repeated Games and Incomplete Information}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\argmax}{argmax}
+\DeclareMathOperator{\argmin}{argmin}
+\DeclareMathOperator{\BR}{BR}
+
+% ---- Title ----
+\title{Lesson 37: Learning in Games and Bayesian Games}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{4}
+
+\section{Zero-Sum Games: Fictitious Play and No-Regret Learning}
+\label{sec:zero-sum}
+
+We return to two-player zero-sum games $G = (\{1,2\}, A_1, A_2, g)$ where
+$g_1(a) = -g_2(a) = g(a)$. Recall from Lesson 11 the minimax theorem:
+$\max_{\alpha_1} \min_{\alpha_2} \E[g(\alpha_1, \alpha_2)]
+= \min_{\alpha_2} \max_{\alpha_1} \E[g(\alpha_1, \alpha_2)] = v^*$ (the value of the game).
+
+\subsection{Fictitious Play}
+
+\begin{definition}[Fictitious Play]
+\label{def:fictitious-play}
+\emph{Fictitious play} is a learning dynamic where each player best-responds to the
+empirical frequency of the opponent's past actions. Formally, let $a_j^1, a_j^2, \ldots$
+be the actions played by player $j$. The empirical frequency after $T$ rounds is
+\[
+    \hat{\alpha}_j^T(a_j) = \frac{1}{T} \sum_{t=1}^T \indicator\{a_j^t = a_j\}
+    \qquad \text{for each } a_j \in A_j.
+\]
+At round $T+1$, player $i$ plays $a_i^{T+1} \in \BR_i(\hat{\alpha}_j^T)$, a best response
+to the empirical distribution of the opponent.
+\end{definition}
+
+\begin{theorem}[Convergence of Fictitious Play in $2 \times 2$ Zero-Sum Games]
+\label{thm:fp-2x2}
+In any $2 \times 2$ zero-sum game, the empirical frequencies
+$(\hat{\alpha}_1^T, \hat{\alpha}_2^T)$ under fictitious play converge to a Nash equilibrium
+as $T \to \infty$.
+\end{theorem}
+
+\begin{proof}
+Let the payoff matrix be
+\[
+    G = \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+\]
+with player 1 choosing rows and player 2 choosing columns, so $g_1 = G$, $g_2 = -G$.
+
+Consider the function $\Phi^T = \max_{a_1} \sum_{t=1}^T g(a_1, a_2^t)$. This is player 1's
+``fictitious play payoff''---the best she could have done against the sequence of player 2's
+actions if constrained to a fixed action.
+
+We analyze how $\Phi^T$ evolves. Note that $\Phi^T = \max\{R_1^T, R_2^T\}$ where
+$R_k^T = \sum_{t=1}^T g(k, a_2^t)$ is the cumulative payoff of row $k$.
+
+In a $2 \times 2$ game, the best response of player 1 to $\hat{\alpha}_2^T$ is row 1 if
+$R_1^T > R_2^T$ and row 2 if $R_1^T < R_2^T$ (with either at ties). Define
+$D^T = R_1^T - R_2^T$.
+
+\emph{Claim:} $|D^T|$ is bounded. To see this, note that when $D^T > 0$, player 1 plays
+row 1, and player 2 best-responds to the empirical frequency $\hat{\alpha}_1^T$ which puts
+more weight on row 1. Player 2's best response tends to be the column that makes row 1
+less attractive, which decreases $D^{T+1}$. Similarly when $D^T < 0$. The key observation
+in the $2 \times 2$ case is that $D^T$ oscillates around 0 with bounded amplitude
+(bounded by $\max |g(a)|$), because each step changes $D^T$ by at most
+$\max_{a_2} |g(1,a_2) - g(2,a_2)|$.
+
+More precisely, define $V_1^T = \frac{1}{T}\Phi^T$ (player 1's ``best fixed action''
+average payoff). We have
+\[
+    V_1^T = \frac{1}{T} \max_{a_1} \sum_{t=1}^T g(a_1, a_2^t)
+    \geq \frac{1}{T} \sum_{t=1}^T g(a_1^t, a_2^t),
+\]
+since the best fixed action does at least as well as the actual sequence.
+
+Similarly, define $V_2^T = \frac{1}{T} \max_{a_2} \sum_{t=1}^T (-g(a_1^t, a_2))$ for
+player 2. By the minimax theorem for the stage game:
+\[
+    V_1^T \geq v^* \geq -V_2^T.
+\]
+Furthermore, $V_1^T - v^* \to 0$ and $V_2^T + v^* \to 0$ because the ``regret''
+$V_1^T - \frac{1}{T}\sum_t g(a_1^t, a_2^t)$ can be bounded by the bounded oscillation of
+$D^T/T \to 0$.
+
+Since $|D^T|$ is bounded, $\frac{D^T}{T} \to 0$, which means $\frac{R_1^T}{T}$ and
+$\frac{R_2^T}{T}$ converge to the same limit. This implies that $\hat{\alpha}_2^T$
+converges to making player 1 indifferent between rows, which is exactly the NE condition
+in a $2 \times 2$ game with a completely mixed equilibrium. If the game has a pure
+equilibrium, fictitious play converges to it in finitely many steps.
+
+Thus $(\hat{\alpha}_1^T, \hat{\alpha}_2^T) \to (\alpha_1^*, \alpha_2^*)$, a Nash
+equilibrium.
+\end{proof}
+
+\begin{theorem}[Robinson's Theorem: Fictitious Play in General Zero-Sum Games]
+\label{thm:robinson}
+In any finite two-player zero-sum game, the empirical frequencies under fictitious play
+converge to the set of Nash equilibria.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The full proof (Robinson, 1951) uses a potential function argument. Define
+\[
+    \Phi_1^T = \max_{a_1 \in A_1} \sum_{t=1}^T g(a_1, a_2^t), \qquad
+    \Phi_2^T = \max_{a_2 \in A_2} \sum_{t=1}^T (-g(a_1^t, a_2)).
+\]
+Then $\frac{1}{T}\Phi_1^T \geq v^*$ and $\frac{1}{T}\Phi_2^T \geq -v^*$ (each player's
+best fixed action does at least as well as the game value against the empirical opponent
+distribution).
+
+The key step is showing that $\frac{1}{T}(\Phi_1^T + \Phi_2^T) \to 0$. This follows
+because $\Phi_1^T + \Phi_2^T$ grows sublinearly: when player 1 plays a best response to
+$\hat{\alpha}_2^T$, the increase in $\Phi_1^{T+1} - \Phi_1^T$ is exactly
+$g(a_1^{T+1}, a_2^{T+1})$, while the increase $\Phi_2^{T+1} - \Phi_2^T \leq
+-g(a_1^{T+1}, a_2^{T+1}) + C$ for a constant $C$ related to the number of actions.
+Carefully tracking these increments shows $\Phi_1^T + \Phi_2^T = O(\sqrt{T})$.
+
+Since $\frac{1}{T}\Phi_1^T \to v^*$ and $\frac{1}{T}\Phi_2^T \to -v^*$, any limit point
+$(\alpha_1^*, \alpha_2^*)$ of $(\hat{\alpha}_1^T, \hat{\alpha}_2^T)$ satisfies the NE
+conditions: $\alpha_1^*$ is a best response to $\alpha_2^*$ and vice versa.
+\end{proof}
+
+\begin{rlconnection}[Fictitious Play and Policy-Space Response Oracles (PSRO)]
+Fictitious play is a precursor to the \emph{PSRO} framework in modern MARL. In PSRO,
+each player maintains a population of policies (analogous to the empirical frequency in FP),
+and computes a best response to the current mixture---exactly as in fictitious play, but
+with neural-network policies instead of tabular strategies. The convergence guarantees of
+FP in zero-sum games provide theoretical backing for PSRO's effectiveness in competitive
+MARL.
+\end{rlconnection}
+
+\subsection{No-Regret Learning}
+
+\begin{definition}[External Regret]
+\label{def:external-regret}
+Player $i$'s \emph{external regret} after $T$ rounds is
+\[
+    R_i^T = \max_{a_i \in A_i} \sum_{t=1}^T g_i(a_i, a_{-i}^t)
+    - \sum_{t=1}^T g_i(a_i^t, a_{-i}^t).
+\]
+A learning algorithm has \emph{no external regret} (or is \emph{Hannan consistent}) if
+$R_i^T / T \to 0$ as $T \to \infty$.
+\end{definition}
+
+\begin{definition}[Multiplicative Weights Update (MWU)]
+\label{def:mwu}
+Let $\eta > 0$ be a learning rate. Player $i$ maintains weights $w_i^t(a_i)$ for each
+action $a_i \in A_i$:
+\begin{align*}
+    w_i^1(a_i) &= 1 \quad \text{for all } a_i, \\
+    w_i^{t+1}(a_i) &= w_i^t(a_i) \cdot \exp\bigl(\eta \cdot g_i(a_i, a_{-i}^t)\bigr).
+\end{align*}
+The mixed strategy at time $t$ is $\alpha_i^t(a_i) = w_i^t(a_i) / \sum_{a_i'} w_i^t(a_i')$.
+\end{definition}
+
+\begin{theorem}[MWU Regret Bound]
+\label{thm:mwu-regret}
+If $|g_i(a)| \leq 1$ for all $a$, then with $\eta = \sqrt{\frac{\ln |A_i|}{T}}$, the
+multiplicative weights update achieves
+\[
+    R_i^T \leq 2\sqrt{T \ln |A_i|}.
+\]
+In particular, $R_i^T / T \to 0$, so MWU is a no-regret algorithm.
+\end{theorem}
+
+\begin{proof}
+Define the potential $W^t = \sum_{a_i \in A_i} w_i^t(a_i)$, so $W^1 = |A_i|$.
+
+\textbf{Upper bound on $\ln(W^{T+1}/W^1)$:}
+\begin{align*}
+    \frac{W^{t+1}}{W^t}
+    &= \frac{\sum_{a_i} w_i^t(a_i) \exp(\eta \cdot g_i(a_i, a_{-i}^t))}{W^t} \\
+    &= \sum_{a_i} \alpha_i^t(a_i) \exp(\eta \cdot g_i(a_i, a_{-i}^t)) \\
+    &\leq \sum_{a_i} \alpha_i^t(a_i) \bigl(1 + \eta g_i(a_i, a_{-i}^t)
+    + \eta^2 g_i(a_i, a_{-i}^t)^2\bigr),
+\end{align*}
+using $e^x \leq 1 + x + x^2$ for $|x| \leq 1$ (valid when $\eta \leq 1$ and
+$|g_i| \leq 1$). Therefore:
+\begin{align*}
+    \frac{W^{t+1}}{W^t}
+    &\leq 1 + \eta \sum_{a_i} \alpha_i^t(a_i) g_i(a_i, a_{-i}^t)
+    + \eta^2 \\
+    &\leq \exp\bigl(\eta \cdot g_i(\alpha_i^t, a_{-i}^t) + \eta^2\bigr),
+\end{align*}
+where $g_i(\alpha_i^t, a_{-i}^t) = \E_{a_i \sim \alpha_i^t}[g_i(a_i, a_{-i}^t)]$ and
+we used $1 + x \leq e^x$. Telescoping:
+\[
+    \ln \frac{W^{T+1}}{W^1} \leq \eta \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t) + \eta^2 T.
+\]
+
+\textbf{Lower bound on $\ln(W^{T+1}/W^1)$:}
+For any fixed action $a_i^*$:
+\[
+    W^{T+1} \geq w_i^{T+1}(a_i^*) = \exp\Bigl(\eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t)\Bigr).
+\]
+Therefore:
+\[
+    \ln \frac{W^{T+1}}{W^1} \geq \eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \ln |A_i|.
+\]
+
+\textbf{Combining:}
+\[
+    \eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \ln |A_i|
+    \leq \eta \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t) + \eta^2 T.
+\]
+Rearranging:
+\[
+    \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t)
+    \leq \frac{\ln |A_i|}{\eta} + \eta T.
+\]
+Since this holds for all $a_i^*$, taking the max and substituting
+$\eta = \sqrt{\frac{\ln |A_i|}{T}}$:
+\[
+    R_i^T \leq \sqrt{T \ln |A_i|} + \sqrt{T \ln |A_i|} = 2\sqrt{T \ln |A_i|}.
+    \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[No-Regret Implies NE in Zero-Sum Games]
+\label{thm:no-regret-ne}
+In a two-player zero-sum game, if both players use no-regret learning algorithms, then
+the time-averaged strategy profile $(\bar{\alpha}_1^T, \bar{\alpha}_2^T)$ converges to the
+set of Nash equilibria as $T \to \infty$, where
+$\bar{\alpha}_i^T = \frac{1}{T}\sum_{t=1}^T \alpha_i^t$.
+\end{theorem}
+
+\begin{proof}
+Let $g = g_1 = -g_2$. The no-regret condition for player 1 gives:
+\[
+    \max_{a_1} \frac{1}{T} \sum_{t=1}^T g(a_1, \alpha_2^t)
+    \leq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) + \frac{R_1^T}{T}.
+\]
+By linearity of $g$ in the first argument and Jensen's inequality (or directly by linearity):
+\[
+    \max_{a_1} g(a_1, \bar{\alpha}_2^T)
+    = \max_{a_1} \frac{1}{T} \sum_{t=1}^T g(a_1, \alpha_2^t)
+    \leq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) + \varepsilon_1^T,
+\]
+where $\varepsilon_1^T = R_1^T / T \to 0$.
+
+Similarly, the no-regret condition for player 2 (who minimizes $g$) gives:
+\[
+    \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    = \min_{a_2} \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, a_2)
+    \geq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) - \varepsilon_2^T,
+\]
+where $\varepsilon_2^T \to 0$.
+
+Combining:
+\[
+    \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    \geq \frac{1}{T}\sum_t g(\alpha_1^t, \alpha_2^t) - \varepsilon_2^T
+    \geq \max_{a_1} g(a_1, \bar{\alpha}_2^T) - \varepsilon_1^T - \varepsilon_2^T.
+\]
+
+But by the minimax inequality (which always holds):
+\[
+    \max_{a_1} g(a_1, \bar{\alpha}_2^T)
+    \geq \min_{a_2} g(\bar{\alpha}_1^T, a_2).
+\]
+
+Therefore:
+\[
+    0 \leq \max_{a_1} g(a_1, \bar{\alpha}_2^T) - \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    \leq \varepsilon_1^T + \varepsilon_2^T \to 0.
+\]
+
+This means the ``duality gap'' converges to zero. Since
+$\max_{a_1} g(a_1, \bar{\alpha}_2^T) \to v^*$ and
+$\min_{a_2} g(\bar{\alpha}_1^T, a_2) \to v^*$, any limit point
+$(\alpha_1^*, \alpha_2^*)$ of $(\bar{\alpha}_1^T, \bar{\alpha}_2^T)$ satisfies
+$\max_{a_1} g(a_1, \alpha_2^*) = \min_{a_2} g(\alpha_1^*, a_2) = v^*$, which is the
+Nash equilibrium condition.
+\end{proof}
+
+\begin{rlconnection}[No-Regret Learning in Multi-Agent RL]
+No-regret algorithms are fundamental to competitive MARL. The convergence guarantee of
+Theorem~\ref{thm:no-regret-ne} underpins algorithms like:
+\begin{itemize}
+    \item \textbf{Counterfactual Regret Minimization (CFR)} for extensive-form games
+    (poker AI).
+    \item \textbf{Online mirror descent} in policy space for continuous games.
+    \item \textbf{V-learning} and other model-free algorithms that achieve sublinear regret
+    against adversarial opponents.
+\end{itemize}
+The $O(\sqrt{T})$ regret rate of MWU translates to $O(1/\sqrt{T})$ convergence to NE in
+zero-sum games, which can be accelerated by optimistic variants.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 6: Bayesian Games
+%% ============================================================
+
+\section{Bayesian Games (Incomplete Information)}
+\label{sec:bayesian-games}
+
+\subsection{Motivation and Model}
+
+In many strategic settings, players are uncertain about others' payoff functions. A firm
+does not know a competitor's cost structure; an agent does not know an opponent's reward
+function. Harsanyi's (1967--68) framework models this via \emph{types}.
+
+\begin{definition}[Bayesian Game]
+\label{def:bayesian-game}
+A \emph{Bayesian game} (or game of incomplete information) is a tuple
+$\Gamma = (N, (A_i)_{i \in N}, (\Theta_i)_{i \in N}, p, (u_i)_{i \in N})$ where:
+\begin{enumerate}[label=(\alph*)]
+    \item $N = [n]$ is the player set.
+    \item $A_i$ is the finite action set of player $i$.
+    \item $\Theta_i$ is the finite \emph{type space} of player $i$. A type
+    $\theta_i \in \Theta_i$ encodes player $i$'s private information.
+    \item $p \in \Delta(\Theta)$ is the \emph{common prior} distribution over the type
+    profile $\theta = (\theta_1, \ldots, \theta_n) \in \Theta = \prod_i \Theta_i$.
+    \item $u_i : A \times \Theta \to \R$ is player $i$'s payoff function, depending on both
+    the action profile and the type profile.
+\end{enumerate}
+The timing is: Nature draws $\theta \sim p$; each player $i$ observes only her own type
+$\theta_i$; players simultaneously choose actions.
+\end{definition}
+
+\begin{definition}[Bayesian Nash Equilibrium]
+\label{def:bne}
+A \emph{(pure) strategy} in a Bayesian game is a function $s_i : \Theta_i \to A_i$ mapping
+types to actions. A strategy profile $s^* = (s_1^*, \ldots, s_n^*)$ is a \emph{Bayesian
+Nash equilibrium} (BNE) if, for every player $i$ and every type $\theta_i \in \Theta_i$:
+\[
+    s_i^*(\theta_i) \in \argmax_{a_i \in A_i}
+    \E_{\theta_{-i} \sim p(\cdot | \theta_i)}\bigl[
+    u_i\bigl(a_i, s_{-i}^*(\theta_{-i}), \theta_i, \theta_{-i}\bigr)\bigr],
+\]
+where $p(\theta_{-i} | \theta_i) = p(\theta_i, \theta_{-i}) / p(\theta_i)$ is the
+conditional distribution of others' types given $\theta_i$.
+\end{definition}
+
+\begin{remark}
+The BNE condition says: each type of each player best-responds to the expected play of
+opponents, where the expectation is over opponents' types (which determine their actions
+through the strategy profile).
+\end{remark}
+
+\subsection{Existence of BNE}
+
+\begin{theorem}[Existence of BNE]
+\label{thm:bne-existence}
+Every finite Bayesian game (finite player set, finite action sets, finite type spaces) has
+a Bayesian Nash equilibrium in mixed strategies.
+\end{theorem}
+
+\begin{proof}
+Transform the Bayesian game into the ``agent normal form.'' For each player-type pair
+$(i, \theta_i)$, create an ``agent'' who chooses action $a_i \in A_i$. This yields a
+finite normal-form game with $\sum_i |\Theta_i|$ agents, each with action set $A_i$.
+The payoff to agent $(i, \theta_i)$ when the action profile is
+$(a_{j,\theta_j})_{j,\theta_j}$ is:
+\[
+    \sum_{\theta_{-i}} p(\theta_{-i} | \theta_i) \cdot
+    u_i(a_{i,\theta_i}, (a_{j,\theta_j})_{j \neq i}, \theta_i, \theta_{-i}).
+\]
+
+This is a finite normal-form game, so by Nash's theorem (from Lesson 11), it has a Nash
+equilibrium in mixed strategies. Any NE of the agent normal form corresponds to a BNE of
+the original Bayesian game: the mixed strategy of agent $(i, \theta_i)$ specifies
+$s_i(\theta_i) \in \Delta(A_i)$, and the NE condition for each agent is exactly the BNE
+condition for type $\theta_i$ of player $i$.
+\end{proof}
+
+\subsection{Examples}
+
+\begin{example}[Cournot Duopoly with Unknown Costs]
+\label{ex:cournot-bayesian}
+Two firms produce a homogeneous good with inverse demand $P(Q) = a - Q$ where
+$Q = q_1 + q_2$. Firm $i$'s cost is $c_i q_i$. Suppose $c_1$ is known to both firms, but
+$c_2$ is private information of firm 2: $c_2 \in \{c_L, c_H\}$ with
+$\Prob(c_2 = c_L) = \pi$.
+
+This is a Bayesian game with $\Theta_2 = \{c_L, c_H\}$, $\Theta_1 = \{c_1\}$ (trivial
+type space for firm 1). Actions are quantities $q_i \geq 0$.
+
+Firm 2's profit when type is $\theta_2 = c$: $u_2 = (a - q_1 - q_2 - c)q_2$.
+
+In a BNE, firm 2 uses strategy $s_2 : \{c_L, c_H\} \to \R_+$ and firm 1 chooses $q_1$.
+The first-order conditions give:
+\begin{align*}
+    q_1 &= \frac{a - c_1 - \pi s_2(c_L) - (1-\pi)s_2(c_H)}{2}, \\
+    s_2(c_L) &= \frac{a - c_L - q_1}{2}, \\
+    s_2(c_H) &= \frac{a - c_H - q_1}{2}.
+\end{align*}
+Solving this system of three equations yields the unique BNE. The key insight is that
+firm 1's optimal quantity depends on the \emph{expected} cost of firm 2, and firm 2's
+strategy conditions on its private type.
+\end{example}
+
+\begin{example}[First-Price Sealed-Bid Auction]
+\label{ex:first-price-auction}
+Two bidders have private values $v_i \sim \text{Uniform}[0,1]$ independently. Each bidder
+submits a sealed bid $b_i$; the highest bidder wins and pays her bid. Payoff:
+$u_i = (v_i - b_i)\indicator\{b_i > b_j\}$.
+
+This is a Bayesian game with $\Theta_i = [0,1]$ (continuous types). We seek a symmetric
+BNE where $b_i = \beta(v_i)$ for some increasing function $\beta$.
+
+Given opponent's strategy $\beta$, bidder $i$ with value $v_i$ solves:
+\[
+    \max_{b} (v_i - b) \cdot \Prob(\beta(v_j) < b)
+    = (v_i - b) \cdot \beta^{-1}(b).
+\]
+The first-order condition (substituting $b = \beta(v_i)$) and the boundary condition
+$\beta(0) = 0$ yield $\beta(v_i) = v_i / 2$: each bidder bids half her value.
+
+\textbf{Verification:} If bidder $j$ bids $v_j/2$, then bidder $i$'s problem is
+$\max_b (v_i - b) \cdot 2b = \max_b 2bv_i - 2b^2$. The FOC gives $2v_i - 4b = 0$, so
+$b = v_i/2$, confirming the BNE.
+\end{example}
+
+\begin{rlconnection}[Bayesian Games and Opponent Modeling in MARL]
+In MARL, agents typically do not know each other's reward functions---precisely the
+setting of Bayesian games. The Bayesian framework formalizes \emph{opponent modeling}:
+\begin{itemize}
+    \item The type $\theta_j$ can encode opponent $j$'s policy parameters or reward weights.
+    \item The prior $p(\theta_{-i})$ represents agent $i$'s beliefs about opponents.
+    \item Bayesian updating (observing opponents' actions and updating beliefs via Bayes'
+    rule) is the principled approach to learning about opponents.
+\end{itemize}
+Algorithms like LOLA (Learning with Opponent-Learning Awareness) and Bayesian policy
+reuse implement variants of this Bayesian framework.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 7: Perfect Bayesian Equilibrium
+%% ============================================================
+
+
+\end{document}

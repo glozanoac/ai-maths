@@ -1,0 +1,361 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 7: Hilbert Spaces and Operators}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\interior}{int}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\spn}{span}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\range}{range}
+\DeclareMathOperator{\nullspace}{null}
+\DeclareMathOperator{\diam}{diam}
+
+% ---- Title ----
+\title{Lesson 21: Fundamental Theorems of Functional Analysis}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{6}
+
+\section{Fundamental Theorems of Functional Analysis}\label{sec:fundamental}
+
+We now present the four pillars of linear functional analysis. These theorems
+hold in general Banach spaces (not just Hilbert spaces).
+
+\subsection{Hahn--Banach Theorem}
+
+\begin{definition}[Sublinear Functional]\label{def:sublinear}
+A function $p \colon X \to \R$ on a real vector space $X$ is \emph{sublinear} if:
+\begin{enumerate}[label=(\roman*)]
+    \item $p(\alpha x) = \alpha\, p(x)$ for all $\alpha > 0$ and $x \in X$
+          (positive homogeneity).
+    \item $p(x + y) \leq p(x) + p(y)$ for all $x, y \in X$ (subadditivity).
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Hahn--Banach Theorem, Real Case]\label{thm:hahn-banach}
+Let $X$ be a real vector space, $p \colon X \to \R$ a sublinear functional,
+and $Y \subset X$ a subspace. If $f \colon Y \to \R$ is a linear functional
+with $f(y) \leq p(y)$ for all $y \in Y$, then there exists a linear functional
+$F \colon X \to \R$ extending $f$ (i.e., $F|_Y = f$) such that
+$F(x) \leq p(x)$ for all $x \in X$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Extension by one dimension.}
+Let $x_0 \in X \setminus Y$ and $Y_1 = Y + \R x_0 = \{y + t x_0 : y \in Y, t \in \R\}$.
+We seek $c = F(x_0) \in \R$ such that $F(y + t x_0) = f(y) + tc$ satisfies
+$F \leq p$ on $Y_1$.
+
+For $t > 0$: $f(y) + tc \leq p(y + tx_0)$, i.e.,
+$c \leq \frac{1}{t}[p(y + tx_0) - f(y)] = p(y/t + x_0) - f(y/t)$.
+Since $y/t$ ranges over $Y$, we need
+$c \leq \inf_{u \in Y}[p(u + x_0) - f(u)]$.
+
+For $t < 0$: setting $s = -t > 0$, we need $f(y) - sc \leq p(y - sx_0)$,
+i.e., $c \geq f(y/s) - p(y/s - x_0)$, so
+$c \geq \sup_{v \in Y}[f(v) - p(v - x_0)]$.
+
+We must verify:
+$f(v) - p(v - x_0) \leq p(u + x_0) - f(u)$ for all $u, v \in Y$.
+This reduces to $f(u) + f(v) \leq p(u + x_0) + p(v - x_0)$.
+Indeed, $f(u) + f(v) = f(u + v) \leq p(u + v) = p((u + x_0) + (v - x_0))
+\leq p(u + x_0) + p(v - x_0)$.
+
+So we can choose $c$ in the interval
+$[\sup_v(f(v) - p(v - x_0)),\, \inf_u(p(u + x_0) - f(u))]$.
+
+\textbf{Step 2: Zorn's Lemma.}
+Let $\mathcal{F}$ be the set of all pairs $(Z, g)$ where $Y \subset Z \subset X$
+is a subspace and $g \colon Z \to \R$ is linear with $g|_Y = f$ and
+$g(z) \leq p(z)$ for all $z \in Z$. Order $\mathcal{F}$ by extension:
+$(Z_1, g_1) \leq (Z_2, g_2)$ if $Z_1 \subset Z_2$ and $g_2|_{Z_1} = g_1$.
+
+Every chain has an upper bound (take the union of subspaces and the common
+extension). By Zorn's Lemma, $\mathcal{F}$ has a maximal element $(Z^*, F)$.
+If $Z^* \neq X$, Step~1 would produce a proper extension, contradicting
+maximality. Hence $Z^* = X$.
+\end{proof}
+
+\begin{corollary}[Extension of Bounded Linear Functionals]\label{cor:hahn-banach-normed}
+Let $Y$ be a subspace of a normed space $X$ and $f \in Y^*$. Then there exists
+$F \in X^*$ with $F|_Y = f$ and $\|F\|_{X^*} = \|f\|_{Y^*}$.
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:hahn-banach} with $p(x) = \|f\| \cdot \|x\|$.
+Then $f(y) \leq |f(y)| \leq \|f\| \|y\| = p(y)$, and the extension $F$
+satisfies $F(x) \leq \|f\| \|x\|$ and $F(-x) \leq \|f\| \|x\|$,
+giving $|F(x)| \leq \|f\| \|x\|$, so $\|F\| \leq \|f\|$.
+Since $F$ extends $f$, $\|F\| \geq \|f\|$.
+\end{proof}
+
+\begin{corollary}\label{cor:hahn-banach-separation}
+For any $x_0 \neq 0$ in a normed space $X$, there exists $f \in X^*$ with
+$\|f\| = 1$ and $f(x_0) = \|x_0\|$.
+\end{corollary}
+
+\begin{proof}
+Define $g \colon \R x_0 \to \R$ by $g(\alpha x_0) = \alpha \|x_0\|$.
+Then $\|g\| = 1$ and $g(x_0) = \|x_0\|$.
+Extend by Corollary~\ref{cor:hahn-banach-normed}.
+\end{proof}
+
+\subsection{Baire Category Theorem and Uniform Boundedness}
+
+We need a preliminary result.
+
+\begin{theorem}[Baire Category Theorem]\label{thm:baire}
+Let $(X, d)$ be a complete metric space. If $X = \bigcup_{n=1}^\infty F_n$
+where each $F_n$ is closed, then at least one $F_n$ has nonempty interior.
+Equivalently, a countable intersection of open dense sets is dense.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that every $F_n$ has empty interior. Then each
+$G_n = X \setminus F_n$ is open and dense. We construct a nested sequence of
+closed balls: since $G_1$ is dense, pick $x_1 \in G_1$ and $r_1 < 1$ with
+$\overline{B(x_1, r_1)} \subset G_1$. Since $G_2$ is dense and
+$B(x_1, r_1)$ is open, pick $x_2 \in G_2 \cap B(x_1, r_1)$ and $r_2 < 1/2$
+with $\overline{B(x_2, r_2)} \subset G_2 \cap B(x_1, r_1)$.
+
+Inductively, we obtain $\overline{B(x_{n+1}, r_{n+1})} \subset G_{n+1}
+\cap B(x_n, r_n)$ with $r_n < 1/n$. The centers $(x_n)$ form a Cauchy
+sequence (since $d(x_m, x_n) < 2/\min(m,n)$ for $m, n$ large), converging
+to some $x^* \in X$ by completeness. Then $x^* \in \overline{B(x_n, r_n)}
+\subset G_n$ for all $n$, so $x^* \in \bigcap G_n = X \setminus \bigcup F_n
+= \emptyset$, a contradiction.
+\end{proof}
+
+\begin{theorem}[Uniform Boundedness Principle / Banach--Steinhaus]\label{thm:ubp}
+Let $X$ be a Banach space, $Y$ a normed space, and
+$\{T_\alpha\}_{\alpha \in A} \subset \mathcal{B}(X, Y)$ a family of bounded
+linear operators. If $\sup_\alpha \|T_\alpha x\| < \infty$ for every $x \in X$
+(pointwise bounded), then $\sup_\alpha \|T_\alpha\| < \infty$ (uniformly bounded).
+\end{theorem}
+
+\begin{proof}
+For each $n \in \N$, define the closed set
+\[
+    F_n = \{x \in X : \|T_\alpha x\| \leq n \text{ for all } \alpha \in A\}
+    = \bigcap_{\alpha \in A} \{x : \|T_\alpha x\| \leq n\}.
+\]
+Each $F_n$ is closed (as an intersection of closed sets, since each
+$x \mapsto \|T_\alpha x\|$ is continuous). Since the family is pointwise
+bounded, for each $x$ there exists $n$ with $x \in F_n$, so
+$X = \bigcup_{n=1}^\infty F_n$.
+
+By the Baire Category Theorem~\ref{thm:baire}, some $F_N$ has nonempty
+interior: there exist $x_0 \in X$ and $r > 0$ with $B(x_0, r) \subset F_N$.
+
+For any $x \in X$ with $\|x\| \leq 1$, we have $x_0 + rx \in B(x_0, r) \subset F_N$
+and $x_0 \in F_N$, so for all $\alpha$:
+\[
+    \|T_\alpha(rx)\| = \|T_\alpha(x_0 + rx) - T_\alpha(x_0)\|
+    \leq \|T_\alpha(x_0 + rx)\| + \|T_\alpha(x_0)\| \leq N + N = 2N.
+\]
+Thus $\|T_\alpha x\| \leq 2N/r$ for all $\|x\| \leq 1$, giving
+$\|T_\alpha\| \leq 2N/r$ for all $\alpha$.
+\end{proof}
+
+\begin{rlconnection}[Uniform Boundedness in Approximation Theory]
+The Uniform Boundedness Principle is used to prove negative results in
+approximation theory: certain approximation schemes \emph{must} diverge
+for some continuous functions. In RL, it guarantees that if a sequence
+of operators (e.g., truncated Bellman operators or finite-sample
+approximations) converges pointwise, the operator norms remain controlled.
+This is crucial for interchanging limits in convergence proofs.
+\end{rlconnection}
+
+\subsection{Open Mapping Theorem}
+
+\begin{theorem}[Open Mapping Theorem]\label{thm:open-mapping}
+Let $X$ and $Y$ be Banach spaces and $T \colon X \to Y$ a bounded linear
+operator that is surjective. Then $T$ is an open map: $T(U)$ is open in $Y$
+whenever $U$ is open in $X$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1:} We show $T(B_X(0, 1))$ contains a ball centered at 0 in $Y$.
+Write $B_X = B_X(0,1)$ and $B_Y = B_Y(0,1)$.
+
+Since $T$ is surjective, $Y = \bigcup_{n=1}^\infty T(nB_X) = \bigcup_{n=1}^\infty n \cdot T(B_X)$.
+By Baire's theorem, some $\overline{n \cdot T(B_X)}$ has nonempty interior.
+By scaling, $\overline{T(B_X)}$ has nonempty interior: there exist
+$y_0 \in Y$ and $s > 0$ with $B_Y(y_0, s) \subset \overline{T(B_X)}$.
+
+Since $\overline{T(B_X)}$ is symmetric (if $y \in \overline{T(B_X)}$, then
+$-y \in \overline{T(B_X)}$) and convex, we get
+$B_Y(0, s) \subset \overline{T(B_X)}$: for any $\|y\| < s$,
+$y + y_0 \in \overline{T(B_X)}$ and $-y + y_0 \in \overline{T(B_X)}$,
+and $y_0 \in \overline{T(B_X)}$, so
+$y = (y + y_0)/2 + (-y_0 + y)/2 + y_0 - y_0$... Let us be more careful.
+We have $y + y_0$ and $-y + y_0$ both in $\overline{T(B_X)}$, and
+$\overline{T(B_X)} - \overline{T(B_X)} \subset \overline{T(2B_X)}$
+(since $T(B_X) + T(B_X) \subset T(2B_X)$). In particular,
+$(y + y_0) - (-y + y_0) = 2y \in \overline{T(2B_X)}$, so
+$y \in \overline{T(B_X)}$. Hence $B_Y(0, s) \subset \overline{T(B_X)}$.
+
+\textbf{Step 2:} We show $\overline{T(B_X)} \subset T(2B_X)$, i.e.,
+the closure can be ``opened.'' Take $y \in \overline{T(B_X)}$. From Step 1,
+$B_Y(0, s) \subset \overline{T(B_X)}$, so for each $r > 0$,
+$B_Y(0, rs) \subset \overline{T(rB_X)}$.
+
+Choose $x_1 \in B_X$ with $\|y - Tx_1\| < s/2$. Then
+$y - Tx_1 \in B_Y(0, s/2) \subset \overline{T(\frac{1}{2}B_X)}$, so choose
+$x_2 \in \frac{1}{2}B_X$ with $\|y - Tx_1 - Tx_2\| < s/4$.
+Inductively, choose $x_n \in 2^{-(n-1)} B_X$ with
+$\|y - \sum_{k=1}^n Tx_k\| < s \cdot 2^{-n}$.
+
+Then $\sum_n \|x_n\| < 1 + 1/2 + 1/4 + \cdots = 2$. Since $X$ is complete,
+$x = \sum_{n=1}^\infty x_n$ converges with $\|x\| < 2$, and
+$Tx = \lim_{n \to \infty} T(\sum_{k=1}^n x_k) = y$. So $y \in T(2B_X)$.
+
+\textbf{Step 3:} Combining Steps 1 and 2:
+$B_Y(0, s) \subset \overline{T(B_X)} \subset T(2B_X)$, so
+$B_Y(0, s/2) \subset T(B_X)$.
+
+\textbf{Step 4:} $T$ is open. Let $U \subset X$ be open and $y_0 = Tx_0 \in T(U)$.
+Choose $r > 0$ with $B_X(x_0, r) \subset U$. Then
+$T(U) \supset T(B_X(x_0, r)) = Tx_0 + T(rB_X) \supset y_0 + B_Y(0, rs/2)$,
+so $T(U)$ is open.
+\end{proof}
+
+\begin{corollary}[Bounded Inverse Theorem]\label{cor:bounded-inverse}
+If $T \colon X \to Y$ is a bounded linear bijection between Banach spaces,
+then $T^{-1}$ is bounded.
+\end{corollary}
+
+\begin{proof}
+$T$ is an open map, so $T^{-1}$ is continuous (preimages of open sets under
+$T^{-1}$ are images of open sets under $T$).
+\end{proof}
+
+\subsection{Closed Graph Theorem}
+
+\begin{definition}[Closed Graph]\label{def:closed-graph}
+A linear operator $T \colon X \to Y$ between normed spaces has a
+\emph{closed graph} if its graph
+$G(T) = \{(x, Tx) : x \in X\} \subset X \times Y$ is closed in the
+product topology (equivalently, in the norm $\|(x,y)\| = \|x\| + \|y\|$).
+Equivalently: if $x_n \to x$ in $X$ and $Tx_n \to y$ in $Y$, then $y = Tx$.
+\end{definition}
+
+\begin{theorem}[Closed Graph Theorem]\label{thm:closed-graph}
+Let $X$ and $Y$ be Banach spaces. A linear operator $T \colon X \to Y$ is
+bounded if and only if it has a closed graph.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ If $T$ is bounded and $x_n \to x$, $Tx_n \to y$, then
+$Tx_n \to Tx$ by continuity, so $y = Tx$ by uniqueness of limits.
+
+$(\Leftarrow)$ Assume $G(T)$ is closed. Consider $X \times Y$ with the norm
+$\|(x,y)\| = \|x\| + \|y\|$, which is a Banach space. $G(T)$ is a closed
+subspace, hence itself a Banach space.
+
+Define $\pi_1 \colon G(T) \to X$ by $\pi_1(x, Tx) = x$ and
+$\pi_2 \colon G(T) \to Y$ by $\pi_2(x, Tx) = Tx$.
+Then $\pi_1$ is bounded, linear, and bijective. By the Bounded Inverse
+Theorem (Corollary~\ref{cor:bounded-inverse}), $\pi_1^{-1} \colon X \to G(T)$
+is bounded. Since $T = \pi_2 \circ \pi_1^{-1}$ and both $\pi_2$ and
+$\pi_1^{-1}$ are bounded, $T$ is bounded.
+\end{proof}
+
+\begin{remark}\label{rem:closed-graph-usage}
+The Closed Graph Theorem is often the most convenient way to prove that
+an operator is bounded: instead of estimating $\|Tx\|$ directly, one
+only needs to verify the sequential closedness condition, which is often
+easier in applications.
+\end{remark}
+
+
+%% ============================================================================
+%% SECTION 8: FIXED POINT THEOREMS
+%% ============================================================================
+
+
+\end{document}

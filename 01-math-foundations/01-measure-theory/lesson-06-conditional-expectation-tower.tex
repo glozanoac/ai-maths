@@ -1,0 +1,349 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{tdconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{Lesson 6: Conditional Expectation and the Tower Property}
+\author{AI/ML Mathematics Series}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{3}
+
+\section{Conditional Expectation and Tower Property}
+\label{sec:conditional}
+
+\subsection{Definition and Basic Properties}
+\label{subsec:cond_def}
+
+\begin{definition}[Conditional Expectation Given an Event]
+\label{def:cond_exp_event}
+For a discrete random variable $X$ and an event $B$ with $\Prob(B) > 0$:
+\begin{equation}
+    \E[X \mid B] = \sum_x x\, \Prob(X = x \mid B) = \sum_x x\, \frac{\Prob(X = x,\, B)}{\Prob(B)}.
+    \label{eq:cond_exp_event}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Conditional Expectation Given a Random Variable]
+\label{def:cond_exp_rv}
+For discrete random variables $X$ and $Y$, the \emph{conditional expectation of $X$ given $Y$} is the random variable $\E[X \mid Y]$ defined by
+\begin{equation}
+    \E[X \mid Y](\omega) = \E[X \mid Y = Y(\omega)] = \sum_x x\, \Prob(X = x \mid Y = Y(\omega)).
+    \label{eq:cond_exp_rv}
+\end{equation}
+That is, $\E[X \mid Y]$ is a function of $Y$: it assigns to each outcome $\omega$ the conditional mean of $X$ given the observed value of $Y$.
+\end{definition}
+
+\begin{tdconnection}[Connection to TD Learning]
+The value function $V^\pi(s) = \E_\pi[G_t \mid S_t = s]$ is a conditional expectation given a specific state. The notation $\E_\pi[\delta_t^\pi \mid S_t = s]$ conditions on the current state $s$ and averages over the randomness of $A_t$, $R_{t+1}$, and $S_{t+1}$.
+\end{tdconnection}
+
+\subsection{Linearity of Conditional Expectation}
+\label{subsec:cond_linearity}
+
+\begin{theorem}[Linearity of Conditional Expectation]
+\label{thm:cond_linearity}
+For discrete random variables $X$, $Y$, $Z$ and constants $a, b \in \R$:
+\begin{equation}
+    \E[aX + bY \mid Z] = a\,\E[X \mid Z] + b\,\E[Y \mid Z].
+    \label{eq:cond_linearity}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Fix $Z = z$ with $\Prob(Z = z) > 0$.
+
+\textbf{Step 1: Expand the definition of conditional expectation.}
+The conditional expectation of $aX + bY$ given $Z = z$ is computed by summing over all joint values $(x, y)$:
+\begin{equation}
+    \E[aX + bY \mid Z = z]
+    = \sum_{x,y} (ax + by)\, \Prob(X = x, Y = y \mid Z = z).
+    \label{eq:cond_lin_step1}
+\end{equation}
+
+\textbf{Step 2: Distribute the sum.}
+Since the sum $\sum_{x,y}$ is a finite sum and $(ax + by) = ax + by$, we can split it into two separate sums:
+\begin{equation}
+    = a \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z)
+    \;+\; b \sum_{x,y} y\, \Prob(X = x, Y = y \mid Z = z).
+    \label{eq:cond_lin_step2}
+\end{equation}
+
+\textbf{Step 3: Marginalize --- reduce $\sum_{x,y}$ to $\sum_x$ (and $\sum_y$).}
+This is the key step. Consider the first sum. Since $x$ does \emph{not} depend on $y$, we can rearrange the double sum by summing over $y$ first, with $x$ held fixed:
+\begin{align}
+    \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z)
+    &= \sum_x x \underbrace{\sum_y \Prob(X = x, Y = y \mid Z = z)}_{\text{sum over all possible } y}.
+    \label{eq:cond_lin_step3a}
+\end{align}
+The inner sum over $y$ is the \textbf{marginalization} (law of total probability applied conditionally). Since the events $\{Y = y\}$ for all $y$ form a partition of the sample space:
+\begin{align}
+    \sum_y \Prob(X = x, Y = y \mid Z = z)
+    &= \Prob\!\left(\bigcup_y \{X = x, Y = y\} \;\middle|\; Z = z\right) \nonumber\\
+    &= \Prob(X = x \mid Z = z).
+    \label{eq:cond_lin_marginal}
+\end{align}
+The union $\bigcup_y \{X = x, Y = y\}$ covers every possible value of $Y$ while keeping $X = x$ fixed, so it equals the event $\{X = x\}$.
+
+Substituting~\eqref{eq:cond_lin_marginal} back into~\eqref{eq:cond_lin_step3a}:
+\begin{equation}
+    \sum_{x,y} x\, \Prob(X = x, Y = y \mid Z = z) = \sum_x x\, \Prob(X = x \mid Z = z).
+    \label{eq:cond_lin_step3b}
+\end{equation}
+
+By the \emph{same reasoning} applied to the second sum (sum over $x$ first, marginalize out $X$):
+\begin{equation}
+    \sum_{x,y} y\, \Prob(X = x, Y = y \mid Z = z) = \sum_y y\, \Prob(Y = y \mid Z = z).
+    \label{eq:cond_lin_step3c}
+\end{equation}
+
+\textbf{Step 4: Recognize the conditional expectations.}
+Substituting~\eqref{eq:cond_lin_step3b} and~\eqref{eq:cond_lin_step3c} into~\eqref{eq:cond_lin_step2}:
+\begin{align}
+    \E[aX + bY \mid Z = z]
+    &= a \sum_x x\, \Prob(X = x \mid Z = z) + b \sum_y y\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= a\,\E[X \mid Z = z] + b\,\E[Y \mid Z = z].
+    \label{eq:cond_lin_step4}
+\end{align}
+
+Since this holds for every value $z$ with $\Prob(Z = z) > 0$, we conclude as an identity of random variables:
+\begin{equation}
+    \E[aX + bY \mid Z] = a\,\E[X \mid Z] + b\,\E[Y \mid Z]. \qedhere
+\end{equation}
+\end{proof}
+
+\subsection{Pulling Out Known Factors}
+\label{subsec:pull_out}
+
+\begin{keyresult}[Pull-Out Property]
+\begin{theorem}[Pull-Out Property]
+\label{thm:pull_out}
+If $h(Z)$ is a function of $Z$ (i.e., $h(Z)$ is $\sigma(Z)$-measurable), then:
+\begin{equation}
+    \E[h(Z) \cdot X \mid Z] = h(Z) \cdot \E[X \mid Z].
+    \label{eq:pull_out}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Fix $Z = z$. Then $h(Z) = h(z)$ is a constant under this conditioning:
+\begin{align}
+    \E[h(Z) \cdot X \mid Z = z]
+    &= \sum_x h(z) \cdot x \cdot \Prob(X = x \mid Z = z) \nonumber\\
+    &= h(z) \sum_x x\, \Prob(X = x \mid Z = z) \nonumber\\
+    &= h(z) \cdot \E[X \mid Z = z]. \label{eq:pull_out_proof}
+\end{align}
+Since this holds for every $z$, the result follows as an identity of random variables.
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+When proving that the TD error has zero conditional mean, we condition on $S_t = s$ and pull out $V(S_t) = V(s)$:
+\[
+    \E[\delta_t \mid S_t = s] = \E[R_{t+1} + \gamma V(S_{t+1}) \mid S_t = s] - V(s).
+\]
+Here $V(s)$ exits the expectation because it is fully determined by $S_t$.
+\end{tdconnection}
+
+\subsection{Law of Total Expectation (Tower Property)}
+\label{subsec:tower}
+
+\begin{keyresult}[Law of Total Expectation]
+\begin{theorem}[Law of Total Expectation]
+\label{thm:tower}
+For discrete random variables $X$ and $Y$ with $\E[|X|] < \infty$:
+\begin{equation}
+    \E[X] = \E\!\left[\E[X \mid Y]\right] = \sum_y \E[X \mid Y = y]\, \Prob(Y = y).
+    \label{eq:tower}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Expand the right-hand side:
+\begin{align}
+    \sum_y \E[X \mid Y = y]\, \Prob(Y = y)
+    &= \sum_y \left(\sum_x x\, \Prob(X = x \mid Y = y)\right) \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \Prob(X = x \mid Y = y)\, \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \frac{\Prob(X = x, Y = y)}{\Prob(Y = y)} \cdot \Prob(Y = y) \nonumber\\
+    &= \sum_y \sum_x x\, \Prob(X = x, Y = y) \nonumber\\
+    &= \sum_x x \sum_y \Prob(X = x, Y = y) \nonumber\\
+    &= \sum_x x\, \Prob(X = x) = \E[X]. \label{eq:tower_proof}
+\end{align}
+The interchange of summation is justified by absolute convergence.
+\end{proof}
+
+\begin{theorem}[Generalized Tower Property]
+\label{thm:tower_general}
+If $\mathcal{G} \subseteq \mathcal{H}$ are two $\sigma$-algebras (i.e., $\mathcal{G}$ contains ``less information'' than $\mathcal{H}$), then:
+\begin{equation}
+    \E\!\left[\E[X \mid \mathcal{H}] \;\middle|\; \mathcal{G}\right] = \E[X \mid \mathcal{G}].
+    \label{eq:tower_general}
+\end{equation}
+In particular, for random variables with $\sigma(Z) \subseteq \sigma(Y, Z)$:
+\begin{equation}
+    \E\!\left[\E[X \mid Y, Z] \;\middle|\; Z\right] = \E[X \mid Z].
+    \label{eq:tower_yz}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We prove~\eqref{eq:tower_yz} in the discrete case. Fix $Z = z$:
+\begin{align}
+    \E\!\left[\E[X \mid Y, Z] \;\middle|\; Z = z\right]
+    &= \sum_y \E[X \mid Y = y, Z = z]\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_y \left(\sum_x x\, \Prob(X = x \mid Y = y, Z = z)\right) \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_x x \sum_y \Prob(X = x \mid Y = y, Z = z)\, \Prob(Y = y \mid Z = z) \nonumber\\
+    &= \sum_x x \sum_y \frac{\Prob(X = x, Y = y, Z = z)}{\Prob(Y = y, Z = z)} \cdot \frac{\Prob(Y = y, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x \sum_y \frac{\Prob(X = x, Y = y, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x\, \frac{\Prob(X = x, Z = z)}{\Prob(Z = z)} \nonumber\\
+    &= \sum_x x\, \Prob(X = x \mid Z = z) = \E[X \mid Z = z]. \label{eq:tower_general_proof}
+\end{align}
+\end{proof}
+
+\begin{tdconnection}[Connection to TD Learning]
+The Bellman equation derivation uses the tower property with the Markov property. Starting from $V^\pi(s) = \E_\pi[R_1 + \gamma G_1 \mid S_0 = s]$:
+\[
+    \E_\pi[G_1 \mid S_0 = s] = \E_\pi\!\left[\E_\pi[G_1 \mid S_1] \;\middle|\; S_0 = s\right] = \E_\pi[V^\pi(S_1) \mid S_0 = s].
+\]
+The inner conditioning on $S_1$ uses the Markov property ($S_1$ screens off the future from $S_0$), and the outer averaging over $S_1$ given $S_0$ uses the tower property.
+\end{tdconnection}
+
+%% ============================================================
+%% SECTION 5: EXPANDING EXPECTATIONS IN AN MDP
+%% ============================================================
+
+\section{Expanding Expectations in an MDP}
+\label{sec:expanding}
+
+This section formalizes the mechanical step that appears in virtually every derivation in the TD article.
+
+\begin{theorem}[MDP Expectation Expansion]
+\label{thm:mdp_expansion}
+Let $(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ be a finite MDP with policy $\pi$. For any function $f: \mathcal{A} \times \mathcal{S} \times \R \to \R$:
+\begin{equation}
+    \E_\pi[f(A_t, S_{t+1}, R_{t+1}) \mid S_t = s] = \sum_{a \in \mathcal{A}} \pi(a|s) \sum_{s' \in \mathcal{S}} P(s'|s,a)\, f(a, s', r(s,a,s')).
+    \label{eq:mdp_expansion}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By the definition of conditional expectation and the MDP dynamics:
+\begin{align}
+    &\E_\pi[f(A_t, S_{t+1}, R_{t+1}) \mid S_t = s] \nonumber\\
+    &\quad= \sum_{a \in \mathcal{A}} \sum_{s' \in \mathcal{S}} f(a, s', r(s,a,s'))\, \Prob(A_t = a, S_{t+1} = s' \mid S_t = s). \label{eq:expand_step1}
+\end{align}
+By the chain rule for conditional probability:
+\begin{align}
+    \Prob(A_t = a, S_{t+1} = s' \mid S_t = s)
+    &= \Prob(A_t = a \mid S_t = s) \cdot \Prob(S_{t+1} = s' \mid S_t = s, A_t = a) \nonumber\\
+    &= \pi(a|s) \cdot P(s'|s,a). \label{eq:expand_step2}
+\end{align}
+Substituting~\eqref{eq:expand_step2} into~\eqref{eq:expand_step1} yields~\eqref{eq:mdp_expansion}.
+\end{proof}
+
+\begin{corollary}[Bellman Expectation --- Expectation Form]
+\label{cor:bellman_expansion}
+Setting $f(a, s', r) = r + \gamma V(s')$ in Theorem~\ref{thm:mdp_expansion}:
+\begin{equation}
+    \E_\pi[R_{t+1} + \gamma V(S_{t+1}) \mid S_t = s] = \sum_a \pi(a|s) \sum_{s'} P(s'|s,a)\bigl[r(s,a,s') + \gamma V(s')\bigr] = (\mathcal{T}^\pi V)(s).
+    \label{eq:bellman_expansion}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Direct substitution into~\eqref{eq:mdp_expansion}.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: VARIANCE AND CONDITIONAL VARIANCE
+%% ============================================================
+
+
+\end{document}

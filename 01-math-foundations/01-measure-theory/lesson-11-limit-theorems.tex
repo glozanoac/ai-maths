@@ -1,0 +1,276 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{tdconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{Lesson 11: Limit Theorems}
+\author{AI/ML Mathematics Series}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{12}
+
+\section{Limit Theorems}
+\label{sec:limit_theorems}
+
+\subsection{Weak Law of Large Numbers}
+\label{subsec:wlln}
+
+\begin{keyresult}[Weak Law of Large Numbers]
+\begin{theorem}[Weak Law of Large Numbers]
+\label{thm:wlln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ random variables with $\E[X_1] = \mu$ and $\Var(X_1) = \sigma^2 < \infty$. Let $\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$. Then:
+\begin{equation}
+    \bar{X}_n \cprob \mu.
+    \label{eq:wlln}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+By linearity, $\E[\bar{X}_n] = \mu$. By independence (Corollary~\ref{cor:var_sum}):
+\begin{equation}
+    \Var(\bar{X}_n) = \frac{1}{n^2} \sum_{i=1}^n \Var(X_i) = \frac{\sigma^2}{n}.
+\end{equation}
+By Chebyshev's inequality (Theorem~\ref{thm:chebyshev}):
+\begin{equation}
+    \Prob(|\bar{X}_n - \mu| \geq \varepsilon) \leq \frac{\Var(\bar{X}_n)}{\varepsilon^2} = \frac{\sigma^2}{n\varepsilon^2} \to 0 \quad \text{as } n \to \infty.
+\end{equation}
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The WLLN justifies Monte Carlo value estimation: averaging $n$ independent returns from state $s$ yields an estimate that converges to $V^\pi(s)$ in probability. This is the baseline against which TD methods are compared (Section 3 of the TD article).
+\end{rlconnection}
+
+\subsection{Strong Law of Large Numbers}
+\label{subsec:slln}
+
+\begin{keyresult}[Strong Law of Large Numbers]
+\begin{theorem}[Strong Law of Large Numbers (Kolmogorov)]
+\label{thm:slln}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[|X_1|] < \infty$ and $\E[X_1] = \mu$. Then:
+\begin{equation}
+    \bar{X}_n \cas \mu.
+    \label{eq:slln}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove the result under the stronger assumption $\E[X_1^4] < \infty$; the general case requires truncation arguments (see Remark~\ref{rem:slln_general}).
+
+Let $Y_i = X_i - \mu$, so $\E[Y_i] = 0$ and $S_n = \sum_{i=1}^n Y_i = n(\bar{X}_n - \mu)$.
+
+\textbf{Step 1: Fourth moment bound.} Expand $S_n^4 = \left(\sum_i Y_i\right)^4$. The non-zero terms in $\E[S_n^4]$ come from:
+\begin{itemize}[nosep]
+    \item Terms $\E[Y_i^4]$: there are $n$ such terms, each equal to $\E[Y_1^4]$.
+    \item Terms $\E[Y_i^2 Y_j^2]$ with $i \neq j$: there are $\binom{n}{2} \cdot 3$ such terms (from the multinomial expansion), each equal to $(\E[Y_1^2])^2 = \sigma^4$.
+\end{itemize}
+All other terms (containing an odd power of some $Y_i$) vanish because $\E[Y_i] = 0$ and independence implies $\E[Y_i^k \cdot Y_j^\ell] = \E[Y_i^k]\,\E[Y_j^\ell] = 0$ when $k$ is odd. Therefore:
+\begin{equation}
+    \E[S_n^4] = n\,\E[Y_1^4] + 3n(n-1)\sigma^4 \leq Cn^2
+    \label{eq:slln_fourth}
+\end{equation}
+for $C = \E[Y_1^4] + 3\sigma^4$.
+
+\textbf{Step 2: Summability via Markov.} By Markov's inequality applied to $(\bar{X}_n - \mu)^4 = S_n^4 / n^4$:
+\begin{equation}
+    \Prob(|\bar{X}_n - \mu| > \varepsilon) \leq \frac{\E[S_n^4]}{n^4 \varepsilon^4} \leq \frac{C}{n^2 \varepsilon^4}.
+\end{equation}
+Since $\sum_{n=1}^\infty 1/n^2 < \infty$, we have $\sum_{n=1}^\infty \Prob(|\bar{X}_n - \mu| > \varepsilon) < \infty$.
+
+\textbf{Step 3: Apply Borel--Cantelli.} By the first Borel--Cantelli lemma (Theorem~\ref{thm:bc1}) and the characterization in Theorem~\ref{thm:bc_as}, $\bar{X}_n \cas \mu$.
+\end{proof}
+
+\begin{remark}
+\label{rem:slln_general}
+The proof above uses the fourth moment to get summable probabilities. The general proof (requiring only $\E[|X_1|] < \infty$) uses a truncation argument: replace $X_i$ by $X_i \indicator_{|X_i| \leq n}$, show the truncated and original sums agree eventually, and apply Kolmogorov's inequality to the truncated sum. See Durrett (2019), Theorem 2.4.1 for details.
+\end{remark}
+
+\subsection{Central Limit Theorem}
+\label{subsec:clt}
+
+\begin{theorem}[Central Limit Theorem]
+\label{thm:clt}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_1] = \mu$ and $0 < \Var(X_1) = \sigma^2 < \infty$. Then:
+\begin{equation}
+    \frac{\sqrt{n}(\bar{X}_n - \mu)}{\sigma} \cdist \mathcal{N}(0, 1).
+    \label{eq:clt}
+\end{equation}
+\end{theorem}
+
+\begin{proof}[Proof sketch via characteristic functions]
+Let $Y_i = (X_i - \mu)/\sigma$ so $\E[Y_i] = 0$, $\E[Y_i^2] = 1$. The characteristic function of $\bar{Y}_n = \frac{1}{\sqrt{n}}\sum_i Y_i$ is:
+\begin{equation}
+    \varphi_{\bar{Y}_n}(t) = \left[\varphi_{Y_1}\!\left(\frac{t}{\sqrt{n}}\right)\right]^n.
+\end{equation}
+Taylor expanding $\varphi_{Y_1}(t/\sqrt{n}) = 1 - t^2/(2n) + o(t^2/n)$ and using $(1 + x/n)^n \to e^x$:
+\begin{equation}
+    \varphi_{\bar{Y}_n}(t) \to e^{-t^2/2},
+\end{equation}
+which is the characteristic function of $\mathcal{N}(0,1)$. By L\'{e}vy's continuity theorem, convergence of characteristic functions implies convergence in distribution.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The CLT describes the \emph{rate} of Monte Carlo convergence: the estimation error of $\bar{X}_n$ is approximately $\sigma / \sqrt{n}$, which is $O(1/\sqrt{n})$. This quantifies the efficiency gain of TD methods, whose error can decrease faster than $1/\sqrt{n}$ due to bootstrapping and variance reduction.
+\end{rlconnection}
+
+\subsection{Monotone and Dominated Convergence}
+\label{subsec:mct_dct}
+
+These theorems justify interchanging limits and expectations --- a step that appears implicitly in many RL derivations.
+
+\begin{theorem}[Monotone Convergence Theorem]
+\label{thm:mct}
+If $0 \leq X_1 \leq X_2 \leq \cdots$ a.s.\ and $X_n \cas X$, then:
+\begin{equation}
+    \lim_{n \to \infty} \E[X_n] = \E[X].
+    \label{eq:mct}
+\end{equation}
+(Both sides may be $+\infty$.)
+\end{theorem}
+
+\begin{proof}
+Since $X_n \leq X$ a.s., monotonicity of expectation gives $\E[X_n] \leq \E[X]$, so $L := \lim_n \E[X_n] \leq \E[X]$.
+
+For the reverse inequality, fix any simple function $0 \leq s \leq X$ (i.e., $s = \sum_{k=1}^m c_k \indicator_{A_k}$). For $\alpha \in (0,1)$, define $B_n = \{X_n \geq \alpha s\}$. Since $X_n \uparrow X \geq s > \alpha s$ on $\{s > 0\}$, we have $B_n \uparrow \Omega$ (up to a null set). Then:
+\begin{equation}
+    \E[X_n] \geq \E[X_n \indicator_{B_n}] \geq \alpha\, \E[s\, \indicator_{B_n}].
+\end{equation}
+As $n \to \infty$, $\E[s\,\indicator_{B_n}] \to \E[s]$ by the continuity from below applied to each $A_k \cap B_n$. So $L \geq \alpha\,\E[s]$. Letting $\alpha \uparrow 1$ gives $L \geq \E[s]$. Taking the supremum over all simple $s \leq X$ gives $L \geq \E[X]$.
+\end{proof}
+
+\begin{theorem}[Fatou's Lemma]
+\label{thm:fatou}
+If $X_n \geq 0$ a.s.\ for all $n$, then:
+\begin{equation}
+    \E\!\left[\liminf_{n \to \infty} X_n\right] \leq \liminf_{n \to \infty} \E[X_n].
+    \label{eq:fatou}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Define $Y_n = \inf_{k \geq n} X_k$. Then $0 \leq Y_1 \leq Y_2 \leq \cdots$ and $Y_n \uparrow \liminf X_n$. By the Monotone Convergence Theorem:
+\begin{equation}
+    \E[\liminf X_n] = \lim_n \E[Y_n].
+\end{equation}
+Since $Y_n \leq X_n$, we have $\E[Y_n] \leq \E[X_n]$. Therefore $\lim_n \E[Y_n] \leq \liminf_n \E[X_n]$.
+\end{proof}
+
+\begin{keyresult}[Dominated Convergence Theorem]
+\begin{theorem}[Dominated Convergence Theorem (Lebesgue)]
+\label{thm:dct}
+If $X_n \cas X$ and there exists a random variable $Y$ with $\E[Y] < \infty$ such that $|X_n| \leq Y$ a.s.\ for all $n$, then:
+\begin{equation}
+    \lim_{n \to \infty} \E[X_n] = \E[X] \quad \text{and} \quad \E[|X_n - X|] \to 0.
+    \label{eq:dct}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Since $|X_n| \leq Y$ a.s.\ and $X_n \to X$ a.s., we have $|X| \leq Y$ a.s. The variables $Y + X_n \geq 0$ and $Y - X_n \geq 0$. Apply Fatou's lemma to each:
+\begin{align}
+    \E[Y + X] &= \E[\liminf(Y + X_n)] \leq \liminf \E[Y + X_n] = \E[Y] + \liminf \E[X_n], \label{eq:dct_fatou1}\\
+    \E[Y - X] &= \E[\liminf(Y - X_n)] \leq \liminf \E[Y - X_n] = \E[Y] - \limsup \E[X_n]. \label{eq:dct_fatou2}
+\end{align}
+From~\eqref{eq:dct_fatou1}: $\E[X] \leq \liminf \E[X_n]$. From~\eqref{eq:dct_fatou2}: $\E[X] \geq \limsup \E[X_n]$. Together: $\lim \E[X_n] = \E[X]$.
+
+For $\E[|X_n - X|] \to 0$: apply the above to $|X_n - X|$ which converges a.s.\ to $0$ and is dominated by $2Y$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+The DCT justifies interchanging limits and expectations in discounted MDPs. When proving that the value function $V^\pi(s) = \E[\sum_{t=0}^\infty \gamma^t R_{t+1} \mid S_0 = s]$ is well-defined, one uses dominated convergence with the dominating variable $Y = R_{\max}/(1-\gamma)$ to exchange the limit of partial sums with the expectation. It also appears when proving that Bellman operators preserve continuity of value functions.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: MARKOV CHAINS
+%% ============================================================
+
+
+\end{document}

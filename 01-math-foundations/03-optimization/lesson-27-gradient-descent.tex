@@ -1,0 +1,305 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{Lesson 27: Gradient Descent and Convergence Rates}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{4}
+
+\section{Gradient Descent}\label{sec:gd}
+
+\subsection{Smoothness and Convexity}
+
+\begin{definition}[$L$-smoothness]\label{def:smooth}
+A differentiable function $f : \R^n \to \R$ is \emph{$L$-smooth} (or has
+$L$-Lipschitz continuous gradient) if
+\begin{equation}\label{eq:smooth}
+  \|\nabla f(x) - \nabla f(y)\| \le L \|x - y\| \quad \forall\, x, y \in \R^n.
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Descent lemma]\label{lem:descent}
+If $f$ is $L$-smooth, then for all $x, y \in \R^n$:
+\begin{equation}\label{eq:descent-lemma}
+  f(y) \le f(x) + \nabla f(x)^\top (y - x) + \frac{L}{2}\|y - x\|^2.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By the fundamental theorem of calculus,
+\[
+  f(y) - f(x) = \int_0^1 \nabla f(x + t(y-x))^\top (y-x)\, dt.
+\]
+Subtracting $\nabla f(x)^\top(y-x)$:
+\begin{align*}
+  f(y) - f(x) - \nabla f(x)^\top(y-x)
+  &= \int_0^1 [\nabla f(x + t(y-x)) - \nabla f(x)]^\top (y-x)\, dt \\
+  &\le \int_0^1 \|\nabla f(x + t(y-x)) - \nabla f(x)\| \cdot \|y-x\|\, dt \\
+  &\le \int_0^1 L t \|y-x\|^2\, dt = \frac{L}{2}\|y-x\|^2. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{definition}[$\mu$-strong convexity]\label{def:strong-convex}
+A differentiable function $f$ is \emph{$\mu$-strongly convex} (with $\mu > 0$)
+if for all $x, y$:
+\begin{equation}\label{eq:strong-convex}
+  f(y) \ge f(x) + \nabla f(x)^\top(y - x) + \frac{\mu}{2}\|y - x\|^2.
+\end{equation}
+\end{definition}
+
+\begin{remark}\label{rem:condition-number}
+If $f$ is $\mu$-strongly convex and $L$-smooth, the \emph{condition number} is
+$\kappa = L/\mu \ge 1$. The condition number governs the convergence speed of
+first-order methods.
+\end{remark}
+
+\subsection{Gradient Descent Algorithm}
+
+The gradient descent iteration with step size $\eta > 0$ is:
+\begin{equation}\label{eq:gd}
+  x_{k+1} = x_k - \eta \nabla f(x_k).
+\end{equation}
+
+\subsection{Convergence for Convex Functions}
+
+\begin{theorem}[$O(1/k)$ convergence for convex $L$-smooth functions]%
+\label{thm:gd-convex}
+Let $f$ be convex and $L$-smooth with minimizer $x^*$. Gradient descent with
+step size $\eta = 1/L$ satisfies
+\begin{equation}\label{eq:gd-convex-rate}
+  f(x_k) - f(x^*) \le \frac{L \|x_0 - x^*\|^2}{2k}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Set $\eta = 1/L$. By the descent lemma (Lemma~\ref{lem:descent}) with
+$y = x_{k+1} = x_k - \frac{1}{L}\nabla f(x_k)$:
+\begin{equation}\label{eq:gd-descent-step}
+  f(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k)
+    + \frac{L}{2}\|x_{k+1} - x_k\|^2
+  = f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2.
+\end{equation}
+So the sequence of function values is non-increasing, and
+\begin{equation}\label{eq:func-decrease}
+  f(x_k) - f(x_{k+1}) \ge \frac{1}{2L}\|\nabla f(x_k)\|^2.
+\end{equation}
+By convexity, $f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k)$, hence
+\begin{equation}\label{eq:convexity-bound}
+  f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) \le \|\nabla f(x_k)\| \cdot \|x_k - x^*\|.
+\end{equation}
+Now consider the distance to the optimum:
+\begin{align}
+  \|x_{k+1} - x^*\|^2
+  &= \|x_k - \tfrac{1}{L}\nabla f(x_k) - x^*\|^2 \notag \\
+  &= \|x_k - x^*\|^2 - \frac{2}{L}\nabla f(x_k)^\top(x_k - x^*)
+     + \frac{1}{L^2}\|\nabla f(x_k)\|^2. \label{eq:dist-recursion}
+\end{align}
+Using convexity: $\nabla f(x_k)^\top(x_k - x^*) \ge f(x_k) - f(x^*)$, so
+\[
+  \|x_{k+1} - x^*\|^2 \le \|x_k - x^*\|^2
+    - \frac{2}{L}(f(x_k) - f(x^*)) + \frac{1}{L^2}\|\nabla f(x_k)\|^2.
+\]
+From~\eqref{eq:func-decrease}: $\|\nabla f(x_k)\|^2 \le 2L(f(x_k) - f(x_{k+1}))$, so
+\begin{align*}
+  \|x_{k+1} - x^*\|^2
+  &\le \|x_k - x^*\|^2 - \frac{2}{L}(f(x_k) - f(x^*))
+    + \frac{2}{L}(f(x_k) - f(x_{k+1})) \\
+  &= \|x_k - x^*\|^2 - \frac{2}{L}(f(x_{k+1}) - f(x^*)).
+\end{align*}
+Rearranging: $f(x_{k+1}) - f(x^*) \le \frac{L}{2}(\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2)$.
+
+Let $\delta_k = f(x_k) - f(x^*)$. Summing from $k = 0$ to $k = K-1$:
+\[
+  \sum_{k=1}^{K} \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2.
+\]
+Since $\delta_k$ is non-increasing (from~\eqref{eq:func-decrease}),
+$K \delta_K \le \sum_{k=1}^K \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2$, giving
+$\delta_K \le \frac{L\|x_0 - x^*\|^2}{2K}$.
+\end{proof}
+
+\subsection{Convergence for Strongly Convex Functions}
+
+\begin{theorem}[Linear convergence for strongly convex $L$-smooth functions]%
+\label{thm:gd-strong}
+Let $f$ be $\mu$-strongly convex and $L$-smooth. Gradient descent with
+$\eta = 1/L$ satisfies
+\begin{equation}\label{eq:gd-strong-rate}
+  f(x_k) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)^k (f(x_0) - f(x^*)).
+\end{equation}
+Hence $f(x_k) - f(x^*) \le \epsilon$ after $k = O(\kappa \log(1/\epsilon))$
+iterations, where $\kappa = L/\mu$.
+\end{theorem}
+
+\begin{proof}
+From~\eqref{eq:gd-descent-step},
+$f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2$.
+By strong convexity applied at the optimum $x^*$:
+\[
+  f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k) + \frac{\mu}{2}\|x^* - x_k\|^2.
+\]
+Thus $f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) - \frac{\mu}{2}\|x_k - x^*\|^2$.
+By the Cauchy--Schwarz inequality and the AM-GM inequality (or by optimizing
+over $\|x_k - x^*\|$), one obtains the standard inequality for strongly convex
+functions:
+\begin{equation}\label{eq:PL}
+  \|\nabla f(x_k)\|^2 \ge 2\mu (f(x_k) - f(x^*)).
+\end{equation}
+This is the \emph{Polyak--Lojasiewicz (PL) inequality}, which follows from
+strong convexity.
+
+\emph{Proof of~\eqref{eq:PL}:} By strong convexity, for all $y$:
+$f(y) \ge f(x_k) + \nabla f(x_k)^\top(y - x_k) + \frac{\mu}{2}\|y - x_k\|^2$.
+Minimizing the right side over $y$ (a quadratic in $y$) gives
+$y^* = x_k - \frac{1}{\mu}\nabla f(x_k)$, yielding
+\[
+  f(x^*) \ge f(x_k) - \frac{1}{2\mu}\|\nabla f(x_k)\|^2,
+\]
+which rearranges to~\eqref{eq:PL}.
+
+Substituting~\eqref{eq:PL} into the descent bound:
+\[
+  f(x_{k+1}) \le f(x_k) - \frac{1}{2L} \cdot 2\mu(f(x_k) - f(x^*))
+  = f(x_k) - \frac{\mu}{L}(f(x_k) - f(x^*)).
+\]
+Subtracting $f(x^*)$ from both sides:
+\[
+  f(x_{k+1}) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)(f(x_k) - f(x^*)).
+\]
+Applying this recursively yields~\eqref{eq:gd-strong-rate} with
+$\rho = 1 - \mu/L = 1 - 1/\kappa$.
+\end{proof}
+
+\begin{keyresult}[title={Gradient Descent Convergence Rates}]
+For $L$-smooth functions with step size $\eta = 1/L$:
+\begin{itemize}
+  \item \textbf{Convex:} $f(x_k) - f^* = O(1/k)$, i.e., $O(1/\epsilon)$
+    iterations for $\epsilon$-accuracy.
+  \item \textbf{$\mu$-strongly convex:} $f(x_k) - f^* = O(\rho^k)$ with
+    $\rho = 1 - 1/\kappa$, i.e., $O(\kappa \log(1/\epsilon))$ iterations.
+\end{itemize}
+\end{keyresult}
+
+\begin{rlconnection}
+Policy gradient methods and TD learning with function approximation perform
+(stochastic) gradient descent on the policy parameters or value function weights.
+The convergence rate depends critically on the smoothness ($L$) and strong
+convexity ($\mu$) of the loss landscape. In practice, the loss for neural network
+policies is non-convex, but locally the landscape often behaves like a strongly
+convex function near a good solution.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: Nesterov Acceleration
+%% ============================================================
+
+
+\end{document}

@@ -1,0 +1,337 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{example}{Example}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{tdconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\Cov}{Cov}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
+\newcommand{\cprob}{\xrightarrow{\Prob}}
+\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
+\newcommand{\cdist}{\xrightarrow{d}}
+
+% ---- Title ----
+\title{Lesson 12: Markov Chains}
+\author{AI/ML Mathematics Series}
+\date{February 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{13}
+
+\section{Markov Chains}
+\label{sec:markov_chains}
+
+\subsection{Definition and Transition Matrices}
+\label{subsec:mc_def}
+
+\begin{definition}[Markov Chain]
+\label{def:markov_chain}
+A sequence of random variables $\{X_t\}_{t \geq 0}$ taking values in a finite or countable state space $\mathcal{S}$ is a \emph{(discrete-time) Markov chain} if for all $t \geq 0$ and all states $s_0, \ldots, s_t, s_{t+1} \in \mathcal{S}$:
+\begin{equation}
+    \Prob(X_{t+1} = s_{t+1} \mid X_t = s_t, X_{t-1} = s_{t-1}, \ldots, X_0 = s_0) = \Prob(X_{t+1} = s_{t+1} \mid X_t = s_t).
+    \label{eq:markov_property}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Time-Homogeneous Transition Matrix]
+\label{def:transition_matrix}
+A Markov chain is \emph{time-homogeneous} if $\Prob(X_{t+1} = s' \mid X_t = s) = P(s' \mid s)$ does not depend on $t$. The \emph{transition matrix} $\mathbf{P} \in \R^{|\mathcal{S}| \times |\mathcal{S}|}$ has entries:
+\begin{equation}
+    P_{ss'} = P(s' \mid s), \quad \text{with } P_{ss'} \geq 0 \text{ and } \sum_{s' \in \mathcal{S}} P_{ss'} = 1 \text{ for all } s.
+    \label{eq:transition_matrix}
+\end{equation}
+Such a matrix (non-negative entries, rows summing to $1$) is called a \emph{stochastic matrix}.
+\end{definition}
+
+\begin{theorem}[Chapman--Kolmogorov Equation]
+\label{thm:chapman_kolmogorov}
+For a time-homogeneous Markov chain with transition matrix $\mathbf{P}$:
+\begin{equation}
+    P^{(n+m)}(s, s') = \sum_{u \in \mathcal{S}} P^{(n)}(s, u)\, P^{(m)}(u, s'),
+    \label{eq:ck}
+\end{equation}
+where $P^{(k)}(s, s') = \Prob(X_{t+k} = s' \mid X_t = s)$ is the $k$-step transition probability. In matrix notation: $\mathbf{P}^{n+m} = \mathbf{P}^n \mathbf{P}^m$.
+\end{theorem}
+
+\begin{proof}
+By the law of total probability and the Markov property:
+\begin{align}
+    P^{(n+m)}(s, s') &= \Prob(X_{n+m} = s' \mid X_0 = s) \nonumber\\
+    &= \sum_{u \in \mathcal{S}} \Prob(X_{n+m} = s' \mid X_n = u, X_0 = s)\, \Prob(X_n = u \mid X_0 = s) \nonumber\\
+    &= \sum_{u \in \mathcal{S}} \Prob(X_{n+m} = s' \mid X_n = u)\, \Prob(X_n = u \mid X_0 = s) \tag{Markov property}\\
+    &= \sum_u P^{(m)}(u, s')\, P^{(n)}(s, u). \nonumber
+\end{align}
+This is precisely the $(s, s')$ entry of the matrix product $\mathbf{P}^n \mathbf{P}^m$.
+\end{proof}
+
+\subsection{Classification of States}
+\label{subsec:mc_classify}
+
+\begin{definition}[Accessibility and Communication]
+\label{def:accessibility}
+State $s'$ is \emph{accessible} from $s$ (written $s \to s'$) if $P^{(n)}(s, s') > 0$ for some $n \geq 0$. States $s$ and $s'$ \emph{communicate} (written $s \leftrightarrow s'$) if $s \to s'$ and $s' \to s$.
+\end{definition}
+
+\begin{proposition}[Communication is an Equivalence Relation]
+\label{prop:communication}
+The relation $\leftrightarrow$ is an equivalence relation on $\mathcal{S}$, partitioning the state space into \emph{communicating classes}.
+\end{proposition}
+
+\begin{proof}
+\textit{Reflexive:} $P^{(0)}(s, s) = 1 > 0$, so $s \to s$.
+
+\textit{Symmetric:} By definition of $\leftrightarrow$.
+
+\textit{Transitive:} If $s \leftrightarrow u$ and $u \leftrightarrow s'$, then $s \to u$ in $n$ steps and $u \to s'$ in $m$ steps. By Chapman--Kolmogorov, $P^{(n+m)}(s, s') \geq P^{(n)}(s, u) P^{(m)}(u, s') > 0$, so $s \to s'$. Similarly $s' \to s$.
+\end{proof}
+
+\begin{definition}[Irreducible Chain]
+\label{def:irreducible}
+A Markov chain is \emph{irreducible} if there is a single communicating class, i.e., $s \to s'$ for all $s, s' \in \mathcal{S}$.
+\end{definition}
+
+\begin{definition}[Recurrence and Transience]
+\label{def:recurrence}
+Let $\tau_s = \inf\{t \geq 1 : X_t = s\}$ be the first return time to state $s$. State $s$ is:
+\begin{itemize}[nosep]
+    \item \emph{Recurrent} if $\Prob(\tau_s < \infty \mid X_0 = s) = 1$ (the chain returns to $s$ with probability $1$).
+    \item \emph{Transient} if $\Prob(\tau_s < \infty \mid X_0 = s) < 1$.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Recurrence Criterion]
+\label{thm:recurrence}
+State $s$ is recurrent if and only if $\sum_{n=0}^\infty P^{(n)}(s, s) = \infty$.
+\end{theorem}
+
+\begin{proof}
+Let $N_s = \sum_{t=1}^\infty \indicator_{\{X_t = s\}}$ be the number of returns to $s$ (starting from $X_0 = s$). Then:
+\begin{equation}
+    \E[N_s \mid X_0 = s] = \sum_{t=1}^\infty P^{(t)}(s, s).
+\end{equation}
+
+If $s$ is transient, let $p = \Prob(\tau_s < \infty \mid X_0 = s) < 1$. By the strong Markov property, $\Prob(N_s \geq k \mid X_0 = s) = p^k$, so $N_s$ is geometric: $\E[N_s \mid X_0 = s] = p/(1-p) < \infty$. Thus $\sum P^{(n)}(s,s) < \infty$.
+
+If $s$ is recurrent, then $p = 1$, so $\Prob(N_s = \infty \mid X_0 = s) = 1$, giving $\E[N_s \mid X_0 = s] = \infty$.
+\end{proof}
+
+\begin{proposition}[Recurrence is a Class Property]
+\label{prop:recurrence_class}
+If $s$ is recurrent and $s \leftrightarrow s'$, then $s'$ is recurrent.
+\end{proposition}
+
+\begin{proof}
+Since $s \leftrightarrow s'$, there exist $m, n$ such that $P^{(m)}(s', s) > 0$ and $P^{(n)}(s, s') > 0$. For any $k$:
+\begin{equation}
+    P^{(m+k+n)}(s', s') \geq P^{(m)}(s', s)\, P^{(k)}(s, s)\, P^{(n)}(s, s').
+\end{equation}
+Let $c = P^{(m)}(s', s) \cdot P^{(n)}(s, s') > 0$. Summing over $k$:
+\begin{equation}
+    \sum_k P^{(m+k+n)}(s', s') \geq c \sum_k P^{(k)}(s, s) = \infty.
+\end{equation}
+So $\sum_t P^{(t)}(s', s') = \infty$, and $s'$ is recurrent by Theorem~\ref{thm:recurrence}.
+\end{proof}
+
+\subsection{Stationary Distributions}
+\label{subsec:stationary}
+
+\begin{definition}[Stationary Distribution]
+\label{def:stationary}
+A probability distribution $\pi = (\pi(s))_{s \in \mathcal{S}}$ is \emph{stationary} (or \emph{invariant}) for a Markov chain with transition matrix $\mathbf{P}$ if:
+\begin{equation}
+    \pi(s') = \sum_{s \in \mathcal{S}} \pi(s)\, P(s' \mid s) \quad \text{for all } s' \in \mathcal{S}.
+    \label{eq:stationary}
+\end{equation}
+In vector notation: $\boldsymbol{\pi}^\top = \boldsymbol{\pi}^\top \mathbf{P}$, i.e., $\boldsymbol{\pi}$ is a left eigenvector of $\mathbf{P}$ with eigenvalue $1$.
+\end{definition}
+
+\begin{definition}[Aperiodic Chain]
+\label{def:aperiodic}
+The \emph{period} of state $s$ is $d(s) = \gcd\{n \geq 1 : P^{(n)}(s, s) > 0\}$. State $s$ is \emph{aperiodic} if $d(s) = 1$. An irreducible chain is aperiodic if any (equivalently, all) of its states are aperiodic.
+\end{definition}
+
+\begin{definition}[Positive Recurrence]
+\label{def:positive_recurrent}
+A recurrent state $s$ is \emph{positive recurrent} if $\E[\tau_s \mid X_0 = s] < \infty$. An irreducible Markov chain is positive recurrent if all its states are positive recurrent.
+\end{definition}
+
+\begin{keyresult}[Existence and Uniqueness of Stationary Distribution]
+\begin{theorem}[Stationary Distribution Theorem]
+\label{thm:stationary_existence}
+For a finite, irreducible Markov chain:
+\begin{enumerate}[nosep]
+    \item The chain is positive recurrent.
+    \item There exists a unique stationary distribution $\boldsymbol{\pi}$ with $\pi(s) > 0$ for all $s$.
+    \item $\pi(s) = 1 / \E[\tau_s \mid X_0 = s]$.
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Part (1):} In a finite irreducible chain, all states communicate, and at least one state must be recurrent (since the chain cannot escape to infinity). By Proposition~\ref{prop:recurrence_class}, all states are recurrent. In a finite state space, recurrence implies positive recurrence (the expected return time is finite because the chain has only finitely many states to visit).
+
+\textbf{Part (2), existence:} Define $\pi(s) = 1/\E[\tau_s \mid X_0 = s]$ (which is positive and finite by Part (1)). We verify stationarity. Consider the chain started from $X_0 = s$. The expected number of visits to state $s'$ before returning to $s$ is:
+\begin{equation}
+    \mu(s') = \E\!\left[\sum_{t=0}^{\tau_s - 1} \indicator_{\{X_t = s'\}} \;\middle|\; X_0 = s\right].
+\end{equation}
+One can verify that $\mu(s') / \mu(s)$ satisfies the stationarity equation $\boldsymbol{\pi}^\top = \boldsymbol{\pi}^\top \mathbf{P}$ and $\mu(s) = \E[\tau_s \mid X_0 = s]$, so $\pi(s') = \mu(s') / \sum_{u} \mu(u) = 1/\E[\tau_{s'} \mid X_0 = s']$ after normalization.
+
+\textbf{Part (2), uniqueness:} Suppose $\boldsymbol{\pi}'$ is another stationary distribution. Then $\boldsymbol{\pi}'^\top = \boldsymbol{\pi}'^\top \mathbf{P}^n$ for all $n$. Since the chain is irreducible and positive recurrent, $P^{(n)}(s, s') \to \pi(s')$ as $n \to \infty$ (if additionally aperiodic; in the periodic case, Ces\`{a}ro averages converge). Therefore $\pi'(s') = \sum_s \pi'(s) \pi(s') = \pi(s')$.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+In the TD function approximation setting (Section 6 of the TD article), the stationary distribution $d^\pi$ of the Markov chain induced by policy $\pi$ defines the weighting in the Mean Squared Value Error $\overline{\text{VE}}(\mathbf{w}) = \sum_s d^\pi(s)(V^\pi(s) - \hat{V}(s; \mathbf{w}))^2$. The convergence proof of linear TD (Theorem 6.2) relies on $d^\pi(s) > 0$ for all $s$, which is guaranteed by irreducibility. The ergodic theorem (below) justifies replacing expectations under $d^\pi$ with time averages along a single trajectory.
+\end{rlconnection}
+
+\subsection{Ergodic Theorem}
+\label{subsec:ergodic}
+
+\begin{definition}[Ergodic Chain]
+\label{def:ergodic}
+A finite Markov chain is \emph{ergodic} if it is irreducible and aperiodic.
+\end{definition}
+
+\begin{keyresult}[Convergence Theorem for Ergodic Chains]
+\begin{theorem}[Ergodic Theorem for Finite Markov Chains]
+\label{thm:ergodic}
+If $\{X_t\}$ is an ergodic finite Markov chain with stationary distribution $\boldsymbol{\pi}$, then:
+\begin{enumerate}[nosep]
+    \item \textbf{Distribution convergence:} For any initial distribution, $\Prob(X_t = s) \to \pi(s)$ as $t \to \infty$.
+    \item \textbf{Time-average convergence:} For any bounded function $f: \mathcal{S} \to \R$:
+    \begin{equation}
+        \frac{1}{T}\sum_{t=0}^{T-1} f(X_t) \cas \sum_{s \in \mathcal{S}} \pi(s)\, f(s) = \E_\pi[f].
+        \label{eq:ergodic}
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}[Proof of Part (1)]
+For an ergodic chain on a finite state space $\mathcal{S} = \{1, \ldots, N\}$, aperiodicity and irreducibility imply that there exists $n_0$ such that $P^{(n)}(s, s') > 0$ for all $s, s'$ and all $n \geq n_0$.
+
+Let $\boldsymbol{\mu}_t^\top = \boldsymbol{\mu}_0^\top \mathbf{P}^t$ be the distribution at time $t$. We show $\|\boldsymbol{\mu}_t - \boldsymbol{\pi}\|_1 \to 0$.
+
+Define the \emph{coupling coefficient} $\alpha(\mathbf{P}) = \max_{s, s'} \sum_u |P(u \mid s) - P(u \mid s')|/2$. For a matrix with all positive entries, $\alpha(\mathbf{P}) < 1$. Since $\mathbf{P}^{n_0}$ has all positive entries, $\alpha(\mathbf{P}^{n_0}) = \rho < 1$. One can verify that:
+\begin{equation}
+    \|\boldsymbol{\mu}_{n_0}^\top - \boldsymbol{\pi}^\top\|_1 \leq \rho\, \|\boldsymbol{\mu}_0^\top - \boldsymbol{\pi}^\top\|_1.
+\end{equation}
+Iterating: $\|\boldsymbol{\mu}_{kn_0}^\top - \boldsymbol{\pi}^\top\|_1 \leq \rho^k \cdot 2 \to 0$, giving convergence.
+\end{proof}
+
+\begin{proof}[Proof sketch of Part (2)]
+By the strong law of large numbers for Markov chains (which extends the i.i.d.\ SLLN): for a positive recurrent chain, the fraction of time spent in state $s$ converges a.s.\ to $\pi(s)$. Since $\frac{1}{T}\sum_t f(X_t) = \sum_s f(s) \cdot \frac{1}{T}\sum_t \indicator_{\{X_t = s\}}$, the result follows from a.s.\ convergence of each empirical frequency to $\pi(s)$.
+\end{proof}
+
+\subsection{Detailed Balance}
+\label{subsec:detailed_balance}
+
+\begin{definition}[Detailed Balance / Reversibility]
+\label{def:detailed_balance}
+A Markov chain with transition matrix $\mathbf{P}$ satisfies \emph{detailed balance} with respect to a distribution $\boldsymbol{\pi}$ if:
+\begin{equation}
+    \pi(s)\, P(s' \mid s) = \pi(s')\, P(s \mid s') \quad \text{for all } s, s' \in \mathcal{S}.
+    \label{eq:detailed_balance}
+\end{equation}
+A chain satisfying detailed balance is called \emph{reversible}.
+\end{definition}
+
+\begin{proposition}[Detailed Balance Implies Stationarity]
+\label{prop:db_stationary}
+If $\boldsymbol{\pi}$ satisfies detailed balance~\eqref{eq:detailed_balance}, then $\boldsymbol{\pi}$ is a stationary distribution.
+\end{proposition}
+
+\begin{proof}
+Sum both sides of~\eqref{eq:detailed_balance} over $s$:
+\begin{equation}
+    \sum_s \pi(s)\, P(s' \mid s) = \sum_s \pi(s')\, P(s \mid s') = \pi(s') \sum_s P(s \mid s') = \pi(s').
+\end{equation}
+This is the stationarity equation~\eqref{eq:stationary}.
+\end{proof}
+
+\begin{rlconnection}[Connection to RL]
+In the linear TD convergence proof (Theorem 6.2 of the TD article), the key matrix $\mathbf{A} = \E_{d^\pi}[\mathbf{x}(S)(\mathbf{x}(S) - \gamma \mathbf{x}(S'))^\top]$ involves the stationary distribution. Reversibility (detailed balance) is \emph{not} assumed --- the chain induced by the MDP under a fixed policy is generally non-reversible. The proof instead uses the general ergodic theorem to replace expectations over $d^\pi$ with time averages.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 10: MARTINGALE CONVERGENCE THEORY
+%% ============================================================
+
+
+\end{document}
