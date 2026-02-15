@@ -139,11 +139,174 @@ Phase 06 -- Aerospace (requires: Phase 04 + Phase 05)
 - Only use ASCII characters to write documents.
 - After creating the PDF document from tex file, clean the temporal files that were generated.
 
-## Lesson structure
-Each lesson must have the following sections:
-1. Motivation and Overview: Show connections with the final objective (reinforcement learning)
-2. References: References to specific chapters of books or articles to complement the lecture.
-3. Sections related to the topic: Depends of the topics that is being developing
-4. Exercises: Enhance and challenge the builded knowledgment (score with * the dificulty of the problem)
-5. Summary: Summary of important points of the lesson
-6. Furter Readings: References to furter reading (another lecture or a reference books or article)
+## Lesson Structure Standard
+
+Lessons follow a structure based on **Gagne's Nine Events of Instruction** (Gagne, Briggs & Wager, *Principles of Instructional Design*, 5th ed., 2005), adapted for graduate-level mathematical writing. Each section maps to one or more of Gagne's events. Learning objectives use **Bloom's Revised Taxonomy** (Anderson & Krathwohl, 2001) action verbs.
+
+### Mapping: Gagne's Events to Lesson Sections
+
+| Gagne Event | Lesson Section | Purpose |
+|---|---|---|
+| 1. Gain attention | Motivation & Overview (opening problem) | Engage with a concrete RL/ML scenario |
+| 2. Inform learners of objectives | Motivation & Overview (learning objectives) | State what the student will be able to do |
+| 3. Stimulate recall of prior learning | Motivation & Overview (prerequisites) | Activate knowledge from earlier lessons |
+| 4. Present the content | Core Content Sections (2 through N) | Definitions, theorems, proofs |
+| 5. Provide learning guidance | Worked examples, `rlconnection`, `keyresult`, `warning` boxes | Connect abstract theory to applications |
+| 6. Elicit performance | Exercises | Practice applying new knowledge |
+| 7. Provide feedback | Exercise hints (optional) | Guide self-assessment |
+| 8. Assess performance | Exercises (graded difficulty) | Evaluate mastery at multiple Bloom levels |
+| 9. Enhance retention and transfer | Summary + Further Reading | Consolidate and connect forward |
+
+### LaTeX File Template
+
+```latex
+\documentclass[11pt,a4paper]{article}
+\input{../../lesson-preamble}   % relative path from subdomain dir
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson N: Title}}
+\fancyhead[R]{\thepage}
+\title{Lesson N: Title}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+% --- Section 1: Motivation and Overview ---
+% --- Sections 2..N: Core Content ---
+% --- Section N+1: Exercises ---
+% --- Section N+2: Summary ---
+% --- Section N+3: Further Reading ---
+\bibliography{subdomain-refs}
+\end{document}
+```
+
+### Section Specifications
+
+#### Section 1 -- Motivation and Overview
+
+*Gagne Events 1-3: Gain attention, state objectives, recall prerequisites.*
+
+This section has four subsections written as prose (no `\subsection` commands -- use paragraph breaks or `\paragraph{}`):
+
+1. **Opening problem** (1-2 paragraphs): Present a concrete RL/ML problem or scenario that requires the mathematics developed in this lesson. Do not solve it -- just pose it to create intellectual need. End with a forward pointer: *"The tools developed in this lesson will let us..."*
+
+2. **RL/ML connection box**: An `\begin{rlconnection}` environment listing 2-4 specific algorithms or results that depend on this lesson's material, with one-sentence explanations of how.
+
+3. **Prerequisites**: A `\paragraph{Prerequisites.}` listing the specific definitions, theorems, or lessons the student must know, using textual cross-references (e.g., "Chebyshev's inequality (Lesson 9, Theorem 2.3)").
+
+4. **Learning objectives**: A `\paragraph{Learning objectives.}` with a bulleted list (`\begin{itemize}`) of 3-6 measurable objectives using Bloom's Revised Taxonomy verbs:
+   - **Remember/Understand**: *Define*, *State*, *Explain*, *Classify*
+   - **Apply/Analyze**: *Compute*, *Derive*, *Prove*, *Compare*
+   - **Evaluate/Create**: *Justify*, *Construct*, *Design*, *Critique*
+
+   Each objective should be verifiable (a reader can confirm they achieved it).
+
+#### Section 2 -- References
+
+*Supports Gagne Event 4 (content presentation) with authoritative sources.*
+
+A bulleted list of 3-6 primary references using `\citet{}` with specific chapter/section pointers. Format:
+
+```latex
+\begin{itemize}
+  \item \citet[Chapter 4]{durrett2019} -- Detailed treatment of conditional expectation.
+  \item \citet[Sections 7.1--7.3]{williams1991} -- Martingale convergence theorems.
+\end{itemize}
+```
+
+#### Sections 3 through N -- Core Content
+
+*Gagne Events 4-5: Present content and provide learning guidance.*
+
+These sections develop the mathematical content. Guidelines:
+
+- **Definitions first**: Every new concept gets a `\begin{definition}` environment before it is used. Never use a term before defining it.
+- **Complete proofs**: Every theorem, lemma, and proposition must include a full proof (`\begin{proof}...\end{proof}`). No "see textbook" or "left to the reader" for main results. Minor technical lemmas may defer to exercises.
+- **Worked examples**: Include at least 2-3 `\begin{example}` environments per content section showing concrete computations or applications.
+- **Key result boxes**: Wrap the 1-3 most important results per lesson in `\begin{keyresult}` environments.
+- **RL connection boxes**: Insert `\begin{rlconnection}` at natural connection points (aim for 2-4 per lesson) explaining how the current result applies in RL/ML.
+- **Warning boxes**: Use `\begin{warning}` for common misconceptions or subtle pitfalls (0-2 per lesson, only when genuinely needed).
+- **Custom box titles**: Override default titles when needed: `\begin{keyresult}[title={Bellman Optimality}]`.
+- **Logical flow**: Each section should end with a brief transition sentence pointing to the next section.
+
+#### Section N+1 -- Exercises
+
+*Gagne Events 6-8: Elicit performance, provide feedback, assess mastery.*
+
+Include 4-6 exercises spanning multiple Bloom levels. Format:
+
+```latex
+\section{Exercises}
+
+\begin{exercise}[Descriptive Title] \textnormal{(\(*\))} \\
+  Statement of the exercise.
+\end{exercise}
+```
+
+Difficulty scoring (mandatory, placed after the title):
+- `(*)` -- Direct application of a single definition or theorem (Bloom: Apply)
+- `(**)` -- Requires combining 2-3 results or multi-step reasoning (Bloom: Analyze)
+- `(***)` -- Proof construction, generalization, or open-ended exploration (Bloom: Evaluate/Create)
+
+Distribution: aim for 1-2 exercises at each difficulty level. At least one exercise should have an explicit RL/ML application context.
+
+Optional: include `\textit{Hint:}` at the end of harder exercises.
+
+#### Section N+2 -- Summary
+
+*Gagne Event 9 (first part): Enhance retention.*
+
+A concise bulleted list (`\begin{itemize}`) of 5-10 key takeaways. Each item should be a complete, self-contained statement (not just a topic name). Example:
+
+```latex
+\begin{itemize}
+  \item The Banach fixed-point theorem guarantees a unique fixed point for
+        contraction mappings on complete metric spaces, which underpins
+        the convergence of value iteration.
+\end{itemize}
+```
+
+For capstone lessons (last lesson in a subdomain), include a summary table reviewing the full subdomain arc.
+
+#### Section N+3 -- Further Reading
+
+*Gagne Event 9 (second part): Enhance transfer.*
+
+A bulleted list combining:
+- **Forward pointers** to upcoming lessons that build on this material (textual, e.g., "Lesson 15 extends these results to...")
+- **Deeper references** to advanced textbooks, monographs, or survey papers for students who want to go further
+- **Historical notes** (optional) crediting original contributors
+
+### Cross-Lesson Reference Conventions
+
+- Each lesson compiles independently -- no `\ref{}` or `\label{}` across lessons.
+- Reference results from other lessons textually: "By the Borel-Cantelli lemma (Lesson 9, Theorem 2.3)..."
+- When using a prior result, briefly re-state it without proof and cite the lesson.
+- Within a lesson, use standard `\label{}`/`\ref{}` freely.
+
+### Target Length
+
+- Standard lessons: 500-800 lines of LaTeX source
+- Capstone or survey lessons: up to 1000 lines
+- Each lesson should produce 10-20 pages of PDF output
+
+### Shared Preamble and Bibliography
+
+- All Phase 01 lessons use `\input{../../lesson-preamble}` (path: `01-math-foundations/lesson-preamble.tex`)
+- Bibliography files are per-subdomain (e.g., `measure-theory-refs.bib`, `optimization-refs.bib`)
+- Use `\citet{}` for textual citations and `\citep{}` for parenthetical citations
+- Compile chain: `pdflatex` -> `bibtex` -> `pdflatex` -> `pdflatex`, then clean temp files
+
+### Available Environments (from `lesson-preamble.tex`)
+
+**Theorem-like** (all share a single counter, numbered by section):
+`theorem`, `lemma`, `proposition`, `corollary`, `definition`, `example`, `exercise`, `assumption`, `remark`
+
+**Colored boxes** (tcolorbox, breakable):
+- `keyresult` -- green, for central results
+- `rlconnection` -- blue, for RL/ML connections
+- `warning` -- red, for common mistakes or pitfalls
+
+**Custom commands**: `\R`, `\N`, `\Q`, `\Z`, `\C` (number sets); `\E`, `\Prob`, `\Var`, `\Cov`, `\indicator` (probability); `\cas`, `\cprob`, `\clp{p}`, `\cdist` (convergence); `\dom`, `\epi`, `\conv`, `\argmin`, `\argmax`, `\prox` (operators); `\powerset`, `\Borel` (measure theory)
