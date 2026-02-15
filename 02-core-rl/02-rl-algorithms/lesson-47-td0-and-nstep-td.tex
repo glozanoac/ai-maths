@@ -1,0 +1,850 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 47: TD(0) and n-Step TD}}
+\fancyhead[R]{\thepage}
+\title{Lesson 47: TD(0) and n-Step TD}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider an agent navigating a large gridworld with thousands of states,
+receiving a reward only upon reaching a distant goal. After each episode,
+the Monte Carlo approach updates every visited state using the realized
+return---but those returns are sums of dozens of random transitions,
+producing estimates with enormous variance. Worse, the agent must wait
+until the episode terminates before any learning occurs. In continuing
+(non-episodic) environments, Monte Carlo methods cannot be applied at all.
+
+Temporal-difference (TD) learning resolves both problems by
+\emph{bootstrapping}: updating value estimates using other value estimates
+rather than waiting for a complete return. The simplest variant, TD(0),
+adjusts the estimate of each state immediately after a single transition,
+using the observed reward and the current estimate of the next state as a
+proxy for the full future return. The $n$-step extension interpolates
+between the one-step bootstrap of TD(0) and the full-episode return of
+Monte Carlo, providing a tunable bias--variance tradeoff. The tools
+developed in this lesson will let us prove that these bootstrapped updates
+converge to the true value function despite the apparent circularity of
+updating estimates from estimates.
+
+\begin{rlconnection}[title={Where TD(0) and $n$-Step TD Appear}]
+\begin{itemize}[nosep]
+  \item \textbf{TD(0)} is the prediction engine inside SARSA and
+    Q-learning (Lesson 49), where the TD error drives value updates.
+  \item \textbf{$n$-step returns} underpin Generalized Advantage
+    Estimation (GAE), the variance reduction technique used by PPO and
+    TRPO for policy gradient estimation.
+  \item \textbf{TD errors} form the building blocks of eligibility traces
+    and TD($\lambda$) (Lesson 48), connecting the forward and backward
+    views of credit assignment.
+  \item \textbf{Bias--variance analysis} of TD targets guides
+    hyperparameter selection ($n$, $\lambda$) in every practical deep RL
+    implementation.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Markov decision processes: state-value function $\Vpi(s) =
+\E_\policy[\sum_{t=0}^\infty \discount^t R_{t+1} \mid S_0 = s]$,
+Bellman expectation equation, Bellman operator $\Bellman^\policy$ and its
+$\discount$-contraction property in $\|\cdot\|_\infty$ (Lessons 45--46).
+Stochastic approximation: the Robbins--Monro theorem with martingale
+noise, step-size conditions $\sum \alpha_n = \infty$,
+$\sum \alpha_n^2 < \infty$ (Lesson 31). Conditional expectation and the
+law of total variance (Lesson 7).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{State} the TD(0) update rule and explain how it differs
+    from the Monte Carlo update through bootstrapping.
+  \item \emph{Prove} that the TD error $\delta_t^\policy$ under the true
+    value function is a martingale difference sequence.
+  \item \emph{Derive} the convergence of TD(0) by casting it as a
+    stochastic approximation of the Bellman equation.
+  \item \emph{Analyze} the bias--variance tradeoff between TD(0) and
+    Monte Carlo targets.
+  \item \emph{Define} the $n$-step return and \emph{prove} the
+    telescoping decomposition into TD errors.
+  \item \emph{Prove} convergence of $n$-step TD for any fixed $n \geq 1$.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapter 6]{suttonbarto2018} --- Introduction to TD
+    prediction; TD(0) algorithm and examples.
+  \item \citet[Chapter 7]{suttonbarto2018} --- $n$-step bootstrapping
+    methods and the bias--variance spectrum.
+  \item \citet[Chapter 4]{bertsekas1996} --- Convergence of temporal
+    difference methods via stochastic approximation.
+  \item \citet[Section 4]{szepesvari2010} --- Compact treatment of TD
+    convergence under the stochastic approximation framework.
+  \item \citet{tsitsiklis1994} --- Asynchronous stochastic approximation
+    and the convergence machinery for TD and Q-learning.
+  \item \citet{sutton1988} --- The original paper formalizing TD learning
+    and the TD($\lambda$) family.
+\end{itemize}
+
+%% SECTION 3: MONTE CARLO PREDICTION BASELINE
+\section{Monte Carlo Prediction as Baseline}
+\label{sec:mc}
+
+We begin with Monte Carlo (MC) prediction to establish the baseline
+against which TD methods will be compared. Throughout this lesson, we
+work with a finite MDP $(\States, \Actions, \Trans, r, \discount)$ with
+$\discount \in [0,1)$, a stationary policy $\policy$, and the return
+$\return = \sum_{k=0}^\infty \discount^k R_{t+k+1}$.
+
+\begin{definition}[Monte Carlo Update]
+\label{def:mc_update}
+Given an observed return $\return$ from state $S_t$, the
+\emph{every-visit MC update} is
+\begin{equation}
+  V(S_t) \leftarrow V(S_t) + \alpha\bigl[\return - V(S_t)\bigr].
+  \label{eq:mc_update}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Convergence of MC Prediction]
+\label{prop:mc_convergence}
+Suppose every state $s \in \States$ is visited infinitely often and the
+step sizes satisfy $\sum_n \alpha_n(s) = \infty$,
+$\sum_n \alpha_n^2(s) < \infty$ for each $s$. Then the MC
+update~\eqref{eq:mc_update} converges to $\Vpi(s)$ almost surely.
+\end{proposition}
+
+\begin{proof}
+Since $\E_\policy[\return \mid S_t = s] = \Vpi(s)$, the MC update is a
+Robbins--Monro iteration with driving function
+$h(V(s)) = \Vpi(s) - V(s)$ and noise $w_t = \return - \Vpi(s)$. The
+noise has zero conditional mean: $\E[w_t \mid S_t = s] = 0$. The mapping
+$h$ has unique root $V(s) = \Vpi(s)$, and the step-size conditions are
+satisfied by assumption. By the Robbins--Monro theorem (Lesson 31),
+$V_n(s) \to \Vpi(s)$ almost surely.
+\end{proof}
+
+\begin{lemma}[Variance of the MC Return]
+\label{lem:mc_variance}
+For deterministic rewards $r(s,a,s')$, the variance of the return
+satisfies
+\begin{equation}
+  \Var_\policy(\return \mid S_t = s)
+  = \discount^2 \E_\policy\bigl[\Var_\policy(G_{t+1} \mid S_{t+1})
+    \,\big|\, S_t = s\bigr]
+  + \Var_\policy\!\bigl(r(S_t, A_t, S_{t+1})
+    + \discount \Vpi(S_{t+1}) \,\big|\, S_t = s\bigr).
+  \label{eq:mc_variance}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Write $\return = R_{t+1} + \discount G_{t+1}$. By the law of total
+variance conditioned on $(S_t, A_t, S_{t+1})$:
+\[
+  \Var_\policy(\return \mid S_t)
+  = \E_\policy\bigl[\Var_\policy(\return \mid S_t, A_t, S_{t+1})
+    \,\big|\, S_t\bigr]
+  + \Var_\policy\!\bigl(\E_\policy[\return \mid S_t, A_t, S_{t+1}]
+    \,\big|\, S_t\bigr).
+\]
+For deterministic rewards, the inner conditional variance reduces to
+$\discount^2 \Var_\policy(G_{t+1} \mid S_{t+1})$ and the inner
+conditional expectation is $r(S_t, A_t, S_{t+1}) + \discount \Vpi(S_{t+1})$,
+yielding~\eqref{eq:mc_variance}.
+\end{proof}
+
+\begin{warning}[title={MC Variance Accumulates Over the Entire Trajectory}]
+Equation~\eqref{eq:mc_variance} shows that $\Var_\policy(\return \mid
+S_t)$ includes a $\discount^2$-weighted contribution from
+$\Var_\policy(G_{t+1} \mid S_{t+1})$, which in turn depends on
+$\Var_\policy(G_{t+2} \mid S_{t+2})$, and so on. The variance
+accumulates from \emph{all} future time steps, growing substantially
+when $\discount$ is close to 1. This motivates the bootstrapping
+approach of TD methods.
+\end{warning}
+
+The recursive structure of~\eqref{eq:mc_variance} makes clear that the
+MC target $\return$ incorporates randomness from the entire trajectory.
+We now introduce TD(0), which eliminates all future variance beyond
+a single transition.
+
+%% SECTION 4: TD(0) PREDICTION
+\section{TD(0) Prediction}
+\label{sec:td0}
+
+\begin{definition}[TD Error]
+\label{def:td_error}
+Given a value estimate $V$, the \emph{temporal-difference error} at
+time $t$ is
+\begin{equation}
+  \delta_t = R_{t+1} + \discount V(S_{t+1}) - V(S_t).
+  \label{eq:td_error}
+\end{equation}
+When $V = \Vpi$, we write
+$\delta_t^\policy = R_{t+1} + \discount \Vpi(S_{t+1}) - \Vpi(S_t)$.
+\end{definition}
+
+\begin{definition}[TD(0) Update Rule]
+\label{def:td0_update}
+The \emph{TD(0) update} modifies the value estimate upon observing the
+transition $(S_t, A_t, R_{t+1}, S_{t+1})$:
+\begin{equation}
+  V(S_t) \leftarrow V(S_t) + \alpha\,\delta_t
+  = V(S_t) + \alpha\bigl[R_{t+1} + \discount V(S_{t+1}) - V(S_t)\bigr].
+  \label{eq:td0_update}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Bootstrapping]
+\label{rem:bootstrapping}
+The key distinction from MC is that TD(0) uses the
+\emph{bootstrapped target} $R_{t+1} + \discount V(S_{t+1})$ instead
+of the full return $\return$. This replaces all future randomness
+(from $G_{t+1}$) with the current estimate $V(S_{t+1})$, reducing
+variance at the cost of introducing bias when $V \neq \Vpi$.
+\end{remark}
+
+\subsection{Properties of the TD Error}
+\label{subsec:td_error_properties}
+
+\begin{lemma}[Unbiasedness of the TD Error]
+\label{lem:td_unbiased}
+Under policy $\policy$, the TD error computed with the true value
+function has zero conditional expectation:
+\begin{equation}
+  \E_\policy\bigl[\delta_t^\policy \mid S_t = s\bigr] = 0
+  \quad \text{for all } s \in \States.
+  \label{eq:td_unbiased}
+\end{equation}
+That is, $\{\delta_t^\policy\}$ is a martingale difference sequence with
+respect to the filtration generated by $(S_0, A_0, R_1, S_1, \ldots)$.
+\end{lemma}
+
+\begin{proof}
+Compute the conditional expectation directly:
+\begin{align}
+  \E_\policy\bigl[\delta_t^\policy \mid S_t = s\bigr]
+  &= \E_\policy\bigl[R_{t+1} + \discount \Vpi(S_{t+1})
+     - \Vpi(S_t) \mid S_t = s\bigr] \nonumber\\
+  &= \E_\policy\bigl[R_{t+1} + \discount \Vpi(S_{t+1})
+     \mid S_t = s\bigr] - \Vpi(s) \nonumber\\
+  &= \sum_{a} \policy(a \mid s) \sum_{s'} \Trans(s' \mid s, a)
+     \bigl[r(s,a,s') + \discount \Vpi(s')\bigr] - \Vpi(s) \nonumber\\
+  &= (\Bellman^\policy \Vpi)(s) - \Vpi(s)
+   = \Vpi(s) - \Vpi(s) = 0,
+  \label{eq:td_unbiased_proof}
+\end{align}
+where the last equality uses the fact that $\Vpi$ is the fixed point
+of $\Bellman^\policy$.
+\end{proof}
+
+\begin{keyresult}[title={Return as Telescoping Sum of TD Errors}]
+\begin{lemma}[Telescoping Decomposition]
+\label{lem:return_telescope}
+Under the true value function $\Vpi$, the prediction error decomposes as
+\begin{equation}
+  \return - \Vpi(S_t) = \sum_{k=0}^{\infty} \discount^k
+  \delta_{t+k}^\policy.
+  \label{eq:return_telescope}
+\end{equation}
+\end{lemma}
+\end{keyresult}
+
+\begin{proof}
+Expand the right-hand side:
+\begin{align}
+  \sum_{k=0}^{\infty} \discount^k \delta_{t+k}^\policy
+  &= \sum_{k=0}^{\infty} \discount^k
+     \bigl[R_{t+k+1} + \discount \Vpi(S_{t+k+1})
+     - \Vpi(S_{t+k})\bigr] \nonumber\\
+  &= \sum_{k=0}^{\infty} \discount^k R_{t+k+1}
+     + \sum_{k=0}^{\infty} \discount^{k+1} \Vpi(S_{t+k+1})
+     - \sum_{k=0}^{\infty} \discount^k \Vpi(S_{t+k}).
+     \label{eq:telescope_expand}
+\end{align}
+Re-index the second sum with $j = k + 1$:
+\begin{align}
+  &= \return
+     + \sum_{j=1}^{\infty} \discount^j \Vpi(S_{t+j})
+     - \sum_{k=0}^{\infty} \discount^k \Vpi(S_{t+k}) \nonumber\\
+  &= \return
+     + \sum_{k=1}^{\infty} \discount^k \Vpi(S_{t+k})
+     - \Vpi(S_t)
+     - \sum_{k=1}^{\infty} \discount^k \Vpi(S_{t+k}) \nonumber\\
+  &= \return - \Vpi(S_t),
+  \label{eq:telescope_final}
+\end{align}
+where the telescoping cancellation eliminates all intermediate value
+terms. The boundary term $\lim_{k \to \infty} \discount^k \Vpi(S_{t+k})
+= 0$ since $\discount < 1$ and $\Vpi$ is bounded on the finite state
+space.
+\end{proof}
+
+\begin{rlconnection}[title={TD Errors as Prediction Errors}]
+Lemma~\ref{lem:return_telescope} shows that the return minus the value
+--- the total prediction error --- equals the sum of discounted one-step
+TD errors. This decomposition is the mathematical foundation for:
+\begin{itemize}[nosep]
+  \item The forward view of TD($\lambda$) (Lesson 48), where
+    exponentially weighted sums of TD errors define the $\lambda$-return.
+  \item Generalized Advantage Estimation (GAE), which uses truncated
+    versions of this sum for low-variance policy gradient estimation.
+\end{itemize}
+\end{rlconnection}
+
+\subsection{Convergence of TD(0)}
+\label{subsec:td0_convergence}
+
+We now prove the central result of this lesson: TD(0) converges to the
+true value function almost surely.
+
+\begin{assumption}[TD(0) Convergence Conditions]
+\label{ass:td0}
+We assume:
+\begin{enumerate}[nosep]
+  \item The MDP has finite state and action spaces.
+  \item The policy $\policy$ is stationary.
+  \item Every state $s \in \States$ is visited infinitely often.
+  \item The step sizes satisfy $\sum_{n=0}^\infty \alpha_n(s) = \infty$
+    and $\sum_{n=0}^\infty \alpha_n^2(s) < \infty$ for each
+    $s \in \States$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[title={Convergence of TD(0)}]
+\begin{theorem}[Convergence of TD(0)]
+\label{thm:td0_convergence}
+Under Assumption~\ref{ass:td0}, the TD(0)
+update~\eqref{eq:td0_update} converges to $\Vpi$ almost surely:
+\begin{equation}
+  V_n(s) \cas \Vpi(s) \quad \text{for all } s \in \States.
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We cast TD(0) as a stochastic approximation of the Bellman equation and
+verify all conditions of the Robbins--Monro theorem
+(Lesson 31, Theorem 3.1). The proof follows
+\citet{tsitsiklis1994} and \citet{jaakkola1994}.
+
+\textbf{Step 1: Express as stochastic approximation.}
+Fix a state $s$ and let $n_k(s)$ denote the time of the $k$-th visit
+to $s$. At these visits, the TD(0) update reads
+\begin{equation}
+  V_{k+1}(s) = V_k(s) + \alpha_k(s)\bigl[R_{n_k+1}
+  + \discount V_k(S_{n_k+1}) - V_k(s)\bigr].
+  \label{eq:td0_sa}
+\end{equation}
+Decompose the update target into its expected value plus noise:
+\begin{equation}
+  R_{n_k+1} + \discount V_k(S_{n_k+1})
+  = (\Bellman^\policy V_k)(s) + w_k(s),
+  \label{eq:td0_decomp}
+\end{equation}
+where $w_k(s) = R_{n_k+1} + \discount V_k(S_{n_k+1})
+- (\Bellman^\policy V_k)(s)$.
+
+\textbf{Step 2: Verify martingale noise.}
+Let $\mathcal{F}_k$ denote the filtration containing all information
+up to the $k$-th visit to $s$ (including $V_k$ and $S_{n_k} = s$).
+Then:
+\begin{align}
+  \E[w_k(s) \mid \mathcal{F}_k]
+  &= \E\bigl[R_{n_k+1} + \discount V_k(S_{n_k+1})
+     \mid S_{n_k} = s, V_k\bigr]
+     - (\Bellman^\policy V_k)(s) \nonumber\\
+  &= \sum_a \policy(a \mid s) \sum_{s'} \Trans(s' \mid s, a)
+     \bigl[r(s,a,s') + \discount V_k(s')\bigr]
+     - (\Bellman^\policy V_k)(s) \nonumber\\
+  &= (\Bellman^\policy V_k)(s) - (\Bellman^\policy V_k)(s)
+   = 0.
+  \label{eq:td0_noise_mg}
+\end{align}
+Thus $\{w_k(s)\}$ is a martingale difference sequence with respect
+to $\{\mathcal{F}_k\}$.
+
+\textbf{Step 3: Identify the expected update direction.}
+Substituting~\eqref{eq:td0_decomp} into~\eqref{eq:td0_sa}:
+\begin{equation}
+  V_{k+1}(s) = V_k(s) + \alpha_k(s)
+  \bigl[(\Bellman^\policy V_k)(s) - V_k(s) + w_k(s)\bigr].
+  \label{eq:td0_sa_clean}
+\end{equation}
+The deterministic driving function is
+$h(V)(s) = (\Bellman^\policy V)(s) - V(s)$, which has the unique root
+$V = \Vpi$ (the fixed point of $\Bellman^\policy$).
+
+\textbf{Step 4: Verify stability via contraction.}
+Since $\Bellman^\policy$ is a $\discount$-contraction in
+$\|\cdot\|_\infty$ (Lessons 45--46), for any $\alpha \in (0, 1]$:
+\begin{align}
+  \|V + \alpha\, h(V) - \Vpi\|_\infty
+  &= \|(1 - \alpha) V + \alpha\, \Bellman^\policy V - \Vpi\|_\infty
+     \nonumber\\
+  &= \|(1 - \alpha)(V - \Vpi)
+     + \alpha(\Bellman^\policy V - \Bellman^\policy \Vpi)\|_\infty
+     \nonumber\\
+  &\leq (1 - \alpha)\|V - \Vpi\|_\infty
+     + \alpha\,\discount\,\|V - \Vpi\|_\infty \nonumber\\
+  &= \bigl(1 - \alpha(1 - \discount)\bigr)\|V - \Vpi\|_\infty.
+  \label{eq:td0_contraction}
+\end{align}
+Since $\alpha(1 - \discount) > 0$, the expected update contracts the
+error toward zero, confirming that $h$ drives iterates toward $\Vpi$.
+
+\textbf{Step 5: Bound the noise variance.}
+By finiteness of the MDP, there exists $R_{\max} < \infty$ such that
+$|R_{t+1}| \leq R_{\max}$. The value iterates remain bounded
+throughout: $\|V_k\|_\infty \leq R_{\max}/(1 - \discount)$, which can
+be established by induction using~\eqref{eq:td0_contraction}. Therefore:
+\begin{equation}
+  \E\bigl[\|w_k(s)\|^2 \mid \mathcal{F}_k\bigr]
+  \leq C\bigl(1 + \|V_k\|_\infty^2\bigr)
+  \label{eq:td0_noise_bound}
+\end{equation}
+for a constant $C$ depending on $R_{\max}$, $\discount$, and
+$|\States|$.
+
+\medskip
+All five conditions of the Robbins--Monro theorem are verified: (1)
+step sizes, (2) martingale noise, (3) unique root of $h$, (4) stability
+via contraction, (5) bounded noise variance. Therefore
+$V_n(s) \to \Vpi(s)$ almost surely for all $s \in \States$.
+\end{proof}
+
+\begin{remark}[Convergence Despite Bootstrapping Bias]
+\label{rem:bootstrap_convergence}
+At any finite time, $V(S_{t+1}) \neq \Vpi(S_{t+1})$, so the TD
+target $R_{t+1} + \discount V(S_{t+1})$ is a biased estimate of
+$\Vpi(S_t)$. Why does TD(0) still converge? The contraction property
+(Step 4) provides the answer: the expected update direction
+$\Bellman^\policy V - V$ always points toward $\Vpi$, and the
+contraction ensures that the bootstrapping loop is stable --- the
+bias shrinks as $V$ approaches $\Vpi$, creating a virtuous cycle.
+\end{remark}
+
+\begin{example}[Two-State MDP]
+\label{ex:two_state}
+Consider an MDP with $\States = \{A, B\}$, a single action,
+deterministic transitions $A \to B \to A \to \cdots$, rewards
+$r(A) = 1$, $r(B) = 0$, and $\discount = 0.9$. The true values are
+$\Vpi(A) = 100/19 \approx 5.26$ and $\Vpi(B) \approx 4.74$.
+Starting from $V_0(A) = V_0(B) = 0$ with $\alpha = 0.1$, the first
+TD(0) update at $A$ gives $V_1(A) = 0.1(1 + 0) = 0.1$, gradually
+refining toward the true values through bootstrapping.
+\end{example}
+
+%% SECTION 5: BIAS-VARIANCE ANALYSIS
+\section{Bias--Variance Analysis}
+\label{sec:bias_variance}
+
+We now make precise the tradeoff between bias and variance that
+distinguishes TD(0) from MC.
+
+\begin{proposition}[Bias of the TD(0) Target]
+\label{prop:td0_bias}
+The conditional expectation of the TD(0) target is
+\begin{equation}
+  \E_\policy\bigl[R_{t+1} + \discount V(S_{t+1}) \mid S_t = s\bigr]
+  = (\Bellman^\policy V)(s),
+  \label{eq:td0_bias}
+\end{equation}
+which equals $\Vpi(s)$ if and only if $V = \Vpi$. Thus the TD(0)
+target is \emph{biased} whenever $V \neq \Vpi$.
+\end{proposition}
+
+\begin{proof}
+Direct computation:
+\begin{equation}
+  \E_\policy\bigl[R_{t+1} + \discount V(S_{t+1}) \mid S_t = s\bigr]
+  = \sum_a \policy(a \mid s) \sum_{s'} \Trans(s' \mid s, a)
+    \bigl[r(s,a,s') + \discount V(s')\bigr]
+  = (\Bellman^\policy V)(s).
+\end{equation}
+Since $\Vpi$ is the unique fixed point of $\Bellman^\policy$,
+$(\Bellman^\policy V)(s) = \Vpi(s)$ for all $s$ if and only if
+$V = \Vpi$.
+\end{proof}
+
+\begin{proposition}[Variance Reduction by TD(0)]
+\label{prop:td0_variance}
+For deterministic rewards, the variance of the TD(0) target satisfies
+\begin{equation}
+  \Var_\policy\!\bigl(R_{t+1} + \discount V(S_{t+1}) \mid S_t = s\bigr)
+  = \Var_\policy\!\bigl(r(s, A_t, S_{t+1}) + \discount V(S_{t+1})
+    \mid S_t = s\bigr),
+  \label{eq:td0_variance}
+\end{equation}
+which depends only on the randomness of the next transition
+$(A_t, S_{t+1})$. In contrast, $\Var_\policy(\return \mid S_t = s)$
+depends on all future transitions.
+\end{proposition}
+
+\begin{proof}
+Since $R_{t+1} + \discount V(S_{t+1})$ is fully determined by
+$(S_t, A_t, S_{t+1})$, its variance involves only the randomness of
+the next action and transition. Using the law of total variance with
+$V = \Vpi$:
+\begin{equation}
+  \Var_\policy(\return \mid S_t)
+  = \underbrace{\Var_\policy\!\bigl(R_{t+1} + \discount \Vpi(S_{t+1})
+    \mid S_t\bigr)}_{\text{one-step variance}}
+  + \discount^2 \underbrace{\E_\policy\bigl[\Var_\policy(G_{t+1}
+    \mid S_{t+1}) \mid S_t\bigr]}_{\text{future variance } \geq 0}.
+  \label{eq:variance_decomp}
+\end{equation}
+The TD(0) target captures only the first term, eliminating the
+non-negative future variance entirely.
+\end{proof}
+
+\begin{keyresult}[title={Bias--Variance Tradeoff: MC vs TD(0)}]
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Bias} & \textbf{Variance} \\
+\midrule
+MC ($\return$) & Zero & High (all future steps) \\
+TD(0) ($R_{t+1} + \discount V(S_{t+1})$)
+  & Nonzero (when $V \neq \Vpi$) & Low (one step) \\
+\bottomrule
+\end{tabular}
+\end{center}
+The $n$-step TD methods developed next provide a continuum between
+these two extremes.
+\end{keyresult}
+
+\begin{example}[Variance Comparison]
+\label{ex:variance}
+In a chain with $\discount = 0.99$ (effective horizon $\approx 100$)
+and per-step reward variance $\sigma^2$, the MC return variance is
+approximately $\sum_{k=0}^{99} \discount^{2k}\sigma^2 \approx
+50\sigma^2$, while the TD(0) target variance is approximately
+$\sigma^2$ --- a 50-fold reduction.
+\end{example}
+
+%% SECTION 6: N-STEP TD PREDICTION
+\section{$n$-Step TD Prediction}
+\label{sec:nstep}
+
+The $n$-step TD method interpolates between TD(0) (one-step bootstrap)
+and MC (full return) by using $n$ actual rewards before bootstrapping.
+
+\begin{definition}[$n$-Step Return]
+\label{def:nstep_return}
+The \emph{$n$-step return} from time $t$ is
+\begin{equation}
+  G_t^{(n)} = \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+  + \discount^n V(S_{t+n}).
+  \label{eq:nstep_return}
+\end{equation}
+For $n = 1$, this reduces to the TD(0) target
+$R_{t+1} + \discount V(S_{t+1})$. In the limit $n \to \infty$
+(with episode length $T$), the bootstrap term
+$\discount^n V(S_{t+n}) \to 0$ and $G_t^{(n)} \to \return$.
+\end{definition}
+
+\begin{definition}[$n$-Step TD Update]
+\label{def:nstep_update}
+The \emph{$n$-step TD update} is
+\begin{equation}
+  V(S_t) \leftarrow V(S_t)
+  + \alpha\bigl[G_t^{(n)} - V(S_t)\bigr].
+  \label{eq:nstep_update}
+\end{equation}
+\end{definition}
+
+\begin{example}[$n$-Step Returns in a Chain]
+\label{ex:nstep_chain}
+Consider a chain $A \to B \to C \to D$ with $\discount = 0.9$,
+rewards $r(A) = 1, r(B) = 0, r(C) = 2$, and estimates
+$V(B) = 3, V(C) = 4, V(D) = 2$. From state $A$:
+$G_A^{(1)} = 1 + 0.9(3) = 3.7$,
+$G_A^{(2)} = 1 + 0 + 0.81(4) = 4.24$,
+$G_A^{(3)} = 1 + 0 + 1.62 + 0.729(2) = 4.078$.
+Each uses more actual rewards and less bootstrapping.
+\end{example}
+
+\subsection{Telescoping Decomposition}
+\label{subsec:nstep_telescope}
+
+\begin{lemma}[$n$-Step Return as Telescoping Sum of TD Errors]
+\label{lem:nstep_telescope}
+The $n$-step prediction error decomposes as
+\begin{equation}
+  G_t^{(n)} - V(S_t) = \sum_{k=0}^{n-1} \discount^k \delta_{t+k},
+  \label{eq:nstep_telescope}
+\end{equation}
+where $\delta_{t+k} = R_{t+k+1} + \discount V(S_{t+k+1}) - V(S_{t+k})$.
+\end{lemma}
+
+\begin{proof}
+Expand the right-hand side:
+\begin{align}
+  \sum_{k=0}^{n-1} \discount^k \delta_{t+k}
+  &= \sum_{k=0}^{n-1} \discount^k
+     \bigl[R_{t+k+1} + \discount V(S_{t+k+1}) - V(S_{t+k})\bigr]
+     \nonumber\\
+  &= \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+     + \sum_{k=0}^{n-1} \discount^{k+1} V(S_{t+k+1})
+     - \sum_{k=0}^{n-1} \discount^k V(S_{t+k}).
+     \label{eq:nstep_expand}
+\end{align}
+Re-index the second sum with $j = k + 1$:
+\begin{align}
+  &= \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+     + \sum_{j=1}^{n} \discount^j V(S_{t+j})
+     - \sum_{k=0}^{n-1} \discount^k V(S_{t+k}) \nonumber\\
+  &= \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+     + \discount^n V(S_{t+n}) - V(S_t)
+   = G_t^{(n)} - V(S_t),
+  \label{eq:nstep_telescope_final}
+\end{align}
+where the telescoping cancellation eliminates all intermediate value
+terms $\discount^k V(S_{t+k})$ for $k = 1, \ldots, n-1$.
+\end{proof}
+
+\begin{remark}[Connecting to the Infinite Telescoping]
+\label{rem:nstep_infinite}
+Lemma~\ref{lem:nstep_telescope} is the finite-$n$ analogue of
+Lemma~\ref{lem:return_telescope}. As $n \to \infty$, the $n$-step
+decomposition~\eqref{eq:nstep_telescope} approaches the infinite
+decomposition~\eqref{eq:return_telescope}, with the bootstrap term
+$\discount^n V(S_{t+n}) \to 0$ absorbed into the tail of the TD error
+sum.
+\end{remark}
+
+\subsection{Convergence of $n$-Step TD}
+\label{subsec:nstep_convergence}
+
+\begin{theorem}[Convergence of $n$-Step TD]
+\label{thm:nstep_convergence}
+Under Assumption~\ref{ass:td0}, the $n$-step TD
+update~\eqref{eq:nstep_update} converges to $\Vpi$ almost surely
+for any fixed $n \geq 1$.
+\end{theorem}
+
+\begin{proof}
+Define the $n$-step Bellman operator
+$\Bellman_n^\policy \colon \R^{|\States|} \to \R^{|\States|}$ by
+\begin{equation}
+  (\Bellman_n^\policy V)(s)
+  = \E_\policy\bigl[G_t^{(n)} \mid S_t = s\bigr]
+  = \E_\policy\!\left[\sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+    + \discount^n V(S_{t+n}) \;\middle|\; S_t = s\right].
+  \label{eq:nstep_operator}
+\end{equation}
+
+\textbf{Step 1: $\Bellman_n^\policy$ is a $\discount^n$-contraction.}
+The operator $\Bellman_n^\policy$ is the $n$-fold composition
+$(\Bellman^\policy)^n$. Since $\Bellman^\policy$ is a
+$\discount$-contraction in $\|\cdot\|_\infty$, we have for any
+$V_1, V_2$:
+\begin{equation}
+  \|\Bellman_n^\policy V_1 - \Bellman_n^\policy V_2\|_\infty
+  = \|(\Bellman^\policy)^n V_1 - (\Bellman^\policy)^n V_2\|_\infty
+  \leq \discount^n \|V_1 - V_2\|_\infty.
+\end{equation}
+The unique fixed point of $\Bellman_n^\policy$ is $\Vpi$
+(since $\Bellman^\policy \Vpi = \Vpi$ implies
+$(\Bellman^\policy)^n \Vpi = \Vpi$).
+
+\textbf{Step 2: Cast as stochastic approximation.}
+The $n$-step TD update at the $k$-th visit to state $s$ has the form
+\begin{equation}
+  V_{k+1}(s) = V_k(s)
+  + \alpha_k(s)\bigl[(\Bellman_n^\policy V_k)(s) - V_k(s)
+    + w_k^{(n)}(s)\bigr],
+\end{equation}
+where $w_k^{(n)}(s) = G_t^{(n)} - (\Bellman_n^\policy V_k)(s)$ is
+zero-mean noise (by the same argument as Step 2 in the TD(0) proof).
+
+\textbf{Step 3: Verify remaining conditions.}
+The driving function $h_n(V)(s) = (\Bellman_n^\policy V)(s) - V(s)$
+has unique root $\Vpi$. The $\discount^n$-contraction ensures stability
+(indeed, the contraction rate is \emph{stronger} than TD(0)). The
+noise variance is bounded since rewards are bounded and $n$ is finite.
+Step-size conditions hold by assumption.
+
+All conditions of the Robbins--Monro theorem are satisfied, so
+$V_k(s) \to \Vpi(s)$ almost surely for all $s$.
+\end{proof}
+
+\begin{rlconnection}[title={The Spectrum from TD(0) to MC}]
+The $n$-step TD family provides a continuum parameterized by $n$:
+\begin{itemize}[nosep]
+  \item $n = 1$: TD(0) --- maximal bias, minimal variance, fastest
+    per-step computation.
+  \item $n = T$ (episode length): MC --- zero bias, maximal variance,
+    requires complete episodes.
+  \item Intermediate $n$: trades off bias and variance; optimal $n$
+    depends on the problem.
+\end{itemize}
+In deep RL practice, moderate values of $n$ (typically 5--20) combined
+with value function baselines yield the best empirical performance.
+\end{rlconnection}
+
+\begin{example}[Contraction Rate vs.\ Variance]
+\label{ex:nstep_bias}
+For $\discount = 0.99$: TD(0) contracts at rate $0.99$, while 10-step
+TD contracts at rate $0.99^{10} \approx 0.904$ (faster). But the
+10-step target has higher variance from 10 random transitions. The
+optimal $n$ balances faster contraction against noisier updates.
+\end{example}
+
+%% SECTION 7: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[TD Error Variance]
+\textnormal{(\(*\))} \\
+Consider a finite MDP with deterministic rewards. Show that the variance
+of the TD error under the true value function satisfies
+\[
+  \Var_\policy(\delta_t^\policy \mid S_t = s)
+  = \Var_\policy\!\bigl(R_{t+1} + \discount \Vpi(S_{t+1})
+    \mid S_t = s\bigr).
+\]
+Interpret this as the one-step variance that TD(0) uses.
+\end{exercise}
+
+\begin{exercise}[MC as $n$-Step TD]
+\textnormal{(\(*\))} \\
+For an episodic MDP with episode length $T$ starting from time $t = 0$,
+verify directly from Definition~\ref{def:nstep_return} that
+$G_0^{(T)} = \return[0]$ when $V(S_T) = 0$ (terminal state has zero
+value).
+\end{exercise}
+
+\begin{exercise}[Contraction Rate of the $n$-Step Operator]
+\textnormal{(\(**\))} \\
+Let $\discount = 0.95$ and $n = 5$. Compute the contraction rate
+$\discount^n$ and determine how many applications of $\Bellman_n^\policy$
+are needed to reduce the initial error $\|V_0 - \Vpi\|_\infty$ by a
+factor of $10^{-3}$.
+
+\textit{Hint:} Solve $\discount^{nk} \leq 10^{-3}$ for $k$.
+\end{exercise}
+
+\begin{exercise}[Stochastic Approximation Decomposition for $n = 2$]
+\textnormal{(\(**\))} \\
+Write out the full stochastic approximation decomposition for the
+2-step TD update: express $G_t^{(2)} - V(S_t)$ as
+$(\Bellman_2^\policy V)(S_t) - V(S_t) + w_t^{(2)}$, and verify
+explicitly that $\E[w_t^{(2)} \mid S_t, V] = 0$.
+\end{exercise}
+
+\begin{exercise}[Bias Quantification]
+\textnormal{(\(***\))} \\
+Let $V$ be an arbitrary value function estimate with
+$\|V - \Vpi\|_\infty \leq \varepsilon$. Show that the bias of the
+$n$-step return satisfies
+\[
+  \bigl|\E_\policy\bigl[G_t^{(n)} \mid S_t = s\bigr]
+  - \Vpi(s)\bigr| \leq \discount^n \varepsilon
+  \quad \text{for all } s \in \States.
+\]
+Conclude that larger $n$ reduces the bias geometrically.
+
+\textit{Hint:} Use the fact that $\Bellman_n^\policy$ is a
+$\discount^n$-contraction with fixed point $\Vpi$.
+\end{exercise}
+
+\begin{exercise}[Variance of the $n$-Step Return]
+\textnormal{(\(***\))} \\
+Assuming $V = \Vpi$ and deterministic rewards, derive a recursive
+formula for $\Var_\policy(G_t^{(n)} \mid S_t = s)$ in terms of one-step
+transition variances. Show that $\Var_\policy(G_t^{(n)} \mid S_t)$ is
+non-decreasing in $n$, confirming that longer lookback increases
+variance.
+
+\textit{Hint:} Use the telescoping decomposition
+$G_t^{(n)} - \Vpi(S_t) = \sum_{k=0}^{n-1} \discount^k
+\delta_{t+k}^\policy$ and the fact that the $\delta_{t+k}^\policy$
+are martingale differences.
+\end{exercise}
+
+%% SECTION 8: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \textbf{TD error}
+    $\delta_t = R_{t+1} + \discount V(S_{t+1}) - V(S_t)$ measures the
+    one-step prediction discrepancy; under the true value function, it
+    forms a \emph{martingale difference sequence}
+    ($\E[\delta_t^\policy \mid S_t] = 0$).
+
+  \item The \textbf{telescoping decomposition}
+    $\return - \Vpi(S_t) = \sum_{k=0}^\infty \discount^k
+    \delta_{t+k}^\policy$ decomposes the total prediction error into
+    a sum of discounted one-step TD errors --- the foundation for
+    TD($\lambda$) and GAE.
+
+  \item \textbf{TD(0)} converges to $\Vpi$ almost surely under standard
+    conditions, proved by casting it as a stochastic approximation of
+    the Bellman equation: the Bellman operator's contraction property
+    provides stability, and the martingale noise has bounded variance.
+
+  \item \textbf{Bias--variance tradeoff}: MC targets are unbiased but
+    have high variance (accumulated over all future steps); TD(0)
+    targets have low variance (one step) but are biased when
+    $V \neq \Vpi$.
+
+  \item The \textbf{$n$-step return}
+    $G_t^{(n)} = \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
+    + \discount^n V(S_{t+n})$ interpolates between TD(0) ($n=1$) and
+    MC ($n \to \infty$), with contraction rate $\discount^n$.
+
+  \item \textbf{$n$-step TD converges} for any fixed $n \geq 1$ via
+    the same stochastic approximation framework, with the $n$-step
+    Bellman operator $\Bellman_n^\policy = (\Bellman^\policy)^n$
+    providing a $\discount^n$-contraction.
+\end{itemize}
+
+%% SECTION 9: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 48} extends the $n$-step framework to
+    TD($\lambda$), which takes a geometrically weighted average of all
+    $n$-step returns, and develops the theory of eligibility traces for
+    efficient incremental computation.
+
+  \item \textbf{Lesson 49} applies TD errors to the control setting,
+    developing SARSA, Q-learning, and Expected SARSA with convergence
+    proofs.
+
+  \item \citet{sutton1988} is the original paper introducing TD learning
+    and proving convergence for the linear case. The stochastic
+    approximation approach used here follows \citet{tsitsiklis1994} and
+    \citet{jaakkola1994}.
+
+  \item \citet[Chapter 7]{suttonbarto2018} provides extensive empirical
+    comparisons of $n$-step methods on benchmark tasks, illustrating the
+    bias--variance tradeoff in practice.
+
+  \item \citet{borkar2008} gives the definitive treatment of stochastic
+    approximation via the ODE method, providing the theoretical
+    foundations underlying all convergence proofs in this lesson.
+
+  \item For the extension to function approximation, where TD methods
+    can diverge (the ``deadly triad''), see \citet{tsitsiklis1997}
+    and \citet{baird1995}.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}

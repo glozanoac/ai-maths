@@ -10,7 +10,7 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 
 Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf -- 102 sessions). Each phase directory has its own `README.md` with full details.
 
-**Total: 46 documents** (22 exist, 24 planned)
+**Total: 47 documents** (24 exist, 23 planned)
 
 ### Phase 00 -- Prerequisites (12 lessons)
 
@@ -43,55 +43,56 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 | 20 | `01-math-foundations/04-game-theory/01-static-and-extensive-form-games` | Normal-form games, Nash equilibrium, minimax theorem, correlated equilibrium, extensive-form games, subgame perfection | **exists** |
 | 21 | `01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info` | Repeated games, folk theorems, fictitious play, no-regret learning, Bayesian games, PBE, signaling games, potential games | **exists** |
 
-### Phase 02 -- Core Reinforcement Learning (4 docs)
+### Phase 02 -- Core Reinforcement Learning (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
 | 22 | `02-core-rl/01-mdp/01-mdp-formulation-and-finite-horizon` | MDP model, policies, finite-horizon MDPs, backward induction | planned |
 | 23 | `02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming` | Discounted/average reward, Bellman equations, contraction, value/policy iteration, LP formulation | planned |
-| 24 | `02-core-rl/02-rl-algorithms/temporal-difference-learning` | TD(0), n-step TD, TD(lambda), SARSA, Q-learning, function approximation, deadly triad | **exists** |
-| 25 | `02-core-rl/03-policy-gradient/policy-gradient-theorem` | Policy gradient theorem, REINFORCE, baseline variance reduction, natural gradient, Fisher information | **exists** |
+| 24 | `02-core-rl/02-rl-algorithms/lesson-47-td0-and-nstep-td` | MC baseline, TD(0) update, TD error properties, convergence of TD(0) via SA, bias-variance analysis, n-step returns, n-step TD convergence | **exists** |
+| 25 | `02-core-rl/02-rl-algorithms/lesson-48-td-lambda-eligibility-traces` | Lambda-return (forward view), special cases, lambda-return decomposition, eligibility traces (backward view), forward-backward equivalence, trace variants | **exists** |
+| 26 | `02-core-rl/03-policy-gradient/policy-gradient-theorem` | Policy gradient theorem, REINFORCE, baseline variance reduction, natural gradient, Fisher information | **exists** |
 
 ### Phase 03 -- Deep Learning (4 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 26 | `03-deep-learning/01-neural-networks/01-approximation-theory` | Universal approximation (Cybenko, Hornik), Barron's theorem, approximation rates, Rademacher complexity, NTK perspective | planned |
-| 27 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
-| 28 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
-| 29 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
+| 27 | `03-deep-learning/01-neural-networks/01-approximation-theory` | Universal approximation (Cybenko, Hornik), Barron's theorem, approximation rates, Rademacher complexity, NTK perspective | planned |
+| 28 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
+| 29 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
+| 30 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
 
 ### Phase 04 -- Deep Reinforcement Learning (7 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 30 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
-| 31 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
-| 32 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
-| 33 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
-| 34 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
-| 35 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
-| 36 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
+| 31 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
+| 32 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
+| 33 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
+| 34 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
+| 35 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
+| 36 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
+| 37 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
 
 ### Phase 05 -- Multi-Agent RL (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 37 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
-| 38 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
-| 39 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
-| 40 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
-| 41 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
+| 38 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
+| 39 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
+| 40 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
+| 41 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
+| 42 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
 
 ### Phase 06 -- Aerospace Applications (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 42 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
-| 43 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
-| 44 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
-| 45 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
-| 46 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
+| 43 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
+| 44 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
+| 45 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
+| 46 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
+| 47 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
 
 ## Dependency Tree / Reading Order
 

@@ -1,0 +1,817 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 48: TD($\lambda$) and Eligibility Traces}}
+\fancyhead[R]{\thepage}
+\title{Lesson 48: TD($\lambda$) and Eligibility Traces}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+In Lesson 47 we showed that $n$-step TD prediction interpolates between
+TD(0) and Monte Carlo: small $n$ yields low variance but high bias,
+while large $n$ yields low bias but high variance. Choosing the ``right''
+$n$ requires prior knowledge of the problem --- and the optimal $n$ may
+differ across states and time steps.
+
+TD($\lambda$) resolves this by averaging \emph{all} $n$-step returns
+simultaneously with geometrically decaying weights. The parameter
+$\lambda \in [0,1]$ smoothly controls the bias--variance tradeoff:
+$\lambda = 0$ recovers TD(0), $\lambda = 1$ recovers MC, and
+intermediate values blend all horizons. The resulting $\lambda$-return
+admits a remarkable decomposition as an exponentially weighted sum of
+TD errors, which leads to the concept of \emph{eligibility traces} ---
+a memory mechanism that allows incremental, $O(|\States|)$-per-step
+computation of what would otherwise require the entire future trajectory.
+The tools developed in this lesson will let us prove the exact
+equivalence between the forward view (the $\lambda$-return) and the
+backward view (eligibility traces), unifying the theoretical and
+computational perspectives on TD learning.
+
+\begin{rlconnection}[title={Where TD($\lambda$) and Eligibility Traces Appear}]
+\begin{itemize}[nosep]
+  \item \textbf{Generalized Advantage Estimation (GAE)} uses the
+    $\lambda$-weighted TD error sum
+    $\hat{A}_t = \sum_{k=0}^\infty (\discount\lambda)^k \delta_{t+k}$
+    as a low-variance advantage estimator in PPO and TRPO.
+  \item \textbf{SARSA($\lambda$) and Q($\lambda$)} extend eligibility
+    traces to the control setting, propagating TD errors backward
+    through recently visited state--action pairs.
+  \item \textbf{True online TD($\lambda$)} with Dutch traces achieves
+    exact equivalence with the online $\lambda$-return algorithm, the
+    gold standard for incremental multi-step learning.
+  \item \textbf{Actor--critic methods} use eligibility traces in both
+    the critic (for value estimation) and the actor (for policy
+    gradient estimation).
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+TD(0) update rule, TD error $\delta_t$, unbiasedness of the TD error
+under $\Vpi$ (Lesson 47, Lemma 4.2), the telescoping decomposition
+$\return - \Vpi(S_t) = \sum_{k=0}^\infty \discount^k
+\delta_{t+k}^\policy$ (Lesson 47, Lemma 4.4), $n$-step return and its
+telescoping decomposition (Lesson 47, Lemma 6.3). Stochastic
+approximation convergence theorem (Lesson 31). Absolute convergence
+and interchange of summation for double series.
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{Define} the $\lambda$-return and \emph{verify} that
+    $\lambda = 0$ gives the TD(0) target and $\lambda = 1$ gives the
+    MC return.
+  \item \emph{Prove} the $\lambda$-return decomposition theorem: the
+    $\lambda$-return minus the current value equals a sum of
+    $(\discount\lambda)^k$-weighted TD errors.
+  \item \emph{Define} the accumulating eligibility trace and the
+    TD($\lambda$) backward view update.
+  \item \emph{Prove} the forward--backward equivalence theorem in the
+    offline setting by unrolling traces, interchanging summation, and
+    identifying the $\lambda$-return.
+  \item \emph{Explain} the computational advantage of the backward view
+    and \emph{compare} trace variants (accumulating, replacing, Dutch).
+  \item \emph{State} the convergence guarantee for TD($\lambda$) and
+    identify the conditions under which it holds.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapter 12]{suttonbarto2018} --- Eligibility traces,
+    forward and backward views, TD($\lambda$), and trace variants
+    (accumulating, replacing, Dutch).
+  \item \citet[Section 3]{sutton1988} --- The original formulation of
+    TD($\lambda$) and the forward view.
+  \item \citet[Chapter 5]{bertsekas1996} --- Convergence analysis of
+    TD($\lambda$) via stochastic approximation.
+  \item \citet[Section 4.3]{szepesvari2010} --- Compact treatment of
+    $\lambda$-returns and their convergence properties.
+  \item \citet{tsitsiklis1997} --- Analysis of TD($\lambda$) with
+    linear function approximation, including convergence and error
+    bounds.
+\end{itemize}
+
+%% SECTION 3: THE LAMBDA-RETURN (FORWARD VIEW)
+\section{The $\lambda$-Return: Forward View}
+\label{sec:lambda_return}
+
+Rather than selecting a single $n$ for the $n$-step return, TD($\lambda$)
+takes a geometrically weighted average of \emph{all} $n$-step returns.
+
+\begin{definition}[$\lambda$-Return]
+\label{def:lambda_return}
+For $\lambda \in [0,1]$, the \emph{$\lambda$-return} from time $t$ is
+\begin{equation}
+  G_t^\lambda = (1 - \lambda)
+  \sum_{n=1}^{\infty} \lambda^{n-1} G_t^{(n)},
+  \label{eq:lambda_return}
+\end{equation}
+where $G_t^{(n)} = \sum_{k=0}^{n-1} \discount^k R_{t+k+1}
++ \discount^n V(S_{t+n})$ is the $n$-step return
+(Lesson 47, Definition 6.1). The normalization factor $(1 - \lambda)$
+ensures the weights sum to one:
+$(1 - \lambda)\sum_{n=1}^\infty \lambda^{n-1} = 1$ for
+$\lambda \in [0,1)$.
+\end{definition}
+
+\begin{remark}[Geometric Weighting]
+\label{rem:geometric}
+The weight assigned to $G_t^{(n)}$ is $(1-\lambda)\lambda^{n-1}$,
+which decays geometrically in $n$. Short-horizon returns receive more
+weight when $\lambda$ is small; long-horizon returns dominate when
+$\lambda$ is close to 1. The geometric weighting is not merely
+convenient --- it is the unique memoryless distribution on the positive
+integers, which leads to the recursive eligibility trace structure in
+the backward view.
+\end{remark}
+
+\subsection{Special Cases}
+\label{subsec:special_cases}
+
+\begin{proposition}[Special Cases of the $\lambda$-Return]
+\label{prop:lambda_special}
+\begin{enumerate}
+  \item When $\lambda = 0$:
+    $G_t^0 = G_t^{(1)} = R_{t+1} + \discount V(S_{t+1})$
+    (the TD(0) target).
+  \item When $\lambda = 1$: $G_t^1 = \return$ (the full MC return).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{Case $\lambda = 0$.} By Definition~\ref{def:lambda_return}:
+\begin{equation}
+  G_t^0 = (1 - 0)\sum_{n=1}^{\infty} 0^{n-1} G_t^{(n)}
+  = 1 \cdot G_t^{(1)} = R_{t+1} + \discount V(S_{t+1}).
+\end{equation}
+
+\textbf{Case $\lambda = 1$.}
+We use the telescoping decomposition from Lesson 47
+(Lemma 6.3): $G_t^{(n)} - V(S_t) = \sum_{k=0}^{n-1}
+\discount^k \delta_{t+k}$. Then:
+\begin{align}
+  G_t^1 - V(S_t)
+  &= \lim_{\lambda \to 1^-} (1-\lambda) \sum_{n=1}^{\infty}
+     \lambda^{n-1} \bigl[G_t^{(n)} - V(S_t)\bigr] \nonumber\\
+  &= \lim_{\lambda \to 1^-} (1-\lambda) \sum_{n=1}^{\infty}
+     \lambda^{n-1} \sum_{k=0}^{n-1} \discount^k \delta_{t+k}
+     \nonumber\\
+  &= \lim_{\lambda \to 1^-} \sum_{k=0}^{\infty}
+     (\discount\lambda)^k \delta_{t+k}
+   = \sum_{k=0}^{\infty} \discount^k \delta_{t+k}
+   = \return - V(S_t),
+  \label{eq:lambda1_proof}
+\end{align}
+where the second-to-last equality uses the $\lambda$-return
+decomposition (proved below in Theorem~\ref{thm:lambda_decomp})
+and the final equality is the infinite telescoping decomposition
+(Lesson 47, Lemma 4.4) applied with $V = \Vpi$, together with
+$\lim_{n \to \infty} \discount^n V(S_{t+n}) = 0$.
+Thus $G_t^1 = \return$.
+\end{proof}
+
+\begin{example}[$\lambda$-Return Interpolation]
+\label{ex:lambda_interp}
+Consider a trajectory with TD errors
+$\delta_t = 2, \delta_{t+1} = -1, \delta_{t+2} = 3$ and
+$\discount = 0.9$. For different values of $\lambda$:
+\begin{align*}
+  \lambda = 0: &\quad G_t^0 - V(S_t) = \delta_t = 2, \\
+  \lambda = 0.5: &\quad G_t^{0.5} - V(S_t)
+    = 2 + (0.45)(-1) + (0.45)^2 \cdot 3 + \cdots \approx 2.16, \\
+  \lambda = 1: &\quad G_t^1 - V(S_t)
+    = 2 + 0.9(-1) + 0.81(3) + \cdots = 3.53 + \cdots
+\end{align*}
+Higher $\lambda$ incorporates TD errors from further into the future.
+\end{example}
+
+%% SECTION 4: LAMBDA-RETURN DECOMPOSITION
+\section{The $\lambda$-Return Decomposition}
+\label{sec:lambda_decomp}
+
+The central analytical result for the $\lambda$-return expresses it as
+an exponentially weighted sum of TD errors.
+
+\begin{keyresult}[title={$\lambda$-Return Decomposition}]
+\begin{theorem}[$\lambda$-Return Decomposition]
+\label{thm:lambda_decomp}
+For $\lambda \in [0,1)$, the $\lambda$-return satisfies
+\begin{equation}
+  G_t^\lambda - V(S_t) = \sum_{k=0}^{\infty}
+  (\discount\lambda)^k \delta_{t+k}.
+  \label{eq:lambda_decomp}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Starting from Definition~\ref{def:lambda_return} and applying the
+$n$-step telescoping decomposition (Lesson 47, Lemma 6.3:
+$G_t^{(n)} - V(S_t) = \sum_{k=0}^{n-1} \discount^k \delta_{t+k}$):
+\begin{align}
+  G_t^\lambda - V(S_t)
+  &= (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1}
+     \bigl[G_t^{(n)} - V(S_t)\bigr] \nonumber\\
+  &= (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1}
+     \sum_{k=0}^{n-1} \discount^k \delta_{t+k}.
+  \label{eq:decomp_step1}
+\end{align}
+We now interchange the order of summation. The double sum ranges over
+pairs $(n, k)$ with $n \geq 1$ and $0 \leq k \leq n - 1$. For a
+fixed $k \geq 0$, the index $n$ ranges over $n \geq k + 1$. The
+interchange is justified by absolute convergence: since
+$|\delta_{t+k}|$ is bounded (by $R_{\max}(1 + \discount)/(1-\discount)$
+on a finite MDP) and $\discount\lambda < 1$, the double sum converges
+absolutely.
+
+Interchanging:
+\begin{align}
+  G_t^\lambda - V(S_t)
+  &= (1 - \lambda) \sum_{k=0}^{\infty} \discount^k \delta_{t+k}
+     \sum_{n=k+1}^{\infty} \lambda^{n-1}.
+  \label{eq:decomp_step2}
+\end{align}
+Evaluate the inner geometric series. With the substitution $m = n - k - 1$
+(so $n = m + k + 1$ and $\lambda^{n-1} = \lambda^{m+k}$):
+\begin{equation}
+  \sum_{n=k+1}^{\infty} \lambda^{n-1}
+  = \sum_{m=0}^{\infty} \lambda^{m+k}
+  = \lambda^k \sum_{m=0}^{\infty} \lambda^m
+  = \frac{\lambda^k}{1 - \lambda}.
+  \label{eq:geometric_eval}
+\end{equation}
+Substituting~\eqref{eq:geometric_eval}
+into~\eqref{eq:decomp_step2}:
+\begin{equation}
+  G_t^\lambda - V(S_t)
+  = (1 - \lambda) \sum_{k=0}^{\infty} \discount^k \delta_{t+k}
+    \cdot \frac{\lambda^k}{1 - \lambda}
+  = \sum_{k=0}^{\infty} (\discount\lambda)^k \delta_{t+k}.
+  \label{eq:decomp_final}
+\end{equation}
+This completes the proof.
+\end{proof}
+
+\begin{remark}[Interpretation]
+\label{rem:decomp_interp}
+Theorem~\ref{thm:lambda_decomp} reveals the structure of the
+$\lambda$-return: the prediction error $G_t^\lambda - V(S_t)$ is a
+weighted sum of TD errors with exponentially decaying weights
+$(\discount\lambda)^k$. The parameter $\lambda$ controls the
+effective horizon:
+\begin{itemize}[nosep]
+  \item $\lambda = 0$: Only the immediate TD error $\delta_t$
+    contributes (TD(0)).
+  \item $\lambda = 1$: All TD errors contribute with weights
+    $\discount^k$ (MC return, by Lesson 47, Lemma 4.4).
+  \item $0 < \lambda < 1$: The effective number of contributing TD
+    errors is approximately $1/(1 - \discount\lambda)$.
+\end{itemize}
+This is the \emph{forward view}: at each time step, we look forward
+at the sequence of future TD errors.
+\end{remark}
+
+\begin{example}[Finite Episode]
+\label{ex:finite_episode}
+For an episode of length $T$ (with $V(S_T) = 0$), the
+decomposition~\eqref{eq:lambda_decomp} truncates to
+\begin{equation}
+  G_t^\lambda - V(S_t) = \sum_{k=0}^{T-1-t}
+  (\discount\lambda)^k \delta_{t+k}.
+  \label{eq:finite_decomp}
+\end{equation}
+For $T = 3$, $t = 0$:
+$G_0^\lambda - V(S_0) = \delta_0 + \discount\lambda\,\delta_1
++ (\discount\lambda)^2 \delta_2$.
+\end{example}
+
+The forward view requires waiting until the end of the episode to
+compute $G_t^\lambda$. We now develop the backward view, which achieves
+the same result incrementally.
+
+%% SECTION 5: ELIGIBILITY TRACES (BACKWARD VIEW)
+\section{Eligibility Traces and the Backward View}
+\label{sec:backward}
+
+\begin{definition}[Accumulating Eligibility Trace]
+\label{def:trace}
+The \emph{accumulating eligibility trace} for state $s$ is defined
+recursively:
+\begin{equation}
+  e_0(s) = 0, \qquad
+  e_t(s) = \discount\lambda\,e_{t-1}(s) + \indicator\{S_t = s\},
+  \label{eq:trace}
+\end{equation}
+where $\indicator\{S_t = s\}$ is the indicator that equals 1 if
+$S_t = s$ and 0 otherwise.
+\end{definition}
+
+\begin{remark}[Trace Intuition]
+\label{rem:trace_intuition}
+The trace $e_t(s)$ records a ``fading memory'' of recent visits to
+state $s$. Each visit increments the trace by 1; between visits, the
+trace decays by $\discount\lambda$ per step. A state visited recently
+and frequently has a high trace value. When a TD error $\delta_t$
+occurs, credit is assigned to each state proportionally to its current
+trace --- this is a form of temporal credit assignment.
+\end{remark}
+
+\begin{definition}[TD($\lambda$) Backward View Update]
+\label{def:backward_update}
+The \emph{TD($\lambda$) backward view} updates all states
+simultaneously at each step:
+\begin{equation}
+  V(s) \leftarrow V(s) + \alpha\,\delta_t\,e_t(s)
+  \quad \text{for all } s \in \States,
+  \label{eq:backward_update}
+\end{equation}
+where $\delta_t = R_{t+1} + \discount V(S_{t+1}) - V(S_t)$ is the
+current TD error and $e_t(s)$ is defined by~\eqref{eq:trace}.
+\end{definition}
+
+\begin{lemma}[Explicit Form of the Eligibility Trace]
+\label{lem:trace_explicit}
+The eligibility trace admits the closed-form expression
+\begin{equation}
+  e_t(s) = \sum_{j=0}^{t} (\discount\lambda)^{t-j}
+  \indicator\{S_j = s\}.
+  \label{eq:trace_explicit}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By induction on $t$.
+
+\textbf{Base case} ($t = 0$): $e_0(s) = \indicator\{S_0 = s\}$
+from~\eqref{eq:trace} (since $e_{-1}(s) = 0$ by convention, we get
+$e_0(s) = 0 + \indicator\{S_0 = s\}$). The
+formula~\eqref{eq:trace_explicit} gives
+$\sum_{j=0}^0 (\discount\lambda)^{0-0} \indicator\{S_0 = s\}
+= \indicator\{S_0 = s\}$. \checkmark
+
+\textbf{Inductive step.} Assume~\eqref{eq:trace_explicit} holds for
+$t - 1$. Then:
+\begin{align}
+  e_t(s)
+  &= \discount\lambda\,e_{t-1}(s) + \indicator\{S_t = s\}
+     \nonumber\\
+  &= \discount\lambda \sum_{j=0}^{t-1}
+     (\discount\lambda)^{t-1-j} \indicator\{S_j = s\}
+     + \indicator\{S_t = s\} \nonumber\\
+  &= \sum_{j=0}^{t-1} (\discount\lambda)^{t-j}
+     \indicator\{S_j = s\}
+     + (\discount\lambda)^0 \indicator\{S_t = s\} \nonumber\\
+  &= \sum_{j=0}^{t} (\discount\lambda)^{t-j}
+     \indicator\{S_j = s\}. \qedhere
+\end{align}
+\end{proof}
+
+\begin{example}[Trace Evolution]
+\label{ex:trace}
+Consider states $\{A, B, C\}$ with $\discount\lambda = 0.8$ and the
+trajectory $S_0 = A, S_1 = B, S_2 = A, S_3 = C$. The trace for
+state $A$ evolves as:
+\begin{align*}
+  e_0(A) &= 1, \\
+  e_1(A) &= 0.8 \cdot 1 + 0 = 0.8, \\
+  e_2(A) &= 0.8 \cdot 0.8 + 1 = 1.64, \\
+  e_3(A) &= 0.8 \cdot 1.64 + 0 = 1.312.
+\end{align*}
+At time $t = 2$, the revisit to $A$ causes the trace to jump above 1,
+reflecting the accumulated credit from two visits.
+\end{example}
+
+%% SECTION 6: FORWARD-BACKWARD EQUIVALENCE
+\section{Forward--Backward Equivalence}
+\label{sec:equivalence}
+
+We now prove the central theorem connecting the forward view
+(Section~\ref{sec:lambda_return}) and the backward view
+(Section~\ref{sec:backward}).
+
+\begin{keyresult}[title={Forward--Backward Equivalence}]
+\begin{theorem}[Equivalence of Forward and Backward Views]
+\label{thm:fb_equiv}
+In the \emph{offline} setting (all updates accumulated during an episode
+and applied at the episode's end), the total update to $V(s)$ from the
+backward view equals the total update from the forward view:
+\begin{equation}
+  \sum_{t=0}^{T-1} \alpha\,\delta_t\,e_t(s)
+  = \sum_{t=0}^{T-1} \alpha\bigl[G_t^\lambda - V(S_t)\bigr]
+    \indicator\{S_t = s\},
+  \label{eq:fb_equiv}
+\end{equation}
+where $T$ is the episode length.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We prove the identity~\eqref{eq:fb_equiv} by reorganizing the
+left-hand side through four steps: unrolling the trace, substituting,
+interchanging summation order, and identifying the $\lambda$-return
+decomposition.
+
+\textbf{Step 1: Unroll the eligibility trace.}
+By Lemma~\ref{lem:trace_explicit}:
+\begin{equation}
+  e_t(s) = \sum_{j=0}^{t} (\discount\lambda)^{t-j}
+  \indicator\{S_j = s\}.
+  \label{eq:fb_step1}
+\end{equation}
+
+\textbf{Step 2: Substitute into the backward view sum.}
+The total backward-view update (ignoring the common factor $\alpha$,
+which appears on both sides of~\eqref{eq:fb_equiv}) is:
+\begin{align}
+  \sum_{t=0}^{T-1} \delta_t\,e_t(s)
+  &= \sum_{t=0}^{T-1} \delta_t
+     \sum_{j=0}^{t} (\discount\lambda)^{t-j}
+     \indicator\{S_j = s\}.
+  \label{eq:fb_step2}
+\end{align}
+This is a double sum over pairs $(t, j)$ with
+$0 \leq j \leq t \leq T - 1$.
+
+\textbf{Step 3: Interchange the order of summation.}
+We swap the order of summation over $t$ and $j$. The summation region
+is $\{(t,j) : 0 \leq j \leq t \leq T - 1\}$. For a fixed $j$, the
+index $t$ ranges from $j$ to $T - 1$:
+\begin{align}
+  \sum_{t=0}^{T-1} \delta_t\,e_t(s)
+  &= \sum_{j=0}^{T-1} \indicator\{S_j = s\}
+     \sum_{t=j}^{T-1} (\discount\lambda)^{t-j} \delta_t.
+  \label{eq:fb_step3}
+\end{align}
+The interchange is valid because the double sum involves finitely many
+terms (both indices range over $\{0, \ldots, T-1\}$).
+
+\textbf{Step 4: Identify the forward view.}
+In the inner sum, substitute $k = t - j$ (so $t = j + k$ and $k$
+ranges from $0$ to $T - 1 - j$):
+\begin{equation}
+  \sum_{t=j}^{T-1} (\discount\lambda)^{t-j} \delta_t
+  = \sum_{k=0}^{T-1-j} (\discount\lambda)^k \delta_{j+k}.
+  \label{eq:fb_step4}
+\end{equation}
+By the $\lambda$-return decomposition
+(Theorem~\ref{thm:lambda_decomp}, applied to the finite-episode
+case where the sum truncates at the episode boundary), this equals
+$G_j^\lambda - V(S_j)$.
+
+Substituting back into~\eqref{eq:fb_step3}:
+\begin{equation}
+  \sum_{t=0}^{T-1} \delta_t\,e_t(s)
+  = \sum_{j=0}^{T-1} \indicator\{S_j = s\}
+    \bigl[G_j^\lambda - V(S_j)\bigr].
+  \label{eq:fb_final}
+\end{equation}
+Multiplying both sides by $\alpha$ and relabeling the dummy index
+$j$ as $t$ yields~\eqref{eq:fb_equiv}.
+\end{proof}
+
+\begin{remark}[Why ``Offline''?]
+\label{rem:offline}
+Theorem~\ref{thm:fb_equiv} holds in the \emph{offline} setting where
+value estimates $V$ remain fixed throughout the episode and all updates
+are accumulated. In the \emph{online} setting, $V$ changes after each
+update, so the TD errors $\delta_t$ in the backward view depend on the
+updated values while the forward-view $G_t^\lambda$ is computed with
+the original values. The equivalence breaks down slightly, motivating
+the ``true online'' algorithms discussed in
+Section~\ref{subsec:trace_variants}.
+\end{remark}
+
+\begin{rlconnection}[title={Computational Advantage of the Backward View}]
+The forward view requires computing $G_t^\lambda$ for each time step
+$t$, which needs future rewards up to the end of the episode --- making
+it inherently non-causal and requiring $O(T)$ memory for the full
+trajectory. The backward view~\eqref{eq:backward_update} uses only:
+\begin{itemize}[nosep]
+  \item The current TD error $\delta_t$ (available immediately after
+    the transition).
+  \item The trace vector $e_t \in \R^{|\States|}$ (updated
+    incrementally via~\eqref{eq:trace}).
+\end{itemize}
+The computational cost is $O(|\States|)$ per step (updating all traces
+and values), making the backward view suitable for online, incremental
+learning. Theorem~\ref{thm:fb_equiv} guarantees that both views
+produce identical total updates in the offline case.
+\end{rlconnection}
+
+\begin{example}[Forward--Backward Equivalence Verification]
+\label{ex:fb_verify}
+Consider an episode with $T = 3$, states $\{A, B\}$, and trajectory
+$S_0 = A, S_1 = B, S_2 = A$ with TD errors $\delta_0 = 1$,
+$\delta_1 = -0.5$, $\delta_2 = 2$. Let $\discount\lambda = 0.8$.
+
+\textbf{Backward view} for state $A$ ($\alpha = 1$):
+\begin{align*}
+  &\text{Traces: }
+  e_0(A) = 1,\;
+  e_1(A) = 0.8,\;
+  e_2(A) = 0.8 \cdot 0.8 + 1 = 1.64. \\
+  &\text{Total: }
+  \delta_0 e_0(A) + \delta_1 e_1(A) + \delta_2 e_2(A)
+  = 1(1) + (-0.5)(0.8) + 2(1.64) = 3.88.
+\end{align*}
+
+\textbf{Forward view} for state $A$ (visited at $t = 0$ and $t = 2$):
+\begin{align*}
+  G_0^\lambda - V(S_0) &= \delta_0 + 0.8\,\delta_1
+    + 0.64\,\delta_2
+    = 1 - 0.4 + 1.28 = 1.88, \\
+  G_2^\lambda - V(S_2) &= \delta_2 = 2, \\
+  \text{Total: } &1.88 + 2 = 3.88. \quad\checkmark
+\end{align*}
+\end{example}
+
+%% SECTION 7: CONVERGENCE AND TRACE VARIANTS
+\section{Convergence and Trace Variants}
+\label{sec:convergence_variants}
+
+\subsection{Convergence of TD($\lambda$)}
+\label{subsec:convergence}
+
+\begin{corollary}[Convergence of TD($\lambda$)]
+\label{cor:td_lambda_convergence}
+Under the following conditions:
+\begin{enumerate}[nosep]
+  \item The MDP has finite state and action spaces.
+  \item The policy $\policy$ is stationary.
+  \item Every state is visited infinitely often.
+  \item Step sizes satisfy $\sum_n \alpha_n(s) = \infty$ and
+    $\sum_n \alpha_n^2(s) < \infty$ for each $s$.
+\end{enumerate}
+For any $\lambda \in [0,1]$, the offline TD($\lambda$) algorithm
+converges to $\Vpi$ almost surely.
+\end{corollary}
+
+\begin{proof}
+By Theorem~\ref{thm:fb_equiv}, offline TD($\lambda$) applies the
+same total update as the forward-view algorithm that uses
+$G_t^\lambda$ as the target. We show that this forward-view algorithm
+is a valid stochastic approximation.
+
+Define the $\lambda$-weighted Bellman operator
+$\Bellman_\lambda^\policy \colon \R^{|\States|} \to \R^{|\States|}$ by
+\begin{equation}
+  (\Bellman_\lambda^\policy V)(s)
+  = \E_\policy\bigl[G_t^\lambda \mid S_t = s\bigr]
+  = (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1}
+    (\Bellman^\policy)^n V(s).
+  \label{eq:lambda_operator}
+\end{equation}
+This is a weighted average of the operators
+$(\Bellman^\policy)^n$, each of which is a $\discount^n$-contraction.
+The operator $\Bellman_\lambda^\policy$ is therefore a contraction
+with rate
+\begin{equation}
+  (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1} \discount^n
+  = \frac{(1-\lambda)\discount}{1 - \lambda\discount},
+  \label{eq:lambda_contraction}
+\end{equation}
+which is strictly less than 1 for $\discount < 1$.
+The unique fixed point is $\Vpi$, since
+$\Bellman^\policy \Vpi = \Vpi$ implies
+$\Bellman_\lambda^\policy \Vpi = \Vpi$.
+
+The forward-view update is a stochastic approximation of
+$V \leftarrow \Bellman_\lambda^\policy V$, with noise
+$w_t = G_t^\lambda - (\Bellman_\lambda^\policy V)(S_t)$ satisfying
+$\E[w_t \mid S_t, V] = 0$ by construction. The noise variance is
+bounded (since $G_t^\lambda$ is a convex combination of bounded
+$n$-step returns). All conditions of the Robbins--Monro theorem
+are satisfied, yielding $V_n(s) \to \Vpi(s)$ almost surely.
+\end{proof}
+
+\begin{remark}[Contraction Rate as a Function of $\lambda$]
+\label{rem:contraction_rate}
+The contraction rate~\eqref{eq:lambda_contraction} is
+$(1 - \lambda)\discount/(1 - \lambda\discount)$. For $\lambda = 0$
+this equals $\discount$ (the TD(0) rate), and as $\lambda \to 1$ it
+approaches $\discount$ from below (since the $(1-\lambda)$ factor in
+the numerator shrinks). For intermediate $\lambda$, the contraction
+rate is strictly smaller than $\discount$, meaning the expected
+operator contracts \emph{faster} than TD(0). However, the variance
+of $G_t^\lambda$ increases with $\lambda$, so the faster contraction
+per iteration may be offset by noisier updates.
+\end{remark}
+
+\subsection{Trace Variants}
+\label{subsec:trace_variants}
+
+\begin{definition}[Replacing Traces]
+\label{def:replacing}
+The \emph{replacing trace} caps the trace at 1 upon revisit:
+\begin{equation}
+  e_t(s) = \begin{cases}
+    1 & \text{if } S_t = s, \\
+    \discount\lambda\,e_{t-1}(s) & \text{otherwise.}
+  \end{cases}
+  \label{eq:replacing}
+\end{equation}
+Equivalently:
+$e_t(s) = \max\bigl(\discount\lambda\,e_{t-1}(s),\;
+\indicator\{S_t = s\}\bigr)$.
+\end{definition}
+
+\begin{remark}[Replacing vs.\ Accumulating]
+\label{rem:replacing}
+Accumulating traces can grow without bound in states that are visited
+repeatedly within a short time window (e.g., $e_t(s) > 1$ in
+Example~\ref{ex:trace}). Replacing traces prevent this by resetting
+to 1 upon each visit, which can improve stability in practice.
+However, replacing traces do \emph{not} satisfy the exact
+forward--backward equivalence of Theorem~\ref{thm:fb_equiv}.
+\end{remark}
+
+\begin{definition}[Dutch Traces]
+\label{def:dutch}
+The \emph{Dutch trace} is defined by
+\begin{equation}
+  e_t(s) = \discount\lambda\,e_{t-1}(s)
+  + \alpha\bigl(1 - \discount\lambda\,e_{t-1}(s)\bigr)
+    \indicator\{S_t = s\},
+  \label{eq:dutch}
+\end{equation}
+where $\alpha$ is the step size.
+\end{definition}
+
+\begin{remark}[True Online TD($\lambda$)]
+\label{rem:true_online}
+Dutch traces are designed to produce exact equivalence with the
+\emph{online} $\lambda$-return algorithm, where value estimates are
+updated after every step (not just at episode end). The resulting
+``true online TD($\lambda$)'' algorithm
+\citep[Chapter 12]{suttonbarto2018} computes the same sequence of
+value estimates as the theoretically ideal online forward-view
+algorithm, making it the method of choice when both computational
+efficiency and theoretical exactness are desired.
+\end{remark}
+
+\begin{warning}[title={Accumulating Traces Break Online Equivalence}]
+Theorem~\ref{thm:fb_equiv} holds only in the offline setting.
+When using standard accumulating traces with online updates (applying
+each update immediately), the resulting algorithm does \emph{not}
+compute the same updates as the online forward view. The discrepancy
+arises because the TD errors $\delta_t$ in the backward view depend on
+the updated value function, while the forward-view $\lambda$-return
+uses the original values. For exact online equivalence, use Dutch
+traces.
+\end{warning}
+
+%% SECTION 8: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Normalization of the $\lambda$-Return Weights]
+\textnormal{(\(*\))} \\
+Verify that the weights in Definition~\ref{def:lambda_return} sum to
+one: show that $(1 - \lambda)\sum_{n=1}^\infty \lambda^{n-1} = 1$ for
+$\lambda \in [0,1)$. What happens when $\lambda = 1$, and how is the
+$\lambda$-return interpreted in this limiting case?
+\end{exercise}
+
+\begin{exercise}[$\lambda$-Return for $\lambda = 0.5$]
+\textnormal{(\(*\))} \\
+Consider a 4-step episode with trajectory
+$S_0, S_1, S_2, S_3$ (terminal), rewards $R_1 = 1$, $R_2 = 0$,
+$R_3 = 2$, $\discount = 0.9$, and value estimates $V(S_1) = 3$,
+$V(S_2) = 2$, $V(S_3) = 0$. Compute $G_0^{(1)}$, $G_0^{(2)}$,
+$G_0^{(3)}$, and $G_0^{0.5}$ directly from the definitions. Verify
+that $G_0^{0.5} - V(S_0)$ equals
+$\sum_{k=0}^{2} (0.45)^k \delta_k$ using the decomposition theorem.
+\end{exercise}
+
+\begin{exercise}[Trace Unrolling for a Specific Trajectory]
+\textnormal{(\(**\))} \\
+Consider $\States = \{A, B, C\}$ with $\discount\lambda = 0.7$ and
+the trajectory $S_0 = A, S_1 = B, S_2 = B, S_3 = A, S_4 = C$.
+Compute $e_t(s)$ for all $s \in \States$ and $t = 0, 1, 2, 3, 4$
+using both the recursive definition~\eqref{eq:trace} and the explicit
+formula~\eqref{eq:trace_explicit}. Verify they agree.
+\end{exercise}
+
+\begin{exercise}[Forward--Backward Equivalence Proof Variant]
+\textnormal{(\(**\))} \\
+Re-derive the forward--backward equivalence
+(Theorem~\ref{thm:fb_equiv}) by starting from the forward view
+$\sum_{t=0}^{T-1} [G_t^\lambda - V(S_t)] \indicator\{S_t = s\}$
+and showing it equals $\sum_{t=0}^{T-1} \delta_t\,e_t(s)$. That is,
+work the proof in the reverse direction.
+
+\textit{Hint:} Expand $G_t^\lambda - V(S_t)$ using the decomposition
+theorem, then interchange the order of summation.
+\end{exercise}
+
+\begin{exercise}[Contraction Rate Analysis]
+\textnormal{(\(**\))} \\
+For $\discount = 0.99$, plot the contraction rate
+$(1-\lambda)\discount/(1 - \lambda\discount)$ of the
+$\Bellman_\lambda^\policy$ operator as a function of
+$\lambda \in [0, 1)$. Determine the value of $\lambda$ that minimizes
+this contraction rate and compute the minimum. Explain why a faster
+contraction rate does not necessarily mean faster convergence in
+practice.
+\end{exercise}
+
+\begin{exercise}[Replacing Traces and Forward--Backward Mismatch]
+\textnormal{(\(***\))} \\
+Construct a concrete example (episode with 4 states, $T = 5$) where
+the total backward-view update with \emph{replacing} traces differs
+from the forward-view update $\sum_t [G_t^\lambda - V(S_t)]
+\indicator\{S_t = s\}$. Quantify the discrepancy and explain which
+feature of the replacing trace causes the mismatch.
+
+\textit{Hint:} The mismatch arises when a state is visited multiple
+times in quick succession.
+\end{exercise}
+
+%% SECTION 9: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \textbf{$\lambda$-return}
+    $G_t^\lambda = (1-\lambda)\sum_{n=1}^\infty \lambda^{n-1}
+    G_t^{(n)}$ is a geometrically weighted average of all $n$-step
+    returns, with $\lambda = 0$ recovering TD(0) and $\lambda = 1$
+    recovering MC.
+
+  \item The \textbf{$\lambda$-return decomposition}
+    (Theorem~\ref{thm:lambda_decomp}) shows that
+    $G_t^\lambda - V(S_t) = \sum_{k=0}^\infty
+    (\discount\lambda)^k \delta_{t+k}$, expressing the prediction
+    error as an exponentially weighted sum of TD errors.
+
+  \item The \textbf{accumulating eligibility trace}
+    $e_t(s) = \discount\lambda\,e_{t-1}(s) + \indicator\{S_t = s\}$
+    provides a fading memory of state visits, enabling incremental
+    $O(|\States|)$-per-step credit assignment.
+
+  \item The \textbf{forward--backward equivalence}
+    (Theorem~\ref{thm:fb_equiv}) proves that the total offline update
+    from the backward view (using traces) equals the total update from
+    the forward view (using $\lambda$-returns), established via trace
+    unrolling and summation interchange.
+
+  \item \textbf{TD($\lambda$) converges} to $\Vpi$ almost surely under
+    standard conditions, with the $\lambda$-weighted Bellman operator
+    providing a contraction rate of
+    $(1-\lambda)\discount/(1-\lambda\discount) < 1$.
+
+  \item \textbf{Trace variants}: accumulating traces give exact offline
+    equivalence; replacing traces cap at 1 for stability; Dutch traces
+    achieve exact \emph{online} equivalence with the $\lambda$-return
+    algorithm.
+\end{itemize}
+
+%% SECTION 10: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 49} extends TD($\lambda$) to the control
+    setting, developing SARSA($\lambda$) and Watkins's Q($\lambda$)
+    with eligibility traces for action-value estimation.
+
+  \item \citet{sutton1988} is the foundational paper on TD($\lambda$),
+    establishing the forward-view formulation and early convergence
+    results.
+
+  \item \citet[Chapter 12]{suttonbarto2018} provides the definitive
+    textbook treatment of eligibility traces, including the true online
+    TD($\lambda$) algorithm with Dutch traces and the general
+    $\lambda$-return algorithm.
+
+  \item \citet{tsitsiklis1997} analyzes TD($\lambda$) with linear
+    function approximation, proving convergence and characterizing the
+    approximation error as a function of $\lambda$. This analysis
+    shows that larger $\lambda$ yields smaller asymptotic bias in the
+    function approximation setting.
+
+  \item For the connection to policy gradient methods,
+    Generalized Advantage Estimation (GAE) uses the decomposition
+    $\hat{A}_t^{\text{GAE}(\lambda)} = \sum_{k=0}^\infty
+    (\discount\lambda)^k \delta_{t+k}$ as a variance-reduced
+    advantage estimator, directly applying
+    Theorem~\ref{thm:lambda_decomp}.
+
+  \item \citet{borkar2008} provides the stochastic approximation
+    machinery underlying all TD convergence proofs, including
+    extensions to the function approximation setting.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}
