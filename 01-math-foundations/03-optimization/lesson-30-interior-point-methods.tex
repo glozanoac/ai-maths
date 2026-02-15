@@ -1,243 +1,720 @@
 \documentclass[11pt,a4paper]{article}
-
-% --- Encoding and fonts ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-
-% --- Mathematics ---
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-
-% --- Page layout ---
-\usepackage[margin=1in,headheight=14pt]{geometry}
-
-% --- Hyperlinks ---
-\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
-
-% --- Lists ---
-\usepackage{enumitem}
-
-% --- Colors and boxes ---
-\usepackage{xcolor}
-\usepackage[theorems,skins,breakable]{tcolorbox}
-
-% --- Header/footer ---
-\usepackage{fancyhdr}
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[L]{\textsc{Lesson 30: Interior-Point Methods}}
 \fancyhead[R]{\thepage}
-
-% --- Tables ---
-\usepackage{booktabs}
-
-% ============================================================
-% Theorem environments
-% ============================================================
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ============================================================
-% Colored boxes
-% ============================================================
-\newtcolorbox{keyresult}[1][]{
-  colback=green!5!white,
-  colframe=green!60!black,
-  fonttitle=\bfseries,
-  title={Key Result},
-  breakable,
-  #1
-}
-
-\newtcolorbox{rlconnection}[1][]{
-  colback=blue!5!white,
-  colframe=blue!60!black,
-  fonttitle=\bfseries,
-  title={RL Connection},
-  breakable,
-  #1
-}
-
-\newtcolorbox{warning}[1][]{
-  colback=red!5!white,
-  colframe=red!60!black,
-  fonttitle=\bfseries,
-  title={Warning},
-  breakable,
-  #1
-}
-
-% ============================================================
-% Custom commands
-% ============================================================
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\epi}{epi}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\prox}{prox}
-\DeclareMathOperator*{\argmin}{arg\,min}
-\DeclareMathOperator*{\argmax}{arg\,max}
-\DeclareMathOperator{\tr}{tr}
-\DeclareMathOperator{\diag}{diag}
-\DeclareMathOperator{\interior}{int}
-
-% ============================================================
 \title{Lesson 30: Interior-Point Methods}
-\author{%
-  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
-  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
-}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{7}
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
 
-\section{Interior-Point Methods}\label{sec:interior}
+\section{Introduction}\label{sec:intro}
 
-\subsection{Logarithmic Barrier}
+Interior-point methods solve constrained convex optimization problems
+by converting hard inequality constraints into smooth barrier terms
+added to the objective. By systematically reducing the barrier weight,
+these methods trace a smooth curve---the \emph{central path}---that
+converges to the constrained optimum. The resulting algorithms achieve
+polynomial-time complexity: $O(\sqrt{m}\log(1/\epsilon))$ Newton
+iterations for $m$ inequality constraints and $\epsilon$-accuracy.
 
-Interior-point methods solve constrained problems by converting inequality
-constraints into a smooth barrier term added to the objective, then following
-the ``central path'' as the barrier weight decreases.
+Interior-point methods are particularly relevant for reinforcement
+learning because they efficiently solve the \emph{linear programs} (LPs)
+and \emph{semidefinite programs} (SDPs) that arise in exact MDP
+formulations and constrained policy optimization.
+
+This lesson develops the barrier method from first principles.
+Section~\ref{sec:motivation} motivates the approach.
+Section~\ref{sec:barrier} defines the logarithmic barrier and
+establishes its convexity.
+Section~\ref{sec:central-path} introduces the central path and proves
+the central path optimality bound.
+Section~\ref{sec:barrier-method} presents the barrier method algorithm.
+Section~\ref{sec:complexity} provides the complexity analysis.
+Section~\ref{sec:newton} briefly describes Newton's method for the
+centering step.
+Section~\ref{sec:mdp} connects interior-point methods to the MDP
+LP formulation.
+Section~\ref{sec:exercises} provides exercises.
+
+The primary references are \citet{boyd2004} (Chapters~11) and
+\citet{wright1997}.
+
+%% ============================================================
+%% SECTION 2: Motivation
+%% ============================================================
+
+\section{Motivation}\label{sec:motivation}
+
+Consider the standard constrained convex optimization problem:
+\begin{equation}\label{eq:std-form}
+\begin{aligned}
+  &\min_{x \in \R^n}\; f_0(x) \\
+  &\text{subject to}\; f_i(x) \le 0, \quad i = 1, \dots, m, \\
+  &\phantom{\text{subject to}\;} Ax = b,
+\end{aligned}
+\end{equation}
+where $f_0, f_1, \dots, f_m : \R^n \to \R$ are convex and twice
+continuously differentiable, $A \in \R^{p \times n}$ with
+$\rank(A) = p$, and $b \in \R^p$.
+
+First-order methods (gradient descent, proximal methods) handle
+\emph{unconstrained} or simply constrained problems efficiently, but
+they struggle with general inequality constraints. Two standard
+approaches to handling constraints are:
+
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Projection methods:} Project each iterate onto the
+    feasible set. This requires solving a subproblem at each step and
+    is efficient only when projection is cheap (e.g., onto boxes
+    or balls).
+  \item \textbf{Barrier methods:} Encode constraints in the objective
+    using a barrier function that goes to $+\infty$ at the constraint
+    boundary. This converts the constrained problem into a sequence of
+    \emph{unconstrained} problems.
+\end{enumerate}
+
+Interior-point methods follow approach (ii). Their distinguishing
+feature is polynomial worst-case complexity, unlike simplex-type
+methods (which can be exponential in the worst case) or first-order
+methods (which have slow convergence for ill-conditioned problems).
+
+\begin{rlconnection}[title={Constrained Optimization in RL}]
+Constrained optimization is central to RL in several ways:
+\begin{itemize}
+  \item \textbf{MDP as LP:} A finite MDP with $|S|$ states and $|A|$
+    actions can be solved exactly via a linear program with
+    $|S| \cdot |A|$ variables and $|S|$ equality constraints plus
+    $|S| \cdot |A|$ non-negativity constraints. Interior-point methods
+    solve this in polynomial time.
+  \item \textbf{Constrained MDPs:} Safe RL problems impose cost
+    constraints $C(\pi) \le \alpha$ alongside the return objective
+    $J(\pi)$. The Lagrangian relaxation converts these into the form
+    of~\eqref{eq:std-form}.
+  \item \textbf{Robust MDPs:} Minimax formulations with uncertainty
+    sets lead to SDPs solvable by interior-point methods.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: Logarithmic Barrier
+%% ============================================================
+
+\section{The Logarithmic Barrier}\label{sec:barrier}
+
+\begin{definition}[Strictly feasible set]\label{def:strictly-feasible}
+The \emph{strictly feasible set} of problem~\eqref{eq:std-form}
+(ignoring equality constraints for simplicity) is
+\begin{equation}\label{eq:strict-feas}
+  \mathcal{F}^{\circ} = \{x \in \R^n : f_i(x) < 0,\;
+  i = 1, \dots, m\}.
+\end{equation}
+We assume $\mathcal{F}^{\circ} \ne \emptyset$ (Slater's condition).
+\end{definition}
 
 \begin{definition}[Logarithmic barrier]\label{def:barrier}
-For the convex program~\eqref{eq:std-form} (with equality constraints omitted
-for simplicity), the \emph{logarithmic barrier} is
+The \emph{logarithmic barrier function} for the inequality constraints
+in~\eqref{eq:std-form} is
 \begin{equation}\label{eq:barrier}
   \phi(x) = -\sum_{i=1}^m \log(-f_i(x)),
 \end{equation}
-defined for $x$ in the strictly feasible set $\{x : f_i(x) < 0, \, i = 1,\dots,m\}$.
+defined for $x \in \mathcal{F}^{\circ}$. We set
+$\phi(x) = +\infty$ for $x \notin \mathcal{F}^{\circ}$.
 \end{definition}
 
-\begin{proposition}[Barrier is convex]\label{prop:barrier-convex}
-If $f_1, \dots, f_m$ are convex, then the logarithmic barrier $\phi$ is convex
-on $\{x : f_i(x) < 0\}$.
+\begin{remark}[Barrier behavior]\label{rem:barrier-behavior}
+The barrier $\phi(x)$ increases without bound as $x$ approaches
+the boundary of the feasible set (i.e., as any $f_i(x) \to 0^-$).
+This ``repels'' the iterates from the constraint boundary, keeping
+them strictly feasible---hence the name \emph{interior-point} method.
+\end{remark}
+
+\begin{proposition}[Convexity of the logarithmic barrier]%
+\label{prop:barrier-convex}
+If $f_1, \dots, f_m$ are convex, then the logarithmic barrier $\phi$
+is convex on $\mathcal{F}^{\circ}$.
 \end{proposition}
 
 \begin{proof}
-The function $-\log(-u)$ is convex and non-decreasing on $u < 0$. Since each
-$f_i$ is convex, the composition $-\log(-f_i(x))$ is convex (by the
-composition rule for convex non-decreasing outer function and convex inner
-function). The sum of convex functions is convex.
+It suffices to show that each term $-\log(-f_i(x))$ is convex on
+$\{x : f_i(x) < 0\}$.
+
+\textbf{Step 1: Composition rule.}
+The function $\psi(u) = -\log(-u)$ is defined for $u < 0$. We compute:
+\begin{align*}
+  \psi'(u) &= \frac{-1}{-u} \cdot (-1) = \frac{1}{u}
+  \quad (\text{wait: } \psi'(u) = \frac{d}{du}[-\log(-u)]
+  = \frac{-1}{-u} \cdot (-1) = -\frac{1}{u}).
+\end{align*}
+Let us be more careful. For $u < 0$:
+$\psi(u) = -\log(-u)$, so
+$\psi'(u) = -\frac{1}{-u}\cdot(-1) = -\frac{1}{u}$, and
+$\psi''(u) = \frac{1}{u^2} > 0$.
+
+Since $\psi''(u) > 0$ for all $u < 0$, the function $\psi$ is
+\emph{strictly convex} on $(-\infty, 0)$.
+
+\textbf{Step 2: Convexity of composition.}
+Moreover, $\psi$ is \emph{non-decreasing} on $(-\infty, 0)$: indeed,
+$\psi'(u) = -1/u > 0$ for $u < 0$. By the composition rule for
+convex functions \citep[Section~3.2.4]{boyd2004}: if $\psi$ is convex
+and non-decreasing, and $f_i$ is convex, then $\psi \circ f_i$ is
+convex on $\{x : f_i(x) < 0\}$.
+
+\textbf{Step 3: Sum of convex functions.}
+Each $-\log(-f_i(x))$ is convex on $\{x : f_i(x) < 0\}$. The sum
+$\phi(x) = \sum_{i=1}^m [-\log(-f_i(x))]$ is convex on
+$\mathcal{F}^{\circ} = \bigcap_{i=1}^m \{x : f_i(x) < 0\}$.
 \end{proof}
 
-\subsection{Central Path}
+\begin{remark}[Gradient and Hessian of the barrier]\label{rem:barrier-grad}
+The gradient and Hessian of $\phi$ are
+\begin{align}
+  \nabla \phi(x) &= \sum_{i=1}^m \frac{1}{-f_i(x)}\nabla f_i(x),
+    \label{eq:barrier-grad} \\
+  \nabla^2 \phi(x) &= \sum_{i=1}^m \frac{1}{f_i(x)^2}
+    \nabla f_i(x)\nabla f_i(x)^\top
+    + \sum_{i=1}^m \frac{1}{-f_i(x)}\nabla^2 f_i(x).
+    \label{eq:barrier-hess}
+\end{align}
+The first term in the Hessian is always positive semidefinite (it is
+a sum of rank-one matrices scaled by positive coefficients). Near the
+boundary of the feasible set, where some $f_i(x) \to 0^-$, the
+Hessian grows without bound, reflecting the steep barrier.
+\end{remark}
 
-\begin{definition}[Barrier problem and central path]\label{def:central-path}
-For parameter $t > 0$, the \emph{barrier problem} is
+\begin{example}[Barrier for linear inequalities]\label{ex:linear-barrier}
+For the constraint set $\{x : a_i^\top x \le b_i\}_{i=1}^m$ (i.e.,
+$f_i(x) = a_i^\top x - b_i$), the barrier is
+\[
+  \phi(x) = -\sum_{i=1}^m \log(b_i - a_i^\top x).
+\]
+The gradient is
+$\nabla \phi(x) = \sum_i \frac{a_i}{b_i - a_i^\top x}$
+and the Hessian is
+$\nabla^2 \phi(x) = \sum_i \frac{a_i a_i^\top}{(b_i - a_i^\top x)^2}
+\succeq 0$.
+\end{example}
+
+%% ============================================================
+%% SECTION 4: Central Path
+%% ============================================================
+
+\section{The Central Path}\label{sec:central-path}
+
+\begin{definition}[Barrier problem]\label{def:barrier-problem}
+For a parameter $t > 0$, the \emph{barrier problem} (or \emph{penalized
+problem}) associated with~\eqref{eq:std-form} is
 \begin{equation}\label{eq:barrier-prob}
-  \min_x \; t\, f_0(x) + \phi(x).
+  \min_{x}\; t\, f_0(x) + \phi(x)
+  \quad \text{subject to}\; Ax = b,
 \end{equation}
-Assuming a unique minimizer $x^*(t)$ exists for each $t > 0$, the curve
-$\{x^*(t) : t > 0\}$ is called the \emph{central path}.
+where $\phi$ is the logarithmic barrier~\eqref{eq:barrier}.
 \end{definition}
 
-\begin{theorem}[Central path optimality bound]\label{thm:central-path}
-Each point $x^*(t)$ on the central path satisfies
-\begin{equation}\label{eq:central-bound}
-  f_0(x^*(t)) - p^* \le \frac{m}{t},
+\begin{remark}[Interpretation of $t$]\label{rem:t-interpretation}
+The parameter $t > 0$ controls the trade-off between optimizing the
+original objective $f_0$ and staying away from the constraint boundary
+(via $\phi$). As $t \to \infty$, the objective $t\,f_0(x)$ dominates,
+and the minimizer of~\eqref{eq:barrier-prob} approaches the constrained
+optimum of~\eqref{eq:std-form}. As $t \to 0^+$, the barrier dominates,
+and the minimizer is the \emph{analytic center} of the feasible set.
+\end{remark}
+
+\begin{definition}[Central path]\label{def:central-path}
+Assuming that for each $t > 0$, the barrier
+problem~\eqref{eq:barrier-prob} has a unique minimizer $x^*(t)$,
+the curve $\{x^*(t) : t > 0\}$ is called the \emph{central path}.
+\end{definition}
+
+\begin{proposition}[Central path characterization]%
+\label{prop:central-path-char}
+Each point $x^*(t)$ on the central path satisfies the optimality
+conditions: there exists $\nu^*(t) \in \R^p$ such that
+\begin{equation}\label{eq:cp-optimality}
+  t\,\nabla f_0(x^*(t)) + \nabla\phi(x^*(t)) + A^\top\nu^*(t) = 0,
+  \qquad Ax^*(t) = b.
 \end{equation}
-where $p^*$ is the optimal value and $m$ is the number of inequality
-constraints.
+\end{proposition}
+
+\begin{proof}
+The barrier problem~\eqref{eq:barrier-prob} is a convex optimization
+problem with equality constraints $Ax = b$. Its Lagrangian is
+$\mathcal{L}(x, \nu) = t f_0(x) + \phi(x) + \nu^\top(Ax - b)$.
+Since the problem is convex and (assuming constraint qualification)
+feasible, the KKT conditions are necessary and sufficient. The
+stationarity condition
+$\nabla_x \mathcal{L} = t\nabla f_0(x) + \nabla\phi(x) + A^\top\nu = 0$
+combined with primal feasibility $Ax = b$
+gives~\eqref{eq:cp-optimality}.
+\end{proof}
+
+\begin{theorem}[Central path optimality bound]\label{thm:central-path}
+Let $p^*$ denote the optimal value of~\eqref{eq:std-form}. Each point
+$x^*(t)$ on the central path satisfies
+\begin{equation}\label{eq:central-bound}
+  \boxed{f_0(x^*(t)) - p^* \le \frac{m}{t},}
+\end{equation}
+where $m$ is the number of inequality constraints.
 \end{theorem}
 
 \begin{proof}
-At $x^*(t)$, the gradient of the barrier objective vanishes:
-\[
-  t\, \nabla f_0(x^*(t)) + \nabla \phi(x^*(t)) = 0.
-\]
-The gradient of the barrier is
-$\nabla \phi(x) = \sum_{i=1}^m \frac{-\nabla f_i(x)}{-f_i(x)}
-= \sum_{i=1}^m \frac{\nabla f_i(x)}{-f_i(x)}$.
+We construct a dual feasible point from the central path conditions
+and use weak duality.
 
-Define the dual variables $\lambda^*_i(t) = \frac{1}{t(-f_i(x^*(t)))} > 0$.
-Then the stationarity condition becomes
-\[
-  \nabla f_0(x^*(t)) + \sum_{i=1}^m \lambda^*_i(t) \nabla f_i(x^*(t)) = 0.
-\]
-Thus $x^*(t)$ minimizes $L(x, \lambda^*(t), 0) = f_0(x) + \sum_i \lambda^*_i(t) f_i(x)$ over $x$,
-so the dual function evaluates to
-\begin{align*}
-  g(\lambda^*(t), 0)
-  &= f_0(x^*(t)) + \sum_i \lambda^*_i(t) f_i(x^*(t)) \\
-  &= f_0(x^*(t)) + \sum_i \frac{f_i(x^*(t))}{t(-f_i(x^*(t)))} \\
-  &= f_0(x^*(t)) - \frac{m}{t}.
-\end{align*}
-By weak duality, $g(\lambda^*(t), 0) \le p^*$, so
-$f_0(x^*(t)) - m/t \le p^*$, giving $f_0(x^*(t)) - p^* \le m/t$.
+\textbf{Step 1: Define dual variables.}
+From~\eqref{eq:cp-optimality} and the formula for
+$\nabla\phi$~\eqref{eq:barrier-grad}:
+\begin{equation}\label{eq:stationarity-expanded}
+  t\,\nabla f_0(x^*(t))
+  + \sum_{i=1}^m \frac{1}{-f_i(x^*(t))}\nabla f_i(x^*(t))
+  + A^\top\nu^*(t) = 0.
+\end{equation}
+Define the dual variables
+\begin{equation}\label{eq:dual-vars}
+  \lambda_i^*(t) = \frac{1}{-t\,f_i(x^*(t))} > 0,
+  \quad i = 1, \dots, m.
+\end{equation}
+Note that $\lambda_i^*(t) > 0$ since $f_i(x^*(t)) < 0$ (the central
+path stays strictly feasible). Substituting into~\eqref{eq:stationarity-expanded}:
+\begin{equation}\label{eq:stationarity-dual}
+  \nabla f_0(x^*(t)) + \sum_{i=1}^m \lambda_i^*(t)\nabla f_i(x^*(t))
+  + A^\top\!\left(\frac{\nu^*(t)}{t}\right) = 0.
+\end{equation}
+This is precisely the stationarity condition for the Lagrangian
+$L(x, \lambda, \nu) = f_0(x) + \sum_i \lambda_i f_i(x) + \nu^\top(Ax - b)$
+evaluated at $x = x^*(t)$, $\lambda = \lambda^*(t)$,
+$\nu = \nu^*(t)/t$.
+
+\textbf{Step 2: Evaluate the dual function.}
+Since $x^*(t)$ minimizes $L(x, \lambda^*(t), \nu^*(t)/t)$ over $x$
+(by the stationarity condition), the dual function is
+\begin{align}
+  g(\lambda^*(t), \nu^*(t)/t)
+  &= \inf_x L(x, \lambda^*(t), \nu^*(t)/t) \notag \\
+  &= L(x^*(t), \lambda^*(t), \nu^*(t)/t) \notag \\
+  &= f_0(x^*(t)) + \sum_{i=1}^m \lambda_i^*(t) f_i(x^*(t))
+    + \frac{\nu^*(t)^\top}{t}(Ax^*(t) - b). \label{eq:dual-eval}
+\end{align}
+Since $Ax^*(t) = b$, the last term vanishes. For the middle sum:
+\begin{equation}\label{eq:complementarity}
+  \sum_{i=1}^m \lambda_i^*(t) f_i(x^*(t))
+  = \sum_{i=1}^m \frac{f_i(x^*(t))}{-t\,f_i(x^*(t))}
+  = \sum_{i=1}^m \frac{-1}{t} = -\frac{m}{t}.
+\end{equation}
+Therefore:
+\begin{equation}\label{eq:dual-value}
+  g(\lambda^*(t), \nu^*(t)/t) = f_0(x^*(t)) - \frac{m}{t}.
+\end{equation}
+
+\textbf{Step 3: Apply weak duality.}
+By weak duality (the dual function provides a lower bound on the
+primal optimal value):
+\begin{equation}\label{eq:weak-dual}
+  g(\lambda^*(t), \nu^*(t)/t) \le p^*.
+\end{equation}
+Combining~\eqref{eq:dual-value} and~\eqref{eq:weak-dual}:
+\begin{equation}\label{eq:bound-derived}
+  f_0(x^*(t)) - \frac{m}{t} \le p^*,
+\end{equation}
+which rearranges to $f_0(x^*(t)) - p^* \le m/t$.
 \end{proof}
 
-\subsection{Barrier Method}
-
-\begin{definition}[Barrier method]\label{def:barrier-method}
-The \emph{barrier method} (or \emph{path-following method}) proceeds as follows:
-\begin{enumerate}
-  \item Initialize with a strictly feasible $x^{(0)}$, $t^{(0)} > 0$,
-    and a growth factor $\sigma > 1$.
-  \item At iteration $\ell$: solve (approximately) the barrier problem
-    $\min_x \; t^{(\ell)} f_0(x) + \phi(x)$ starting from $x^{(\ell)}$,
-    using Newton's method. Set $x^{(\ell+1)}$ to the result.
-  \item Update $t^{(\ell+1)} = \sigma \cdot t^{(\ell)}$.
-  \item Stop when $m/t^{(\ell)} \le \epsilon$.
-\end{enumerate}
-\end{definition}
-
-\begin{theorem}[Complexity of the barrier method]\label{thm:barrier-complexity}
-To achieve $f_0(x) - p^* \le \epsilon$, the barrier method requires
-$O(\sqrt{m}\log(m/\epsilon))$ Newton steps (outer iterations), each involving
-the solution of a linear system of size $n \times n$.
-\end{theorem}
-
-\begin{proof}[Proof sketch]
-By Theorem~\ref{thm:central-path}, we need $t \ge m/\epsilon$, so
-$\lceil \log_\sigma(m/(t^{(0)}\epsilon))\rceil$ outer iterations suffice.
-The key result from the theory of self-concordant barriers (Nesterov and
-Nemirovskii) is that with the optimal choice $\sigma = 1 + 1/\sqrt{m}$,
-each centering step (finding $x^*(t)$ to sufficient accuracy) requires
-$O(1)$ Newton steps (specifically, a constant number independent of $m$ and
-$n$). The total number of outer iterations is then
-$\log_\sigma(m/\epsilon) = O(\sqrt{m}\log(m/\epsilon))$,
-using $\log(1 + 1/\sqrt{m}) \approx 1/\sqrt{m}$.
-\end{proof}
-
-\begin{keyresult}[title={Interior-Point Complexity}]
-Interior-point methods solve convex programs with $m$ inequality constraints
-to $\epsilon$-accuracy in $O(\sqrt{m}\log(m/\epsilon))$ Newton iterations.
-Each Newton iteration costs $O(n^3)$ for a dense $n$-dimensional problem
-(or less with structure). This polynomial complexity in $m$, $n$, and
-$\log(1/\epsilon)$ makes interior-point methods highly efficient for
-moderate-dimensional problems.
+\begin{keyresult}[title={Central Path Optimality Bound}]
+Each point on the central path is within $m/t$ of optimal:
+$f_0(x^*(t)) - p^* \le m/t$.
+\begin{itemize}
+  \item The \emph{duality gap} along the central path is exactly
+    $m/t$ (from~\eqref{eq:complementarity}, the complementary
+    slackness residual is $-m/t$).
+  \item To achieve $\epsilon$-accuracy, we need $t \ge m/\epsilon$.
+  \item The dual variables~\eqref{eq:dual-vars} approach complementary
+    slackness as $t \to \infty$: $\lambda_i^*(t) f_i(x^*(t))
+    = -1/t \to 0$.
+\end{itemize}
 \end{keyresult}
 
-\begin{rlconnection}
-Interior-point methods are used to solve the linear programs that arise in the
-LP formulation of finite MDPs. For large-scale problems, they complement
-value iteration and policy iteration. In constrained RL (safe RL), solving
-the inner constrained optimization at each policy update step can be handled
-by interior-point methods when the constraint set has moderate dimension.
+\begin{remark}[Approximate complementary slackness]%
+\label{rem:approx-cs}
+At the central path point $x^*(t)$, each product
+$\lambda_i^*(t) \cdot (-f_i(x^*(t))) = 1/t$ is the same for all $i$.
+This ``uniform'' near-complementarity is a distinctive feature of
+interior-point methods, in contrast to active-set methods where some
+constraints are exactly active and others are strictly inactive.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: Barrier Method
+%% ============================================================
+
+\section{The Barrier Method}\label{sec:barrier-method}
+
+\begin{definition}[Barrier method (path-following method)]%
+\label{def:barrier-method}
+The \emph{barrier method} solves~\eqref{eq:std-form} by approximately
+following the central path. Given:
+\begin{itemize}
+  \item A strictly feasible starting point $x^{(0)} \in \mathcal{F}^{\circ}$,
+  \item An initial barrier parameter $t^{(0)} > 0$,
+  \item A growth factor $\sigma > 1$,
+  \item A tolerance $\epsilon > 0$,
+\end{itemize}
+the algorithm proceeds as follows:
+\begin{equation}\label{eq:barrier-method}
+\boxed{
+\begin{aligned}
+  &\textbf{repeat } \ell = 0, 1, 2, \dots \\
+  &\quad \text{1. \textbf{Centering step:} Compute } x^{(\ell+1)}
+    \approx x^*(t^{(\ell)}) \\
+  &\quad\quad \text{by minimizing } t^{(\ell)} f_0(x) + \phi(x)
+    \text{ subject to } Ax = b, \\
+  &\quad\quad \text{starting from } x^{(\ell)}, \text{ using Newton's
+    method.} \\
+  &\quad \text{2. \textbf{Update:} } t^{(\ell+1)} = \sigma \cdot t^{(\ell)}. \\
+  &\quad \text{3. \textbf{Stop if } } m / t^{(\ell)} \le \epsilon.
+\end{aligned}
+}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Warm starting]\label{rem:warm-start}
+The key to the efficiency of the barrier method is \emph{warm starting}:
+the centering step at parameter $t^{(\ell+1)} = \sigma\,t^{(\ell)}$
+starts from $x^{(\ell+1)}$, which is already close to $x^*(t^{(\ell)})$
+(the previous central path point). If $\sigma$ is not too large, then
+$x^*(t^{(\ell)})$ is close to $x^*(\sigma\,t^{(\ell)})$, so
+Newton's method converges in few iterations.
+\end{remark}
+
+\begin{proposition}[Number of outer iterations]\label{prop:outer-iters}
+The barrier method terminates after at most
+\begin{equation}\label{eq:outer-iters}
+  \left\lceil \frac{\log(m/(t^{(0)}\epsilon))}{\log\sigma}
+  \right\rceil
+\end{equation}
+outer iterations (centering steps).
+\end{proposition}
+
+\begin{proof}
+The stopping criterion is $m/t^{(\ell)} \le \epsilon$, i.e.,
+$t^{(\ell)} \ge m/\epsilon$. Since $t^{(\ell)} = \sigma^\ell\,t^{(0)}$,
+we need $\sigma^\ell \ge m/(t^{(0)}\epsilon)$, i.e.,
+$\ell \ge \log(m/(t^{(0)}\epsilon))/\log\sigma$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: Complexity Analysis
+%% ============================================================
+
+\section{Complexity Analysis}\label{sec:complexity}
+
+The overall complexity of the barrier method depends on two factors:
+\begin{enumerate}[label=(\roman*)]
+  \item The number of outer iterations
+    (Proposition~\ref{prop:outer-iters}).
+  \item The number of Newton steps per centering computation.
+\end{enumerate}
+
+The theory of \emph{self-concordant functions}
+\citep{nesterov2004, wright1997} provides the key to analyzing (ii).
+
+\begin{definition}[Self-concordant function]\label{def:self-concordant}
+A convex function $g : \R \to \R$ is \emph{self-concordant} if
+$|g'''(x)| \le 2\,g''(x)^{3/2}$ for all $x \in \dom g$. More
+generally, $g : \R^n \to \R$ is self-concordant if for every
+$x \in \dom g$ and every direction $v \in \R^n$, the univariate
+function $t \mapsto g(x + tv)$ is self-concordant.
+\end{definition}
+
+\begin{proposition}[Logarithmic barrier is self-concordant]%
+\label{prop:barrier-sc}
+The logarithmic barrier $\phi(x) = -\sum_{i=1}^m \log(-f_i(x))$ is
+self-concordant when the constraint functions $f_i$ are affine
+($f_i(x) = a_i^\top x - b_i$).
+\end{proposition}
+
+\begin{proof}
+For a single linear constraint $f(x) = a^\top x - b$, the barrier
+term is $g(x) = -\log(b - a^\top x)$. Along any direction $v$:
+$\tilde{g}(t) = -\log(b - a^\top(x + tv)) = -\log(c - dt)$ where
+$c = b - a^\top x > 0$ and $d = a^\top v$. Then:
+\begin{align*}
+  \tilde{g}'(t) &= \frac{d}{c - dt}, \qquad
+  \tilde{g}''(t) = \frac{d^2}{(c-dt)^2}, \qquad
+  \tilde{g}'''(t) = \frac{2d^3}{(c-dt)^3}.
+\end{align*}
+We verify: $|\tilde{g}'''(t)| = \frac{2|d|^3}{(c-dt)^3}$ and
+$2\tilde{g}''(t)^{3/2} = 2\frac{|d|^3}{(c-dt)^3}$. So
+$|\tilde{g}'''| = 2(\tilde{g}'')^{3/2}$, confirming self-concordance
+with equality.
+
+Since the sum of self-concordant functions is self-concordant, $\phi$
+is self-concordant.
+\end{proof}
+
+\begin{remark}[Self-concordance for general constraints]%
+\label{rem:sc-general}
+When the constraint functions $f_i$ are nonlinear but convex, the
+logarithmic barrier may not be self-concordant. However, a rescaled
+version $c \cdot \phi$ is self-concordant for an appropriate constant
+$c$ depending on the curvature of the $f_i$. For convex quadratic
+constraints, $c = 1$ suffices. The general theory handles this via
+the \emph{self-concordance parameter} $\vartheta$, which equals $m$
+for the standard logarithmic barrier with $m$ linear constraints.
+\end{remark}
+
+\begin{theorem}[Newton's method on self-concordant functions]%
+\label{thm:newton-sc}
+For a self-concordant function $g$, Newton's method with appropriate
+step size (backtracking line search) achieves
+\begin{equation}\label{eq:newton-sc}
+  g(x_{k+1}) - g^* \le \epsilon
+\end{equation}
+in at most $C_1 (g(x_0) - g^*) + C_2 \log\log(1/\epsilon)$ iterations,
+where $C_1$ and $C_2$ are universal constants independent of the
+problem dimension $n$ and the number of constraints $m$.
+\end{theorem}
+
+\begin{proof}
+The proof, due to \citet{nesterov2004}, proceeds in two phases:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Damped Newton phase:} While the Newton decrement
+    $\lambda(x) = (\nabla g(x)^\top [\nabla^2 g(x)]^{-1}
+    \nabla g(x))^{1/2}$ is large ($\lambda(x) \ge 1/4$), each
+    damped Newton step reduces $g$ by at least a constant. This
+    phase takes $O(g(x_0) - g^*)$ steps.
+  \item \textbf{Quadratically convergent phase:} Once
+    $\lambda(x) < 1/4$, full Newton steps converge quadratically:
+    $\lambda(x_{k+1}) \le 2\lambda(x_k)^2$. This reaches
+    $\lambda(x) < \epsilon$ in $O(\log\log(1/\epsilon))$ steps.
+\end{enumerate}
+The key property of self-concordant functions is that Newton's method
+has \emph{affine-invariant} convergence, meaning the iteration count
+does not depend on the condition number or dimension.
+\end{proof}
+
+\begin{theorem}[Complexity of the barrier method]%
+\label{thm:barrier-complexity}
+Consider problem~\eqref{eq:std-form} with $m$ inequality constraints
+and affine constraint functions $f_i$. The barrier method with
+$\sigma = 1 + 1/\sqrt{m}$ and initial $t^{(0)} = m/f_0(x^{(0)})$
+achieves $f_0(x) - p^* \le \epsilon$ in at most
+\begin{equation}\label{eq:total-complexity}
+  \boxed{O\!\left(\sqrt{m}\,\log\frac{m}{\epsilon}\right)
+  \text{ Newton iterations (total).}}
+\end{equation}
+Each Newton iteration requires solving a linear system of size
+$n \times n$, costing $O(n^3)$ operations (or less with sparsity).
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Number of outer iterations.}
+By Proposition~\ref{prop:outer-iters}, the number of outer iterations
+is
+\begin{equation}\label{eq:outer-count}
+  K = \left\lceil
+  \frac{\log(m/(t^{(0)}\epsilon))}{\log(1 + 1/\sqrt{m})}
+  \right\rceil.
+\end{equation}
+Using $\log(1 + u) \ge u/(1+u)$ for $u > 0$:
+$\log(1 + 1/\sqrt{m}) \ge \frac{1/\sqrt{m}}{1 + 1/\sqrt{m}}
+\ge \frac{1}{2\sqrt{m}}$ for $m \ge 1$. Thus:
+\begin{equation}\label{eq:outer-bound}
+  K \le 2\sqrt{m}\,\log\!\left(\frac{m}{t^{(0)}\epsilon}\right) + 1.
+\end{equation}
+
+\textbf{Step 2: Newton steps per outer iteration.}
+The crucial insight is that with $\sigma = 1 + 1/\sqrt{m}$, the
+starting point for each centering step is sufficiently close to the
+new central path point that Newton's method converges in $O(1)$
+iterations (a constant independent of $m$ and $n$).
+
+More precisely, when $t$ increases from $t^{(\ell)}$ to
+$\sigma\,t^{(\ell)} = (1 + 1/\sqrt{m})\,t^{(\ell)}$, the central
+path point shifts by an amount measured by the Newton decrement. For
+the standard logarithmic barrier (a self-concordant function with
+\emph{self-concordance parameter} $\vartheta = m$), the shift in the
+Newton decrement is bounded by $\sqrt{m} \cdot |\sigma - 1|
+= \sqrt{m} \cdot 1/\sqrt{m} = 1$. When the initial Newton decrement
+is at most $1$, the quadratically convergent phase of Newton's method
+starts immediately, requiring $O(\log\log(1/\epsilon'))$ steps where
+$\epsilon'$ is the centering accuracy.
+
+For the purpose of the barrier method, centering to moderate accuracy
+suffices (e.g., Newton decrement below $1/4$), which requires
+$O(1)$ Newton steps per outer iteration.
+
+\textbf{Step 3: Total count.}
+Total Newton iterations $= K \times O(1)
+= O(\sqrt{m}\log(m/(t^{(0)}\epsilon)))
+= O(\sqrt{m}\log(m/\epsilon))$
+(absorbing $t^{(0)}$ into the constant).
+\end{proof}
+
+\begin{keyresult}[title={Barrier Method Complexity}]
+The barrier method solves a convex program with $m$ inequality
+constraints to $\epsilon$-accuracy in
+$O(\sqrt{m}\log(m/\epsilon))$ Newton iterations.
+Key features:
+\begin{itemize}
+  \item The dependence on $\epsilon$ is $\log(1/\epsilon)$
+    (polynomial-time), not $1/\epsilon$ as in first-order methods.
+  \item The dependence on $m$ is $\sqrt{m}$, which is optimal for
+    the class of self-concordant barriers.
+  \item Each Newton step costs $O(n^3)$ in general, or $O(n^2 m)$
+    when the Hessian has special structure.
+\end{itemize}
+\end{keyresult}
+
+\begin{remark}[Comparison with first-order methods]%
+\label{rem:comparison}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Method} & \textbf{Cost per iteration} &
+  \textbf{Iterations for $\epsilon$} \\
+\midrule
+Gradient descent & $O(n)$ & $O(1/\epsilon)$ \\
+Nesterov accel.\ & $O(n)$ & $O(1/\sqrt{\epsilon})$ \\
+Barrier method & $O(n^3)$ per Newton step &
+  $O(\sqrt{m}\log(1/\epsilon))$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+For small to moderate $n$ and $m$, interior-point methods dominate
+due to the logarithmic dependence on $1/\epsilon$. For very large $n$
+(as in deep learning), first-order methods are preferred due to the
+$O(n)$ per-iteration cost.
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: Newton's Method
+%% ============================================================
+
+\section{Newton's Method for the Centering Step}\label{sec:newton}
+
+Each centering step requires (approximately) solving the unconstrained
+problem $\min_x\; t\,f_0(x) + \phi(x)$ (we drop equality constraints
+for clarity). Newton's method is the algorithm of choice due to its
+quadratic convergence near the optimum.
+
+\begin{definition}[Newton's method]\label{def:newton}
+Given a twice differentiable convex function $g : \R^n \to \R$, Newton's
+method generates iterates via
+\begin{equation}\label{eq:newton}
+  x_{k+1} = x_k - [\nabla^2 g(x_k)]^{-1}\nabla g(x_k).
+\end{equation}
+The \emph{Newton step} $\Delta x_k = -[\nabla^2 g(x_k)]^{-1}\nabla g(x_k)$
+is the minimizer of the local quadratic model
+$g(x_k) + \nabla g(x_k)^\top(x - x_k)
++ \frac{1}{2}(x - x_k)^\top\nabla^2 g(x_k)(x - x_k)$.
+\end{definition}
+
+\begin{definition}[Newton decrement]\label{def:newton-decrement}
+The \emph{Newton decrement} of $g$ at $x$ is
+\begin{equation}\label{eq:newton-decrement}
+  \lambda(x) = \bigl(\nabla g(x)^\top[\nabla^2 g(x)]^{-1}
+  \nabla g(x)\bigr)^{1/2} = \|\Delta x\|_{\nabla^2 g(x)},
+\end{equation}
+where $\|v\|_H = (v^\top H v)^{1/2}$ is the local norm induced by
+the Hessian. The Newton decrement is affine-invariant: it does not
+change under invertible linear transformations of the variable $x$.
+\end{definition}
+
+\begin{remark}[Newton's method for the barrier]\label{rem:newton-barrier}
+For the centering problem $g(x) = t\,f_0(x) + \phi(x)$, the Newton
+step requires:
+\begin{enumerate}
+  \item Computing the gradient: $\nabla g(x) = t\,\nabla f_0(x)
+    + \nabla\phi(x)$.
+  \item Computing the Hessian: $\nabla^2 g(x) = t\,\nabla^2 f_0(x)
+    + \nabla^2\phi(x)$.
+  \item Solving the linear system
+    $\nabla^2 g(x)\,\Delta x = -\nabla g(x)$.
+\end{enumerate}
+For linear programs ($f_0$ linear, $f_i$ linear), the Hessian
+$\nabla^2 g(x) = \nabla^2\phi(x)$ has a specific sparse structure
+that can be exploited for efficient computation.
+\end{remark}
+
+\begin{proposition}[Quadratic convergence of Newton's method]%
+\label{prop:newton-quadratic}
+If $g$ is self-concordant and the Newton decrement satisfies
+$\lambda(x_k) < 1/4$, then the full Newton step (no line search) gives
+\begin{equation}\label{eq:quadratic-conv}
+  \lambda(x_{k+1}) \le 2\lambda(x_k)^2.
+\end{equation}
+Starting from $\lambda(x_0) < 1/4$, after $j$ Newton steps:
+$\lambda(x_j) \le 2^{-2^j+1} \cdot \lambda(x_0)$.
+\end{proposition}
+
+\begin{proof}
+This is a consequence of the self-concordance inequality, which
+provides affine-invariant control of the third derivative. The
+detailed proof can be found in \citet[Theorem~4.1.14]{nesterov2004}
+or \citet[Chapter~4]{wright1997}.
+\end{proof}
+
+%% ============================================================
+%% SECTION 8: MDP LP Formulation
+%% ============================================================
+
+\section{Connection to the MDP LP Formulation}\label{sec:mdp}
+
+\begin{rlconnection}[title={Interior-Point Methods for MDPs}]
+\textbf{The LP formulation of MDPs.}
+A finite MDP with state space $S$, action space $A$, transition
+probabilities $P(s'|s,a)$, rewards $r(s,a)$, and discount factor
+$\gamma \in (0,1)$ can be solved via the linear program:
+\begin{equation}\label{eq:mdp-lp}
+\begin{aligned}
+  &\min_{v \in \R^{|S|}}\; c^\top v
+  = \sum_{s \in S} \alpha(s)\, v(s) \\
+  &\text{s.t.}\; v(s) \ge r(s,a) + \gamma \sum_{s' \in S}
+    P(s'|s,a)\,v(s'), \quad \forall\, s \in S,\; a \in A,
+\end{aligned}
+\end{equation}
+where $\alpha$ is an initial state distribution (any strictly positive
+distribution works). The optimal value function $v^*$ is the unique
+solution. This LP has $|S|$ variables and $|S| \cdot |A|$ inequality
+constraints.
+
+\textbf{Applying interior-point methods.}
+The barrier method solves~\eqref{eq:mdp-lp} in
+$O(\sqrt{|S| \cdot |A|}\,\log(|S| \cdot |A|/\epsilon))$ Newton
+iterations. Each Newton step involves a linear system of size
+$|S| \times |S|$, costing $O(|S|^3)$ in the dense case. For
+large MDPs, this is impractical (e.g., $|S| = 10^6$), but for
+moderate-sized problems it provides an exact solution with
+guaranteed accuracy.
+
+\textbf{Dual LP and occupancy measures.}
+The dual of~\eqref{eq:mdp-lp} is
+\begin{equation}\label{eq:mdp-dual-lp}
+\begin{aligned}
+  &\max_{d \ge 0}\; \sum_{s,a} d(s,a)\, r(s,a) \\
+  &\text{s.t.}\; \sum_a d(s,a) = \alpha(s)
+    + \gamma \sum_{s',a} d(s',a)\, P(s|s',a), \quad \forall\, s \in S,
+\end{aligned}
+\end{equation}
+where $d(s,a)$ is the discounted occupancy measure. The optimal policy
+is recovered from $d^*$ via $\pi^*(a|s) = d^*(s,a)/\sum_{a'} d^*(s,a')$.
+
+\textbf{Constrained MDPs and duality gaps.}
+In constrained MDPs, one adds constraints of the form
+$\sum_{s,a} d(s,a)\,c(s,a) \le \alpha$ to~\eqref{eq:mdp-dual-lp}.
+The resulting LP can be solved by interior-point methods. The duality
+gap $m/t$ from Theorem~\ref{thm:central-path} provides a certificate
+of near-optimality at each step, which is valuable for safe RL
+applications where constraint satisfaction must be verified.
 \end{rlconnection}
 
 %% ============================================================
@@ -246,182 +723,121 @@ by interior-point methods when the constraint set has moderate dimension.
 
 \section{Exercises}\label{sec:exercises}
 
-\begin{exercise}[Dual of a linear program]\label{ex:lp-dual}
-Consider the LP $\min_x \; c^\top x$ subject to $Ax = b$, $x \ge 0$.
+\begin{exercise}[Barrier for box constraints]\label{ex:box-barrier}
+Consider the box-constrained problem
+$\min_x f_0(x)$ subject to $\ell_i \le x_i \le u_i$,
+$i = 1, \dots, n$, where $\ell_i < u_i$.
 \begin{enumerate}[label=(\alph*)]
-  \item Write the Lagrangian and derive the dual problem. Show it is
-    $\max_\nu \; b^\top \nu$ subject to $A^\top \nu \le c$.
-  \item Prove that strong duality always holds for feasible LPs (Hint: LP
-    feasible sets are polyhedral, so Slater's condition can be replaced by
-    the weaker condition of feasibility).
+  \item Write the logarithmic barrier $\phi(x)$ explicitly.
+  \item Compute $\nabla\phi(x)$ and $\nabla^2\phi(x)$.
+  \item Show that the Hessian $\nabla^2\phi(x)$ is diagonal.
+  \item For $f_0(x) = c^\top x$ (linear objective), find the central
+    path $x^*(t)$ by solving the stationarity condition.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[KKT for least-squares with non-negativity]\label{ex:nnls}
-Consider the non-negative least-squares problem:
-$\min_{x \ge 0} \; \frac{1}{2}\|Ax - b\|^2$.
-Write the KKT conditions explicitly and show they reduce to:
-$x \ge 0$, $A^\top(Ax - b) \ge 0$, $x_i [A^\top(Ax - b)]_i = 0$ for all $i$.
-\end{exercise}
-
-\begin{exercise}[Convergence rate verification]\label{ex:gd-verify}
-Let $f(x) = \frac{1}{2}x^\top Q x$ where $Q$ is symmetric positive definite
-with eigenvalues $\mu = \lambda_{\min}(Q)$ and $L = \lambda_{\max}(Q)$.
+\begin{exercise}[Central path for LP]\label{ex:lp-central-path}
+For the LP $\min\; c^\top x$ subject to $x \ge 0$ (i.e.,
+$f_i(x) = -x_i$ for $i = 1, \dots, n$):
 \begin{enumerate}[label=(\alph*)]
-  \item Verify that $f$ is $\mu$-strongly convex and $L$-smooth.
-  \item Run gradient descent with $\eta = 1/L$ and verify that
-    $f(x_k) \le (1 - \mu/L)^k f(x_0)$.
-  \item For $Q = \diag(1, 100)$, compute the condition number and determine
-    how many iterations are needed for $f(x_k)/f(x_0) \le 10^{-6}$.
+  \item Write the barrier function
+    $\phi(x) = -\sum_{i=1}^n \log(x_i)$.
+  \item Show that the central path satisfies $x_i^*(t) = 1/(tc_i)$
+    when $c_i > 0$ for all $i$.
+  \item Verify that $c^\top x^*(t) - p^* = n/t$ where $p^* = 0$
+    (the infimum as $x \to 0^+$).
+  \item Compute the dual variables $\lambda_i^*(t)$ and verify that
+    $\lambda_i^*(t) \cdot x_i^*(t) = 1/t$ for all $i$
+    (approximate complementary slackness).
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Soft-thresholding derivation]\label{ex:soft-thresh}
-Derive the soft-thresholding operator: show that
-$\prox_{\tau|\cdot|}(v) = \text{sign}(v)\max(|v| - \tau, 0)$ for a scalar $v$.
-(Hint: consider the three cases $v > \tau$, $|v| \le \tau$, and $v < -\tau$
-separately.)
-\end{exercise}
-
-\begin{exercise}[Dual of SDP relaxation]\label{ex:sdp-dual}
-Consider the boolean optimization problem $\min_{x \in \{-1,+1\}^n} x^\top W x$.
-The standard SDP relaxation replaces $x x^\top$ with a matrix variable
-$X \succeq 0$, $X_{ii} = 1$.
+\begin{exercise}[Self-concordance verification]\label{ex:self-conc}
+Verify self-concordance of $g(x) = -\log(x)$ for $x > 0$:
 \begin{enumerate}[label=(\alph*)]
-  \item Write this relaxation as a standard SDP.
-  \item Derive its Lagrange dual.
-  \item Show that weak duality provides a lower bound on the original
-    combinatorial problem.
+  \item Compute $g'(x)$, $g''(x)$, $g'''(x)$.
+  \item Verify $|g'''(x)| = 2\,g''(x)^{3/2}$.
+  \item Show that $g(x) = -\log(b - a^\top x)$ for $a \in \R^n$,
+    $b \in \R$ is self-concordant on
+    $\{x : a^\top x < b\}$. Verify the self-concordance condition
+    along any direction $v$.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Proving the PL inequality]\label{ex:pl}
-Let $f$ be $\mu$-strongly convex and differentiable.
+\begin{exercise}[Newton's method on a quadratic]\label{ex:newton-quad}
+For $g(x) = \frac{1}{2}x^\top Q x - b^\top x$ with $Q \succ 0$:
 \begin{enumerate}[label=(\alph*)]
-  \item Prove that $\|\nabla f(x)\|^2 \ge 2\mu(f(x) - f(x^*))$ for all $x$.
-  \item Show by example that the PL inequality can hold for non-convex
-    functions (consider $f(x) = x^2 + 3\sin^2(x)$ near the origin; verify
-    numerically).
-  \item Prove that gradient descent converges linearly under the PL inequality
-    alone (without assuming convexity).
+  \item Show that Newton's method converges in one step:
+    $x_1 = Q^{-1}b = x^*$.
+  \item Compute the Newton decrement $\lambda(x_0)$ and verify that
+    $g(x_0) - g^* = \frac{1}{2}\lambda(x_0)^2$.
+  \item Explain why the ``one-step'' convergence does not contradict
+    the $O(\log\log(1/\epsilon))$ complexity bound.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[FISTA for LASSO]\label{ex:fista-lasso}
-The LASSO problem is $\min_x \frac{1}{2}\|Ax - b\|^2 + \tau\|x\|_1$.
+\begin{exercise}[Barrier method complexity]\label{ex:complexity}
+A convex program has $m = 100$ inequality constraints.
 \begin{enumerate}[label=(\alph*)]
-  \item Identify $f(x)$ and $h(x)$ in the composite formulation.
-  \item Write out the FISTA iteration explicitly (including the
-    soft-thresholding step).
-  \item What is the Lipschitz constant $L$ of $\nabla f$? Express it in terms
-    of $A$.
+  \item With $\sigma = 2$, how many outer iterations are needed to go
+    from $t^{(0)} = 1$ to $t \ge m/\epsilon = 10^8$ (i.e.,
+    $\epsilon = 10^{-6}$)?
+  \item With $\sigma = 1 + 1/\sqrt{m}$, how many outer iterations?
+  \item Explain why the optimal $\sigma = 1 + 1/\sqrt{m}$ gives fewer
+    \emph{total} Newton steps despite more outer iterations.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Central path for LP]\label{ex:lp-barrier}
-For the LP $\min\; c^\top x$ subject to $x \ge 0$ (i.e., $f_i(x) = -x_i$):
+\begin{exercise}[Duality gap in constrained MDP]\label{ex:cmdp-gap}
+Consider a constrained MDP with one safety constraint:
+$\max_\pi J(\pi)$ subject to $C(\pi) \le \alpha$, where $J$ is the
+expected return and $C$ is the expected cost under policy $\pi$.
 \begin{enumerate}[label=(\alph*)]
-  \item Write the barrier function $\phi(x) = -\sum_i \log(x_i)$.
-  \item Show that the central path satisfies $x^*_i(t) = 1/(tc_i)$ when $c > 0$.
-  \item Verify that $c^\top x^*(t) - p^* = n/t$ where $n$ is the dimension
-    and $p^* = 0$.
+  \item Write the Lagrangian $L(\pi, \lambda)$ for this problem
+    (with $\lambda \ge 0$ the dual variable for the cost constraint).
+  \item Show that the dual function
+    $g(\lambda) = \max_\pi L(\pi, \lambda)$ can be computed by solving
+    an unconstrained MDP with modified reward $r(s,a) - \lambda c(s,a)$.
+  \item In the occupancy-measure LP formulation, the constrained MDP
+    becomes an LP with $|S| \cdot |A| + 1$ constraints ($|S| \cdot |A|$
+    non-negativity constraints plus the cost constraint). What is the
+    duality gap $m/t$ along the central path, and how does it relate
+    to the constraint violation?
+  \item Under what condition does strong duality hold? (Relate to
+    Slater's condition in the occupancy-measure space.)
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Duality gap in constrained MDP]\label{ex:cmdp}
-Consider a constrained MDP with one constraint: $\max_\pi J(\pi)$ subject to
-$C(\pi) \le \alpha$, where $J$ and $C$ are the expected return and expected
-cost under policy $\pi$ over a finite MDP.
+\begin{exercise}[Barrier method for SDP]\label{ex:sdp-barrier}
+For a semidefinite program (SDP) $\min\; \tr(CX)$ subject to
+$\tr(A_i X) = b_i$, $X \succeq 0$ (where $X$ is an $n \times n$
+symmetric matrix variable):
 \begin{enumerate}[label=(\alph*)]
-  \item Write the Lagrangian $L(\pi, \lambda)$ for this problem.
-  \item Show that the dual function $g(\lambda) = \max_\pi L(\pi, \lambda)$
-    corresponds to solving an unconstrained MDP with modified reward
-    $r(s,a) - \lambda c(s,a)$.
-  \item Under what condition does strong duality hold? (Hint: relate to
-    Slater's condition in the occupancy-measure LP formulation.)
+  \item The natural barrier for $X \succeq 0$ is
+    $\phi(X) = -\log\det(X)$. Verify that this is a valid barrier
+    (convex on the cone of positive definite matrices, going to
+    $+\infty$ as $X$ approaches the boundary).
+  \item Show that $\nabla_X \phi(X) = -X^{-1}$.
+  \item The self-concordance parameter of this barrier is $\vartheta = n$.
+    What is the complexity of the barrier method for this SDP?
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Moreau envelope and gradient]\label{ex:moreau}
-The \emph{Moreau envelope} of a convex function $h$ with parameter $\gamma > 0$ is
-$M_\gamma h(v) = \min_x \{h(x) + \frac{1}{2\gamma}\|x - v\|^2\}$.
+\begin{exercise}[Interior-point vs.\ policy iteration]\label{ex:ip-vs-pi}
+For a finite MDP with $|S|$ states and $|A|$ actions:
 \begin{enumerate}[label=(\alph*)]
-  \item Show that $M_\gamma h$ is differentiable even when $h$ is not, with
-    gradient $\nabla M_\gamma h(v) = \frac{1}{\gamma}(v - \prox_{\gamma h}(v))$.
-  \item Prove that $M_\gamma h$ is $(1/\gamma)$-smooth.
-  \item Explain how this connects to the proximal point algorithm:
-    $x_{k+1} = \prox_{\gamma h}(x_k)$.
+  \item The LP formulation~\eqref{eq:mdp-lp} has $m = |S| \cdot |A|$
+    constraints. What is the barrier method complexity in terms of
+    $|S|$ and $|A|$?
+  \item Policy iteration converges in at most
+    $|A|^{|S|}/(1 - \gamma)$ iterations (worst case), but often
+    converges in very few iterations in practice. Compare with the
+    interior-point complexity.
+  \item For what regime of $|S|$, $|A|$, and $\gamma$ would
+    interior-point methods be preferred over policy iteration?
 \end{enumerate}
 \end{exercise}
 
-%% ============================================================
-%% SECTION 10: Summary
-%% ============================================================
-
-\section{Summary}\label{sec:summary}
-
-\subsection{Key Theorems Recap}
-
-The central results of this document are:
-\begin{enumerate}
-  \item \textbf{Weak duality} (Theorem~\ref{thm:weak-duality}): Always
-    $d^* \le p^*$.
-  \item \textbf{Strong duality} (Theorem~\ref{thm:strong-duality}): Under
-    Slater's condition, $d^* = p^*$.
-  \item \textbf{KKT conditions} (Theorems~\ref{thm:kkt-necessary}
-    and~\ref{thm:kkt-sufficient}): Necessary under strong duality, sufficient
-    for convex problems.
-  \item \textbf{Gradient descent} (Theorems~\ref{thm:gd-convex}
-    and~\ref{thm:gd-strong}): $O(1/k)$ for convex, $O(\rho^k)$ for strongly convex.
-  \item \textbf{Nesterov acceleration} (Theorem~\ref{thm:nesterov}): Optimal
-    $O(1/k^2)$ for smooth convex.
-  \item \textbf{Interior-point methods} (Theorem~\ref{thm:barrier-complexity}):
-    $O(\sqrt{m}\log(m/\epsilon))$ Newton steps.
-\end{enumerate}
-
-\subsection{Convergence Rate Summary}
-
-\begin{table}[h]
-\centering
-\caption{Convergence rates for first-order and interior-point methods.}
-\label{tab:rates}
-\renewcommand{\arraystretch}{1.3}
-\begin{tabular}{@{}llll@{}}
-\toprule
-\textbf{Method} & \textbf{Assumption} & \textbf{Rate} & \textbf{Iterations for $\epsilon$} \\
-\midrule
-Gradient descent & Convex, $L$-smooth &
-  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
-Gradient descent & $\mu$-s.c., $L$-smooth &
-  $O((1-\mu/L)^k)$ & $O(\kappa\log(1/\epsilon))$ \\
-Nesterov accel. & Convex, $L$-smooth &
-  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
-Nesterov accel. & $\mu$-s.c., $L$-smooth &
-  $O((1-1/\sqrt{\kappa})^k)$ & $O(\sqrt{\kappa}\log(1/\epsilon))$ \\
-Prox.\ gradient & Convex, $L$-smooth $+$ $h$ &
-  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
-FISTA & Convex, $L$-smooth $+$ $h$ &
-  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
-Interior point & $m$ ineq.\ constraints &
-  $O(\sqrt{m}\log(m/\epsilon))$ & $O(\sqrt{m}\log(1/\epsilon))$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{remark}[Lower bounds]\label{rem:lower}
-The $O(1/k^2)$ rate for smooth convex functions and $O((1-1/\sqrt{\kappa})^k)$
-for smooth strongly convex functions match the information-theoretic lower bounds
-for first-order methods (Nesterov, 1983). These are not improvable by any
-method that accesses $f$ only through gradient evaluations.
-\end{remark}
-
-\begin{remark}[Stochastic extensions]\label{rem:stochastic}
-In ML and RL, we typically have access only to stochastic gradients. SGD with
-step size $\eta_k = O(1/k)$ achieves $O(1/\sqrt{k})$ for convex and $O(1/k)$
-for strongly convex problems (in expectation). Variance reduction techniques
-(SVRG, SARAH) recover the deterministic rates up to logarithmic factors. These
-stochastic methods are covered in a subsequent document.
-\end{remark}
-
+\bibliography{optimization-refs}
 
 \end{document}

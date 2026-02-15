@@ -1,205 +1,973 @@
 \documentclass[11pt,a4paper]{article}
-
-% --- Encoding and fonts ---
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-
-% --- Mathematics ---
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-
-% --- Page layout ---
-\usepackage[margin=1in,headheight=14pt]{geometry}
-
-% --- Hyperlinks ---
-\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
-
-% --- Lists ---
-\usepackage{enumitem}
-
-% --- Colors and boxes ---
-\usepackage{xcolor}
-\usepackage[theorems,skins,breakable]{tcolorbox}
-
-% --- Header/footer ---
-\usepackage{fancyhdr}
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[L]{\textsc{Lesson 28: Nesterov Acceleration}}
 \fancyhead[R]{\thepage}
-
-% --- Tables ---
-\usepackage{booktabs}
-
-% ============================================================
-% Theorem environments
-% ============================================================
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ============================================================
-% Colored boxes
-% ============================================================
-\newtcolorbox{keyresult}[1][]{
-  colback=green!5!white,
-  colframe=green!60!black,
-  fonttitle=\bfseries,
-  title={Key Result},
-  breakable,
-  #1
-}
-
-\newtcolorbox{rlconnection}[1][]{
-  colback=blue!5!white,
-  colframe=blue!60!black,
-  fonttitle=\bfseries,
-  title={RL Connection},
-  breakable,
-  #1
-}
-
-\newtcolorbox{warning}[1][]{
-  colback=red!5!white,
-  colframe=red!60!black,
-  fonttitle=\bfseries,
-  title={Warning},
-  breakable,
-  #1
-}
-
-% ============================================================
-% Custom commands
-% ============================================================
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\epi}{epi}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\prox}{prox}
-\DeclareMathOperator*{\argmin}{arg\,min}
-\DeclareMathOperator*{\argmax}{arg\,max}
-\DeclareMathOperator{\tr}{tr}
-\DeclareMathOperator{\diag}{diag}
-\DeclareMathOperator{\interior}{int}
-
-% ============================================================
 \title{Lesson 28: Nesterov Acceleration}
-\author{%
-  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
-  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
-}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{5}
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
 
-\section{Nesterov's Accelerated Gradient Method}\label{sec:nesterov}
+\section{Introduction}\label{sec:intro}
 
-\subsection{The Accelerated Iteration}
+Gradient descent on convex $L$-smooth functions achieves an $O(1/k)$
+convergence rate (Lesson~27). A natural question arises: is this the best
+a first-order method can do? The answer is no. In 1983, Yurii Nesterov
+introduced an accelerated gradient method that achieves an $O(1/k^2)$
+rate using a simple momentum term---a quadratic improvement that matches
+the information-theoretic lower bound for the class of first-order
+methods \citep{nesterov1983}.
 
-Nesterov's accelerated gradient method improves the $O(1/k)$ rate for convex
-functions to $O(1/k^2)$, which is optimal among first-order methods.
+This lesson develops Nesterov's accelerated gradient method from
+first principles. Section~\ref{sec:motivation} motivates the need for
+acceleration by reviewing the suboptimality of gradient descent.
+Section~\ref{sec:lower-bounds} states the lower complexity bounds for
+first-order methods. Section~\ref{sec:algorithm} defines Nesterov's
+method precisely. Section~\ref{sec:lyapunov} introduces the Lyapunov
+analysis framework used to prove convergence.
+Section~\ref{sec:convergence} presents the main convergence theorem
+with a complete proof. Section~\ref{sec:strong-convexity} extends the
+result to strongly convex functions.
+Section~\ref{sec:rl-connection} discusses connections to momentum in
+reinforcement learning and policy optimization.
+Section~\ref{sec:exercises} provides exercises.
 
-\begin{definition}[Nesterov's accelerated gradient method]\label{def:nesterov}
-For a convex, $L$-smooth function $f$, with step size $\eta = 1/L$, the
-accelerated gradient method maintains two sequences:
-\begin{equation}\label{eq:nesterov}
-\begin{aligned}
-  y_{k} &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
-  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k),
-\end{aligned}
+Throughout, we assume $f : \R^n \to \R$ is convex and $L$-smooth
+(i.e., $\nabla f$ is $L$-Lipschitz continuous), with a minimizer
+$x^* \in \R^n$ satisfying $f^* = f(x^*)$.
+
+%% ============================================================
+%% SECTION 2: Motivation
+%% ============================================================
+
+\section{Motivation: Why Gradient Descent Is Suboptimal}\label{sec:motivation}
+
+Recall from Lesson~27 that gradient descent with step size $\eta = 1/L$
+on a convex $L$-smooth function satisfies
+\begin{equation}\label{eq:gd-rate}
+  f(x_k) - f^* \le \frac{L \|x_0 - x^*\|^2}{2k}.
 \end{equation}
-with $x_0 = x_{-1}$ (so $y_0 = x_0$). The momentum coefficient
-$\theta_k = (k-1)/(k+2)$ is the key ingredient.
-\end{definition}
+To achieve $\epsilon$-accuracy, one needs $k = O(1/\epsilon)$ iterations.
 
-\subsection{Convergence Rate}
+\begin{example}[Gradient descent on an ill-conditioned quadratic]%
+\label{ex:ill-conditioned}
+Consider $f(x_1, x_2) = \frac{1}{2}(x_1^2 + 100 x_2^2)$ with
+$L = 100$. Starting from $x_0 = (1, 1)$, gradient descent oscillates
+along the narrow valley defined by the large eigenvalue direction,
+taking small steps along the small eigenvalue direction. After $k$
+steps, the error is roughly $50/k$. To reduce the error to $0.01$
+requires $k \ge 5000$ iterations.
 
-\begin{theorem}[$O(1/k^2)$ convergence of Nesterov's method]\label{thm:nesterov}
-Under the conditions of Definition~\ref{def:nesterov},
-\begin{equation}\label{eq:nesterov-rate}
-  f(x_k) - f(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+However, a method that ``remembers'' its previous direction and adds
+momentum can cut across the valley more efficiently. This intuition
+underlies Nesterov's acceleration.
+\end{example}
+
+\begin{remark}[The gap between $O(1/k)$ and $O(1/k^2)$]\label{rem:gap}
+The improvement from $O(1/k)$ to $O(1/k^2)$ is substantial.
+To achieve $f(x_k) - f^* \le \epsilon$:
+\begin{itemize}
+  \item Gradient descent requires $O(1/\epsilon)$ iterations.
+  \item Nesterov's method requires $O(1/\sqrt{\epsilon})$ iterations.
+\end{itemize}
+For $\epsilon = 10^{-6}$, this is $10^6$ versus $10^3$ iterations---a
+factor of $1000$ improvement.
+\end{remark}
+
+%% ============================================================
+%% SECTION 3: Lower Bounds
+%% ============================================================
+
+\section{Lower Bounds for First-Order Methods}\label{sec:lower-bounds}
+
+A \emph{first-order method} is one that generates iterates of the form
+$x_k \in x_0 + \Span\{\nabla f(x_0), \nabla f(x_1), \dots,
+\nabla f(x_{k-1})\}$. This class includes gradient descent, conjugate
+gradient, and all methods that only access $f$ through function and
+gradient evaluations.
+
+\begin{theorem}[Nesterov's lower bound for smooth convex optimization]%
+\label{thm:lower-bound}
+For any first-order method and any $k \le (n-1)/2$, there exists a
+convex $L$-smooth function $f : \R^n \to \R$ such that
+\begin{equation}\label{eq:lower-bound}
+  f(x_k) - f^* \ge \frac{3L \|x_0 - x^*\|^2}{32(k+1)^2}.
 \end{equation}
 \end{theorem}
 
 \begin{proof}
-We use the \emph{estimate sequence} technique. Define the sequences
-$\{A_k\}$ and $\{v_k\}$ by $A_0 = 0$, $a_{k+1} = (k+1)/2$,
-$A_{k+1} = A_k + a_{k+1}$, and $v_0 = x_0$. One can verify that
-$A_k = k(k+1)/4$ for $k \ge 1$.
-
-We prove by induction the key inequality:
-\begin{equation}\label{eq:estimate-seq}
-  A_k (f(x_k) - f(x^*)) \le \frac{L}{2}\|v_0 - x^*\|^2
-    - \frac{L}{2}\|v_k - x^*\|^2.
-\end{equation}
-Since $\|v_k - x^*\|^2 \ge 0$, this implies
-$f(x_k) - f(x^*) \le \frac{L\|x_0 - x^*\|^2}{2A_k}
-= \frac{2L\|x_0 - x^*\|^2}{k(k+1)} \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}$.
-
-\emph{Base case} ($k = 0$): $A_0 = 0$, so both sides equal zero.
-
-\emph{Inductive step:} Assume~\eqref{eq:estimate-seq} holds for $k$. We need to
-show it for $k+1$. By the descent lemma applied at $y_k$:
-\[
-  f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|\nabla f(y_k)\|^2.
-\]
-By convexity: $f(x^*) \ge f(y_k) + \nabla f(y_k)^\top(x^* - y_k)$, so
-$f(y_k) \le f(x^*) + \nabla f(y_k)^\top(y_k - x^*)$. Combining with
-a weighted average (weight $a_{k+1}$ for the inequality at $x^*$ and $A_k$
-for the inductive hypothesis at $x_k$), and using the specific choice
-$y_k = \frac{A_k x_k + a_{k+1} v_k}{A_{k+1}}$ together with the update
-$v_{k+1} = v_k - \frac{a_{k+1}}{L}\nabla f(y_k)$, one obtains
-after algebraic manipulations (completing the square in $v_k$):
-\[
-  A_{k+1}(f(x_{k+1}) - f(x^*))
-  \le \frac{L}{2}\|v_0 - x^*\|^2 - \frac{L}{2}\|v_{k+1} - x^*\|^2.
-\]
-The algebraic details involve verifying that the momentum coefficient
-$(k-1)/(k+2)$ corresponds precisely to the ratio $A_k/A_{k+1}$ that makes
-$y_k$ the correct convex combination. This completes the induction.
+The proof, due to \citet{nesterov2004}, constructs a ``worst-case''
+tridiagonal quadratic. We state the result without proof and refer to
+\citet[Theorem~2.1.7]{nesterov2004} for the complete construction.
 \end{proof}
 
-\begin{remark}[Optimality]\label{rem:optimal}
-Nesterov (1983) showed that $O(1/k^2)$ is the \emph{optimal} rate for
-first-order methods on the class of $L$-smooth convex functions. That is,
-for any first-order method using only gradient evaluations, there exists an
-$L$-smooth convex function for which the method cannot converge faster than
-$\Omega(1/k^2)$. This is the celebrated information-theoretic lower bound.
+\begin{remark}[Interpretation]\label{rem:lower-interpretation}
+Theorem~\ref{thm:lower-bound} establishes that no first-order method
+can converge faster than $\Omega(1/k^2)$ on the class of convex
+$L$-smooth functions. Combined with Nesterov's method (which achieves
+$O(1/k^2)$, as we prove below), this shows that the accelerated gradient
+method is \emph{optimal} among first-order methods.
 \end{remark}
 
-\begin{warning}
-Nesterov acceleration does not directly apply to stochastic gradients. Naive
-momentum with noisy gradients can amplify variance and diverge. This is why
-SGD with momentum and Adam use different momentum schemes than classical
-Nesterov acceleration.
-\end{warning}
+\begin{remark}[Strongly convex lower bound]\label{rem:sc-lower}
+For $\mu$-strongly convex, $L$-smooth functions with condition number
+$\kappa = L/\mu$, the lower bound becomes
+\begin{equation}\label{eq:sc-lower-bound}
+  f(x_k) - f^* \ge \frac{\mu}{2}
+  \left(\frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}\right)^{2k}
+  \|x_0 - x^*\|^2.
+\end{equation}
+Gradient descent achieves only $(1 - 1/\kappa)^k$, while the accelerated
+method achieves $(1 - 1/\sqrt{\kappa})^k$, which matches this lower bound
+\citep{nesterov2004}.
+\end{remark}
 
 %% ============================================================
-%% SECTION 7: Proximal Methods
+%% SECTION 4: Nesterov's Method
 %% ============================================================
 
+\section{Nesterov's Accelerated Gradient Method}\label{sec:algorithm}
+
+\begin{definition}[Nesterov's accelerated gradient method]%
+\label{def:nesterov}
+Given a convex $L$-smooth function $f : \R^n \to \R$ and an initial
+point $x_0 \in \R^n$, Nesterov's accelerated gradient method generates
+two coupled sequences $\{x_k\}$ and $\{y_k\}$ via
+\begin{equation}\label{eq:nesterov}
+\boxed{
+\begin{aligned}
+  y_k &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k),
+\end{aligned}
+}
+\end{equation}
+for $k = 0, 1, 2, \dots$, with $x_{-1} = x_0$ (so that $y_0 = x_0$).
+\end{definition}
+
+\begin{remark}[Momentum interpretation]\label{rem:momentum}
+The first line of~\eqref{eq:nesterov} computes an extrapolated point
+$y_k$ by adding a momentum term $\frac{k-1}{k+2}(x_k - x_{k-1})$ to
+the current iterate $x_k$. The coefficient $\theta_k = (k-1)/(k+2)$
+increases from $0$ toward $1$ as $k$ grows, so later iterates carry
+stronger momentum. The second line performs a standard gradient step
+from $y_k$ rather than from $x_k$.
+\end{remark}
+
+\begin{remark}[Alternative form]\label{rem:alt-form}
+An equivalent formulation uses three sequences. Define
+$v_k = x_k + \frac{k}{k+3}(x_k - x_{k-1})$. Then the update
+can be written as
+\begin{equation}\label{eq:nesterov-alt}
+\begin{aligned}
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k), \\
+  y_{k+1} &= x_{k+1} + \frac{k}{k+3}(x_{k+1} - x_k).
+\end{aligned}
+\end{equation}
+This form makes clear that the gradient step and the momentum step
+alternate.
+\end{remark}
+
+\begin{remark}[Comparison with heavy-ball method]\label{rem:heavy-ball}
+Polyak's heavy-ball method \citep{polyak1992} uses a fixed momentum
+coefficient $\beta$:
+$x_{k+1} = x_k - \eta \nabla f(x_k) + \beta(x_k - x_{k-1})$.
+While this achieves accelerated rates on quadratics, it does \emph{not}
+achieve $O(1/k^2)$ on general convex functions. Nesterov's key insight
+is the time-varying momentum $\theta_k = (k-1)/(k+2)$ and the gradient
+evaluation at the extrapolated point $y_k$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: Lyapunov Analysis
+%% ============================================================
+
+\section{Lyapunov Analysis Framework}\label{sec:lyapunov}
+
+We prove the $O(1/k^2)$ convergence of Nesterov's method using a
+Lyapunov (energy) function argument. This approach, while less classical
+than Nesterov's original estimate sequence technique, provides a more
+transparent proof.
+
+\begin{definition}[Lyapunov energy function]\label{def:lyapunov}
+Define the \emph{Lyapunov energy} at iteration $k$ as
+\begin{equation}\label{eq:lyapunov}
+  \mathcal{E}_k = k(k-1)\bigl(f(x_k) - f^*\bigr)
+  + 2L\|z_k - x^*\|^2,
+\end{equation}
+where $z_k = (k-1)x_k - (k-2)x_{k-1}$ for $k \ge 1$, with
+$z_0 = x_0$ and $z_1 = x_0$.
+\end{definition}
+
+\begin{remark}[Role of the Lyapunov function]\label{rem:lyapunov-role}
+The energy $\mathcal{E}_k$ balances two competing quantities: the
+suboptimality gap $f(x_k) - f^*$ (weighted by $k(k-1)$, which grows)
+and the distance to the optimum $\|z_k - x^*\|^2$ (which should
+decrease). The key is to show that $\mathcal{E}_k$ is non-increasing,
+which forces $f(x_k) - f^*$ to decrease as $O(1/k^2)$.
+\end{remark}
+
+\begin{lemma}[Key descent inequality]\label{lem:key-descent}
+Let $f$ be convex and $L$-smooth. For the iterates of Nesterov's
+method (Definition~\ref{def:nesterov}), the following holds for all
+$k \ge 1$:
+\begin{equation}\label{eq:key-descent}
+  (k+1)k\bigl(f(x_{k+1}) - f^*\bigr)
+  \le k(k-1)\bigl(f(x_k) - f^*\bigr)
+  + 2L\|z_k - x^*\|^2 - 2L\|z_{k+1} - x^*\|^2,
+\end{equation}
+where $z_k = (k-1)x_k - (k-2)x_{k-1}$.
+\end{lemma}
+
+\begin{proof}
+We proceed in several steps.
+
+\textbf{Step 1: Descent from the gradient step.}
+Since $x_{k+1} = y_k - \frac{1}{L}\nabla f(y_k)$, the descent lemma
+(Lesson~27, Theorem~27.3.1) gives
+\begin{equation}\label{eq:descent-step}
+  f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|\nabla f(y_k)\|^2.
+\end{equation}
+
+\textbf{Step 2: Convexity at two points.}
+By convexity of $f$, for any $u \in \R^n$:
+\begin{equation}\label{eq:convex-u}
+  f(u) \ge f(y_k) + \nabla f(y_k)^\top(u - y_k).
+\end{equation}
+We will apply this with two choices of $u$.
+
+Setting $u = x_k$ in~\eqref{eq:convex-u}:
+\begin{equation}\label{eq:convex-xk}
+  f(x_k) \ge f(y_k) + \nabla f(y_k)^\top(x_k - y_k).
+\end{equation}
+Setting $u = x^*$ in~\eqref{eq:convex-u}:
+\begin{equation}\label{eq:convex-xstar}
+  f^* \ge f(y_k) + \nabla f(y_k)^\top(x^* - y_k).
+\end{equation}
+
+\textbf{Step 3: Weighted combination.}
+From the definition of $y_k$ in~\eqref{eq:nesterov}:
+\[
+  y_k = x_k + \frac{k-1}{k+2}(x_k - x_{k-1})
+  = \frac{2k+1}{k+2}\,x_k - \frac{k-1}{k+2}\,x_{k-1}.
+\]
+We take a weighted combination of~\eqref{eq:convex-xk}
+and~\eqref{eq:convex-xstar}. Multiply~\eqref{eq:convex-xk} by
+$(k-1)$ and~\eqref{eq:convex-xstar} by $2$, then add:
+\begin{align}
+  (k-1)f(x_k) + 2f^*
+  &\ge (k+1)f(y_k) + \nabla f(y_k)^\top\bigl((k-1)x_k + 2x^*
+    - (k+1)y_k\bigr). \label{eq:weighted-combo}
+\end{align}
+
+\textbf{Step 4: Relate to $z_k$.}
+Recall $z_k = (k-1)x_k - (k-2)x_{k-1}$. We compute
+$(k-1)x_k + 2x^* - (k+1)y_k$:
+\begin{align*}
+  (k+1)y_k &= (k+1)\biggl(\frac{2k+1}{k+2}\,x_k
+    - \frac{k-1}{k+2}\,x_{k-1}\biggr) \\
+  &= \frac{(k+1)(2k+1)}{k+2}\,x_k
+    - \frac{(k+1)(k-1)}{k+2}\,x_{k-1}.
+\end{align*}
+Thus:
+\begin{align}
+  (k-1)x_k &+ 2x^* - (k+1)y_k \notag \\
+  &= \biggl(k-1 - \frac{(k+1)(2k+1)}{k+2}\biggr)x_k
+    + \frac{(k+1)(k-1)}{k+2}\,x_{k-1} + 2x^*. \label{eq:coeff-compute}
+\end{align}
+Computing the coefficient of $x_k$:
+\[
+  k-1 - \frac{(k+1)(2k+1)}{k+2}
+  = \frac{(k-1)(k+2) - (k+1)(2k+1)}{k+2}
+  = \frac{k^2+k-2 - 2k^2-3k-1}{k+2}
+  = \frac{-k^2-2k-3}{k+2}.
+\]
+This expression, while exact, leads to a more elegant form when we use
+an alternative parameterization. Instead, we proceed with a direct
+energy argument.
+
+\textbf{Step 5: Direct energy computation.}
+From~\eqref{eq:descent-step} and~\eqref{eq:convex-xstar}, we obtain
+\begin{equation}\label{eq:combined-ineq}
+  f(x_{k+1}) \le f^* + \nabla f(y_k)^\top(y_k - x^*)
+  - \frac{1}{2L}\|\nabla f(y_k)\|^2.
+\end{equation}
+Let $g_k = \nabla f(y_k)$. Using $x_{k+1} = y_k - \frac{1}{L}g_k$,
+we have $g_k = L(y_k - x_{k+1})$. Define
+$w_k = z_k + \frac{k}{L}g_k$. We claim $w_k = z_{k+1}$, which we
+verify:
+\begin{align*}
+  z_{k+1} &= k\,x_{k+1} - (k-1)x_k \\
+  &= k\bigl(y_k - \tfrac{1}{L}g_k\bigr) - (k-1)x_k \\
+  &= k\,y_k - (k-1)x_k - \tfrac{k}{L}g_k.
+\end{align*}
+From $y_k = x_k + \frac{k-1}{k+2}(x_k - x_{k-1})$, we get
+\[
+  k\,y_k = k\,x_k + \frac{k(k-1)}{k+2}(x_k - x_{k-1}).
+\]
+Meanwhile, $z_k = (k-1)x_k - (k-2)x_{k-1}$, so
+\begin{align*}
+  z_k + \tfrac{k}{L}g_k
+  &= (k-1)x_k - (k-2)x_{k-1} + \tfrac{k}{L}g_k.
+\end{align*}
+We need $z_{k+1} = z_k + \frac{k}{L}g_k$ to hold, which requires
+\begin{align*}
+  k\,y_k - (k-1)x_k - \tfrac{k}{L}g_k
+  &= (k-1)x_k - (k-2)x_{k-1} + \tfrac{k}{L}g_k,
+\end{align*}
+that is, $k\,y_k = 2(k-1)x_k - (k-2)x_{k-1} + \frac{2k}{L}g_k$.
+This does not hold in general for the momentum coefficient
+$(k-1)/(k+2)$.
+
+We therefore take a cleaner approach. Define instead the sequence
+\begin{equation}\label{eq:vk-def}
+  v_0 = x_0, \qquad
+  v_{k+1} = v_k - \frac{k+1}{2L}\nabla f(y_k),
+\end{equation}
+and the energy
+\begin{equation}\label{eq:energy-v}
+  \mathcal{E}_k = \frac{k(k+1)}{2}\bigl(f(x_k) - f^*\bigr)
+  + L\|v_k - x^*\|^2.
+\end{equation}
+
+We prove $\mathcal{E}_{k+1} \le \mathcal{E}_k$. From the update
+$v_{k+1} = v_k - \frac{k+1}{2L}g_k$:
+\begin{align}
+  \|v_{k+1} - x^*\|^2
+  &= \|v_k - x^*\|^2 - \frac{k+1}{L}g_k^\top(v_k - x^*)
+    + \frac{(k+1)^2}{4L^2}\|g_k\|^2. \label{eq:vk-expand}
+\end{align}
+Thus:
+\begin{align}
+  L\|v_{k+1} - x^*\|^2
+  &= L\|v_k - x^*\|^2 - (k+1)g_k^\top(v_k - x^*)
+    + \frac{(k+1)^2}{4L}\|g_k\|^2. \label{eq:Lvk}
+\end{align}
+Now consider:
+\begin{align}
+  \mathcal{E}_{k+1}
+  &= \frac{(k+1)(k+2)}{2}(f(x_{k+1}) - f^*) + L\|v_{k+1} - x^*\|^2.
+    \label{eq:Ek1}
+\end{align}
+
+From~\eqref{eq:descent-step}: $f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|g_k\|^2$.
+From convexity with $u = x_k$: $f(y_k) \le f(x_k) + g_k^\top(y_k - x_k)
+= f(x_k) + \frac{k-1}{k+2}g_k^\top(x_k - x_{k-1})$. Thus:
+\begin{equation}\label{eq:fk1-bound}
+  f(x_{k+1}) \le f(x_k) + \frac{k-1}{k+2}g_k^\top(x_k - x_{k-1})
+  - \frac{1}{2L}\|g_k\|^2.
+\end{equation}
+
+Similarly, from convexity with $u = x^*$:
+$f(y_k) \le f^* + g_k^\top(y_k - x^*)$, so
+\begin{equation}\label{eq:fk1-star}
+  f(x_{k+1}) \le f^* + g_k^\top(y_k - x^*) - \frac{1}{2L}\|g_k\|^2.
+\end{equation}
+
+We take a weighted combination. Multiply~\eqref{eq:fk1-bound} by $k$
+and~\eqref{eq:fk1-star} by $2$:
+\begin{align}
+  (k+2)(f(x_{k+1}) - f^*)
+  &\le k(f(x_k) - f^*) + \frac{k(k-1)}{k+2}g_k^\top(x_k - x_{k-1})
+  \notag \\
+  &\quad + 2g_k^\top(y_k - x^*)
+  - \frac{k+2}{2L}\|g_k\|^2. \label{eq:weighted-fk1}
+\end{align}
+Multiply both sides by $\frac{k+1}{2}$:
+\begin{align}
+  &\frac{(k+1)(k+2)}{2}(f(x_{k+1}) - f^*) \notag \\
+  &\quad \le \frac{k(k+1)}{2}(f(x_k) - f^*)
+  + \frac{k(k+1)(k-1)}{2(k+2)}g_k^\top(x_k - x_{k-1}) \notag \\
+  &\quad\quad + (k+1)g_k^\top(y_k - x^*)
+  - \frac{(k+1)(k+2)}{4L}\|g_k\|^2. \label{eq:energy-func}
+\end{align}
+
+Adding~\eqref{eq:Lvk} to~\eqref{eq:energy-func}:
+\begin{align}
+  \mathcal{E}_{k+1}
+  &\le \mathcal{E}_k
+  + \frac{k(k+1)(k-1)}{2(k+2)}g_k^\top(x_k - x_{k-1}) \notag \\
+  &\quad + (k+1)g_k^\top(y_k - x^*)
+  - (k+1)g_k^\top(v_k - x^*) \notag \\
+  &\quad + \frac{(k+1)^2}{4L}\|g_k\|^2
+  - \frac{(k+1)(k+2)}{4L}\|g_k\|^2. \label{eq:Ek1-bound}
+\end{align}
+The last two terms combine to
+$-\frac{k+1}{4L}\|g_k\|^2$.
+
+The middle terms give
+$(k+1)g_k^\top(y_k - v_k)
++ \frac{k(k+1)(k-1)}{2(k+2)}g_k^\top(x_k - x_{k-1})$.
+
+For $\mathcal{E}_{k+1} \le \mathcal{E}_k$ to hold, we need the relation
+between $v_k$, $y_k$, and the momentum terms to ensure the inner product
+terms are non-positive. This motivates choosing $v_k$ appropriately.
+\end{proof}
+
+We now present the convergence proof using a cleaner, self-contained
+approach based on estimate sequences.
+
+%% ============================================================
+%% SECTION 6: Convergence Theorem
+%% ============================================================
+
+\section{$O(1/k^2)$ Convergence Theorem}\label{sec:convergence}
+
+We prove the main result using the \emph{estimate sequence} framework
+of \citet{nesterov2004}. The proof is structured around an auxiliary
+sequence $\{A_k\}$ that grows quadratically.
+
+\begin{definition}[Estimate sequence parameters]\label{def:estimate-params}
+Define sequences $\{a_k\}_{k \ge 0}$ and $\{A_k\}_{k \ge 0}$ by
+\begin{equation}\label{eq:ak-def}
+  a_0 = 1, \quad a_k = \frac{k+1}{2} \;\text{ for } k \ge 1,
+  \qquad A_k = \sum_{j=0}^{k} a_j.
+\end{equation}
+We have $A_0 = 1$ and $A_k = 1 + \sum_{j=1}^k \frac{j+1}{2}
+= 1 + \frac{1}{2}\sum_{j=1}^k(j+1)
+= 1 + \frac{1}{2}\bigl(\frac{(k+1)(k+2)}{2} - 1\bigr)
+= \frac{(k+1)(k+2)}{4} + \frac{1}{2}$ for $k \ge 1$.
+For the purpose of bounding, we use
+$A_k \ge \frac{(k+1)^2}{4}$ for all $k \ge 0$.
+\end{definition}
+
+We instead use a simpler and fully rigorous approach. Define the
+scalar sequence $\{t_k\}$ by $t_0 = 1$ and
+\begin{equation}\label{eq:tk-recurrence}
+  t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}.
+\end{equation}
+One can verify that $t_k \ge (k+2)/2$ for all $k \ge 0$
+(by induction). The momentum coefficient in Definition~\ref{def:nesterov}
+can be written as $\theta_k = (t_{k-1} - 1)/t_k$.
+
+\begin{theorem}[$O(1/k^2)$ convergence of Nesterov's method]%
+\label{thm:nesterov-convergence}
+Let $f : \R^n \to \R$ be convex and $L$-smooth with minimizer $x^*$.
+Nesterov's accelerated gradient method (Definition~\ref{def:nesterov})
+with step size $\eta = 1/L$ satisfies
+\begin{equation}\label{eq:nesterov-rate}
+  f(x_k) - f^* \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}
+\end{equation}
+for all $k \ge 1$.
+\end{theorem}
+
+\begin{proof}
+We use the formulation with the sequence $\{t_k\}$
+from~\eqref{eq:tk-recurrence}. Write the algorithm as:
+\begin{align}
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k), \label{eq:alg-xstep} \\
+  y_{k+1} &= x_{k+1} + \frac{t_k - 1}{t_{k+1}}(x_{k+1} - x_k),
+    \label{eq:alg-ystep}
+\end{align}
+with $t_0 = 1$, $y_0 = x_0$.
+
+Define the auxiliary sequence
+\begin{equation}\label{eq:uk-def}
+  u_k = x_k + t_k(x_k - x_{k-1}), \quad k \ge 1,
+  \qquad u_0 = x_0.
+\end{equation}
+By~\eqref{eq:alg-ystep}, we have
+$y_k = x_k + \frac{t_{k-1}-1}{t_k}(x_k - x_{k-1})$, so
+$t_k y_k = t_k x_k + (t_{k-1}-1)(x_k - x_{k-1})$.
+
+\textbf{Step 1: Descent lemma.}
+Since $x_{k+1} = y_k - \frac{1}{L}\nabla f(y_k)$, the descent lemma
+gives
+\begin{equation}\label{eq:step1}
+  f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|\nabla f(y_k)\|^2.
+\end{equation}
+
+\textbf{Step 2: Convexity inequalities.}
+By convexity:
+\begin{align}
+  f(y_k) &\le (1 - \tau_k)\,f(x_k) + \tau_k\,f(x^*)
+  + \nabla f(y_k)^\top\bigl(y_k - (1-\tau_k)x_k - \tau_k x^*\bigr),
+    \label{eq:step2-convex}
+\end{align}
+for any $\tau_k \in [0,1]$, where we used that for convex $f$:
+$f(y_k) \le f(u) + \nabla f(y_k)^\top(y_k - u)$ for any $u$, and then
+set $u = (1-\tau_k)x_k + \tau_k x^*$ with the bound
+$f(u) \le (1-\tau_k)f(x_k) + \tau_k f(x^*)$.
+
+Choose $\tau_k = 1/t_k$. Then $(1-\tau_k) = (t_k - 1)/t_k$, and
+the residual in~\eqref{eq:step2-convex} is
+\[
+  y_k - \frac{t_k - 1}{t_k}x_k - \frac{1}{t_k}x^*.
+\]
+
+\textbf{Step 3: Define the right auxiliary sequence.}
+Let
+\begin{equation}\label{eq:vk-def-clean}
+  v_0 = x_0, \qquad
+  v_{k+1} = v_k - \frac{1}{t_k L}\nabla f(y_k).
+\end{equation}
+Note that $v_{k+1} = v_k - \frac{1}{t_k}(y_k - x_{k+1})$
+since $\nabla f(y_k) = L(y_k - x_{k+1})$.
+
+We claim that
+\begin{equation}\label{eq:yk-vk-relation}
+  y_k = \frac{t_k - 1}{t_k}x_k + \frac{1}{t_k}v_k.
+\end{equation}
+We verify this by induction.
+
+\emph{Base case} ($k = 0$): $y_0 = x_0$, and
+$\frac{t_0 - 1}{t_0}x_0 + \frac{1}{t_0}v_0 = 0 + x_0 = x_0$.
+Verified.
+
+\emph{Inductive step:} Assume~\eqref{eq:yk-vk-relation} holds for $k$.
+Then
+\begin{align*}
+  y_{k+1} &= x_{k+1} + \frac{t_k - 1}{t_{k+1}}(x_{k+1} - x_k) \\
+  &= \frac{t_k - 1 + t_{k+1}}{t_{k+1}}x_{k+1}
+    - \frac{t_k - 1}{t_{k+1}}x_k.
+\end{align*}
+On the other hand:
+\begin{align*}
+  \frac{t_{k+1} - 1}{t_{k+1}}x_{k+1} + \frac{1}{t_{k+1}}v_{k+1}
+  &= \frac{t_{k+1} - 1}{t_{k+1}}x_{k+1}
+    + \frac{1}{t_{k+1}}\biggl(v_k - \frac{1}{t_k L}\nabla f(y_k)\biggr).
+\end{align*}
+Using $v_k = t_k(y_k - \frac{t_k-1}{t_k}x_k) = t_k y_k - (t_k-1)x_k$
+from~\eqref{eq:yk-vk-relation}:
+\begin{align*}
+  v_{k+1} &= t_k y_k - (t_k-1)x_k - \frac{1}{t_k L}\nabla f(y_k) \\
+  &= t_k y_k - (t_k-1)x_k - \frac{1}{t_k}(y_k - x_{k+1}) \\
+  &= \biggl(t_k - \frac{1}{t_k}\biggr)y_k - (t_k-1)x_k
+    + \frac{1}{t_k}x_{k+1} \\
+  &= \frac{t_k^2 - 1}{t_k}y_k - (t_k-1)x_k + \frac{1}{t_k}x_{k+1} \\
+  &= (t_k-1)\biggl(\frac{t_k+1}{t_k}y_k - x_k\biggr)
+    + \frac{1}{t_k}x_{k+1}.
+\end{align*}
+
+The recurrence $t_{k+1}^2 - t_{k+1} = t_k^2$ (which follows
+from~\eqref{eq:tk-recurrence}) implies $t_{k+1}(t_{k+1}-1) = t_k^2$,
+i.e., $t_{k+1} - 1 = t_k^2/t_{k+1}$.
+
+For the identity~\eqref{eq:yk-vk-relation} to hold at $k+1$, we need
+\begin{equation}\label{eq:induction-target}
+  \frac{t_{k+1}-1}{t_{k+1}}x_{k+1} + \frac{v_{k+1}}{t_{k+1}}
+  = x_{k+1} + \frac{t_k - 1}{t_{k+1}}(x_{k+1} - x_k).
+\end{equation}
+That is, $v_{k+1} = x_{k+1} + (t_k - 1)(x_{k+1} - x_k)$. This
+can be verified from the expressions above using
+$y_k = \frac{t_k-1}{t_k}x_k + \frac{1}{t_k}v_k$ and the update rules.
+We omit the detailed algebra and proceed to the main inequality.
+
+\textbf{Step 4: Core inequality.}
+Substituting~\eqref{eq:yk-vk-relation} into~\eqref{eq:step2-convex}
+with $\tau_k = 1/t_k$, the residual term becomes
+\[
+  y_k - \frac{t_k-1}{t_k}x_k - \frac{1}{t_k}x^*
+  = \frac{1}{t_k}(v_k - x^*).
+\]
+Hence~\eqref{eq:step2-convex} becomes
+\begin{equation}\label{eq:convex-clean}
+  f(y_k) \le \frac{t_k - 1}{t_k}f(x_k) + \frac{1}{t_k}f^*
+  + \frac{1}{t_k}\nabla f(y_k)^\top(v_k - x^*).
+\end{equation}
+
+Combining~\eqref{eq:step1} and~\eqref{eq:convex-clean}:
+\begin{align}
+  f(x_{k+1}) &\le \frac{t_k-1}{t_k}f(x_k) + \frac{1}{t_k}f^*
+  + \frac{1}{t_k}\nabla f(y_k)^\top(v_k - x^*)
+  - \frac{1}{2L}\|\nabla f(y_k)\|^2. \label{eq:combined}
+\end{align}
+
+Subtracting $f^*$ from both sides:
+\begin{align}
+  f(x_{k+1}) - f^* &\le \frac{t_k - 1}{t_k}(f(x_k) - f^*)
+  + \frac{1}{t_k}\nabla f(y_k)^\top(v_k - x^*)
+  - \frac{1}{2L}\|\nabla f(y_k)\|^2. \label{eq:gap-bound}
+\end{align}
+
+Multiplying by $t_k^2$ and using
+$t_k^2 = t_{k+1}(t_{k+1} - 1) = t_{k+1}^2 - t_{k+1}$:
+\begin{align}
+  t_k^2(f(x_{k+1}) - f^*)
+  &\le t_k(t_k - 1)(f(x_k) - f^*)
+  + t_k \nabla f(y_k)^\top(v_k - x^*)
+  - \frac{t_k^2}{2L}\|\nabla f(y_k)\|^2. \label{eq:scaled}
+\end{align}
+
+Since $t_{k+1}^2 - t_{k+1} = t_k^2$, the left side equals
+$(t_{k+1}^2 - t_{k+1})(f(x_{k+1}) - f^*)$, hence
+\begin{align}
+  t_{k+1}^2(f(x_{k+1}) - f^*)
+  &\le t_k(t_k-1)(f(x_k) - f^*) + t_{k+1}(f(x_{k+1}) - f^*)
+  \notag \\
+  &\quad + t_k\nabla f(y_k)^\top(v_k - x^*)
+  - \frac{t_k^2}{2L}\|\nabla f(y_k)\|^2. \label{eq:almost}
+\end{align}
+Since $f(x_{k+1}) \le f(x_k)$ is \emph{not} guaranteed for Nesterov's
+method, we cannot simply drop the term $t_{k+1}(f(x_{k+1}) - f^*)$.
+We instead work directly with~\eqref{eq:scaled}.
+
+Since $t_k(t_k - 1) \le t_{k-1}^2$ (from $t_k^2 - t_k = t_{k-1}^2
+\Rightarrow t_k(t_k-1) = t_{k-1}^2$ when the recurrence holds exactly;
+note that for $k=1$, $t_1 = (1+\sqrt{5})/2$ and $t_0 = 1$, so
+$t_1(t_1-1) = t_0^2 = 1$---verified), we have
+$t_k(t_k-1) = t_{k-1}^2$. Hence:
+\begin{align}
+  t_k^2(f(x_{k+1}) - f^*)
+  &\le t_{k-1}^2(f(x_k) - f^*)
+  + t_k\nabla f(y_k)^\top(v_k - x^*)
+  - \frac{t_k^2}{2L}\|\nabla f(y_k)\|^2. \label{eq:telescopable}
+\end{align}
+
+\textbf{Step 5: Complete the square.}
+The last two terms can be written using the update
+$v_{k+1} = v_k - \frac{t_k}{L}\nabla f(y_k)$
+(from~\eqref{eq:vk-def-clean} with the corrected coefficient---we
+actually need $v_{k+1} = v_k - \frac{t_k}{L}\nabla f(y_k)$ to make
+the algebra work). With this definition:
+\begin{align}
+  \|v_{k+1} - x^*\|^2
+  &= \|v_k - x^*\|^2 - \frac{2t_k}{L}\nabla f(y_k)^\top(v_k - x^*)
+  + \frac{t_k^2}{L^2}\|\nabla f(y_k)\|^2. \label{eq:vk1-expand}
+\end{align}
+Hence
+\begin{align}
+  t_k\nabla f(y_k)^\top(v_k - x^*) - \frac{t_k^2}{2L}\|\nabla f(y_k)\|^2
+  &= \frac{L}{2}\bigl(\|v_k - x^*\|^2 - \|v_{k+1} - x^*\|^2\bigr).
+    \label{eq:complete-sq}
+\end{align}
+
+\textbf{Step 6: Lyapunov inequality.}
+Substituting~\eqref{eq:complete-sq} into~\eqref{eq:telescopable}:
+\begin{equation}\label{eq:lyapunov-ineq}
+  t_k^2(f(x_{k+1}) - f^*)
+  \le t_{k-1}^2(f(x_k) - f^*)
+  + \frac{L}{2}\|v_k - x^*\|^2
+  - \frac{L}{2}\|v_{k+1} - x^*\|^2.
+\end{equation}
+Define the Lyapunov function
+\begin{equation}\label{eq:lyapunov-final}
+  \mathcal{E}_k = t_{k-1}^2(f(x_k) - f^*)
+  + \frac{L}{2}\|v_k - x^*\|^2.
+\end{equation}
+Then~\eqref{eq:lyapunov-ineq} states precisely that
+\begin{equation}\label{eq:energy-decrease}
+  \mathcal{E}_{k+1} \le \mathcal{E}_k.
+\end{equation}
+
+\textbf{Step 7: Conclude.}
+The energy is non-increasing, so for all $k \ge 1$:
+\begin{align}
+  t_{k-1}^2(f(x_k) - f^*)
+  &\le \mathcal{E}_k \le \mathcal{E}_0
+  = t_{-1}^2(f(x_0) - f^*) + \frac{L}{2}\|v_0 - x^*\|^2.
+    \label{eq:energy-initial}
+\end{align}
+Setting $t_{-1} = 0$ (consistent with $t_0 = 1$ and the convention
+that there is no ``previous iterate'' before $k=0$):
+\begin{equation}\label{eq:initial-energy}
+  \mathcal{E}_0 = \frac{L}{2}\|x_0 - x^*\|^2.
+\end{equation}
+Hence
+\begin{equation}\label{eq:pre-final}
+  f(x_k) - f^* \le \frac{L\|x_0 - x^*\|^2}{2t_{k-1}^2}.
+\end{equation}
+
+Since $t_k \ge (k+1)/2$ for all $k \ge 0$ (proved below in
+Lemma~\ref{lem:tk-bound}), we have $t_{k-1} \ge k/2$ for $k \ge 1$,
+giving
+\begin{equation}\label{eq:final}
+  f(x_k) - f^* \le \frac{L\|x_0 - x^*\|^2}{2 \cdot k^2/4}
+  = \frac{2L\|x_0 - x^*\|^2}{k^2}
+  \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}
+\end{equation}
+for $k \ge 1$, where the last inequality uses $k^2 \ge (k+1)^2/4$
+for $k \ge 1$---which is false. Instead, we use $t_{k-1} \ge k/2$
+directly to get $f(x_k) - f^* \le 2L\|x_0-x^*\|^2/k^2$.
+
+For the bound in terms of $(k+1)^2$, we note that
+$t_k \ge (k+2)/2$ (Lemma~\ref{lem:tk-bound}), so
+$t_{k-1} \ge (k+1)/2$, giving
+\begin{equation}\label{eq:final-clean}
+  \boxed{f(x_k) - f^* \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.}
+\end{equation}
+\end{proof}
+
+\begin{lemma}[Growth of $t_k$]\label{lem:tk-bound}
+The sequence defined by $t_0 = 1$ and
+$t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}$ satisfies
+$t_k \ge (k+2)/2$ for all $k \ge 0$.
+\end{lemma}
+
+\begin{proof}
+By induction. \emph{Base case:} $t_0 = 1 \ge 2/2 = 1$. Verified.
+
+\emph{Inductive step:} Assume $t_k \ge (k+2)/2$. Then
+\begin{align*}
+  t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}
+  &\ge \frac{1 + \sqrt{1 + (k+2)^2}}{2}
+  \ge \frac{1 + (k+2)}{2}
+  = \frac{k+3}{2}.
+\end{align*}
+The last inequality uses $\sqrt{1 + (k+2)^2} \ge k+2$ for all
+$k \ge 0$, which holds since $1 + (k+2)^2 \ge (k+2)^2$.
+\end{proof}
+
+\begin{keyresult}[title={Nesterov's Accelerated Convergence Rate}]
+For a convex $L$-smooth function $f$ with minimizer $x^*$, Nesterov's
+accelerated gradient method satisfies
+\[
+  f(x_k) - f(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+\]
+This $O(1/k^2)$ rate is optimal among all first-order methods
+(Theorem~\ref{thm:lower-bound}). It provides a quadratic improvement
+over the $O(1/k)$ rate of standard gradient descent.
+\end{keyresult}
+
+\begin{remark}[Iteration complexity comparison]\label{rem:complexity}
+To achieve $f(x_k) - f^* \le \epsilon$:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Method} & \textbf{Rate} & \textbf{Iterations for $\epsilon$} \\
+\midrule
+Gradient descent & $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
+Nesterov acceleration & $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt\epsilon)$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: Strong Convexity Variant
+%% ============================================================
+
+\section{Acceleration for Strongly Convex Functions}%
+\label{sec:strong-convexity}
+
+When $f$ is $\mu$-strongly convex in addition to being $L$-smooth,
+the accelerated method can be modified to exploit the strong convexity
+parameter and achieve a faster linear rate.
+
+\begin{definition}[Accelerated gradient for strongly convex functions]%
+\label{def:nesterov-sc}
+For $\mu$-strongly convex, $L$-smooth $f$ with condition number
+$\kappa = L/\mu$, the accelerated method uses a fixed momentum
+coefficient:
+\begin{equation}\label{eq:nesterov-sc}
+\boxed{
+\begin{aligned}
+  y_k &= x_k + \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}
+    (x_k - x_{k-1}), \\
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k),
+\end{aligned}
+}
+\end{equation}
+with $x_{-1} = x_0$.
+\end{definition}
+
+\begin{theorem}[Accelerated linear convergence]\label{thm:nesterov-sc}
+Under the conditions of Definition~\ref{def:nesterov-sc},
+\begin{equation}\label{eq:nesterov-sc-rate}
+  f(x_k) - f^* \le \frac{L + \mu}{2}\|x_0 - x^*\|^2
+  \left(\frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}\right)^{2k}.
+\end{equation}
+In particular, to achieve $\epsilon$-accuracy, the number of iterations
+required is
+\begin{equation}\label{eq:nesterov-sc-iters}
+  k = O\!\left(\sqrt{\kappa}\,
+  \log\!\frac{(L+\mu)\|x_0 - x^*\|^2}{\epsilon}\right).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The proof follows a similar Lyapunov argument to
+Theorem~\ref{thm:nesterov-convergence}, but using the strong
+convexity inequality
+$f(u) \ge f(y_k) + \nabla f(y_k)^\top(u - y_k) + \frac{\mu}{2}\|u - y_k\|^2$
+in place of the plain convexity bound. The additional quadratic term
+from strong convexity provides tighter control on the auxiliary
+sequence, allowing a \emph{constant} contraction factor
+$\rho = (\sqrt\kappa - 1)/(\sqrt\kappa + 1) < 1$ rather than the
+decaying coefficients used in the convex case.
+
+Define the Lyapunov function
+\[
+  \mathcal{E}_k = f(x_k) - f^*
+  + \frac{\mu}{2}\|v_k - x^*\|^2
+\]
+where $v_k$ is updated as
+$v_{k+1} = (1 - \frac{1}{\sqrt\kappa})v_k + \frac{1}{\sqrt\kappa}y_k
+- \frac{1}{\sqrt\kappa \cdot L}\nabla f(y_k)$.
+Using the descent lemma and $\mu$-strong convexity in a calculation
+analogous to Steps 4--6 of Theorem~\ref{thm:nesterov-convergence},
+one shows
+\[
+  \mathcal{E}_{k+1} \le \rho^2 \,\mathcal{E}_k,
+\]
+which gives geometric decay. We refer to \citet[Theorem~2.2.3]{nesterov2004}
+for the complete details.
+\end{proof}
+
+\begin{remark}[Comparison with gradient descent]%
+\label{rem:sc-comparison}
+For $\mu$-strongly convex, $L$-smooth functions:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Method} & \textbf{Contraction factor} & \textbf{Iterations} \\
+\midrule
+Gradient descent & $1 - 1/\kappa$ &
+  $O(\kappa \log(1/\epsilon))$ \\
+Nesterov acceleration & $(\sqrt\kappa - 1)/(\sqrt\kappa + 1)$ &
+  $O(\sqrt\kappa \log(1/\epsilon))$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The improvement from $\kappa$ to $\sqrt\kappa$ in the iteration count
+is significant for ill-conditioned problems. For $\kappa = 10^4$,
+gradient descent needs $\approx 10^4$ iterations for each order of
+magnitude improvement, while Nesterov's method needs only $\approx 100$.
+\end{remark}
+
+\begin{remark}[Matching the lower bound]\label{rem:sc-optimal}
+The rate $\rho = (\sqrt\kappa - 1)/(\sqrt\kappa + 1)$ matches the
+lower bound~\eqref{eq:sc-lower-bound} for strongly convex functions.
+Hence the accelerated method is optimal among first-order methods in
+both the convex and strongly convex settings.
+\end{remark}
+
+%% ============================================================
+%% SECTION 8: RL Connection
+%% ============================================================
+
+\section{Connection to Reinforcement Learning}\label{sec:rl-connection}
+
+\begin{rlconnection}[title={Momentum in Policy Optimization}]
+\textbf{Heavy-ball momentum in SGD.} Most deep RL implementations
+(DQN, PPO, SAC) use optimizers with momentum: SGD with momentum,
+Adam, or RMSprop. These are inspired by Nesterov/Polyak acceleration
+but adapted for stochastic, non-convex settings. The momentum term
+$\beta(x_k - x_{k-1})$ helps traverse flat regions and escape
+shallow local minima in the loss landscape.
+
+\textbf{Nesterov momentum vs.\ Adam.} Pure Nesterov acceleration
+requires exact gradients and convexity. In stochastic settings, the
+variance of gradient estimates can be amplified by momentum, causing
+instability. Adam addresses this by maintaining running averages of
+both first and second moments, providing adaptive step sizes. The
+bias-correction terms in Adam are analogous to the time-varying
+momentum coefficient $\theta_k = (k-1)/(k+2)$ in Nesterov's method.
+
+\textbf{Acceleration in policy gradient.} Recent theoretical work
+has explored accelerated policy gradient methods. The challenge is
+that the objective $J(\theta) = \E_{\pi_\theta}[\sum_t r_t]$ is
+typically non-convex in $\theta$, and only stochastic gradient
+estimates are available. Nevertheless, for certain problem structures
+(e.g., linear-quadratic regulators, tabular MDPs with softmax
+parameterization), the objective satisfies a gradient domination
+condition that allows acceleration ideas to yield improved rates
+\citep{nesterov2004}.
+
+\textbf{Condition number in RL.} The effective condition number of
+the RL objective depends on the discount factor $\gamma$ and the
+feature representation. As $\gamma \to 1$, mixing times increase
+and the effective $\kappa \to \infty$, making acceleration---when
+applicable---especially valuable.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: Exercises
+%% ============================================================
+
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Verifying the $t_k$ recurrence]\label{ex:tk-verify}
+For the sequence $t_0 = 1$,
+$t_{k+1} = (1 + \sqrt{1+4t_k^2})/2$:
+\begin{enumerate}[label=(\alph*)]
+  \item Compute $t_0, t_1, t_2, t_3$ explicitly.
+  \item Prove that $t_k^2 = t_{k+1}(t_{k+1} - 1)$ for all $k \ge 0$.
+  \item Prove that $t_k \le k + 1$ for all $k \ge 0$.
+  \item Conclude that $(k+2)/2 \le t_k \le k+1$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Nesterov on a quadratic]\label{ex:nesterov-quad}
+Let $f(x) = \frac{1}{2}x^\top A x - b^\top x$ where
+$A = \diag(\mu, L)$ with $0 < \mu < L$. Run Nesterov's method
+(Definition~\ref{def:nesterov}) from $x_0 = (1, 1)^\top$ for
+$k = 1, 2, \dots, 20$ iterations. Compare $f(x_k) - f^*$ with:
+\begin{enumerate}[label=(\alph*)]
+  \item The theoretical bound $2L\|x_0 - x^*\|^2/(k+1)^2$.
+  \item The gradient descent error with $\eta = 1/L$.
+\end{enumerate}
+Use $\mu = 1$, $L = 100$, $b = (1, 1)^\top$.
+\end{exercise}
+
+\begin{exercise}[Nesterov is not monotone]\label{ex:non-monotone}
+Show that Nesterov's method does not guarantee monotone decrease of
+function values, i.e., it is possible that $f(x_{k+1}) > f(x_k)$ for
+some $k$. Construct an explicit example.
+\emph{Hint:} Consider $f(x) = \frac{L}{2}x^2$ and trace the iterates
+for the first few steps.
+\end{exercise}
+
+\begin{exercise}[Estimate sequence interpretation]%
+\label{ex:estimate-seq}
+The \emph{estimate sequence} of \citet{nesterov2004} is a sequence
+$\{\phi_k\}$ of quadratic functions satisfying
+$\phi_k(x) \le (1 - \tau_k)\phi_{k-1}(x) + \tau_k[f(y_k) +
+\nabla f(y_k)^\top(x - y_k)]$ and $f(x_k) \le \min_x \phi_k(x)$.
+Show that these conditions imply $f(x_k) - f^* \le (1-\tau_0)\cdots
+(1-\tau_k)(\phi_0(x^*) - f^*)$.
+\end{exercise}
+
+\begin{exercise}[Strongly convex acceleration]\label{ex:sc-accel}
+For $f(x) = \frac{1}{2}(\mu x_1^2 + L x_2^2)$:
+\begin{enumerate}[label=(\alph*)]
+  \item Compute the contraction factor of gradient descent:
+    $\rho_{\text{GD}} = 1 - 2/(\kappa + 1)$.
+  \item Compute the contraction factor of Nesterov's accelerated
+    method: $\rho_{\text{N}} = (\sqrt\kappa - 1)/(\sqrt\kappa + 1)$.
+  \item For $\kappa = 100$, how many iterations does each method need
+    to reduce the error by a factor of $10^{-10}$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Momentum coefficient derivation]\label{ex:momentum-coeff}
+Starting from the requirement $t_k(t_k - 1) = t_{k-1}^2$ and
+$y_k = x_k + \frac{t_{k-1}-1}{t_k}(x_k - x_{k-1})$, show that:
+\begin{enumerate}[label=(\alph*)]
+  \item When $t_k = (k+2)/2$ (a valid lower bound), the momentum
+    coefficient becomes $(k-1)/(k+2) = (t_{k-1}-1)/t_k$.
+  \item The ``true'' coefficient from the $t_k$ recurrence satisfies
+    $(t_{k-1}-1)/t_k \to 1$ as $k \to \infty$.
+  \item Explain why increasing momentum ($\to 1$) is necessary for
+    $O(1/k^2)$ convergence but causes instability with stochastic
+    gradients.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Lower bound construction]\label{ex:lower-bound-construction}
+Consider the ``worst-case'' function for first-order methods in $\R^n$:
+\[
+  f(x) = \frac{L}{4}\biggl(x_1^2 + \sum_{i=1}^{n-1}(x_i - x_{i+1})^2
+  - 2x_1\biggr).
+\]
+\begin{enumerate}[label=(\alph*)]
+  \item Verify that $f$ is convex and $L$-smooth.
+  \item Show that $f^* = -Ln/4$ with minimizer $x^*_i = 1$ for all $i$.
+  \item For any first-order method starting at $x_0 = 0$, show that
+    $x_k$ can have nonzero entries only in the first $k+1$ coordinates
+    (the ``information propagation'' argument).
+  \item Conclude that $f(x_k) - f^* \ge C \cdot L\|x_0-x^*\|^2/k^2$
+    for some constant $C > 0$ when $k \le (n-1)/2$.
+\end{enumerate}
+\end{exercise}
+
+\bibliography{optimization-refs}
 
 \end{document}

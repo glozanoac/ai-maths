@@ -1,131 +1,157 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 6: Metric and Normed Spaces}}
+\fancyhead[L]{\textsc{Lesson 18: Compactness and the Baire Category Theorem}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\diam}{diam}
-\DeclareMathOperator{\Int}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\Span}{span}
-\DeclareMathOperator{\id}{id}
-
-% ---- Title ----
 \title{Lesson 18: Compactness and the Baire Category Theorem}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{5}
+%% ============================================================
+%% SECTION 1: MOTIVATION
+%% ============================================================
 
-\section{Compactness}
+\section{Motivation}
+\label{sec:motivation}
+
+Compactness is the precise generalization of finiteness to the topological
+setting. In finite-dimensional spaces, the Heine--Borel theorem tells us
+that closed and bounded sets are compact, and this compactness drives
+essentially every existence theorem: the extreme value theorem, the existence
+of minimizers, the existence of convergent subsequences. In
+infinite-dimensional spaces---the natural home of value functions, policies,
+and feature maps---compactness is far more subtle. Closed and bounded sets
+need not be compact, and new criteria are required.
+
+The Baire category theorem is a different kind of existence tool. Rather than
+producing convergent subsequences, it establishes that complete metric spaces
+are ``large'' in a precise topological sense: they cannot be expressed as
+countable unions of ``negligible'' sets. This seemingly abstract result
+underpins the three pillars of Banach space theory---the Uniform Boundedness
+Principle, the Open Mapping Theorem, and the Closed Graph Theorem---all of
+which are proved in the next lesson.
+
+\begin{rlconnection}[title={Why Compactness and Baire Matter for RL}]
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item \textbf{Existence of optimal policies:} On compact action spaces,
+          the supremum in the Bellman equation is attained (it becomes a
+          maximum), guaranteeing the existence of an optimal deterministic
+          policy~\cite{puterman2014}.
+    \item \textbf{Value function approximation:} Riesz's theorem (compact
+          unit ball $\Leftrightarrow$ finite dimension) explains why we must
+          restrict to finite-dimensional parameterizations in practice.
+    \item \textbf{Compactness of policy classes:} The Arzela--Ascoli theorem
+          provides the criterion (uniform boundedness + equicontinuity) for a
+          family of Lipschitz value functions to have convergent subsequences.
+    \item \textbf{Uniform error bounds:} The Uniform Boundedness Principle,
+          which follows from Baire, converts pointwise convergence of TD
+          estimates into uniform bounds on approximation error.
+\end{enumerate}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.} Metric spaces, normed spaces, Banach
+spaces, bounded linear operators, and dual spaces (Lessons 15--17).
+
+\medskip
+\noindent\textbf{Outline.}
+Section~\ref{sec:compactness} introduces compactness and sequential
+compactness in metric spaces.
+Section~\ref{sec:total_bounded} develops total boundedness and proves the
+fundamental equivalence theorem.
+Section~\ref{sec:heine_borel} derives the Heine--Borel theorem as a
+corollary.
+Section~\ref{sec:riesz} proves Riesz's lemma and the characterization of
+finite-dimensional spaces via compact unit balls.
+Section~\ref{sec:arzela_ascoli} proves the Arzela--Ascoli theorem.
+Section~\ref{sec:compact_ops} introduces compact operators.
+Section~\ref{sec:baire} proves the Baire category theorem and derives
+immediate consequences.
+Section~\ref{sec:exercises} provides exercises.
+
+%% ============================================================
+%% SECTION 2: COMPACTNESS IN METRIC SPACES
+%% ============================================================
+
+\section{Compactness in Metric Spaces}
 \label{sec:compactness}
-
-Compactness is the key tool for passing from local to global properties and for
-establishing existence results. In infinite-dimensional spaces, compactness
-behaves very differently from the finite-dimensional case.
-
-\subsection{Definitions and Basic Theory}
 
 \begin{definition}[Compact Set]
 \label{def:compact}
-A subset $K$ of a metric space $(X,d)$ is \emph{compact} if every open cover of
-$K$ has a finite subcover: whenever $K \subseteq \bigcup_{\alpha \in I} G_\alpha$
-with each $G_\alpha$ open, there exist finitely many $\alpha_1, \ldots, \alpha_n$
-with $K \subseteq G_{\alpha_1} \cup \cdots \cup G_{\alpha_n}$.
+A subset $K$ of a metric space $(X,d)$ is \emph{compact} if every open cover
+of $K$ has a finite subcover: whenever $K \subseteq \bigcup_{\alpha \in I}
+G_\alpha$ with each $G_\alpha$ open in $X$, there exist finitely many indices
+$\alpha_1, \ldots, \alpha_n \in I$ with
+$K \subseteq G_{\alpha_1} \cup \cdots \cup G_{\alpha_n}$.
 \end{definition}
 
 \begin{definition}[Sequential Compactness]
 \label{def:seq_compact}
-A subset $K$ of a metric space is \emph{sequentially compact} if every sequence in
-$K$ has a subsequence that converges to a point in $K$.
+A subset $K$ of a metric space $(X,d)$ is \emph{sequentially compact} if
+every sequence in $K$ has a subsequence that converges to a point in $K$.
 \end{definition}
+
+\begin{remark}
+\label{rem:compact_vs_seq}
+In general topological spaces, compactness and sequential compactness are
+distinct notions. In metric spaces, they are equivalent---this is the content
+of Theorem~\ref{thm:compact_equiv} below. We will prove this equivalence
+through the intermediate notion of total boundedness.
+\end{remark}
+
+\begin{proposition}[Basic Properties of Compact Sets]
+\label{prop:compact_basic}
+Let $(X,d)$ be a metric space.
+\begin{enumerate}[label=(\roman*),nosep]
+    \item Every compact set is closed and bounded.
+    \item A closed subset of a compact set is compact.
+    \item A continuous image of a compact set is compact.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(i) Closed:} Let $K$ be compact and let $x \in X \setminus K$. For
+each $k \in K$, let $r_k = d(x,k)/2 > 0$. The balls $B(k, r_k)$ cover $K$,
+so finitely many suffice: $K \subseteq B(k_1, r_{k_1}) \cup \cdots \cup
+B(k_n, r_{k_n})$. Let $r = \min(r_{k_1}, \ldots, r_{k_n}) > 0$. Then
+$B(x, r) \cap K = \emptyset$ (if $y \in B(x,r) \cap B(k_i, r_{k_i})$, then
+$d(x, k_i) \le d(x,y) + d(y, k_i) < r + r_{k_i} \le 2r_{k_i} = d(x, k_i)$,
+a contradiction). So $X \setminus K$ is open, hence $K$ is closed.
+
+\textbf{Bounded:} The balls $B(x_0, n)$ for $n \in \N$ cover $K$ (for any
+fixed $x_0$), so finitely many suffice, giving $K \subseteq B(x_0, N)$ for
+some $N$.
+
+\textbf{(ii)} Let $F \subseteq K$ be closed and let $\{G_\alpha\}$ be an
+open cover of $F$. Then $\{G_\alpha\} \cup \{X \setminus F\}$ is an open
+cover of $K$. Extract a finite subcover, then remove $X \setminus F$ if
+present.
+
+\textbf{(iii)} Let $f \colon X \to Y$ be continuous and $K \subseteq X$
+compact. If $\{G_\alpha\}$ covers $f(K)$, then $\{f^{-1}(G_\alpha)\}$ is an
+open cover of $K$. Extract a finite subcover $f^{-1}(G_{\alpha_1}), \ldots,
+f^{-1}(G_{\alpha_n})$. Then $G_{\alpha_1}, \ldots, G_{\alpha_n}$ covers
+$f(K)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 3: TOTAL BOUNDEDNESS AND THE COMPACTNESS EQUIVALENCE
+%% ============================================================
+
+\section{Total Boundedness and the Compactness Equivalence}
+\label{sec:total_bounded}
 
 \begin{definition}[Totally Bounded]
 \label{def:totally_bounded}
 A subset $A$ of a metric space $(X,d)$ is \emph{totally bounded} if for every
-$\varepsilon > 0$, $A$ can be covered by finitely many open balls of radius
-$\varepsilon$: there exist $x_1, \ldots, x_n \in X$ with
-$A \subseteq \bigcup_{i=1}^n B(x_i, \varepsilon)$.
+$\varepsilon > 0$, there exist finitely many points $x_1, \ldots, x_n \in X$
+such that $A \subseteq \bigcup_{i=1}^n B(x_i, \varepsilon)$. The set
+$\{x_1, \ldots, x_n\}$ is called a \emph{finite $\varepsilon$-net} for $A$.
 \end{definition}
 
 \begin{proposition}[Totally Bounded Implies Bounded]
@@ -134,535 +160,860 @@ Every totally bounded set is bounded. The converse fails in general.
 \end{proposition}
 
 \begin{proof}
-If $A \subseteq \bigcup_{i=1}^n B(x_i, 1)$, then for any $a, b \in A$, $a \in B(x_i, 1)$
-and $b \in B(x_j, 1)$ for some $i, j$, so $d(a,b) \le d(a, x_i) + d(x_i, x_j) +
-d(x_j, b) < 1 + \max_{i,j} d(x_i, x_j) + 1$. Hence $\diam(A) < \infty$.
+Suppose $A$ is totally bounded. Choose a finite $1$-net
+$\{x_1, \ldots, x_n\}$, so $A \subseteq \bigcup_{i=1}^n B(x_i, 1)$. For
+any $a, b \in A$, there exist $i, j$ with $a \in B(x_i, 1)$ and
+$b \in B(x_j, 1)$, giving
+\[
+d(a,b) \le d(a, x_i) + d(x_i, x_j) + d(x_j, b)
+< 1 + \max_{i,j} d(x_i, x_j) + 1.
+\]
+Hence $\diam(A) < \infty$.
 
-For the failure of the converse: the closed unit ball in $\ell^2$ is bounded but not
-totally bounded (the standard basis vectors $e_n$ satisfy $\|e_n - e_m\| = \sqrt{2}$
-for $n \ne m$, so no finite collection of balls of radius $\sqrt{2}/2$ can cover them all).
+For the failure of the converse, consider the closed unit ball $\overline{B}
+= \{x \in \ell^2 : \|x\| \le 1\}$. This set is bounded with $\diam(\overline
+{B}) = 2$, but it is not totally bounded: the standard basis vectors
+$e_n$ satisfy $\|e_n - e_m\| = \sqrt{2}$ for $n \ne m$, so no finite
+collection of balls of radius $\sqrt{2}/2$ can cover them all.
+\end{proof}
+
+\begin{lemma}[Subsequence Extraction via Total Boundedness]
+\label{lem:tb_subsequence}
+If $A$ is totally bounded and $(x_n)$ is a sequence in $A$, then for every
+$\varepsilon > 0$, there exists a subsequence of $(x_n)$ contained in a
+single ball of radius $\varepsilon$.
+\end{lemma}
+
+\begin{proof}
+Cover $A$ by finitely many balls $B(y_1, \varepsilon), \ldots,
+B(y_m, \varepsilon)$. Since the sequence has infinitely many terms and
+the cover is finite, by the pigeonhole principle at least one ball contains
+infinitely many terms of the sequence. These terms form the desired
+subsequence.
 \end{proof}
 
 \begin{theorem}[Characterization of Compactness in Metric Spaces]
 \label{thm:compact_equiv}
 For a subset $K$ of a metric space $(X,d)$, the following are equivalent:
 \begin{enumerate}[nosep,label=(\roman*)]
-    \item $K$ is compact.
-    \item $K$ is sequentially compact.
+    \item $K$ is compact (every open cover has a finite subcover).
+    \item $K$ is sequentially compact (every sequence has a convergent
+          subsequence with limit in $K$).
     \item $K$ is complete and totally bounded.
 \end{enumerate}
 \end{theorem}
 
+\begin{keyresult}[title={Compactness Equivalence Theorem}]
+In metric spaces, compactness, sequential compactness, and completeness plus
+total boundedness are all equivalent. This trichotomy is fundamental:
+compactness (open-cover) is used for abstract existence arguments, sequential
+compactness is used for extracting convergent subsequences, and completeness
+plus total boundedness is the criterion most easily verified in practice.
+\end{keyresult}
+
 \begin{proof}
 \textbf{(i) $\Rightarrow$ (ii):}
-Let $(x_n)$ be a sequence in $K$. Suppose for contradiction that $(x_n)$ has no
-convergent subsequence in $K$. Then every point $y \in K$ has a neighborhood
-$B(y, r_y)$ containing only finitely many terms of $(x_n)$ (otherwise, we could
-extract a subsequence converging to $y$). The collection $\{B(y, r_y) : y \in K\}$
-covers $K$, so by compactness there is a finite subcover. But a finite union of
-sets, each containing finitely many terms, contains only finitely many terms total,
-contradicting the fact that $(x_n)$ has infinitely many terms in $K$.
+Let $(x_n)$ be a sequence in $K$. Suppose for contradiction that no
+subsequence converges to a point in $K$. Then every $y \in K$ has a
+neighborhood $B(y, r_y)$ containing only finitely many terms of $(x_n)$
+(otherwise we could extract a subsequence converging to $y$). The collection
+$\{B(y, r_y) : y \in K\}$ is an open cover of $K$. By compactness, it has
+a finite subcover. But a finite union of sets, each containing finitely many
+terms, contains only finitely many terms total---contradicting the fact that
+$(x_n)$ has infinitely many terms in $K$.
 
 \textbf{(ii) $\Rightarrow$ (iii):}
-\emph{Completeness:} Let $(x_n)$ be Cauchy in $K$. By sequential compactness,
-$(x_n)$ has a subsequence converging to some $x \in K$. A Cauchy sequence with a
-convergent subsequence converges (Theorem~\ref{thm:R_complete} proof argument), so
-$x_n \to x \in K$.
+\emph{Completeness:} Let $(x_n)$ be a Cauchy sequence in $K$. By sequential
+compactness, there is a subsequence $x_{n_k} \to x \in K$. A Cauchy sequence
+with a convergent subsequence converges (for any $\varepsilon > 0$, choose
+$N$ so that $d(x_n, x_m) < \varepsilon/2$ for $n, m \ge N$, and choose
+$k$ with $n_k \ge N$ and $d(x_{n_k}, x) < \varepsilon/2$; then
+$d(x_n, x) \le d(x_n, x_{n_k}) + d(x_{n_k}, x) < \varepsilon$ for
+$n \ge N$). Hence $x_n \to x \in K$.
 
-\emph{Total boundedness:} Suppose $K$ is not totally bounded. Then there exists
-$\varepsilon > 0$ such that $K$ cannot be covered by finitely many
-$\varepsilon$-balls. Pick $x_1 \in K$ arbitrarily. Having chosen $x_1, \ldots, x_n$,
-since $K \not\subseteq \bigcup_{i=1}^n B(x_i, \varepsilon)$, choose
-$x_{n+1} \in K \setminus \bigcup_{i=1}^n B(x_i, \varepsilon)$. Then
-$d(x_{n+1}, x_i) \ge \varepsilon$ for all $i \le n$. The sequence $(x_n)$ has no
-convergent subsequence (any two terms are at least $\varepsilon$ apart),
-contradicting sequential compactness.
+\emph{Total boundedness:} Suppose $K$ is not totally bounded. Then there
+exists $\varepsilon > 0$ such that no finite collection of
+$\varepsilon$-balls covers $K$. Pick $x_1 \in K$ arbitrarily. Having chosen
+$x_1, \ldots, x_n$, since $K \not\subseteq \bigcup_{i=1}^n B(x_i,
+\varepsilon)$, choose $x_{n+1} \in K \setminus \bigcup_{i=1}^n
+B(x_i, \varepsilon)$. Then $d(x_{n+1}, x_i) \ge \varepsilon$ for all
+$i \le n$. The sequence $(x_n)$ satisfies $d(x_n, x_m) \ge \varepsilon$ for
+all $n \ne m$, so no subsequence can be Cauchy (let alone convergent). This
+contradicts sequential compactness.
 
 \textbf{(iii) $\Rightarrow$ (i):}
-Suppose $K$ is complete and totally bounded. We use the \emph{Lebesgue covering
-lemma} approach.
+We prove this in two steps.
 
-\emph{Claim (Lebesgue number):} For every open cover $\{G_\alpha\}$ of $K$, there
-exists $\delta > 0$ (the \emph{Lebesgue number}) such that for every $x \in K$,
+\emph{Step 1: Complete + totally bounded implies sequentially compact.}
+Let $(x_n)$ be a sequence in $K$. By Lemma~\ref{lem:tb_subsequence} applied
+with $\varepsilon = 1$, extract a subsequence $(x_n^{(1)})$ lying in a ball
+of radius $1$. Apply the lemma again to this subsequence with
+$\varepsilon = 1/2$ to get $(x_n^{(2)}) \subseteq B(y_2, 1/2)$ for some
+$y_2$. At stage $k$, extract $(x_n^{(k)}) \subseteq B(y_k, 1/k)$, a
+subsequence of $(x_n^{(k-1)})$. The diagonal subsequence
+$z_k = x_k^{(k)}$ is Cauchy: for $k, m \ge N$, both $z_k$ and $z_m$ belong
+to the ball $B(y_N, 1/N)$ (since $z_k$ for $k \ge N$ is a term of
+$(x_n^{(N)})$), so $d(z_k, z_m) \le 2/N \to 0$. By completeness of $K$,
+$(z_k)$ converges to some $z \in K$.
+
+\emph{Step 2: Sequentially compact implies compact (via the Lebesgue number
+lemma).}
+
+\emph{Claim (Lebesgue number):} If $K$ is sequentially compact and
+$\{G_\alpha\}$ is an open cover of $K$, then there exists $\delta > 0$ (the
+\emph{Lebesgue number}) such that for every $x \in K$,
 $B(x, \delta) \subseteq G_\alpha$ for some $\alpha$.
 
-\emph{Proof of claim:} Suppose not. Then for each $n$, there exists $x_n \in K$
-with $B(x_n, 1/n) \not\subseteq G_\alpha$ for any $\alpha$. By (iii) $\Rightarrow$
-(ii) (which we now verify: complete + totally bounded $\Rightarrow$ sequentially
-compact, see below), $(x_n)$ has a subsequence $x_{n_k} \to x \in K$. Since
-$x \in K \subseteq \bigcup_\alpha G_\alpha$, we have $x \in G_\beta$ for some
-$\beta$. Since $G_\beta$ is open, $B(x, r) \subseteq G_\beta$ for some $r > 0$.
-For large $k$, $d(x_{n_k}, x) < r/2$ and $1/n_k < r/2$, so
-$B(x_{n_k}, 1/n_k) \subseteq B(x, r) \subseteq G_\beta$, contradicting the choice
-of $x_{n_k}$.
+\emph{Proof of claim:} Suppose not. Then for each $n \in \N$, there exists
+$x_n \in K$ with $B(x_n, 1/n) \not\subseteq G_\alpha$ for any $\alpha$. By
+sequential compactness, extract a convergent subsequence
+$x_{n_k} \to x \in K$. Since $\{G_\alpha\}$ covers $K$,
+$x \in G_\beta$ for some $\beta$. Since $G_\beta$ is open,
+$B(x, r) \subseteq G_\beta$ for some $r > 0$. For large $k$,
+$d(x_{n_k}, x) < r/2$ and $1/n_k < r/2$, so
+$B(x_{n_k}, 1/n_k) \subseteq B(x, r) \subseteq G_\beta$, contradicting the
+choice of $x_{n_k}$.
 
-To complete the argument, we need: complete + totally bounded implies sequentially
-compact. Let $(x_n)$ be a sequence in $K$. Cover $K$ by finitely many balls of
-radius $1$; one ball contains infinitely many terms, giving a subsequence
-$(x_n^{(1)})$ with $\diam \le 2$. Cover $K$ by balls of radius $1/2$; one contains
-infinitely many terms of $(x_n^{(1)})$, giving $(x_n^{(2)})$ with $\diam \le 1$.
-Continue: at stage $k$, get $(x_n^{(k)})$ contained in a ball of radius $1/k$.
-The diagonal subsequence $y_k = x_k^{(k)}$ is Cauchy (for $k, m \ge N$,
-$d(y_k, y_m) \le 2/N$), hence converges by completeness.
-
-Now: given the Lebesgue number $\delta > 0$, cover $K$ by finitely many balls
-of radius $\delta/2$ (by total boundedness). Each ball has diameter $\le \delta$,
-so is contained in some $G_\alpha$. Taking the corresponding finitely many
-$G_\alpha$'s gives a finite subcover.
+Now, given the Lebesgue number $\delta > 0$, cover $K$ by finitely many balls
+of radius $\delta/2$ using total boundedness (which we established in
+Step~1). Each such ball has diameter at most $\delta$, so it is contained in
+some $G_\alpha$. The corresponding finitely many $G_\alpha$'s form a finite
+subcover.
 \end{proof}
 
-\begin{corollary}[Heine--Borel for $\R^n$]
+%% ============================================================
+%% SECTION 4: HEINE--BOREL
+%% ============================================================
+
+\section{The Heine--Borel Theorem}
+\label{sec:heine_borel}
+
+\begin{corollary}[Heine--Borel Theorem for $\R^n$]
 \label{cor:heine_borel}
 A subset of $\R^n$ is compact if and only if it is closed and bounded.
 \end{corollary}
 
 \begin{proof}
-($\Rightarrow$) Compact subsets of metric spaces are closed and bounded.
-(\emph{Closed:} If $x_n \in K$ and $x_n \to x$, then by sequential compactness
-there is a subsequence converging in $K$; by uniqueness of limits, $x \in K$.
-\emph{Bounded:} Compact implies totally bounded implies bounded.)
+($\Rightarrow$) By Proposition~\ref{prop:compact_basic}(i), every compact
+set is closed and bounded.
 
-($\Leftarrow$) Let $K \subseteq \R^n$ be closed and bounded. Bounded in $\R^n$
-implies totally bounded (cover $K$ by a grid of cubes of side $\varepsilon/\sqrt{n}$).
-Closed subset of a complete space is complete. By Theorem~\ref{thm:compact_equiv},
-$K$ is compact.
+($\Leftarrow$) Let $K \subseteq \R^n$ be closed and bounded. We verify
+the two conditions of Theorem~\ref{thm:compact_equiv}(iii).
+
+\emph{Complete:} $\R^n$ is complete (every Cauchy sequence in $\R^n$
+converges). A closed subset of a complete metric space is complete: if
+$(x_n)$ is Cauchy in $K$, then $x_n \to x \in \R^n$ by completeness of
+$\R^n$, and $x \in K$ since $K$ is closed.
+
+\emph{Totally bounded:} Since $K$ is bounded, $K \subseteq [-M, M]^n$ for
+some $M > 0$. Given $\varepsilon > 0$, partition $[-M, M]^n$ into cubes of
+side length $\varepsilon / \sqrt{n}$. Each cube has diameter at most
+$\varepsilon$, so it is contained in a ball of radius $\varepsilon$ centered
+at any of its points. Since the partition is finite, $K$ is totally bounded.
+
+By Theorem~\ref{thm:compact_equiv}, $K$ is compact.
 \end{proof}
 
-\subsection{Riesz's Lemma and Compactness in Infinite Dimensions}
+\begin{rlconnection}[title={Heine--Borel and Finite-State RL}]
+In finite-state RL with $|\mathcal{S}| = n$, the space of value functions is
+$\R^n$. The set of value functions bounded by $R_{\max}/(1-\gamma)$ is
+closed and bounded in $\R^n$, hence compact by Heine--Borel. This
+compactness guarantees that every bounded sequence of value function iterates
+has a convergent subsequence---a starting point for convergence analysis
+even before invoking contraction arguments.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: RIESZ'S LEMMA AND FINITE DIMENSION
+%% ============================================================
+
+\section{Riesz's Lemma and Compactness in Infinite Dimensions}
+\label{sec:riesz}
+
+The Heine--Borel theorem fails spectacularly in infinite-dimensional normed
+spaces. The following lemma and its consequence explain exactly why.
 
 \begin{lemma}[Riesz's Lemma]
 \label{lem:riesz}
-Let $Y$ be a proper closed subspace of a normed space $X$ (i.e., $Y \ne X$). For
-every $\theta \in (0,1)$, there exists $x_\theta \in X$ with $\|x_\theta\| = 1$
-and $d(x_\theta, Y) = \inf_{y \in Y} \|x_\theta - y\| \ge \theta$.
+Let $Y$ be a \emph{proper} closed subspace of a normed space $X$ (i.e.,
+$Y \subsetneq X$ and $Y$ is closed). For every $\theta \in (0,1)$, there
+exists $x_\theta \in X$ with $\|x_\theta\| = 1$ and
+\[
+\dist(x_\theta, Y) = \inf_{y \in Y} \|x_\theta - y\| \ge \theta.
+\]
 \end{lemma}
 
 \begin{proof}
 Since $Y \ne X$, there exists $z \in X \setminus Y$. Since $Y$ is closed,
-$d = d(z, Y) = \inf_{y \in Y} \|z - y\| > 0$. Choose $y_0 \in Y$ with
-$\|z - y_0\| < d/\theta$ (possible since $d/\theta > d = \inf$). Define
+$d = \dist(z, Y) = \inf_{y \in Y} \|z - y\| > 0$. Choose $y_0 \in Y$ with
+$\|z - y_0\| < d / \theta$ (possible since $d / \theta > d = \inf$ and the
+infimum is not necessarily attained). Define
 \[
 x_\theta = \frac{z - y_0}{\|z - y_0\|}.
 \]
 Then $\|x_\theta\| = 1$. For any $y \in Y$:
 \[
-\|x_\theta - y\| = \frac{\|z - y_0 - \|z - y_0\| y\|}{\|z - y_0\|}
-= \frac{\|z - \underbrace{(y_0 + \|z - y_0\| y)}_{\in Y}\|}{\|z - y_0\|}
-\ge \frac{d}{\|z - y_0\|} > \frac{d}{d/\theta} = \theta.
+\|x_\theta - y\|
+= \frac{\|z - y_0 - \|z - y_0\| \cdot y\|}{\|z - y_0\|}
+= \frac{\|z - \underbrace{(y_0 + \|z - y_0\| \cdot y)}_{\in Y}\|}
+       {\|z - y_0\|}
+\ge \frac{d}{\|z - y_0\|}
+> \frac{d}{d/\theta} = \theta.
 \]
-Taking the infimum over $y \in Y$: $d(x_\theta, Y) \ge \theta$.
+Taking the infimum over $y \in Y$ gives $\dist(x_\theta, Y) \ge \theta$.
 \end{proof}
 
 \begin{remark}
-We cannot always achieve $\theta = 1$ (i.e., exact distance $1$ from $Y$). This is
-possible in reflexive spaces but not in general.
+\label{rem:riesz_sharp}
+One cannot always achieve $\theta = 1$ in Riesz's lemma. However, in
+reflexive spaces (in particular, in Hilbert spaces), the infimum
+$\dist(z, Y)$ is attained by the orthogonal projection, so one can take
+$\theta = 1$.
 \end{remark}
 
-\begin{theorem}[Riesz's Theorem: Compactness Characterizes Finite Dimension]
+\begin{theorem}[Compact Unit Ball Characterizes Finite Dimension (Riesz)]
 \label{thm:riesz_compact}
-The closed unit ball $\overline{B}(0,1) = \{x \in X : \|x\| \le 1\}$ in a normed
-space $X$ is compact if and only if $X$ is finite-dimensional.
+The closed unit ball $\overline{B}(0,1) = \{x \in X : \|x\| \le 1\}$ in a
+normed space $X$ is compact if and only if $\dim X < \infty$.
 \end{theorem}
 
 \begin{proof}
 ($\Leftarrow$) If $\dim X = n < \infty$, then $X$ is isomorphic to $\R^n$
-(Theorem~\ref{thm:norm_equiv}), and the closed unit ball is closed and bounded,
-hence compact by Heine--Borel (Corollary~\ref{cor:heine_borel}).
+as a normed space (all norms on a finite-dimensional space are equivalent).
+The closed unit ball is closed and bounded in $\R^n$, hence compact by the
+Heine--Borel theorem (Corollary~\ref{cor:heine_borel}).
 
-($\Rightarrow$) We prove the contrapositive: if $X$ is infinite-dimensional, then
-$\overline{B}(0,1)$ is not compact (not sequentially compact). We construct a
-sequence in $\overline{B}(0,1)$ with no convergent subsequence.
+($\Rightarrow$) We prove the contrapositive: if $\dim X = \infty$, then
+$\overline{B}(0,1)$ is not compact. We construct a sequence in
+$\overline{B}(0,1)$ with no convergent subsequence.
 
-Pick $x_1 \in X$ with $\|x_1\| = 1$. Let $Y_1 = \Span\{x_1\}$, which is a proper
-closed subspace (finite-dimensional subspaces are closed). By Riesz's lemma with
-$\theta = 1/2$, there exists $x_2$ with $\|x_2\| = 1$ and $\|x_2 - y\| \ge 1/2$
-for all $y \in Y_1$; in particular $\|x_2 - x_1\| \ge 1/2$.
+Pick $x_1 \in X$ with $\|x_1\| = 1$. Let $Y_1 = \Span\{x_1\}$. Since
+$\dim X = \infty$, $Y_1$ is a proper subspace; it is closed because
+finite-dimensional subspaces of normed spaces are closed. By Riesz's lemma
+(Lemma~\ref{lem:riesz}) with $\theta = 1/2$, there exists $x_2$ with
+$\|x_2\| = 1$ and $\|x_2 - y\| \ge 1/2$ for all $y \in Y_1$. In particular,
+$\|x_2 - x_1\| \ge 1/2$.
 
-Let $Y_2 = \Span\{x_1, x_2\}$, another proper closed subspace. By Riesz's lemma,
-there exists $x_3$ with $\|x_3\| = 1$ and $d(x_3, Y_2) \ge 1/2$. Continuing
-inductively, we obtain a sequence $(x_n)$ in $\overline{B}(0,1)$ with
-$\|x_n - x_m\| \ge 1/2$ for all $n \ne m$.
+Set $Y_2 = \Span\{x_1, x_2\}$, again a proper closed subspace. By Riesz's
+lemma, there exists $x_3$ with $\|x_3\| = 1$ and $\dist(x_3, Y_2) \ge 1/2$.
+Continue inductively: at step $n$, set
+$Y_{n-1} = \Span\{x_1, \ldots, x_{n-1}\}$ and find $x_n$ with
+$\|x_n\| = 1$ and $\dist(x_n, Y_{n-1}) \ge 1/2$. Since $x_1, \ldots,
+x_{n-1} \in Y_{n-1}$, we have $\|x_n - x_m\| \ge 1/2$ for all $m < n$.
 
-No subsequence of $(x_n)$ can be Cauchy (hence none can converge), so
-$\overline{B}(0,1)$ is not sequentially compact, hence not compact.
+The sequence $(x_n)$ lies in $\overline{B}(0,1)$, and any two terms are at
+least $1/2$ apart. No subsequence can be Cauchy, so no subsequence converges.
+Thus $\overline{B}(0,1)$ is not sequentially compact, hence not compact.
 \end{proof}
 
-\begin{keyresult}[Riesz's Theorem]
-The closed unit ball in a normed space is compact if and only if the space is
-finite-dimensional. This is one of the most important structural results in
-functional analysis: it says that in infinite-dimensional spaces, bounded sets are
-never compact (in the norm topology). This forces us to use weaker topologies or
-stronger conditions (like equicontinuity) to obtain compactness.
+\begin{keyresult}[title={Riesz's Theorem: Finite Dimension via Compactness}]
+A normed space is finite-dimensional if and only if its closed unit ball is
+compact. This is one of the most fundamental structural results in functional
+analysis. It explains why bounded sets in infinite-dimensional spaces (such
+as the space of all value functions on an infinite state space) are never
+compact in the norm topology, and why alternative compactness criteria are
+essential.
 \end{keyresult}
 
-\begin{rlconnection}[Compactness and Function Approximation]
-Riesz's theorem explains a fundamental challenge in RL: the space of all value
-functions on an infinite state space is infinite-dimensional, so the unit ball is
-not compact. This means that a bounded sequence of value function approximations
-need not have a convergent subsequence. In practice, this is why we restrict to
-finite-dimensional parameterizations (linear function approximation, neural
-networks) or use compactness criteria like Arzel\`{a}--Ascoli
-(Theorem~\ref{thm:arzela_ascoli}) to guarantee that approximation sequences converge.
+\begin{rlconnection}[title={Why We Need Function Approximation}]
+The space of all bounded value functions $V \colon \mathcal{S} \to \R$ on an
+infinite state space, equipped with the sup norm, is infinite-dimensional. By
+Riesz's theorem, the closed ball $\{V : \|V\|_\infty \le R_{\max}/(1-\gamma)\}$
+is not compact. Consequently, a bounded sequence of value function iterates
+need not have a convergent subsequence.
+
+This is the mathematical reason we restrict to finite-dimensional
+parameterizations (linear function approximation, neural networks): in a
+finite-dimensional subspace, bounded sets are compact, and convergent
+subsequences exist. The price we pay is approximation error (the ``deadly
+triad'' in TD learning involves precisely this tension).
 \end{rlconnection}
 
-\subsection{The Arzel\`{a}--Ascoli Theorem}
+%% ============================================================
+%% SECTION 6: ARZELA--ASCOLI THEOREM
+%% ============================================================
+
+\section{The Arzela--Ascoli Theorem}
+\label{sec:arzela_ascoli}
+
+Riesz's theorem tells us that norm-compactness fails in infinite dimensions.
+The Arzela--Ascoli theorem provides a practical \emph{substitute}: under
+suitable regularity conditions, families of functions are relatively compact
+even in infinite-dimensional function spaces.
 
 \begin{definition}[Equicontinuity]
 \label{def:equicontinuous}
-A family $\mathcal{F} \subseteq C[a,b]$ is \emph{equicontinuous} if for every
-$\varepsilon > 0$ there exists $\delta > 0$ such that
-$|f(s) - f(t)| < \varepsilon$ for all $f \in \mathcal{F}$ and all $s, t \in [a,b]$
-with $|s - t| < \delta$. The family is \emph{uniformly bounded} if
+A family $\mathcal{F}$ of functions from a metric space $(M, d_M)$ to
+$(\R, |\cdot|)$ is \emph{equicontinuous at $x_0 \in M$} if for every
+$\varepsilon > 0$, there exists $\delta > 0$ such that
+$|f(x) - f(x_0)| < \varepsilon$ for all $f \in \mathcal{F}$ and all
+$x \in M$ with $d_M(x, x_0) < \delta$. The family is \emph{equicontinuous}
+(on $M$) if it is equicontinuous at every point of $M$.
+
+When $M$ is compact, equicontinuity implies \emph{uniform equicontinuity}:
+for every $\varepsilon > 0$, there exists $\delta > 0$ such that
+$|f(s) - f(t)| < \varepsilon$ for all $f \in \mathcal{F}$ and all
+$s, t \in M$ with $d_M(s, t) < \delta$.
+\end{definition}
+
+\begin{definition}[Uniformly Bounded Family]
+\label{def:unif_bounded}
+A family $\mathcal{F} \subseteq C(M)$ is \emph{uniformly bounded} if
 $\sup_{f \in \mathcal{F}} \|f\|_\infty < \infty$.
 \end{definition}
 
-\begin{theorem}[Arzel\`{a}--Ascoli]
+\begin{theorem}[Arzela--Ascoli Theorem]
 \label{thm:arzela_ascoli}
-A subset $\mathcal{F} \subseteq C[a,b]$ (with the sup norm) is relatively compact
-(i.e., $\cl(\mathcal{F})$ is compact) if and only if $\mathcal{F}$ is uniformly
-bounded and equicontinuous.
+A subset $\mathcal{F} \subseteq (C[a,b], \|\cdot\|_\infty)$ is relatively
+compact (i.e., its closure $\cl(\mathcal{F})$ is compact) if and only if
+$\mathcal{F}$ is uniformly bounded and equicontinuous.
 \end{theorem}
 
 \begin{proof}
-($\Leftarrow$) \textbf{Uniformly bounded + equicontinuous implies relatively compact.}
-By Theorem~\ref{thm:compact_equiv}, it suffices to show that every sequence $(f_n)$
-in $\mathcal{F}$ has a uniformly convergent subsequence (the closure inherits
-completeness from $C[a,b]$).
+\textbf{($\Leftarrow$) Uniformly bounded + equicontinuous $\Rightarrow$
+relatively compact.}
 
-\textbf{Step 1: Pointwise convergence on a dense set.}
-Let $D = \{r_1, r_2, \ldots\}$ be a countable dense subset of $[a,b]$ (e.g., the
-rationals in $[a,b]$). The sequence $(f_n(r_1))$ is bounded (by uniform
-boundedness), so by Bolzano--Weierstrass it has a convergent subsequence
-$(f_{n_k^{(1)}}(r_1))$. From this subsequence, extract a further subsequence
-convergent at $r_2$: $(f_{n_k^{(2)}})$. Continue for each $r_j$. The diagonal
-subsequence $g_k = f_{n_k^{(k)}}$ converges at every $r_j \in D$.
+By Theorem~\ref{thm:compact_equiv}, it suffices to show that every sequence
+$(f_n)$ in $\mathcal{F}$ has a uniformly convergent subsequence (the closure
+$\cl(\mathcal{F})$ inherits completeness from the Banach space
+$(C[a,b], \|\cdot\|_\infty)$, so sequential compactness of $\cl(\mathcal{F})$
+will follow).
 
-\textbf{Step 2: Uniform convergence.}
-Given $\varepsilon > 0$, choose $\delta > 0$ from equicontinuity for
-$\varepsilon/3$. Cover $[a,b]$ by finitely many intervals of length $< \delta$, and
-pick a point $r_{j_i} \in D$ in each interval, giving $r_{j_1}, \ldots, r_{j_m}$.
+\emph{Step 1: Pointwise convergence on a countable dense set.}
+Let $D = \{r_1, r_2, \ldots\}$ be a countable dense subset of $[a,b]$ (for
+instance, the rationals in $[a,b]$). The sequence $(f_n(r_1))_{n \ge 1}$ is
+bounded (by uniform boundedness of $\mathcal{F}$), so by the
+Bolzano--Weierstrass theorem it has a convergent subsequence
+$(f_{n_k^{(1)}}(r_1))_{k \ge 1}$. From this subsequence, extract a further
+subsequence convergent at $r_2$, obtaining $(f_{n_k^{(2)}})_{k \ge 1}$.
+Continue: at stage $j$, extract a subsequence $(f_{n_k^{(j)}})_{k \ge 1}$
+of $(f_{n_k^{(j-1)}})_{k \ge 1}$ that converges at $r_j$.
+
+Define the diagonal subsequence $g_k = f_{n_k^{(k)}}$. For each fixed
+$j \in \N$, the sequence $(g_k)_{k \ge j}$ is a subsequence of
+$(f_{n_k^{(j)}})_{k \ge 1}$, so $(g_k(r_j))_{k \ge 1}$ converges. Thus
+$(g_k)$ converges pointwise on all of $D$.
+
+\emph{Step 2: Upgrade to uniform convergence.}
+Given $\varepsilon > 0$, by equicontinuity on the compact set $[a,b]$,
+choose $\delta > 0$ such that $|f(s) - f(t)| < \varepsilon/3$ for all
+$f \in \mathcal{F}$ and all $s, t \in [a,b]$ with $|s - t| < \delta$. Cover
+$[a,b]$ by finitely many intervals of length $< \delta$, and pick a point
+$r_{j_i} \in D$ in each interval, giving $r_{j_1}, \ldots, r_{j_m}$.
+
 Since $(g_k)$ converges at each $r_{j_i}$, choose $K$ such that
-$|g_k(r_{j_i}) - g_l(r_{j_i})| < \varepsilon/3$ for all $k, l \ge K$ and all $i$.
+$|g_k(r_{j_i}) - g_l(r_{j_i})| < \varepsilon/3$ for all $k, l \ge K$ and
+all $i = 1, \ldots, m$.
 
-For any $t \in [a,b]$, choose $r_{j_i}$ with $|t - r_{j_i}| < \delta$. Then for
-$k, l \ge K$:
+For any $t \in [a,b]$, choose $r_{j_i}$ with $|t - r_{j_i}| < \delta$. Then
+for $k, l \ge K$:
 \begin{align*}
-|g_k(t) - g_l(t)| &\le |g_k(t) - g_k(r_{j_i})| + |g_k(r_{j_i}) - g_l(r_{j_i})|
-+ |g_l(r_{j_i}) - g_l(t)| \\
-&< \varepsilon/3 + \varepsilon/3 + \varepsilon/3 = \varepsilon.
+|g_k(t) - g_l(t)|
+&\le |g_k(t) - g_k(r_{j_i})| + |g_k(r_{j_i}) - g_l(r_{j_i})|
+   + |g_l(r_{j_i}) - g_l(t)| \\
+&< \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+   + \frac{\varepsilon}{3} = \varepsilon.
 \end{align*}
-So $\|g_k - g_l\|_\infty < \varepsilon$ for $k, l \ge K$, showing $(g_k)$ is Cauchy
-in $(C[a,b], \|\cdot\|_\infty)$, hence convergent.
+Since $t$ was arbitrary, $\|g_k - g_l\|_\infty < \varepsilon$ for all
+$k, l \ge K$. Hence $(g_k)$ is Cauchy in $(C[a,b], \|\cdot\|_\infty)$ and
+therefore converges.
 
-($\Rightarrow$) \textbf{Relatively compact implies uniformly bounded and equicontinuous.}
+\medskip
+\textbf{($\Rightarrow$) Relatively compact $\Rightarrow$ uniformly bounded
++ equicontinuous.}
 
-\emph{Uniformly bounded:} If $\cl(\mathcal{F})$ is compact, it is bounded, so
-$\sup_{f \in \mathcal{F}} \|f\|_\infty \le \sup_{g \in \cl(\mathcal{F})} \|g\|_\infty
-< \infty$.
+\emph{Uniformly bounded:} If $\cl(\mathcal{F})$ is compact, it is bounded
+in the sup norm. Hence $\sup_{f \in \mathcal{F}} \|f\|_\infty \le
+\sup_{g \in \cl(\mathcal{F})} \|g\|_\infty < \infty$.
 
-\emph{Equicontinuous:} Given $\varepsilon > 0$, cover $\cl(\mathcal{F})$ by finitely
-many balls $B(g_i, \varepsilon/3)$, $i = 1, \ldots, N$. Each $g_i \in C[a,b]$ is
-uniformly continuous on $[a,b]$, so choose $\delta_i > 0$ with
-$|g_i(s) - g_i(t)| < \varepsilon/3$ when $|s-t| < \delta_i$. Set
-$\delta = \min(\delta_1, \ldots, \delta_N) > 0$. For any $f \in \mathcal{F}$,
-choose $g_i$ with $\|f - g_i\|_\infty < \varepsilon/3$. For $|s-t| < \delta$:
-$|f(s) - f(t)| \le |f(s) - g_i(s)| + |g_i(s) - g_i(t)| + |g_i(t) - f(t)| <
-\varepsilon/3 + \varepsilon/3 + \varepsilon/3 = \varepsilon$.
+\emph{Equicontinuous:} Given $\varepsilon > 0$, cover $\cl(\mathcal{F})$ by
+finitely many open balls $B(g_1, \varepsilon/3), \ldots,
+B(g_N, \varepsilon/3)$ (possible since $\cl(\mathcal{F})$ is compact, hence
+totally bounded). Each $g_i \in C[a,b]$ is uniformly continuous on $[a,b]$,
+so choose $\delta_i > 0$ with $|g_i(s) - g_i(t)| < \varepsilon/3$ whenever
+$|s - t| < \delta_i$. Let $\delta = \min(\delta_1, \ldots, \delta_N) > 0$.
+
+For any $f \in \mathcal{F}$, choose $g_i$ with
+$\|f - g_i\|_\infty < \varepsilon/3$. For $|s - t| < \delta$:
+\[
+|f(s) - f(t)| \le |f(s) - g_i(s)| + |g_i(s) - g_i(t)| + |g_i(t) - f(t)|
+< \frac{\varepsilon}{3} + \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+= \varepsilon. \qedhere
+\]
 \end{proof}
 
-\begin{rlconnection}[Arzel\`{a}--Ascoli in Policy Optimization]
-In continuous-state RL, when we optimize over a class of value functions or
-policies, we need compactness to guarantee that maximizing sequences have
-convergent subsequences. The Arzel\`{a}--Ascoli theorem provides the criterion:
-if value function approximations are uniformly bounded and equicontinuous (e.g.,
-Lipschitz with a common Lipschitz constant), then any sequence has a uniformly
-convergent subsequence. This is used in the analysis of fitted value iteration
-and actor-critic methods on continuous state spaces.
+\begin{rlconnection}[title={Arzela--Ascoli in Policy Optimization}]
+In continuous-state RL, when we optimize over a class of Lipschitz value
+functions $\{V : |V(s) - V(t)| \le L \cdot d(s,t)\}$ with a uniform
+Lipschitz constant $L$ and uniform bound $\|V\|_\infty \le C$, the
+Arzela--Ascoli theorem guarantees that any sequence from this class has
+a uniformly convergent subsequence. This is used in:
+\begin{itemize}[nosep]
+    \item \textbf{Fitted value iteration:} Ensuring that the sequence of
+          fitted value functions has a convergent subsequence.
+    \item \textbf{Actor-critic methods:} Guaranteeing compactness of policy
+          classes when policies are parameterized by Lipschitz functions.
+    \item \textbf{Regularization:} Adding Lipschitz constraints to neural
+          network policies is precisely an application of Arzela--Ascoli to
+          ensure compactness of the hypothesis class.
+\end{itemize}
 \end{rlconnection}
 
-\subsection{Compact Operators}
+%% ============================================================
+%% SECTION 7: COMPACT OPERATORS
+%% ============================================================
+
+\section{Compact Operators}
+\label{sec:compact_ops}
+
+Compact operators are the infinite-dimensional analogues of matrices.
+They map bounded sets to relatively compact sets, compensating for
+the failure of norm-compactness in infinite dimensions.
 
 \begin{definition}[Compact Operator]
 \label{def:compact_op}
-A linear operator $T \colon X \to Y$ between normed spaces is \emph{compact} if
-$T$ maps bounded sets to relatively compact sets, i.e., for every bounded
-$B \subseteq X$, the closure $\cl(T(B))$ is compact in $Y$.
-Equivalently, $T$ is compact if every bounded sequence $(x_n)$ in $X$ has a
-subsequence $(x_{n_k})$ such that $(Tx_{n_k})$ converges in $Y$.
+A linear operator $T \colon X \to Y$ between normed spaces is \emph{compact}
+if for every bounded subset $B \subseteq X$, the image $T(B)$ is relatively
+compact in $Y$ (i.e., $\cl(T(B))$ is compact). Equivalently, $T$ is compact
+if every bounded sequence $(x_n)$ in $X$ has a subsequence $(x_{n_k})$ such
+that $(Tx_{n_k})$ converges in $Y$.
 \end{definition}
 
 \begin{proposition}[Compact Operators are Bounded]
 \label{prop:compact_bounded}
-Every compact operator is bounded.
+Every compact operator is bounded (hence continuous).
 \end{proposition}
 
 \begin{proof}
-Suppose $T$ is compact but not bounded. Then there exist $(x_n)$ with $\|x_n\| = 1$
-and $\|Tx_n\| \to \infty$. Since $(x_n)$ is bounded, compactness gives a
-subsequence with $(Tx_{n_k})$ convergent, hence bounded. But $\|Tx_{n_k}\| \to
-\infty$, a contradiction.
+Suppose $T$ is compact but not bounded. Then there exists a sequence $(x_n)$
+with $\|x_n\| = 1$ and $\|Tx_n\| \to \infty$. Since $(x_n)$ is bounded,
+compactness of $T$ provides a subsequence with $(Tx_{n_k})$ convergent, hence
+bounded. But $\|Tx_{n_k}\| \to \infty$, a contradiction.
 \end{proof}
 
-\begin{example}[Integral Operators are Often Compact]
+\begin{proposition}[Finite-Rank Operators are Compact]
+\label{prop:finite_rank_compact}
+If $T \colon X \to Y$ is a bounded linear operator with
+$\dim(\operatorname{ran}(T)) < \infty$, then $T$ is compact.
+\end{proposition}
+
+\begin{proof}
+Let $B \subseteq X$ be bounded. Then $T(B)$ is a bounded subset of the
+finite-dimensional space $\operatorname{ran}(T)$. By the Heine--Borel theorem
+applied to $\operatorname{ran}(T) \cong \R^m$, $\cl(T(B))$ is compact.
+\end{proof}
+
+\begin{example}[Integral Operators with Continuous Kernels]
 \label{ex:compact_integral}
-The integral operator from Example~\ref{ex:integral_op} with continuous kernel
-$k$ on $[a,b] \times [a,b]$ is compact as an operator $C[a,b] \to C[a,b]$. This
-follows from Arzel\`{a}--Ascoli: if $(f_n)$ is bounded in $C[a,b]$, then
-$(Tf_n)$ is uniformly bounded (since $T$ is bounded) and equicontinuous (since $k$
-is uniformly continuous on the compact set $[a,b]^2$, and
-$|(Tf_n)(s_1) - (Tf_n)(s_2)| \le \|f_n\|_\infty \int_a^b |k(s_1,t) - k(s_2,t)|\, dt$
-is small uniformly in $n$ when $|s_1 - s_2|$ is small).
+Let $k \colon [a,b] \times [a,b] \to \R$ be continuous, and define
+$T \colon C[a,b] \to C[a,b]$ by
+\[
+(Tf)(s) = \int_a^b k(s,t)\, f(t)\, dt.
+\]
+Then $T$ is compact. To verify this using Arzela--Ascoli: if $(f_n)$ is
+bounded in $C[a,b]$ with $\|f_n\|_\infty \le M$, then:
+\begin{itemize}[nosep]
+    \item \emph{Uniformly bounded:}
+          $\|Tf_n\|_\infty \le (b-a) \cdot \|k\|_\infty \cdot M$.
+    \item \emph{Equicontinuous:} Since $k$ is uniformly continuous on the
+          compact set $[a,b]^2$, for any $\varepsilon > 0$ there exists
+          $\delta > 0$ with $|k(s_1, t) - k(s_2, t)| < \varepsilon /
+          ((b-a)M)$ whenever $|s_1 - s_2| < \delta$. Then
+          \[
+          |(Tf_n)(s_1) - (Tf_n)(s_2)|
+          \le \int_a^b |k(s_1,t) - k(s_2,t)| \cdot |f_n(t)|\, dt
+          < \varepsilon,
+          \]
+          uniformly in $n$.
+\end{itemize}
+By Arzela--Ascoli (Theorem~\ref{thm:arzela_ascoli}), $\{Tf_n\}$ is
+relatively compact in $C[a,b]$.
 \end{example}
 
+\begin{proposition}[Algebraic Properties of Compact Operators]
+\label{prop:compact_algebra}
+Let $X$, $Y$, $Z$ be normed spaces.
+\begin{enumerate}[label=(\roman*),nosep]
+    \item The set of compact operators from $X$ to $Y$ is a closed subspace
+          of $\mathcal{B}(X, Y)$ (when $Y$ is a Banach space).
+    \item If $T \colon X \to Y$ is compact and $S \colon Y \to Z$ is bounded,
+          then $ST$ is compact. Similarly, if $S$ is compact and $T$ is
+          bounded, then $ST$ is compact.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(i)} Let $(T_n)$ be a sequence of compact operators converging in
+operator norm to $T$. We show $T$ is compact. Let $(x_k)$ be a bounded
+sequence in $X$ with $\|x_k\| \le M$. By a diagonal argument: since $T_1$
+is compact, extract a subsequence $(x_k^{(1)})$ with $(T_1 x_k^{(1)})$
+convergent. From this, extract $(x_k^{(2)})$ with $(T_2 x_k^{(2)})$
+convergent. The diagonal sequence $y_k = x_k^{(k)}$ satisfies: $(T_n y_k)$
+converges for each $n$.
+
+We claim $(Ty_k)$ is Cauchy. Given $\varepsilon > 0$, choose $n$ with
+$\|T - T_n\| < \varepsilon/(3M)$. Choose $K$ with
+$\|T_n y_k - T_n y_l\| < \varepsilon/3$ for $k, l \ge K$. Then
+\[
+\|Ty_k - Ty_l\| \le \|Ty_k - T_n y_k\| + \|T_n y_k - T_n y_l\|
++ \|T_n y_l - Ty_l\|
+< \frac{\varepsilon}{3} + \frac{\varepsilon}{3} + \frac{\varepsilon}{3}
+= \varepsilon.
+\]
+
+\textbf{(ii)} If $(x_n)$ is bounded and $T$ is compact, then $(Tx_{n_k})$
+converges for some subsequence, so $(STx_{n_k})$ converges by continuity of
+$S$. The second claim is similar: if $(x_n)$ is bounded, then $(Tx_n)$ is
+bounded, and compactness of $S$ extracts a convergent subsequence of
+$(STx_n)$.
+\end{proof}
+
 %% ============================================================
-%% SECTION 7: BAIRE CATEGORY THEOREM
+%% SECTION 8: BAIRE CATEGORY THEOREM
 %% ============================================================
 
 \section{The Baire Category Theorem}
 \label{sec:baire}
 
-The Baire category theorem is one of the most powerful existence results in
-analysis. It underpins the three fundamental theorems of Banach space theory:
-the Uniform Boundedness Principle, the Open Mapping Theorem, and the Closed Graph
-Theorem (all treated in the next lesson).
+We now turn to a completely different tool. The Baire category theorem
+provides a way to prove that certain sets are ``large'' (or that certain
+properties hold ``generically'') using only completeness.
 
-\subsection{Nowhere Dense Sets and Category}
+\subsection{Nowhere Dense Sets and Baire Category}
 
-\begin{definition}[Nowhere Dense]
+\begin{definition}[Nowhere Dense Set]
 \label{def:nowhere_dense}
-A subset $A$ of a metric space $X$ is \emph{nowhere dense} if $\Int(\cl(A)) =
-\emptyset$, i.e., the closure of $A$ has empty interior. Equivalently, $A$ is
-nowhere dense if and only if for every non-empty open set $U$, there is a
-non-empty open set $V \subseteq U$ with $V \cap A = \emptyset$.
+A subset $A$ of a metric space $(X,d)$ is \emph{nowhere dense} if
+$\interior(\cl(A)) = \emptyset$: the closure of $A$ has empty interior.
+Equivalently, $A$ is nowhere dense if and only if for every non-empty open
+set $U \subseteq X$, there exists a non-empty open set
+$V \subseteq U$ with $V \cap A = \emptyset$.
 \end{definition}
 
-\begin{example}
-In $\R$: $\Z$ is nowhere dense, $\{1/n : n \in \N\}$ is nowhere dense, $\Q$ is
-\emph{not} nowhere dense (its closure is $\R$, which has non-empty interior).
-The Cantor set is a closed, uncountable, nowhere dense subset of $[0,1]$.
+\begin{example}[Nowhere Dense Sets in $\R$]
+\label{ex:nowhere_dense}
+\begin{enumerate}[label=(\alph*),nosep]
+    \item $\Z$ is nowhere dense in $\R$: $\cl(\Z) = \Z$, and $\Z$ contains
+          no open interval.
+    \item $\{1/n : n \in \N\}$ is nowhere dense: its closure is
+          $\{0\} \cup \{1/n : n \in \N\}$, which contains no open interval.
+    \item The Cantor set $\mathcal{C}$ is nowhere dense, uncountable, and
+          closed (it equals its own closure, which has empty interior since
+          every interval in $[0,1]$ contains points not in $\mathcal{C}$).
+    \item $\Q$ is \emph{not} nowhere dense: $\cl(\Q) = \R$, and
+          $\interior(\R) = \R \ne \emptyset$.
+\end{enumerate}
 \end{example}
 
-\begin{definition}[First and Second Category]
+\begin{definition}[First Category (Meager) and Second Category]
 \label{def:category}
-A subset of a metric space is of \emph{first category} (or \emph{meager}) if it is
-a countable union of nowhere dense sets. A set is of \emph{second category} (or
-\emph{non-meager}) if it is not of first category.
+A subset $A$ of a metric space is of \emph{first category} (or
+\emph{meager}) if $A$ can be written as a countable union of nowhere dense
+sets:
+\[
+A = \bigcup_{n=1}^\infty A_n, \quad
+\text{each } A_n \text{ is nowhere dense.}
+\]
+A set that is \emph{not} of first category is said to be of \emph{second
+category} (or \emph{non-meager}, or \emph{comeager} for the complement).
 \end{definition}
 
 \begin{remark}
-``First category'' means ``small'' in the topological sense, and ``second category''
-means ``large.'' This is a different notion of smallness from measure zero.
+\label{rem:category_vs_measure}
+``First category'' means topologically negligible (``small''). This is a
+fundamentally different notion from measure-theoretic negligibility (measure
+zero). The rationals $\Q$ are meager in $\R$ (as a countable union of
+singletons, each nowhere dense) and have Lebesgue measure zero. The Cantor
+set is nowhere dense (hence meager) but uncountable. There exist meager sets
+of full measure and comeager sets of measure zero.
 \end{remark}
 
 \subsection{Statement and Proof}
 
 \begin{theorem}[Baire Category Theorem]
 \label{thm:baire}
-Every complete metric space is of second category in itself. Equivalently, if
-$(X,d)$ is a complete metric space and $X = \bigcup_{n=1}^\infty F_n$ with each
-$F_n$ closed, then at least one $F_n$ has non-empty interior.
+Every complete metric space is of second category in itself. Equivalently:
+\begin{enumerate}[label=(\alph*),nosep]
+    \item If $(X,d)$ is a complete metric space and
+          $X = \bigcup_{n=1}^\infty F_n$ with each $F_n$ closed, then at
+          least one $F_n$ has non-empty interior.
+    \item If $(X,d)$ is a complete metric space and $A_1, A_2, \ldots$ are
+          nowhere dense, then $\bigcup_{n=1}^\infty A_n \ne X$.
+\end{enumerate}
 \end{theorem}
 
 \begin{proof}
-We prove the equivalent contrapositive: if $A_1, A_2, \ldots$ are nowhere dense
-subsets of a complete metric space $X$, then $\bigcup_{n=1}^\infty A_n \ne X$.
+We prove formulation (b). Suppose $A_1, A_2, \ldots$ are nowhere dense in
+a complete metric space $(X,d)$. We construct a point
+$x \in X \setminus \bigcup_{n=1}^\infty A_n$.
 
-Since $A_1$ is nowhere dense, $X \setminus \cl(A_1)$ is a non-empty open set (if
-$\cl(A_1) = X$, then $\Int(\cl(A_1)) = X \ne \emptyset$, contradicting nowhere
-density). Choose $x_1 \in X \setminus \cl(A_1)$ and $r_1 > 0$ with
-$\overline{B}(x_1, r_1) \subseteq X \setminus \cl(A_1)$ and $r_1 < 1$. In
-particular, $\overline{B}(x_1, r_1) \cap A_1 = \emptyset$.
+\emph{Step 1.} Since $A_1$ is nowhere dense, $\cl(A_1)$ has empty interior,
+so $X \setminus \cl(A_1)$ is a non-empty open set (if it were empty, then
+$\cl(A_1) = X$ and $\interior(\cl(A_1)) = X \ne \emptyset$, contradicting
+nowhere density). Choose $x_1 \in X \setminus \cl(A_1)$ and $r_1 \in (0, 1)$
+with $\overline{B}(x_1, r_1) \subseteq X \setminus \cl(A_1)$. In particular,
+$\overline{B}(x_1, r_1) \cap A_1 = \emptyset$.
 
-Since $A_2$ is nowhere dense and $B(x_1, r_1)$ is a non-empty open set, there
-exists a non-empty open ball $B(x_2, r_2) \subseteq B(x_1, r_1)$ with
-$\overline{B}(x_2, r_2) \cap \cl(A_2) = \emptyset$ and $r_2 < 1/2$.
+\emph{Step 2.} Since $A_2$ is nowhere dense and $B(x_1, r_1)$ is a non-empty
+open set, there exists a non-empty open ball $B(x_2, r_2)$ with
+$\overline{B}(x_2, r_2) \subseteq B(x_1, r_1)$ and
+$\overline{B}(x_2, r_2) \cap \cl(A_2) = \emptyset$, with $r_2 \in (0, 1/2)$.
 
-Continuing inductively, at step $n$ we find $x_n$ and $0 < r_n < 1/n$ with
+\emph{Inductive step.} At step $n$, find $x_n$ and $r_n \in (0, 1/n)$ with
 \[
-\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1}) \quad \text{and} \quad
+\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1})
+\quad \text{and} \quad
 \overline{B}(x_n, r_n) \cap A_n = \emptyset.
 \]
 
-The sequence $(x_n)$ is Cauchy: for $m > n$, $x_m \in B(x_n, r_n)$, so
-$d(x_m, x_n) < r_n < 1/n \to 0$. Since $X$ is complete, $x_n \to x$ for some
-$x \in X$.
+\emph{Step 3: The sequence $(x_n)$ is Cauchy.}
+For $m > n$, the nesting condition gives $x_m \in B(x_n, r_n)$, so
+$d(x_m, x_n) < r_n < 1/n \to 0$. Since $X$ is complete,
+$x_n \to x$ for some $x \in X$.
 
-For each $n$, $x_m \in \overline{B}(x_n, r_n)$ for all $m \ge n$ (by nesting), so
-$x = \lim x_m \in \overline{B}(x_n, r_n)$ (closed balls are closed). Therefore
-$x \notin A_n$ for any $n$, so $x \notin \bigcup_{n=1}^\infty A_n$. Hence
-$\bigcup_{n=1}^\infty A_n \ne X$.
+\emph{Step 4: The limit avoids every $A_n$.}
+For each fixed $n$, $x_m \in \overline{B}(x_n, r_n)$ for all $m \ge n$
+(by nesting). Since $\overline{B}(x_n, r_n)$ is closed,
+$x = \lim_{m \to \infty} x_m \in \overline{B}(x_n, r_n)$. But
+$\overline{B}(x_n, r_n) \cap A_n = \emptyset$, so $x \notin A_n$.
+
+Since this holds for every $n$, $x \notin \bigcup_{n=1}^\infty A_n$.
+Therefore $\bigcup_{n=1}^\infty A_n \ne X$.
 \end{proof}
 
-\begin{corollary}
+\begin{keyresult}[title={The Baire Category Theorem}]
+A complete metric space cannot be written as a countable union of nowhere
+dense sets. Equivalently, if a complete metric space is expressed as a
+countable union of closed sets, at least one of them has non-empty interior.
+This theorem is the foundation of the three great theorems of Banach space
+theory: the Uniform Boundedness Principle, the Open Mapping Theorem, and the
+Closed Graph Theorem.
+\end{keyresult}
+
+\subsection{Consequences of the Baire Category Theorem}
+
+\begin{corollary}[Countable Intersection of Dense Open Sets]
 \label{cor:baire_dense}
-In a complete metric space, the intersection of countably many dense open sets is
-dense (in fact, it is a dense $G_\delta$ set).
+In a complete metric space, the intersection of countably many dense open
+sets is dense (it is a dense $G_\delta$ set).
 \end{corollary}
 
 \begin{proof}
-Let $G_1, G_2, \ldots$ be dense open sets in a complete metric space $X$. Their
-complements $F_n = X \setminus G_n$ are closed and nowhere dense (since $G_n$ is
-dense, $\cl(F_n) = F_n$ has empty interior: any ball $B(x,r)$ contains a point of
-$G_n$, hence a point outside $F_n$).
+Let $G_1, G_2, \ldots$ be dense open sets in a complete metric space $X$.
+We show that $G = \bigcap_{n=1}^\infty G_n$ is dense, i.e., $G$ intersects
+every non-empty open set.
 
-By the Baire category theorem, $\bigcup F_n \ne X$, so
-$\bigcap G_n = X \setminus \bigcup F_n \ne \emptyset$.
+Let $U \subseteq X$ be non-empty and open. Since $G_1$ is dense,
+$U \cap G_1$ is non-empty and open. Choose $x_1$ and $r_1 \in (0, 1)$ with
+$\overline{B}(x_1, r_1) \subseteq U \cap G_1$. Since $G_2$ is dense,
+$B(x_1, r_1) \cap G_2$ is non-empty and open. Choose $x_2$ and
+$r_2 \in (0, 1/2)$ with
+$\overline{B}(x_2, r_2) \subseteq B(x_1, r_1) \cap G_2$. Continue
+inductively: at step $n$, choose $x_n$ and $r_n \in (0, 1/n)$ with
+$\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1}) \cap G_n$.
 
-To show density: let $U$ be any non-empty open set. Then $U$ is a complete metric
-space (as an open subset of $X$... actually we need a slight modification). Instead,
-apply the construction in the proof of Theorem~\ref{thm:baire} starting from any
-non-empty open ball $B(x_0, r_0) \subseteq U$: since each $G_n$ is dense,
-$B(x_0, r_0) \cap G_n$ is a non-empty open set. Choose nested closed balls
-$\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1}) \cap G_n$ with $r_n \to 0$.
-The limit $x = \lim x_n$ lies in $\overline{B}(x_0, r_0) \subseteq U$ and in each
-$G_n$, so $x \in U \cap \bigcap G_n$.
+As in the proof of Theorem~\ref{thm:baire}, $(x_n)$ is Cauchy with limit
+$x \in \overline{B}(x_n, r_n) \subseteq G_n$ for each $n$, and
+$x \in \overline{B}(x_1, r_1) \subseteq U$. Hence
+$x \in U \cap \bigcap_{n=1}^\infty G_n$.
 \end{proof}
 
-\begin{corollary}[$\Q$ is Not a $G_\delta$ in $\R$]
+\begin{corollary}[The Rationals are Not a $G_\delta$ Set]
 \label{cor:Q_not_Gdelta}
-The rationals $\Q$ cannot be written as a countable intersection of open sets.
+The set $\Q$ of rationals cannot be expressed as a countable intersection of
+open subsets of $\R$.
 \end{corollary}
 
 \begin{proof}
-Suppose $\Q = \bigcap_{n=1}^\infty G_n$ with each $G_n$ open. Since $\Q$ is dense,
-each $G_n$ is dense. Also, for each $q \in \Q$, $\R \setminus \{q\}$ is open and
-dense. By Corollary~\ref{cor:baire_dense}, $\bigcap_{n} G_n \cap
-\bigcap_{q \in \Q} (\R \setminus \{q\}) = \Q \cap (\R \setminus \Q) = \emptyset$
-is dense, which is a contradiction (the empty set is not dense in $\R$).
+Suppose for contradiction that $\Q = \bigcap_{n=1}^\infty G_n$ with each
+$G_n$ open. Since $\Q$ is dense, each $G_n$ is dense. Also, for each
+$q \in \Q$, the set $\R \setminus \{q\}$ is open and dense. By
+Corollary~\ref{cor:baire_dense}, the intersection
+\[
+\bigcap_{n=1}^\infty G_n \cap
+\bigcap_{q \in \Q} (\R \setminus \{q\})
+= \Q \cap (\R \setminus \Q)
+= \emptyset
+\]
+is dense in $\R$. But the empty set is not dense, a contradiction.
 \end{proof}
 
-\subsection{Application Preview}
+\subsection{Application Preview: The Uniform Boundedness Principle}
 
-\begin{remark}[Preview: The Uniform Boundedness Principle]
+\begin{remark}[Preview: Uniform Boundedness Principle]
 \label{rem:ubp_preview}
-The Baire category theorem has the following powerful consequence (proved in the
-next lesson): if $\{T_\alpha\}_{\alpha \in I}$ is a family of bounded linear
-operators from a Banach space $X$ to a normed space $Y$ such that
-$\sup_\alpha \|T_\alpha x\| < \infty$ for every $x \in X$ (pointwise boundedness),
-then $\sup_\alpha \|T_\alpha\| < \infty$ (uniform boundedness). The proof works by
-writing $X = \bigcup_{n=1}^\infty \{x : \sup_\alpha \|T_\alpha x\| \le n\}$ and
-applying Baire to conclude that one of these closed sets has non-empty interior.
+The Baire category theorem yields the following powerful result (proved in
+the next lesson): if $\{T_\alpha\}_{\alpha \in I}$ is a family of bounded
+linear operators from a Banach space $X$ to a normed space $Y$ such that
+\[
+\sup_{\alpha \in I} \|T_\alpha x\| < \infty
+\quad \text{for every } x \in X
+\quad \text{(pointwise boundedness)},
+\]
+then $\sup_{\alpha \in I} \|T_\alpha\| < \infty$ (uniform boundedness).
+The proof writes $X = \bigcup_{n=1}^\infty \{x \in X :
+\sup_\alpha \|T_\alpha x\| \le n\}$. Each set in the union is closed (by
+continuity of the $T_\alpha$). By the Baire category theorem, at least one
+has non-empty interior, and this leads to the uniform bound.
 \end{remark}
 
-\begin{rlconnection}[Baire Category and Genericity in RL]
-The Baire category theorem is used in RL theory to prove ``genericity'' results:
-that certain properties hold for ``most'' value functions or policies in a
-topological sense. For instance, one can show that for a generic MDP, the optimal
-policy is unique (the set of MDPs with multiple optimal policies is meager). The
-Uniform Boundedness Principle, which follows from Baire, is used in the analysis
-of temporal-difference learning to conclude that pointwise convergence of TD
-estimates implies uniform bounds on approximation error.
+\begin{rlconnection}[title={Baire Category and Genericity in RL}]
+The Baire category theorem is used in RL theory to prove ``genericity''
+results---that certain properties hold for ``most'' instances in a
+topological sense. For example:
+\begin{itemize}[nosep]
+    \item One can show that for a \emph{generic} MDP (in the space of
+          transition kernels and reward functions), the optimal policy is
+          unique~\cite{puterman2014}. The set of MDPs with multiple optimal
+          policies is meager.
+    \item The Uniform Boundedness Principle (a consequence of Baire) is used
+          in the analysis of temporal-difference learning to conclude that
+          pointwise convergence of TD estimates implies uniform bounds on the
+          approximation error.
+    \item The classical result that ``most'' continuous functions are nowhere
+          differentiable (Exercise~\ref{ex:nowhere_diff}) illustrates that
+          generic behavior can be highly irregular---a cautionary tale for
+          assuming smoothness of value functions.
+\end{itemize}
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 8: EXERCISES
+%% SECTION 9: EXERCISES
 %% ============================================================
 
 \section{Exercises}
 \label{sec:exercises}
 
-\begin{exercise}[Metrics from Bounded Metrics]
-\label{ex:bounded_metric}
-Let $(X,d)$ be a metric space. Show that $\tilde{d}(x,y) = \min(d(x,y), 1)$ and
-$\hat{d}(x,y) = d(x,y)/(1 + d(x,y))$ are both metrics on $X$ that generate the
-same topology as $d$. Show that both $\tilde{d}$ and $\hat{d}$ are bounded metrics,
-and that $(X,d)$ is complete if and only if $(X,\hat{d})$ is complete.
-\end{exercise}
-
-\begin{exercise}[Non-Completeness of $C[0,1]$ Under $L^1$]
-\label{ex:C01_L1}
-Give a detailed proof that $(C[0,1], \|\cdot\|_1)$ is not complete by
-constructing an explicit Cauchy sequence that does not converge. (You may modify
-the construction in Example~\ref{ex:Cab_not_banach}, but provide full details.)
-\end{exercise}
-
-\begin{exercise}[Closed Subspace of a Banach Space]
-\label{ex:closed_subspace}
-Let $X$ be a Banach space and $Y \subseteq X$ a subspace (i.e., a vector subspace).
-Show that $Y$ is a Banach space (under the restricted norm) if and only if $Y$ is
-a closed subset of $X$.
-\end{exercise}
-
-\begin{exercise}[Operator Norm Computation]
-\label{ex:op_norm}
-Let $T \colon (\R^2, \|\cdot\|_1) \to (\R^2, \|\cdot\|_\infty)$ be defined by
-$T(x_1, x_2) = (x_1 + x_2, x_1 - x_2)$. Compute $\|T\|$ exactly.
-
-\noindent\textit{Hint:} Use the definition $\|T\| = \sup_{\|x\|_1 \le 1} \|Tx\|_\infty$
-and parametrize the unit ball in $\|\cdot\|_1$.
-\end{exercise}
-
-\begin{exercise}[Completeness of $\ell^\infty$]
-\label{ex:ell_infty}
-Prove directly (without appealing to Theorem~\ref{thm:ell_p_banach}) that
-$(\ell^\infty, \|\cdot\|_\infty)$ is a Banach space.
-\end{exercise}
-
-\begin{exercise}[The Bellman Operator Norm]
-\label{ex:bellman_norm}
-Let $\mathcal{S} = \{1, \ldots, n\}$ be a finite state space and
-$P \in \R^{n \times n}$ a stochastic matrix (non-negative entries, rows sum to $1$).
-Define the linear operator $L \colon (\R^n, \|\cdot\|_\infty) \to
-(\R^n, \|\cdot\|_\infty)$ by $(LV)(s) = \gamma \sum_{s'} P(s'|s) V(s')$ for
-$\gamma \in (0,1)$.
-\begin{enumerate}[nosep,label=(\alph*)]
-    \item Show that $\|L\| = \gamma$.
-    \item Conclude that $T = r + L$ (the Bellman operator for a fixed policy) is a
-    contraction with factor $\gamma$ under $\|\cdot\|_\infty$.
-    \item Verify the contraction property directly by computing
-    $\|TV - TW\|_\infty$ for arbitrary $V, W \in \R^n$.
+\begin{exercise}[Compact Sets are Closed and Bounded]
+\label{ex:compact_closed}
+Let $(X,d)$ be a metric space and $K \subseteq X$ compact.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show directly from the open cover definition that $K$ is closed.
+    \item Show that $K$ is bounded. Give an example of a closed and bounded
+          set in an infinite-dimensional normed space that is not compact.
 \end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Riesz's Lemma is Sharp]
+\begin{exercise}[Total Boundedness in $\R^n$]
+\label{ex:tb_Rn}
+Show that a subset $A \subseteq \R^n$ is totally bounded if and only if it
+is bounded. (This equivalence fails in infinite-dimensional spaces.)
+\end{exercise}
+
+\begin{exercise}[{Sequential Compactness of $[0,1]^\N$}]
+\label{ex:product_compact}
+The space $[0,1]^\N$ of sequences with values in $[0,1]$ can be equipped
+with the metric $d(x,y) = \sum_{n=1}^\infty 2^{-n} |x_n - y_n|$.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that $([0,1]^\N, d)$ is a complete metric space.
+    \item Use a diagonal argument to show that $[0,1]^\N$ is sequentially
+          compact (hence compact).
+    \item Explain why this does not contradict Riesz's theorem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Riesz's Lemma is Sharp in General]
 \label{ex:riesz_sharp}
-Show that in $\ell^2$, Riesz's lemma can be strengthened to $\theta = 1$: for any
-proper closed subspace $Y$, there exists $x$ with $\|x\| = 1$ and $d(x, Y) = 1$.
-
-\noindent\textit{Hint:} Use the orthogonal projection onto $Y$.
+Consider $X = (C[0,1], \|\cdot\|_\infty)$ and the closed subspace
+$Y = \{f \in C[0,1] : f(0) = 0\}$.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that $Y$ is indeed a proper closed subspace of $X$.
+    \item For $\theta \in (0,1)$, find an explicit $f_\theta \in X$ with
+          $\|f_\theta\| = 1$ and $\dist(f_\theta, Y) \ge \theta$.
+    \item Show that in $\ell^2$, Riesz's lemma can be strengthened to
+          $\theta = 1$ for any proper closed subspace. \\
+          \textit{Hint:} Use the orthogonal projection onto $Y$.
+\end{enumerate}
 \end{exercise}
 
-\begin{exercise}[Equicontinuity and Compactness]
+\begin{exercise}[Equicontinuity and Lipschitz Families]
 \label{ex:equicont}
-Let $K > 0$ and $\mathcal{F}_K = \{f \in C[0,1] : |f(s) - f(t)| \le K|s-t|
+Let $L > 0$ and
+$\mathcal{F}_L = \{f \in C[0,1] : |f(s) - f(t)| \le L|s-t|
 \text{ for all } s, t, \text{ and } |f(0)| \le 1\}$.
-\begin{enumerate}[nosep,label=(\alph*)]
-    \item Show that $\mathcal{F}_K$ is equicontinuous and uniformly bounded.
-    \item Conclude by Arzel\`{a}--Ascoli that $\mathcal{F}_K$ is relatively compact
-    in $(C[0,1], \|\cdot\|_\infty)$.
-    \item Show that $\mathcal{F}_K$ is in fact closed, hence compact.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that $\mathcal{F}_L$ is equicontinuous and uniformly bounded
+          (with $\|f\|_\infty \le 1 + L$).
+    \item Conclude by Arzela--Ascoli that $\mathcal{F}_L$ is relatively
+          compact in $(C[0,1], \|\cdot\|_\infty)$.
+    \item Show that $\mathcal{F}_L$ is closed, hence compact.
 \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[The Bellman Operator and Compact Operators]
+\label{ex:bellman_compact}
+Let $\mathcal{S} = [0,1]$, $\mathcal{A} = \{a\}$ (single action), and
+suppose the transition kernel has a continuous density
+$p(\cdot | s) \in C[0,1]$ for each $s$, with $(s, s') \mapsto p(s' | s)$
+jointly continuous. The Bellman operator for a fixed policy is
+\[
+(TV)(s) = r(s) + \gamma \int_0^1 p(s' | s)\, V(s')\, ds',
+\]
+where $r \in C[0,1]$ and $\gamma \in (0,1)$.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that the linear part
+          $L \colon C[0,1] \to C[0,1]$,
+          $(LV)(s) = \gamma \int_0^1 p(s' | s)\, V(s')\, ds'$,
+          is a compact operator.
+    \item Show that $T$ is a contraction on $(C[0,1], \|\cdot\|_\infty)$
+          with factor $\gamma$.
+    \item Explain why compactness of $L$ ensures that the sequence
+          $V, TV, T^2V, \ldots$ has a uniformly convergent subsequence,
+          even before invoking the contraction mapping theorem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Baire Category: $\R$ is Uncountable]
+\label{ex:baire_uncountable}
+Use the Baire category theorem to prove that $\R$ is uncountable. (Write
+$\R = \bigcup_{n} \{r_n\}$ if $\R$ were countable, and derive a
+contradiction.)
 \end{exercise}
 
 \begin{exercise}[Baire Category Application]
 \label{ex:baire_app}
-Use the Baire category theorem to show that $\R$ cannot be written as a countable
-union of sets, each of which is closed and has empty interior.
-
-\noindent Give an example showing that $\R$ \emph{can} be written as a countable
+Use the Baire category theorem to show that $\R$ cannot be written as a
+countable union of sets, each of which is closed and has empty interior.
+Give an example showing that $\R$ \emph{can} be written as a countable
 union of closed sets (some of which necessarily have non-empty interior).
 \end{exercise}
 
 \begin{exercise}[Nowhere Differentiable Functions are Generic]
 \label{ex:nowhere_diff}
-This exercise outlines the classical Baire category proof that ``most'' continuous
-functions are nowhere differentiable.
+This exercise outlines the classical Baire category proof that ``most''
+continuous functions are nowhere differentiable.
 
-Let $A_n = \{f \in C[0,1] : \text{there exists } x \in [0,1] \text{ with }
-|f(x+h) - f(x)| \le n|h| \text{ for all sufficiently small } |h|\}$.
-\begin{enumerate}[nosep,label=(\alph*)]
+For $n \in \N$, let
+\[
+A_n = \bigl\{f \in C[0,1] : \text{there exists } x \in [0,1]
+\text{ with } |f(x+h) - f(x)| \le n|h|
+\text{ for all small } |h|\bigr\}.
+\]
+\begin{enumerate}[label=(\alph*),nosep]
     \item Show that $A_n$ is a closed subset of $(C[0,1], \|\cdot\|_\infty)$.
-    \item Show that $A_n$ has empty interior.
-    \textit{Hint:} Approximate any $f \in A_n$ by a piecewise-linear function with
-    slopes exceeding $n$ in magnitude.
-    \item Conclude that $\bigcup_{n=1}^\infty A_n$ is meager, so the set of
-    functions that are somewhere differentiable is meager. The ``typical''
-    continuous function is nowhere differentiable.
+    \item Show that $A_n$ has empty interior. \\
+          \textit{Hint:} Approximate any $f \in A_n$ uniformly by a
+          piecewise-linear function with slopes exceeding $n$.
+    \item Conclude that $\bigcup_{n=1}^\infty A_n$ is meager, so the set
+          of functions that are somewhere differentiable is meager. The
+          ``generic'' continuous function is nowhere differentiable.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Compact Operators Form a Closed Ideal]
+\label{ex:compact_ideal}
+Let $X$ be a Banach space.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that if $T \colon X \to X$ is compact and $S \colon X \to X$
+          is bounded, then both $TS$ and $ST$ are compact.
+    \item Show that the set $\mathcal{K}(X)$ of compact operators on $X$ is a
+          closed two-sided ideal in $\mathcal{B}(X)$.
+    \item Give an example of a bounded operator that is \emph{not} compact.
 \end{enumerate}
 \end{exercise}
 
 %% ============================================================
-%% SECTION 9: SUMMARY
+%% SECTION 10: SUMMARY
 %% ============================================================
 
 \section{Summary of Key Results}
@@ -670,51 +1021,30 @@ Let $A_n = \{f \in C[0,1] : \text{there exists } x \in [0,1] \text{ with }
 
 \begin{center}
 \renewcommand{\arraystretch}{1.4}
-\begin{tabular}{@{}p{4.2cm}p{5.5cm}p{4.5cm}@{}}
+\begin{tabular}{@{}p{4cm}p{5.8cm}p{4.5cm}@{}}
 \toprule
 \textbf{Result} & \textbf{Statement (Informal)} & \textbf{RL/ML Relevance} \\
 \midrule
-Metric space axioms (Def.~\ref{def:metric})
-  & Distance function with positivity, symmetry, triangle inequality
-  & Foundation for convergence analysis \\
-Completeness of $\R^n$ (Thm.~\ref{thm:Rn_complete})
-  & Every Cauchy sequence in $\R^n$ converges
-  & Finite-state value iteration converges \\
-Completion theorem (Thm.~\ref{thm:completion})
-  & Every metric space embeds densely in a complete space
-  & Justifies function approximation in incomplete spaces \\
-Norm equivalence in $\R^n$ (Thm.~\ref{thm:norm_equiv})
-  & All norms on $\R^n$ are equivalent
-  & Convergence in finite-state RL is norm-independent \\
-Banach = complete normed (Def.~\ref{def:banach})
-  & Banach spaces are the natural setting for fixed-point theorems
-  & Value function spaces must be Banach for contraction arguments \\
-Series characterization (Thm.~\ref{thm:banach_series})
-  & Absolute convergence $\Rightarrow$ convergence iff Banach
-  & Practical completeness test \\
-$C[a,b]$ is Banach under $\|\cdot\|_\infty$ (Thm.~\ref{thm:Cab_banach})
-  & Uniform limit of continuous functions is continuous
-  & Value functions on compact state spaces form a Banach space \\
-Bounded $\Leftrightarrow$ continuous (Thm.~\ref{thm:bounded_iff_cts})
-  & A linear operator is bounded iff continuous
-  & Bellman operator continuity \\
-$B(X,Y)$ Banach when $Y$ Banach (Thm.~\ref{thm:BXY_banach})
-  & Operator space inherits completeness
-  & Space of operators on value functions is complete \\
-Dual is always Banach (Cor.~\ref{cor:dual_banach})
-  & $X^*$ is Banach even if $X$ is not
-  & Policy gradient as element of dual space \\
 Compactness equivalence (Thm.~\ref{thm:compact_equiv})
-  & Compact $\Leftrightarrow$ seq.\ compact $\Leftrightarrow$ complete + totally bounded
+  & Compact $\Leftrightarrow$ seq.\ compact $\Leftrightarrow$
+    complete + totally bounded
   & Existence of optimal policies on compact spaces \\
+Heine--Borel (Cor.~\ref{cor:heine_borel})
+  & In $\R^n$: compact $\Leftrightarrow$ closed + bounded
+  & Finite-state RL convergence \\
 Riesz's theorem (Thm.~\ref{thm:riesz_compact})
-  & Closed unit ball compact $\Leftrightarrow$ finite-dimensional
-  & Explains challenges in infinite-dim.\ function approximation \\
-Arzel\`{a}--Ascoli (Thm.~\ref{thm:arzela_ascoli})
-  & Equicontinuous + bounded $\Leftrightarrow$ relatively compact
-  & Convergence of Lipschitz value function sequences \\
+  & Compact unit ball $\Leftrightarrow$ finite-dimensional
+  & Necessity of function approximation \\
+Arzela--Ascoli (Thm.~\ref{thm:arzela_ascoli})
+  & Relatively compact $\Leftrightarrow$ uniformly bounded +
+    equicontinuous
+  & Compactness of Lipschitz policy classes \\
+Compact operators (Def.~\ref{def:compact_op})
+  & Map bounded sets to relatively compact sets
+  & Bellman operator with continuous kernel \\
 Baire category (Thm.~\ref{thm:baire})
-  & Complete metric space $\ne$ countable union of nowhere dense sets
+  & Complete metric space $\ne$ countable union of nowhere
+    dense sets
   & Underpins Uniform Boundedness Principle \\
 \bottomrule
 \end{tabular}
@@ -722,21 +1052,22 @@ Baire category (Thm.~\ref{thm:baire})
 
 \bigskip
 
-\begin{rlconnection}[Looking Ahead]
-With metric spaces, norms, completeness, operators, and compactness in hand, we are
-ready for the next lesson, which covers:
+\begin{rlconnection}[title={Looking Ahead}]
+With compactness, the Arzela--Ascoli theorem, and the Baire category theorem
+in hand, we are ready for:
 \begin{itemize}[nosep]
-    \item The \textbf{Banach Fixed-Point Theorem} (contraction mapping theorem) ---
-    the core tool for proving convergence of value iteration, policy iteration, and
-    TD-learning.
-    \item The \textbf{Uniform Boundedness Principle} --- used to establish uniform
-    error bounds in function approximation.
-    \item The \textbf{Open Mapping Theorem} and \textbf{Closed Graph Theorem} ---
-    structural results for bounded operators between Banach spaces.
-    \item \textbf{Hilbert spaces} --- inner product spaces where the Projection
-    Theorem enables least-squares value function approximation.
+    \item \textbf{Lesson 19:} Inner product spaces and Hilbert spaces---the
+          geometric structure needed for projections, least-squares, and
+          RKHS theory.
+    \item \textbf{Lesson 20:} The Projection Theorem and Riesz
+          Representation---the tools for orthogonal projection in value
+          function approximation.
+    \item \textbf{Lesson 21:} The fundamental theorems of Banach space theory
+          (Hahn--Banach, Uniform Boundedness, Open Mapping, Closed Graph),
+          all powered by the Baire category theorem.
 \end{itemize}
 \end{rlconnection}
 
+\bibliography{functional-analysis-refs}
 
 \end{document}

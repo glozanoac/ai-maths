@@ -1,256 +1,670 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 8: Filtrations and Martingale Difference Sequences}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 8: Filtrations and Martingale Difference Sequences}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{7}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Reinforcement learning is inherently sequential: at each time
+step, the agent observes the state, selects an action, receives a
+reward, and transitions to a new state.  The mathematical
+framework that captures ``what is known at time $t$'' is a
+\emph{filtration}---a nested sequence of $\sigma$-algebras.
+
+The noise in temporal-difference (TD) learning has a specific
+structure: the TD error $\delta_t^\pi$ under the true value
+function has zero conditional mean given the past.  This is the
+defining property of a \emph{martingale difference sequence}
+(MDS).  The MDS structure is the foundation of convergence
+proofs in stochastic approximation theory.
+
+This lesson develops filtrations, adapted and predictable
+processes, martingales, and martingale difference sequences,
+proving the key properties that will be used in subsequent
+lessons on probability inequalities and convergence.
+
+\begin{rlconnection}[title={Why This Matters for RL}]
+\begin{itemize}[nosep]
+  \item The \textbf{natural filtration} of an MDP formalizes the
+    agent's information at each time step.
+  \item The \textbf{Markov property} says that conditioning on
+    the full filtration $\mathcal{F}_t$ reduces to conditioning
+    on $S_t$ alone.
+  \item The \textbf{TD error is an MDS}: this is the central
+    structural fact enabling convergence proofs for TD(0), SARSA,
+    and Q-learning.
+  \item \textbf{Partial sums of an MDS form a martingale},
+    connecting TD error accumulation to martingale theory and
+    concentration inequalities (Azuma--Hoeffding).
+\end{itemize}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.}
+Lesson~5 (expectation, linearity), Lesson~6 (conditional
+expectation, tower property, pull-out property), and Lesson~7
+(variance, independence).
+
+%% ============================================================
+%% SECTION 2: FILTRATIONS
+%% ============================================================
 
 \section{Filtrations}
 \label{sec:filtrations}
 
 \begin{definition}[Filtration]
 \label{def:filtration}
-A \emph{filtration} on $(\Omega, \mathcal{F}, \Prob)$ is an increasing sequence of sub-$\sigma$-algebras:
+A \emph{filtration} on a probability space
+$(\Omega, \mathcal{F}, \Prob)$ is a sequence of
+sub-$\sigma$-algebras
+$\{\mathcal{F}_t\}_{t \geq 0}$ satisfying
 \begin{equation}
-    \mathcal{F}_0 \subseteq \mathcal{F}_1 \subseteq \mathcal{F}_2 \subseteq \cdots \subseteq \mathcal{F}.
-    \label{eq:filtration}
+  \mathcal{F}_0 \subseteq \mathcal{F}_1 \subseteq
+  \mathcal{F}_2 \subseteq \cdots \subseteq \mathcal{F}.
+  \label{eq:filtration}
 \end{equation}
-\end{definition}
-
-\begin{definition}[Natural Filtration of an MDP]
-\label{def:mdp_filtration}
-The \emph{natural filtration} of the MDP trajectory is
-\begin{equation}
-    \mathcal{F}_t = \sigma(S_0, A_0, R_1, S_1, A_1, R_2, \ldots, S_t),
-    \label{eq:mdp_filtration}
-\end{equation}
-the $\sigma$-algebra generated by all observations up to and including time $t$.
+The triple $(\Omega, \mathcal{F}, \{\mathcal{F}_t\}, \Prob)$
+is called a \emph{filtered probability space}.
 \end{definition}
 
 \begin{remark}[Interpretation]
-$\mathcal{F}_t$ represents ``all information available at time $t$.'' Saying that a random variable $Z$ is $\mathcal{F}_t$-measurable means $Z$ can be computed from $(S_0, A_0, R_1, \ldots, S_t)$ alone. In particular:
+The $\sigma$-algebra $\mathcal{F}_t$ represents all information
+available at time $t$.  The inclusion
+$\mathcal{F}_s \subseteq \mathcal{F}_t$ for $s \leq t$ means
+that information is never forgotten: everything known at time
+$s$ is still known at time $t$.
+\end{remark}
+
+\begin{example}[Coin toss filtration]
+\label{ex:coin_filtration}
+Let $X_1, X_2, \ldots$ be i.i.d.\ Bernoulli$(1/2)$ random
+variables (fair coin tosses) on $\Omega = \{0,1\}^\N$.  Define
+\begin{align}
+  \mathcal{F}_0 &= \{\emptyset, \Omega\},
+  \nonumber\\
+  \mathcal{F}_t &= \sigma(X_1, X_2, \ldots, X_t)
+  \quad \text{for } t \geq 1.
+  \label{eq:coin_filtration}
+\end{align}
+At time $0$, no coins have been tossed (trivial information).
+At time $t$, the results of the first $t$ tosses are known.
+$\mathcal{F}_t$ contains all events that can be determined from
+$(X_1, \ldots, X_t)$.
+\end{example}
+
+%% ============================================================
+%% SECTION 3: NATURAL FILTRATION OF AN MDP
+%% ============================================================
+
+\section{Natural Filtration of an MDP}
+\label{sec:mdp_filtration}
+
+\begin{definition}[Natural Filtration of an MDP]
+\label{def:mdp_filtration}
+In a Markov decision process with trajectory
+$(S_0, A_0, R_1, S_1, A_1, R_2, S_2, \ldots)$,
+the \emph{natural filtration} is
+\begin{equation}
+  \mathcal{F}_t
+  = \sigma(S_0, A_0, R_1, S_1, A_1, R_2,
+    \ldots, S_t)
+  \label{eq:mdp_filtration}
+\end{equation}
+for $t \geq 0$.  This is the $\sigma$-algebra generated by all
+observations up to and including time $t$.
+\end{definition}
+
+\begin{remark}[What is and is not in $\mathcal{F}_t$]
 \begin{itemize}[nosep]
-    \item $V(S_t)$ is $\mathcal{F}_t$-measurable (it depends only on $S_t$, which is in $\mathcal{F}_t$).
-    \item $R_{t+1}$ and $S_{t+1}$ are \emph{not} $\mathcal{F}_t$-measurable (they are ``future'' information).
+  \item $S_t$, $V(S_t)$, $A_{t-1}$, $R_t$ are all
+    $\mathcal{F}_t$-measurable (they depend only on information
+    up to time $t$).
+  \item $R_{t+1}$, $S_{t+1}$, $A_t$ are \emph{not}
+    $\mathcal{F}_t$-measurable---they are ``future'' quantities.
+  \item $A_t$ is $\mathcal{F}_t$-measurable only for a
+    deterministic policy $\pi(s)$ (where $A_t = \pi(S_t)$ is a
+    function of $S_t$); for a stochastic policy, $A_t$ is
+    $\mathcal{F}_{t+1}$-measurable since it is realized between
+    times $t$ and $t+1$.
 \end{itemize}
 \end{remark}
 
-\begin{proposition}[Conditioning on $\mathcal{F}_t$ Refines Conditioning on $S_t$]
+\begin{proposition}[Conditioning on $\mathcal{F}_t$ Refines
+  Conditioning on $S_t$]
 \label{prop:filtration_refine}
-In an MDP with the Markov property, for any function of future observations $f(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$:
+In an MDP with the Markov property, for any function of future
+observations
+$f(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$:
 \begin{equation}
-    \E[f(S_{t+1}, R_{t+1}, \ldots) \mid \mathcal{F}_t] = \E[f(S_{t+1}, R_{t+1}, \ldots) \mid S_t].
-    \label{eq:markov_filtration}
+  \E[f(S_{t+1}, R_{t+1}, \ldots) \mid \mathcal{F}_t]
+  = \E[f(S_{t+1}, R_{t+1}, \ldots) \mid S_t].
+  \label{eq:markov_filtration}
 \end{equation}
 \end{proposition}
 
 \begin{proof}
-The Markov property states that the conditional distribution of the future trajectory given the entire history $\mathcal{F}_t$ depends only on $S_t$:
+The Markov property states that the conditional distribution of
+the future trajectory given the full history
+$\mathcal{F}_t = \sigma(S_0, A_0, R_1, \ldots, S_t)$ depends
+only on $S_t$:
 \begin{equation}
-    \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid \mathcal{F}_t) = \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid S_t).
+  \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid \mathcal{F}_t)
+  = \Prob(S_{t+1} = s', R_{t+1} = r, \ldots \mid S_t).
+  \label{eq:markov_cond_dist}
 \end{equation}
-Since conditional expectations are determined by conditional distributions,~\eqref{eq:markov_filtration} follows immediately.
+Since conditional expectations are determined by conditional
+distributions, \eqref{eq:markov_filtration} follows.
+
+More precisely, write
+$\sigma(S_t) \subseteq \mathcal{F}_t$.  The generalized tower
+property gives
+\[
+  \E\!\left[\E[f \mid \mathcal{F}_t] \;\middle|\;
+    \sigma(S_t)\right]
+  = \E[f \mid \sigma(S_t)]
+  = \E[f \mid S_t].
+\]
+But by the Markov property,
+$\E[f \mid \mathcal{F}_t]$ is already
+$\sigma(S_t)$-measurable, so
+$\E[f \mid \mathcal{F}_t] = \E[f \mid S_t]$.
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-This is why the TD convergence proofs can freely switch between conditioning on the filtration $\mathcal{F}_t$ (needed for stochastic approximation theory) and conditioning on $S_t$ (more convenient for computation). The Markov property guarantees these are equivalent.
+\begin{rlconnection}[title={Connection to RL}]
+This proposition justifies switching freely between
+$\E[\,\cdot\, \mid \mathcal{F}_t]$ (needed for stochastic
+approximation theory and martingale arguments) and
+$\E[\,\cdot\, \mid S_t]$ (more convenient for explicit MDP
+computations).  The Markov property guarantees these are
+equivalent for functions of the future.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 9: MARTINGALE DIFFERENCE SEQUENCES
+%% SECTION 4: ADAPTED AND PREDICTABLE PROCESSES
+%% ============================================================
+
+\section{Adapted and Predictable Processes}
+\label{sec:adapted}
+
+\begin{definition}[Adapted Process]
+\label{def:adapted}
+A sequence of random variables $\{X_t\}_{t \geq 0}$ is
+\emph{adapted to the filtration} $\{\mathcal{F}_t\}$ if $X_t$
+is $\mathcal{F}_t$-measurable for every $t \geq 0$.
+\end{definition}
+
+\begin{remark}
+``Adapted'' means: at each time $t$, the value of $X_t$ is
+known---it can be computed from the information available at
+time $t$.  The value function process $\{V(S_t)\}_{t \geq 0}$
+and the reward process $\{R_t\}_{t \geq 1}$ are both adapted to
+the natural MDP filtration.
+\end{remark}
+
+\begin{definition}[Predictable Process]
+\label{def:predictable}
+A sequence $\{X_t\}_{t \geq 1}$ is \emph{predictable} with
+respect to $\{\mathcal{F}_t\}$ if $X_t$ is
+$\mathcal{F}_{t-1}$-measurable for every $t \geq 1$.
+\end{definition}
+
+\begin{remark}
+``Predictable'' means: the value of $X_t$ is known already at
+time $t-1$, i.e., one step before.  In stochastic approximation,
+the step-size sequence $\{\alpha_t\}_{t \geq 1}$ is typically
+deterministic, hence trivially predictable.  If $\alpha_t$
+depends on the state $S_{t-1}$ visited at the previous step
+(e.g., per-state visit counts), then $\alpha_t$ is
+$\mathcal{F}_{t-1}$-measurable and therefore predictable.
+\end{remark}
+
+\begin{example}[Adapted vs.\ predictable in an MDP]
+\label{ex:adapted_vs_pred}
+In the natural MDP filtration:
+\begin{itemize}[nosep]
+  \item $S_t$ is $\mathcal{F}_t$-measurable (adapted) but
+    typically not $\mathcal{F}_{t-1}$-measurable
+    (not predictable).
+  \item $V(S_t)$ is adapted (it is a function of $S_t$) but not
+    predictable.
+  \item A deterministic step-size $\alpha_t = 1/(t+1)$ is both
+    adapted and predictable (it is $\mathcal{F}_0$-measurable).
+  \item $N_t(s) = \sum_{k=0}^{t-1} \indicator_{\{S_k = s\}}$
+    (visit count to state $s$ up to time $t-1$) is
+    $\mathcal{F}_{t-1}$-measurable, hence predictable.
+\end{itemize}
+\end{example}
+
+%% ============================================================
+%% SECTION 5: MARTINGALES
+%% ============================================================
+
+\section{Martingales}
+\label{sec:martingales}
+
+\begin{definition}[Martingale]
+\label{def:martingale}
+A sequence $\{M_n\}_{n \geq 0}$ is a \emph{martingale} with
+respect to a filtration $\{\mathcal{F}_n\}$ if for all
+$n \geq 0$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $M_n$ is $\mathcal{F}_n$-measurable (adapted),
+  \item $\E[|M_n|] < \infty$ (integrable),
+  \item $\E[M_{n+1} \mid \mathcal{F}_n] = M_n$
+    (the ``fair game'' property).
+  \label{eq:martingale_def}
+\end{enumerate}
+\end{definition}
+
+\begin{remark}[Interpretation]
+Condition (iii) says that, given all current information, the
+best prediction of the next value is the current value.  A
+martingale models a fair game: on average, you neither win nor
+lose.
+\end{remark}
+
+\begin{proposition}[Constant Unconditional Mean]
+\label{prop:martingale_const_mean}
+If $\{M_n\}$ is a martingale, then $\E[M_n] = \E[M_0]$ for all
+$n$.
+\end{proposition}
+
+\begin{proof}
+By the tower property applied to condition (iii):
+\[
+  \E[M_{n+1}] = \E[\E[M_{n+1} \mid \mathcal{F}_n]]
+  = \E[M_n].
+\]
+By induction, $\E[M_n] = \E[M_0]$ for all $n$.
+\end{proof}
+
+\begin{example}[Random walk martingale]
+\label{ex:random_walk}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_i] = 0$ and
+define $M_n = \sum_{k=1}^n X_k$ (with $M_0 = 0$) and
+$\mathcal{F}_n = \sigma(X_1, \ldots, X_n)$.  Then:
+\begin{itemize}[nosep]
+  \item $M_n$ is $\mathcal{F}_n$-measurable.
+  \item $\E[|M_n|] \leq \sum_{k=1}^n \E[|X_k|] < \infty$.
+  \item $\E[M_{n+1} \mid \mathcal{F}_n]
+    = M_n + \E[X_{n+1} \mid \mathcal{F}_n]
+    = M_n + \E[X_{n+1}] = M_n$,
+    using independence of $X_{n+1}$ from $\mathcal{F}_n$.
+\end{itemize}
+\end{example}
+
+\begin{definition}[Supermartingale and Submartingale]
+\label{def:super_sub}
+$\{M_n\}$ is a \emph{supermartingale} if conditions (i)--(ii)
+hold and $\E[M_{n+1} \mid \mathcal{F}_n] \leq M_n$ for all $n$.
+It is a \emph{submartingale} if
+$\E[M_{n+1} \mid \mathcal{F}_n] \geq M_n$.
+\end{definition}
+
+\begin{remark}
+Mnemonics: a supermartingale tends to decrease (the player
+``loses''), a submartingale tends to increase.  The naming
+convention follows the direction of the \emph{bound}:
+$\E[M_{n+1} \mid \mathcal{F}_n]$ is bounded \emph{above} by
+$M_n$ in a supermartingale.
+\end{remark}
+
+%% ============================================================
+%% SECTION 6: MARTINGALE DIFFERENCE SEQUENCES
 %% ============================================================
 
 \section{Martingale Difference Sequences}
 \label{sec:mds}
 
-\subsection{Definitions}
-\label{subsec:mds_def}
-
-\begin{definition}[Martingale]
-\label{def:martingale}
-A sequence of random variables $\{M_n\}_{n \geq 0}$ is a \emph{martingale} with respect to a filtration $\{\mathcal{F}_n\}$ if for all $n \geq 0$:
-\begin{enumerate}[nosep]
-    \item $M_n$ is $\mathcal{F}_n$-measurable (adapted),
-    \item $\E[|M_n|] < \infty$ (integrable),
-    \item $\E[M_{n+1} \mid \mathcal{F}_n] = M_n$ (the ``fair game'' property).
-\end{enumerate}
-\end{definition}
-
 \begin{definition}[Martingale Difference Sequence]
 \label{def:mds}
-A sequence $\{w_n\}_{n \geq 1}$ is a \emph{martingale difference sequence} (MDS) with respect to $\{\mathcal{F}_n\}$ if for all $n \geq 1$:
-\begin{enumerate}[nosep]
-    \item $w_n$ is $\mathcal{F}_n$-measurable,
-    \item $\E[|w_n|] < \infty$,
-    \item $\E[w_n \mid \mathcal{F}_{n-1}] = 0$.
+A sequence $\{d_n\}_{n \geq 1}$ is a \emph{martingale
+difference sequence} (MDS) with respect to a filtration
+$\{\mathcal{F}_n\}_{n \geq 0}$ if for all $n \geq 1$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item $d_n$ is $\mathcal{F}_n$-measurable (adapted),
+  \item $\E[|d_n|] < \infty$ (integrable),
+  \item $\E[d_n \mid \mathcal{F}_{n-1}] = 0$
+    (zero conditional mean).
 \end{enumerate}
 \end{definition}
 
-\subsection{Fundamental Properties}
-\label{subsec:mds_props}
+\begin{remark}[Relationship to martingales]
+If $\{M_n\}_{n \geq 0}$ is a martingale, then the
+\emph{increments} $d_n = M_n - M_{n-1}$ form an MDS.
+Conversely, as we prove below, partial sums of an MDS form a
+martingale.  The two concepts are equivalent: every martingale
+can be decomposed into its initial value plus an MDS.
+\end{remark}
 
-\begin{theorem}[MDS Implies Zero Unconditional Mean]
+%% ============================================================
+%% SECTION 7: KEY MDS PROPERTIES
+%% ============================================================
+
+\section{Key MDS Properties}
+\label{sec:mds_properties}
+
+\begin{theorem}[MDS Has Zero Unconditional Mean]
 \label{thm:mds_zero_mean}
-If $\{w_n\}$ is an MDS, then $\E[w_n] = 0$ for all $n$.
+If $\{d_n\}$ is an MDS with respect to $\{\mathcal{F}_n\}$,
+then $\E[d_n] = 0$ for all $n \geq 1$.
 \end{theorem}
 
 \begin{proof}
-By the tower property (Theorem~\ref{thm:tower}):
+By the tower property (Lesson~6, Theorem~6.1):
 \begin{equation}
-    \E[w_n] = \E[\E[w_n \mid \mathcal{F}_{n-1}]] = \E[0] = 0. \label{eq:mds_zero_proof}
+  \E[d_n] = \E\!\left[\E[d_n \mid \mathcal{F}_{n-1}]\right]
+  = \E[0] = 0. \qedhere
+  \label{eq:mds_zero_proof}
 \end{equation}
 \end{proof}
 
-\begin{theorem}[MDS Partial Sums Form a Martingale]
+\begin{keyresult}[title={MDS Partial Sums Form a Martingale}]
+\begin{theorem}[MDS Partial Sums are a Martingale]
 \label{thm:mds_martingale}
-If $\{w_n\}_{n \geq 1}$ is an MDS with respect to $\{\mathcal{F}_n\}$, then $M_n = \sum_{k=1}^n w_k$ is a martingale with respect to $\{\mathcal{F}_n\}$ (with $M_0 = 0$).
+If $\{d_n\}_{n \geq 1}$ is an MDS with respect to
+$\{\mathcal{F}_n\}$, then the partial sum process
+$M_n = \sum_{k=1}^n d_k$ (with $M_0 = 0$) is a martingale
+with respect to $\{\mathcal{F}_n\}$.
 \end{theorem}
+\end{keyresult}
 
 \begin{proof}
 We verify the three martingale conditions.
 
-\textit{Adapted:} Each $w_k$ is $\mathcal{F}_k$-measurable, hence $\mathcal{F}_n$-measurable for $k \leq n$. So $M_n = \sum_{k=1}^n w_k$ is $\mathcal{F}_n$-measurable.
+\textbf{(i) Adapted.}
+Each $d_k$ is $\mathcal{F}_k$-measurable, hence
+$\mathcal{F}_n$-measurable for $k \leq n$ (since
+$\mathcal{F}_k \subseteq \mathcal{F}_n$).  Therefore
+$M_n = \sum_{k=1}^n d_k$ is $\mathcal{F}_n$-measurable.
 
-\textit{Integrable:} $\E[|M_n|] \leq \sum_{k=1}^n \E[|w_k|] < \infty$ by the triangle inequality.
+\textbf{(ii) Integrable.}
+$\E[|M_n|] \leq \sum_{k=1}^n \E[|d_k|] < \infty$ by the
+triangle inequality and the integrability of each $d_k$.
 
-\textit{Fair game:}
+\textbf{(iii) Fair game.}
 \begin{align}
-    \E[M_{n+1} \mid \mathcal{F}_n]
-    &= \E\!\left[\sum_{k=1}^{n+1} w_k \;\middle|\; \mathcal{F}_n\right] \nonumber\\
-    &= \sum_{k=1}^n \E[w_k \mid \mathcal{F}_n] + \E[w_{n+1} \mid \mathcal{F}_n] \nonumber\\
-    &= \sum_{k=1}^n w_k + 0 = M_n. \label{eq:mds_martingale_proof}
+  \E[M_{n+1} \mid \mathcal{F}_n]
+  &= \E\!\left[\sum_{k=1}^{n+1} d_k
+    \;\middle|\; \mathcal{F}_n\right]
+  \nonumber\\
+  &= \sum_{k=1}^n \E[d_k \mid \mathcal{F}_n]
+    + \E[d_{n+1} \mid \mathcal{F}_n]
+  \tag{linearity}\\
+  &= \sum_{k=1}^n d_k + 0
+  = M_n.
+  \label{eq:mds_mg_proof}
 \end{align}
-Here we used: (a) linearity of conditional expectation; (b) $w_k$ is $\mathcal{F}_n$-measurable for $k \leq n$, so $\E[w_k \mid \mathcal{F}_n] = w_k$; (c) the MDS condition $\E[w_{n+1} \mid \mathcal{F}_n] = 0$.
+In the second line, we used:
+(a) $d_k$ is $\mathcal{F}_n$-measurable for $k \leq n$, so
+$\E[d_k \mid \mathcal{F}_n] = d_k$ (conditioning on known
+information);
+(b) the MDS condition
+$\E[d_{n+1} \mid \mathcal{F}_n] = 0$.
 \end{proof}
 
 \begin{theorem}[Uncorrelated Increments of an MDS]
 \label{thm:mds_uncorrelated}
-If $\{w_n\}$ is an MDS with $\E[w_n^2] < \infty$ for all $n$, then for $m \neq n$:
+If $\{d_n\}$ is an MDS with $\E[d_n^2] < \infty$ for all $n$,
+then for $m \neq n$:
 \begin{equation}
-    \E[w_m w_n] = 0.
-    \label{eq:mds_uncorrelated}
+  \E[d_m d_n] = 0.
+  \label{eq:mds_uncorrelated}
 \end{equation}
-Consequently, $\Var(M_n) = \sum_{k=1}^n \E[w_k^2]$.
+Consequently,
+$\Var(M_n) = \sum_{k=1}^n \E[d_k^2]$ where
+$M_n = \sum_{k=1}^n d_k$.
 \end{theorem}
 
 \begin{proof}
-Without loss of generality, assume $m < n$. Then $w_m$ is $\mathcal{F}_{n-1}$-measurable. By the pull-out property (Theorem~\ref{thm:pull_out}) and the tower property:
+Without loss of generality, assume $m < n$.  Then $d_m$ is
+$\mathcal{F}_m$-measurable, hence
+$\mathcal{F}_{n-1}$-measurable.  By the tower property and the
+pull-out property:
 \begin{align}
-    \E[w_m w_n]
-    &= \E[\E[w_m w_n \mid \mathcal{F}_{n-1}]] \nonumber\\
-    &= \E[w_m \cdot \E[w_n \mid \mathcal{F}_{n-1}]] \nonumber\\
-    &= \E[w_m \cdot 0] = 0. \label{eq:mds_uncorrelated_proof}
+  \E[d_m d_n]
+  &= \E\!\left[\E[d_m d_n \mid \mathcal{F}_{n-1}]\right]
+  \nonumber\\
+  &= \E\!\left[d_m \cdot
+    \E[d_n \mid \mathcal{F}_{n-1}]\right]
+  \tag{pull-out: $d_m$ is $\mathcal{F}_{n-1}$-meas.}\\
+  &= \E[d_m \cdot 0] = 0.
+  \label{eq:uncorr_proof}
 \end{align}
-For the variance of the partial sum:
+
+For the variance of the partial sum, since
+$\E[M_n] = 0$ (by Theorem~\ref{thm:mds_zero_mean} and
+linearity):
 \begin{align}
-    \Var(M_n) &= \E[M_n^2] - (\E[M_n])^2 = \E[M_n^2] \qquad \text{(since } \E[M_n] = 0\text{)} \nonumber\\
-    &= \E\!\left[\left(\sum_{k=1}^n w_k\right)^2\right]
-    = \sum_{k=1}^n \E[w_k^2] + 2\sum_{j < k} \underbrace{\E[w_j w_k]}_{= 0}
-    = \sum_{k=1}^n \E[w_k^2]. \label{eq:mds_var_proof}
+  \Var(M_n) &= \E[M_n^2]
+  = \E\!\left[\left(\sum_{k=1}^n d_k\right)^2\right]
+  \nonumber\\
+  &= \sum_{k=1}^n \E[d_k^2]
+    + 2 \sum_{j < k} \underbrace{\E[d_j d_k]}_{= 0}
+  = \sum_{k=1}^n \E[d_k^2]. \qedhere
+  \label{eq:var_partial_sum}
 \end{align}
 \end{proof}
 
-\begin{tdconnection}[Connection to TD Learning]
-The TD error under the true value function is an MDS:
-\[
-    \E_\pi[\delta_t^\pi \mid \mathcal{F}_t] = \E_\pi[R_{t+1} + \gamma V^\pi(S_{t+1}) - V^\pi(S_t) \mid S_t] = V^\pi(S_t) - V^\pi(S_t) = 0.
-\]
-This is \emph{the} central fact enabling all convergence proofs. In the stochastic approximation formulation, the noise term $w_k(s) = R_{n_k+1} + \gamma V_k(S_{n_k+1}) - (\mathcal{T}^\pi V_k)(s)$ satisfies $\E[w_k(s) \mid \mathcal{F}_k] = 0$. The uncorrelated increments property (Theorem~\ref{thm:mds_uncorrelated}) ensures accumulated noise doesn't grow too fast, which is essential for the Robbins-Monro conditions.
-\end{tdconnection}
+\begin{remark}
+The uncorrelated increments property means that the ``noise
+terms'' $d_1, d_2, \ldots$ do not systematically reinforce each
+other.  Each new increment adds its own variance but does not
+interact with past increments.  This is weaker than independence
+(the $d_k$ need not be independent, only uncorrelated), but it
+suffices for many convergence results.
+\end{remark}
 
 %% ============================================================
-%% SECTION 6: PROBABILITY INEQUALITIES
+%% SECTION 8: RL CONNECTION: TD ERROR AS MDS
 %% ============================================================
 
+\section{RL Connection: TD Error as a Martingale Difference
+  Sequence}
+\label{sec:td_mds}
+
+\begin{rlconnection}[title={TD Error as MDS}]
+Consider a finite MDP with policy $\pi$ and the true value
+function $V^\pi$.  The TD error at time $t$ is
+\begin{equation}
+  \delta_t^\pi = R_{t+1} + \gamma V^\pi(S_{t+1})
+  - V^\pi(S_t).
+  \label{eq:td_error}
+\end{equation}
+We show that $\{\delta_t^\pi\}_{t \geq 0}$ is an MDS with
+respect to the natural filtration $\{\mathcal{F}_t\}$.
+
+\textbf{(i) Adapted.}
+$\delta_t^\pi$ depends on $S_t$, $R_{t+1}$, and $S_{t+1}$,
+which are all in $\mathcal{F}_{t+1}$.  Strictly speaking,
+$\delta_t^\pi$ is $\mathcal{F}_{t+1}$-measurable.
+(Re-indexing: define $w_{t+1} = \delta_t^\pi$; then $w_n$ is
+$\mathcal{F}_n$-measurable.)
+
+\textbf{(ii) Integrable.}
+In a finite MDP, all rewards and value functions are bounded, so
+$\E[|\delta_t^\pi|] < \infty$.
+
+\textbf{(iii) Zero conditional mean.}
+By linearity and the pull-out property:
+\begin{align}
+  \E[\delta_t^\pi \mid \mathcal{F}_t]
+  &= \E[R_{t+1} + \gamma V^\pi(S_{t+1}) \mid \mathcal{F}_t]
+    - V^\pi(S_t)
+  \nonumber\\
+  &= \E[R_{t+1} + \gamma V^\pi(S_{t+1}) \mid S_t]
+    - V^\pi(S_t)
+  \tag{Markov property}\\
+  &= V^\pi(S_t) - V^\pi(S_t)
+  = 0.
+  \label{eq:td_mds_proof}
+\end{align}
+The penultimate equality uses the Bellman equation:
+$\E_\pi[R_{t+1} + \gamma V^\pi(S_{t+1}) \mid S_t]
+= V^\pi(S_t)$.
+\end{rlconnection}
+
+\begin{remark}[Consequences of the MDS property]
+Because $\{\delta_t^\pi\}$ is an MDS:
+\begin{enumerate}[nosep]
+  \item $\E[\delta_t^\pi] = 0$ (unbiased noise).
+  \item The partial sums $\sum_{k=0}^{n-1} \delta_k^\pi$ form a
+    martingale (Theorem~\ref{thm:mds_martingale}).
+  \item The TD errors at different times are uncorrelated:
+    $\E[\delta_s^\pi \delta_t^\pi] = 0$ for $s \neq t$
+    (Theorem~\ref{thm:mds_uncorrelated}).
+  \item Concentration inequalities for martingales
+    (Azuma--Hoeffding, Lesson~9) apply to bound the fluctuations
+    of accumulated TD errors.
+\end{enumerate}
+These properties are the technical backbone of the Robbins--Monro
+convergence theorem applied to TD learning.
+\end{remark}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}
+\label{ex:filtration_events}
+Let $X_1, X_2, X_3$ be i.i.d.\ Bernoulli$(1/2)$.  List all
+events in $\mathcal{F}_1 = \sigma(X_1)$ and in
+$\mathcal{F}_2 = \sigma(X_1, X_2)$.  Verify that
+$\mathcal{F}_1 \subseteq \mathcal{F}_2$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:adapted_check}
+In the natural MDP filtration, determine which of the following
+are $\mathcal{F}_t$-measurable:
+(a) $S_t$;
+(b) $R_{t+1}$;
+(c) $\sum_{k=1}^t R_k$;
+(d) $\max_{0 \leq k \leq t} V(S_k)$;
+(e) $S_{t+1} - S_t$ (if states are numerical).
+\end{exercise}
+
+\begin{exercise}
+\label{ex:martingale_product}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_i] = 1$ and
+$\Prob(X_i > 0) = 1$.  Define $M_n = \prod_{k=1}^n X_k$
+(with $M_0 = 1$) and
+$\mathcal{F}_n = \sigma(X_1, \ldots, X_n)$.  Prove that
+$\{M_n\}$ is a martingale.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:mds_verification}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_i] = \mu$ and
+$\E[X_i^2] < \infty$.  Define $d_n = X_n - \mu$ and
+$\mathcal{F}_n = \sigma(X_1, \ldots, X_n)$.  Verify that
+$\{d_n\}$ is an MDS.  What is
+$\Var\bigl(\sum_{k=1}^n d_k\bigr)$?
+\end{exercise}
+
+\begin{exercise}
+\label{ex:mds_not_iid}
+Construct a martingale difference sequence $\{d_n\}$ where the
+$d_n$ are \emph{not} independent.
+\textit{Hint:} Let $d_n$ depend on both $X_n$ and $X_{n-1}$ in a
+way that preserves $\E[d_n \mid \mathcal{F}_{n-1}] = 0$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:supermartingale}
+Let $\{X_n\}$ be a supermartingale with
+$\E[X_n] > -\infty$ for all $n$.  Show that
+$\E[X_n] \leq \E[X_0]$ for all $n$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:td_error_variance}
+In a finite MDP with bounded rewards $|R_{t+1}| \leq R_{\max}$
+and discount factor $\gamma \in [0,1)$, show that the TD error
+$\delta_t^\pi$ satisfies
+$\E[(\delta_t^\pi)^2 \mid S_t = s] \leq 4 R_{\max}^2 / (1-\gamma)^2$
+for all $s$.
+\textit{Hint:} Bound $|V^\pi(s)| \leq R_{\max}/(1-\gamma)$.
+\end{exercise}
+
+\begin{exercise}[Doob decomposition]
+\label{ex:doob}
+Let $\{X_n\}_{n \geq 0}$ be an adapted, integrable process.
+Define $A_0 = 0$ and
+$A_n = \sum_{k=1}^n (\E[X_k \mid \mathcal{F}_{k-1}] - X_{k-1})$
+for $n \geq 1$, and $M_n = X_n - A_n$.  Show that $\{A_n\}$ is
+predictable and $\{M_n\}$ is a martingale.  This is the
+\emph{Doob decomposition}: every adapted integrable process can
+be uniquely decomposed as $X_n = M_n + A_n$ where $M$ is a
+martingale and $A$ is predictable with $A_0 = 0$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{4cm} p{5.5cm} p{4.5cm}}
+\toprule
+\textbf{Concept} & \textbf{Definition/Result} &
+  \textbf{RL Role} \\
+\midrule
+Filtration &
+  $\mathcal{F}_0 \subseteq \mathcal{F}_1 \subseteq \cdots$ &
+  Information at time $t$ \\
+Natural filtration &
+  $\mathcal{F}_t = \sigma(S_0, A_0, \ldots, S_t)$ &
+  MDP history \\
+Adapted &
+  $X_t$ is $\mathcal{F}_t$-measurable &
+  ``Known at time $t$'' \\
+Predictable &
+  $X_t$ is $\mathcal{F}_{t-1}$-measurable &
+  ``Known before time $t$'' \\
+Martingale &
+  $\E[M_{n+1} \mid \mathcal{F}_n] = M_n$ &
+  Fair game / no drift \\
+MDS &
+  $\E[d_n \mid \mathcal{F}_{n-1}] = 0$ &
+  TD error noise \\
+MDS $\to$ martingale &
+  $M_n = \sum d_k$ is a martingale &
+  Accumulated noise \\
+Uncorrelated &
+  $\E[d_m d_n] = 0$ for $m \neq n$ &
+  Variance = sum of variances \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\textbf{Next lesson:} Probability Inequalities ---
+Markov, Chebyshev, Cauchy--Schwarz, Hoeffding, Azuma--Hoeffding,
+and Jensen.  These concentration inequalities bound the
+fluctuations of MDS partial sums and underpin the finite-sample
+analysis of RL algorithms.
+
+\bibliography{measure-theory-refs}
 
 \end{document}

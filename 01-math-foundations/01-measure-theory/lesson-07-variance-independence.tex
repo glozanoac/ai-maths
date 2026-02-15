@@ -1,223 +1,344 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 7: Variance, Covariance, and Independence}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 7: Variance, Covariance, and Independence}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{5}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
 
-\section{Variance and Conditional Variance}
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Expectation tells us where a random variable is centered;
+\emph{variance} tells us how much it spreads around that center.
+In reinforcement learning, variance governs the speed of
+learning: high-variance estimators require more samples to
+converge.  The \emph{law of total variance} decomposes the
+overall variance of a return into a ``one-step'' component and a
+``future'' component, directly explaining why temporal-difference
+(TD) methods have lower variance than Monte Carlo methods.
+
+This lesson develops variance, covariance, conditional variance,
+and independence.  The central results are:
+\begin{itemize}[nosep]
+  \item The computational formula
+    $\Var(X) = \E[X^2] - (\E[X])^2$.
+  \item The law of total variance
+    $\Var(X) = \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])$.
+  \item The product rule $\E[XY] = \E[X]\E[Y]$ for independent
+    random variables.
+  \item The variance-of-sums rule
+    $\Var(\sum X_i) = \sum \Var(X_i)$ for independent variables.
+\end{itemize}
+
+\begin{rlconnection}[title={Why This Matters for RL}]
+The bias--variance tradeoff is fundamental to RL algorithm
+design.  Monte Carlo estimates average full returns
+$G_t = \sum_{k=0}^\infty \gamma^k R_{t+k+1}$, which have high
+variance because every future reward is random.  TD estimates
+bootstrap after one step: $R_{t+1} + \gamma V(S_{t+1})$.  The
+law of total variance proves that bootstrapping eliminates the
+``future variance'' component, yielding strictly lower variance
+(when $V = V^\pi$).
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.}
+Lesson~5 (expectation, linearity) and Lesson~6 (conditional
+expectation, tower property, pull-out property).
+
+%% ============================================================
+%% SECTION 2: VARIANCE
+%% ============================================================
+
+\section{Variance}
 \label{sec:variance}
-
-\subsection{Definitions}
-\label{subsec:var_def}
 
 \begin{definition}[Variance]
 \label{def:variance}
-The \emph{variance} of a random variable $X$ with $\E[X^2] < \infty$ is
+The \emph{variance} of a random variable $X$ with
+$\E[X^2] < \infty$ is
 \begin{equation}
-    \Var(X) = \E\!\left[(X - \E[X])^2\right].
-    \label{eq:var_def}
+  \Var(X) = \E\!\left[(X - \E[X])^2\right].
+  \label{eq:var_def}
 \end{equation}
+The \emph{standard deviation} is
+$\sigma(X) = \sqrt{\Var(X)}$.
 \end{definition}
-
-\begin{theorem}[Computational Formula for Variance]
-\label{thm:var_formula}
-\begin{equation}
-    \Var(X) = \E[X^2] - (\E[X])^2.
-    \label{eq:var_formula}
-\end{equation}
-\end{theorem}
-
-\begin{proof}
-Let $\mu = \E[X]$. Expanding the square:
-\begin{align}
-    \Var(X) &= \E[(X - \mu)^2] \nonumber\\
-    &= \E[X^2 - 2\mu X + \mu^2] \nonumber\\
-    &= \E[X^2] - 2\mu\,\E[X] + \mu^2 \tag{linearity} \\
-    &= \E[X^2] - 2\mu^2 + \mu^2 \nonumber\\
-    &= \E[X^2] - \mu^2 = \E[X^2] - (\E[X])^2. \label{eq:var_formula_proof}
-\end{align}
-\end{proof}
-
-\begin{definition}[Covariance]
-\label{def:covariance}
-The \emph{covariance} of random variables $X$ and $Y$ with $\E[X^2], \E[Y^2] < \infty$ is
-\begin{equation}
-    \Cov(X, Y) = \E\!\left[(X - \E[X])(Y - \E[Y])\right] = \E[XY] - \E[X]\,\E[Y].
-    \label{eq:covariance_def}
-\end{equation}
-\end{definition}
-
-\begin{proof}[Proof of the computational formula]
-Expand the product $(X - \E[X])(Y - \E[Y]) = XY - X\,\E[Y] - \E[X]\,Y + \E[X]\,\E[Y]$.
-Taking expectations and using linearity:
-$\E[XY] - \E[X]\,\E[Y] - \E[X]\,\E[Y] + \E[X]\,\E[Y] = \E[XY] - \E[X]\,\E[Y]$.
-\end{proof}
 
 \begin{remark}
-$\Var(X) = \Cov(X, X)$, and $\Cov(X, Y) = 0$ when $X$ and $Y$ are independent (by Theorem~\ref{thm:product_exp} below, $\E[XY] = \E[X]\,\E[Y]$).
+Since $(X - \E[X])^2 \geq 0$, we always have $\Var(X) \geq 0$.
+Moreover, $\Var(X) = 0$ if and only if $X = \E[X]$ almost
+surely (i.e., $X$ is constant a.s.).
 \end{remark}
 
-\begin{definition}[Conditional Variance]
-\label{def:cond_var}
-The \emph{conditional variance} of $X$ given $Y$ is the random variable
+\begin{keyresult}[title={Computational Formula for Variance}]
+\begin{theorem}[Computational Formula]
+\label{thm:var_formula}
 \begin{equation}
-    \Var(X \mid Y) = \E\!\left[(X - \E[X \mid Y])^2 \;\middle|\; Y\right] = \E[X^2 \mid Y] - (\E[X \mid Y])^2.
-    \label{eq:cond_var}
-\end{equation}
-\end{definition}
-
-\begin{proof}[Proof of the computational formula~\eqref{eq:cond_var}]
-Fix $Y = y$ and let $\mu_y = \E[X \mid Y = y]$. Applying the same expansion as in Theorem~\ref{thm:var_formula} to the conditional expectation:
-\begin{align}
-    \Var(X \mid Y = y) &= \E[(X - \mu_y)^2 \mid Y = y] \nonumber\\
-    &= \E[X^2 \mid Y = y] - 2\mu_y\,\E[X \mid Y = y] + \mu_y^2 \nonumber\\
-    &= \E[X^2 \mid Y = y] - \mu_y^2. \label{eq:cond_var_proof}
-\end{align}
-\end{proof}
-
-\subsection{Law of Total Variance}
-\label{subsec:total_var}
-
-\begin{keyresult}[Law of Total Variance]
-\begin{theorem}[Law of Total Variance]
-\label{thm:total_variance}
-For random variables $X$ and $Y$ with $\E[X^2] < \infty$:
-\begin{equation}
-    \Var(X) = \E\!\left[\Var(X \mid Y)\right] + \Var\!\left(\E[X \mid Y]\right).
-    \label{eq:total_variance}
+  \Var(X) = \E[X^2] - (\E[X])^2.
+  \label{eq:var_formula}
 \end{equation}
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-We compute each term on the right-hand side.
-
-\textbf{First term.} Using~\eqref{eq:cond_var}:
+Let $\mu = \E[X]$.  Expanding the square in
+Definition~\ref{def:variance}:
 \begin{align}
-    \E[\Var(X \mid Y)]
-    &= \E\!\left[\E[X^2 \mid Y] - (\E[X \mid Y])^2\right] \nonumber\\
-    &= \E[\E[X^2 \mid Y]] - \E[(\E[X \mid Y])^2] \nonumber\\
-    &= \E[X^2] - \E[(\E[X \mid Y])^2], \label{eq:total_var_first}
-\end{align}
-where the last equality uses the tower property $\E[\E[X^2 \mid Y]] = \E[X^2]$.
-
-\textbf{Second term.} Let $\mu = \E[X]$. By the computational formula for variance:
-\begin{align}
-    \Var(\E[X \mid Y])
-    &= \E[(\E[X \mid Y])^2] - (\E[\E[X \mid Y]])^2 \nonumber\\
-    &= \E[(\E[X \mid Y])^2] - (\E[X])^2 \nonumber\\
-    &= \E[(\E[X \mid Y])^2] - \mu^2. \label{eq:total_var_second}
-\end{align}
-
-\textbf{Sum.} Adding~\eqref{eq:total_var_first} and~\eqref{eq:total_var_second}:
-\begin{align}
-    \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])
-    &= \bigl(\E[X^2] - \E[(\E[X \mid Y])^2]\bigr) + \bigl(\E[(\E[X \mid Y])^2] - \mu^2\bigr) \nonumber\\
-    &= \E[X^2] - \mu^2 = \Var(X). \label{eq:total_var_sum}
+  \Var(X) &= \E[(X - \mu)^2]
+  = \E[X^2 - 2\mu X + \mu^2]
+  \nonumber\\
+  &= \E[X^2] - 2\mu\,\E[X] + \mu^2
+  \tag{linearity of $\E$}\\
+  &= \E[X^2] - 2\mu^2 + \mu^2
+  = \E[X^2] - \mu^2.
+  \label{eq:var_formula_proof}
 \end{align}
 \end{proof}
 
-\begin{tdconnection}[Connection to TD Learning]
-This is the central result for the bias-variance analysis. The article applies it with $X = G_t$ and $Y = (A_t, S_{t+1})$:
-\[
-    \Var_\pi(G_t \mid S_t) = \underbrace{\Var_\pi(R_{t+1} + \gamma V^\pi(S_{t+1}) \mid S_t)}_{\text{one-step variance}} + \gamma^2 \underbrace{\E_\pi[\Var_\pi(G_{t+1} \mid S_{t+1}) \mid S_t]}_{\text{future variance} \;\geq\; 0}.
-\]
-The TD(0) target $R_{t+1} + \gamma V(S_{t+1})$ captures only the first term, eliminating the non-negative future variance entirely. This is why TD has lower variance than Monte Carlo.
-\end{tdconnection}
+\begin{proposition}[Scaling and Shifting]
+\label{prop:var_scaling}
+For constants $a, b \in \R$:
+\begin{equation}
+  \Var(aX + b) = a^2 \Var(X).
+  \label{eq:var_scaling}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+$\E[aX + b] = a\mu + b$.  Therefore:
+\begin{equation}
+  \Var(aX + b) = \E[(aX + b - a\mu - b)^2]
+  = \E[a^2(X - \mu)^2]
+  = a^2\, \E[(X - \mu)^2] = a^2 \Var(X). \qedhere
+\end{equation}
+\end{proof}
+
+\begin{example}[Variance of Bernoulli]
+\label{ex:bernoulli_var}
+If $X \sim \operatorname{Bernoulli}(p)$, then $\E[X] = p$ and
+$\E[X^2] = 1^2 \cdot p + 0^2 \cdot (1-p) = p$.  By
+Theorem~\ref{thm:var_formula}:
+$\Var(X) = p - p^2 = p(1 - p)$.
+The maximum variance $1/4$ occurs at $p = 1/2$.
+\end{example}
 
 %% ============================================================
-%% SECTION 7: INDEPENDENCE
+%% SECTION 3: COVARIANCE AND CORRELATION
+%% ============================================================
+
+\section{Covariance and Correlation}
+\label{sec:covariance}
+
+\begin{definition}[Covariance]
+\label{def:covariance}
+The \emph{covariance} of $X$ and $Y$ with
+$\E[X^2], \E[Y^2] < \infty$ is
+\begin{equation}
+  \Cov(X, Y) = \E\!\left[(X - \E[X])(Y - \E[Y])\right].
+  \label{eq:cov_def}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Computational Formula for Covariance]
+\label{thm:cov_formula}
+\begin{equation}
+  \Cov(X, Y) = \E[XY] - \E[X]\,\E[Y].
+  \label{eq:cov_formula}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Let $\mu_X = \E[X]$, $\mu_Y = \E[Y]$.  Expanding the product:
+\begin{align}
+  \Cov(X, Y) &= \E[(X - \mu_X)(Y - \mu_Y)]
+  \nonumber\\
+  &= \E[XY - X\mu_Y - \mu_X Y + \mu_X \mu_Y]
+  \nonumber\\
+  &= \E[XY] - \mu_Y \E[X] - \mu_X \E[Y] + \mu_X \mu_Y
+  \nonumber\\
+  &= \E[XY] - \mu_X \mu_Y.
+  \label{eq:cov_formula_proof}
+\end{align}
+\end{proof}
+
+\begin{proposition}[Properties of Covariance]
+\label{prop:cov_props}
+For random variables $X$, $Y$, $Z$ with finite second moments
+and constants $a, b \in \R$:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item $\Cov(X, X) = \Var(X)$.
+  \item $\Cov(X, Y) = \Cov(Y, X)$ (symmetry).
+  \item $\Cov(aX + b, Y) = a\,\Cov(X, Y)$ (linearity in each
+    argument).
+  \item $\Var(X + Y) = \Var(X) + \Var(Y) + 2\Cov(X, Y)$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(a)} $\Cov(X, X) = \E[X^2] - (\E[X])^2 = \Var(X)$
+by Theorem~\ref{thm:var_formula}.
+
+\textbf{(b)} The product $(X - \E[X])(Y - \E[Y])$ is symmetric
+in $X$ and $Y$.
+
+\textbf{(c)} By Theorem~\ref{thm:cov_formula}:
+$\Cov(aX + b, Y) = \E[(aX + b)Y] - \E[aX + b]\E[Y]
+= a\E[XY] + b\E[Y] - (a\E[X] + b)\E[Y]
+= a(\E[XY] - \E[X]\E[Y]) = a\Cov(X, Y)$.
+
+\textbf{(d)} Let $\mu_X = \E[X]$, $\mu_Y = \E[Y]$.
+\begin{align}
+  \Var(X + Y) &= \E[(X + Y - \mu_X - \mu_Y)^2]
+  \nonumber\\
+  &= \E[(X - \mu_X)^2 + 2(X - \mu_X)(Y - \mu_Y)
+    + (Y - \mu_Y)^2]
+  \nonumber\\
+  &= \Var(X) + 2\Cov(X, Y) + \Var(Y). \qedhere
+\end{align}
+\end{proof}
+
+\begin{definition}[Correlation Coefficient]
+\label{def:correlation}
+The \emph{(Pearson) correlation coefficient} of $X$ and $Y$
+with $\Var(X), \Var(Y) > 0$ is
+\begin{equation}
+  \rho(X, Y) = \frac{\Cov(X, Y)}
+    {\sqrt{\Var(X)\,\Var(Y)}}.
+  \label{eq:correlation}
+\end{equation}
+By the Cauchy--Schwarz inequality (proved in Lesson~9),
+$\rho(X, Y) \in [-1, 1]$.
+\end{definition}
+
+%% ============================================================
+%% SECTION 4: CONDITIONAL VARIANCE AND LAW OF TOTAL VARIANCE
+%% ============================================================
+
+\section{Conditional Variance and the Law of Total Variance}
+\label{sec:cond_var}
+
+\begin{definition}[Conditional Variance]
+\label{def:cond_var}
+The \emph{conditional variance} of $X$ given $Y$ is the random
+variable
+\begin{equation}
+  \Var(X \mid Y)
+  = \E\!\left[(X - \E[X \mid Y])^2 \;\middle|\; Y\right]
+  = \E[X^2 \mid Y] - (\E[X \mid Y])^2.
+  \label{eq:cond_var}
+\end{equation}
+\end{definition}
+
+\begin{proof}[Proof of the computational
+  formula~\eqref{eq:cond_var}]
+Fix $Y = y$ and let $\mu_y = \E[X \mid Y = y]$.  By the same
+expansion as Theorem~\ref{thm:var_formula}:
+\begin{align}
+  \Var(X \mid Y = y)
+  &= \E[(X - \mu_y)^2 \mid Y = y]
+  \nonumber\\
+  &= \E[X^2 \mid Y = y] - 2\mu_y \E[X \mid Y = y] + \mu_y^2
+  \nonumber\\
+  &= \E[X^2 \mid Y = y] - \mu_y^2. \qedhere
+\end{align}
+\end{proof}
+
+\begin{keyresult}[title={Law of Total Variance}]
+\begin{theorem}[Law of Total Variance]
+\label{thm:total_variance}
+For random variables $X$ and $Y$ with $\E[X^2] < \infty$:
+\begin{equation}
+  \Var(X) = \E\!\left[\Var(X \mid Y)\right]
+  + \Var\!\left(\E[X \mid Y]\right).
+  \label{eq:total_variance}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We compute each term on the right-hand side separately.
+
+\textbf{First term.} Using the computational
+formula~\eqref{eq:cond_var} and the tower property
+$\E[\E[X^2 \mid Y]] = \E[X^2]$:
+\begin{align}
+  \E[\Var(X \mid Y)]
+  &= \E\!\left[\E[X^2 \mid Y] - (\E[X \mid Y])^2\right]
+  \nonumber\\
+  &= \E[X^2] - \E\!\left[(\E[X \mid Y])^2\right].
+  \label{eq:tv_first}
+\end{align}
+
+\textbf{Second term.} Applying the computational formula for
+variance to the random variable $\E[X \mid Y]$ and using the
+tower property $\E[\E[X \mid Y]] = \E[X]$:
+\begin{align}
+  \Var(\E[X \mid Y])
+  &= \E\!\left[(\E[X \mid Y])^2\right]
+    - \bigl(\E[\E[X \mid Y]]\bigr)^2
+  \nonumber\\
+  &= \E\!\left[(\E[X \mid Y])^2\right] - (\E[X])^2.
+  \label{eq:tv_second}
+\end{align}
+
+\textbf{Sum.} Adding~\eqref{eq:tv_first}
+and~\eqref{eq:tv_second}:
+\begin{align}
+  \E[\Var(X \mid Y)] + \Var(\E[X \mid Y])
+  &= \bigl(\E[X^2] - \E[(\E[X \mid Y])^2]\bigr)
+    + \bigl(\E[(\E[X \mid Y])^2] - (\E[X])^2\bigr)
+  \nonumber\\
+  &= \E[X^2] - (\E[X])^2 = \Var(X). \qedhere
+  \label{eq:tv_sum}
+\end{align}
+\end{proof}
+
+\begin{remark}[Interpretation]
+The law of total variance decomposes $\Var(X)$ into:
+\begin{itemize}[nosep]
+  \item $\E[\Var(X \mid Y)]$: the average \emph{within-group}
+    variance (unexplained by $Y$).
+  \item $\Var(\E[X \mid Y])$: the \emph{between-group} variance
+    (explained by $Y$).
+\end{itemize}
+This is the probabilistic foundation of ANOVA (analysis of
+variance).
+\end{remark}
+
+\begin{rlconnection}[title={TD vs.\ Monte Carlo Variance}]
+Apply the law of total variance with $X = G_t$ (the return) and
+$Y = (A_t, S_{t+1}, R_{t+1})$ (the one-step transition),
+conditioning on $S_t = s$:
+\begin{equation}
+  \Var_\pi(G_t \mid S_t = s)
+  = \underbrace{\Var_\pi(R_{t+1} + \gamma V^\pi(S_{t+1})
+    \mid S_t = s)}_{\text{one-step variance (TD captures this)}}
+  + \gamma^2 \underbrace{\E_\pi[\Var_\pi(G_{t+1} \mid S_{t+1})
+    \mid S_t = s]}_{\text{future variance} \;\geq\; 0}.
+  \label{eq:td_mc_variance}
+\end{equation}
+The Monte Carlo estimator uses $G_t$ and has variance equal to
+the full left-hand side.  The TD(0) target
+$R_{t+1} + \gamma V^\pi(S_{t+1})$ has variance equal to only
+the first term on the right.  Since the second term is
+non-negative, TD(0) has strictly lower variance than Monte Carlo
+(when using the true value function $V^\pi$).
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: INDEPENDENCE
 %% ============================================================
 
 \section{Independence}
@@ -228,110 +349,366 @@ The TD(0) target $R_{t+1} + \gamma V(S_{t+1})$ captures only the first term, eli
 
 \begin{definition}[Independent Events]
 \label{def:indep_events}
-Two events $A, B \in \mathcal{F}$ are \emph{independent} (written $A \perp B$) if:
+Two events $A, B \in \mathcal{F}$ are \emph{independent}
+(written $A \perp B$) if
 \begin{equation}
-    \Prob(A \cap B) = \Prob(A)\, \Prob(B).
-    \label{eq:indep_events}
+  \Prob(A \cap B) = \Prob(A)\, \Prob(B).
+  \label{eq:indep_events}
 \end{equation}
-Events $A_1, \ldots, A_n$ are \emph{mutually independent} if for every subset $I \subseteq \{1, \ldots, n\}$:
+Events $A_1, \ldots, A_n$ are \emph{mutually independent} if for
+\emph{every} subset $I \subseteq \{1, \ldots, n\}$ with
+$|I| \geq 2$:
 \begin{equation}
-    \Prob\!\left(\bigcap_{i \in I} A_i\right) = \prod_{i \in I} \Prob(A_i).
-    \label{eq:mutual_indep}
+  \Prob\!\left(\bigcap_{i \in I} A_i\right)
+  = \prod_{i \in I} \Prob(A_i).
+  \label{eq:mutual_indep}
 \end{equation}
 \end{definition}
 
 \begin{remark}
-Mutual independence is strictly stronger than pairwise independence. Pairwise independence requires~\eqref{eq:indep_events} for every pair $(A_i, A_j)$ with $i \neq j$, but this does not imply~\eqref{eq:mutual_indep} for $|I| \geq 3$.
+Mutual independence requires $2^n - n - 1$ conditions (one for
+each subset of size $\geq 2$), whereas pairwise independence
+requires only $\binom{n}{2}$ conditions.
 \end{remark}
-
-\begin{example}[Pairwise but Not Mutual Independence]
-\label{ex:pairwise_not_mutual}
-Let $\Omega = \{1, 2, 3, 4\}$ with uniform probability $1/4$ each. Define $A = \{1,2\}$, $B = \{1,3\}$, $C = \{1,4\}$. Then $\Prob(A) = \Prob(B) = \Prob(C) = 1/2$ and $\Prob(A \cap B) = \Prob(A \cap C) = \Prob(B \cap C) = 1/4$, so all pairs are independent. But $\Prob(A \cap B \cap C) = \Prob(\{1\}) = 1/4 \neq 1/8 = \Prob(A)\Prob(B)\Prob(C)$.
-\end{example}
 
 \subsection{Independent Random Variables}
 \label{subsec:indep_rv}
 
 \begin{definition}[Independent Random Variables]
 \label{def:indep_rv}
-Discrete random variables $X_1, \ldots, X_n$ are \emph{mutually independent} if for all $(x_1, \ldots, x_n)$:
+Discrete random variables $X_1, \ldots, X_n$ are
+\emph{mutually independent} if for all
+$(x_1, \ldots, x_n)$:
 \begin{equation}
-    \Prob(X_1 = x_1, \ldots, X_n = x_n) = \prod_{i=1}^n \Prob(X_i = x_i).
-    \label{eq:indep_rv}
+  \Prob(X_1 = x_1, \ldots, X_n = x_n)
+  = \prod_{i=1}^n \Prob(X_i = x_i).
+  \label{eq:indep_rv}
 \end{equation}
-Equivalently, the joint PMF factors as a product of marginals.
+Equivalently, the joint PMF factors as the product of marginals.
 \end{definition}
 
-\begin{keyresult}[Product of Expectations]
-\begin{theorem}[Expectation of Product of Independent Random Variables]
-\label{thm:product_exp}
-If $X_1, \ldots, X_n$ are mutually independent with $\E[|X_i|] < \infty$, then:
+\subsection{Pairwise vs.\ Mutual Independence}
+\label{subsec:pairwise_vs_mutual}
+
+\begin{example}[Pairwise but Not Mutual Independence]
+\label{ex:pairwise_not_mutual}
+Let $\Omega = \{1, 2, 3, 4\}$ with uniform probability $1/4$
+each.  Define
+\[
+  A = \{1, 2\}, \quad B = \{1, 3\}, \quad C = \{1, 4\}.
+\]
+Then $\Prob(A) = \Prob(B) = \Prob(C) = 1/2$.  Check pairwise
+independence:
+\begin{align}
+  &\Prob(A \cap B) = \Prob(\{1\}) = 1/4
+    = (1/2)(1/2) = \Prob(A)\Prob(B), \nonumber\\
+  &\Prob(A \cap C) = \Prob(\{1\}) = 1/4
+    = \Prob(A)\Prob(C), \nonumber\\
+  &\Prob(B \cap C) = \Prob(\{1\}) = 1/4
+    = \Prob(B)\Prob(C).
+  \label{eq:pairwise_ok}
+\end{align}
+All three pairs are independent.  However:
 \begin{equation}
-    \E\!\left[\prod_{i=1}^n X_i\right] = \prod_{i=1}^n \E[X_i].
-    \label{eq:product_exp}
+  \Prob(A \cap B \cap C) = \Prob(\{1\}) = \frac{1}{4}
+  \neq \frac{1}{8}
+  = \Prob(A)\, \Prob(B)\, \Prob(C).
+  \label{eq:mutual_fail}
 \end{equation}
+Thus $A$, $B$, $C$ are pairwise independent but \emph{not}
+mutually independent.  Knowing any two of the three events
+completely determines the third: if $\omega \in A \cap B$, then
+$\omega = 1$, so $\omega \in C$.  This informational coupling is
+invisible to pairwise checks.
+\end{example}
+
+\begin{warning}[title={Pairwise $\neq$ Mutual}]
+Pairwise independence does \emph{not} imply mutual independence.
+Many theoretical results (e.g., variance of sums) require only
+pairwise independence, but others (e.g., the strong law of large
+numbers) require mutual independence.  Always verify which notion
+is needed.
+\end{warning}
+
+%% ============================================================
+%% SECTION 6: PRODUCT EXPECTATIONS AND VARIANCE OF SUMS
+%% ============================================================
+
+\section{Product Expectations and Variance of Sums}
+\label{sec:products}
+
+\begin{keyresult}[title={Product of Expectations under Independence}]
+\begin{theorem}[Expectation of Product of Independent RVs]
+\label{thm:product_exp}
+If $X$ and $Y$ are independent discrete random variables with
+$\E[|X|], \E[|Y|] < \infty$, then
+\begin{equation}
+  \E[XY] = \E[X]\, \E[Y].
+  \label{eq:product_exp}
+\end{equation}
+More generally, if $X_1, \ldots, X_n$ are mutually independent
+with finite first moments, then
+$\E[\prod_{i=1}^n X_i] = \prod_{i=1}^n \E[X_i]$.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-We prove the case $n = 2$; the general case follows by induction. Let $X, Y$ be independent discrete random variables. Then:
+We prove the case $n = 2$; the general case follows by induction.
 \begin{align}
-    \E[XY] &= \sum_x \sum_y xy\, \Prob(X = x, Y = y) \nonumber\\
-    &= \sum_x \sum_y xy\, \Prob(X = x)\, \Prob(Y = y) \tag{independence}\\
-    &= \left(\sum_x x\, \Prob(X = x)\right)\left(\sum_y y\, \Prob(Y = y)\right) = \E[X]\, \E[Y]. \label{eq:product_exp_proof}
+  \E[XY]
+  &= \sum_x \sum_y xy\, \Prob(X = x, Y = y)
+  \nonumber\\
+  &= \sum_x \sum_y xy\, \Prob(X = x)\, \Prob(Y = y)
+  \tag{independence}\\
+  &= \left(\sum_x x\, \Prob(X = x)\right)
+    \left(\sum_y y\, \Prob(Y = y)\right)
+  = \E[X]\, \E[Y].
+  \label{eq:product_proof}
 \end{align}
-The factoring of the double sum into a product of single sums uses $xy = x \cdot y$ and the distributive law, which is valid when both sums converge absolutely.
+The factoring of the double sum uses that $xy$ separates and both
+sums converge absolutely.
 \end{proof}
 
-\begin{corollary}[Variance of Sum of Independent Random Variables]
-\label{cor:var_sum}
-If $X_1, \ldots, X_n$ are mutually independent with $\E[X_i^2] < \infty$, then:
-\begin{equation}
-    \Var\!\left(\sum_{i=1}^n X_i\right) = \sum_{i=1}^n \Var(X_i).
-    \label{eq:var_sum}
-\end{equation}
+\begin{corollary}[Covariance of Independent RVs]
+\label{cor:cov_indep}
+If $X$ and $Y$ are independent with finite second moments, then
+$\Cov(X, Y) = 0$.
 \end{corollary}
 
 \begin{proof}
-Let $S = \sum_i X_i$ and $\mu_i = \E[X_i]$. Then:
-\begin{align}
-    \Var(S) &= \E\!\left[\left(\sum_i (X_i - \mu_i)\right)^2\right] = \sum_i \E[(X_i - \mu_i)^2] + 2 \sum_{i < j} \E[(X_i - \mu_i)(X_j - \mu_j)].
-\end{align}
-For independent $X_i, X_j$, the centered variables $X_i - \mu_i$ and $X_j - \mu_j$ are also independent, so by Theorem~\ref{thm:product_exp}:
-\begin{equation}
-    \E[(X_i - \mu_i)(X_j - \mu_j)] = \E[X_i - \mu_i]\, \E[X_j - \mu_j] = 0 \cdot 0 = 0.
-\end{equation}
-Thus $\Var(S) = \sum_i \Var(X_i)$.
+$\Cov(X, Y) = \E[XY] - \E[X]\E[Y] = 0$ by
+Theorem~\ref{thm:product_exp}.
 \end{proof}
 
-\subsection{Conditional Independence}
-\label{subsec:cond_indep}
+\begin{remark}
+The converse is false: $\Cov(X, Y) = 0$ does not imply
+independence.  For example, let $X \sim \text{Uniform}\{-1, 0, 1\}$
+and $Y = X^2$.  Then $\E[XY] = \E[X^3] = 0 = \E[X]\E[Y]$ so
+$\Cov(X, Y) = 0$, but $Y$ is a deterministic function of $X$.
+\end{remark}
 
-\begin{definition}[Conditional Independence]
-\label{def:cond_indep}
-Events $A$ and $B$ are \emph{conditionally independent given $C$} (with $\Prob(C) > 0$) if:
+\begin{keyresult}[title={Variance of Sum of Independent RVs}]
+\begin{corollary}[Variance of Sum]
+\label{cor:var_sum}
+If $X_1, \ldots, X_n$ are \emph{pairwise} independent with
+finite second moments, then
 \begin{equation}
-    \Prob(A \cap B \mid C) = \Prob(A \mid C)\, \Prob(B \mid C).
-    \label{eq:cond_indep}
+  \Var\!\left(\sum_{i=1}^n X_i\right)
+  = \sum_{i=1}^n \Var(X_i).
+  \label{eq:var_sum}
 \end{equation}
-Random variables $X$ and $Y$ are \emph{conditionally independent given $Z$} if for all $x, y, z$ with $\Prob(Z = z) > 0$:
+\end{corollary}
+\end{keyresult}
+
+\begin{proof}
+Let $S = \sum_i X_i$ and $\mu_i = \E[X_i]$.  Expanding:
+\begin{align}
+  \Var(S)
+  &= \E\!\left[\left(\sum_i (X_i - \mu_i)\right)^2\right]
+  = \sum_i \E[(X_i - \mu_i)^2]
+    + 2 \sum_{i < j} \E[(X_i - \mu_i)(X_j - \mu_j)].
+  \label{eq:var_sum_expand}
+\end{align}
+For $i \neq j$, pairwise independence of $X_i, X_j$ implies
+independence of the centered variables $X_i - \mu_i$ and
+$X_j - \mu_j$, so by Theorem~\ref{thm:product_exp}:
 \begin{equation}
-    \Prob(X = x, Y = y \mid Z = z) = \Prob(X = x \mid Z = z)\, \Prob(Y = y \mid Z = z).
-    \label{eq:cond_indep_rv}
+  \E[(X_i - \mu_i)(X_j - \mu_j)]
+  = \E[X_i - \mu_i]\, \E[X_j - \mu_j] = 0.
+  \label{eq:cross_zero}
+\end{equation}
+All cross terms vanish, leaving
+$\Var(S) = \sum_i \Var(X_i)$.
+\end{proof}
+
+\begin{remark}
+Only \emph{pairwise} independence is needed for the variance of
+sums to decompose additively.  This is a weaker requirement than
+mutual independence.
+\end{remark}
+
+\begin{proposition}[General Variance of Sums]
+\label{prop:var_sum_general}
+For \emph{any} random variables $X_1, \ldots, X_n$ with finite
+second moments (not necessarily independent):
+\begin{equation}
+  \Var\!\left(\sum_{i=1}^n X_i\right)
+  = \sum_{i=1}^n \Var(X_i)
+    + 2 \sum_{1 \leq i < j \leq n} \Cov(X_i, X_j).
+  \label{eq:var_sum_general}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+This is the content of~\eqref{eq:var_sum_expand}, recognizing
+that $\E[(X_i - \mu_i)(X_j - \mu_j)] = \Cov(X_i, X_j)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 7: CONDITIONAL INDEPENDENCE
+%% ============================================================
+
+\section{Conditional Independence}
+\label{sec:cond_indep}
+
+\begin{definition}[Conditional Independence of Events]
+\label{def:cond_indep_events}
+Events $A$ and $B$ are \emph{conditionally independent given $C$}
+(with $\Prob(C) > 0$) if
+\begin{equation}
+  \Prob(A \cap B \mid C)
+  = \Prob(A \mid C)\, \Prob(B \mid C).
+  \label{eq:cond_indep_events}
 \end{equation}
 \end{definition}
 
-\begin{remark}
-Independence and conditional independence are \emph{distinct} properties. Independent random variables may become conditionally dependent (and vice versa). In particular, conditional independence given $Z$ does \emph{not} imply unconditional independence.
+\begin{definition}[Conditional Independence of Random Variables]
+\label{def:cond_indep_rv}
+Random variables $X$ and $Y$ are \emph{conditionally independent
+given $Z$}, written $X \perp Y \mid Z$, if for all $x$, $y$, and
+$z$ with $\Prob(Z = z) > 0$:
+\begin{equation}
+  \Prob(X = x, Y = y \mid Z = z)
+  = \Prob(X = x \mid Z = z)\, \Prob(Y = y \mid Z = z).
+  \label{eq:cond_indep_rv}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Independence $\neq$ Conditional Independence]
+These are distinct properties.  Independent random variables may
+become conditionally dependent given a common effect (``explaining
+away''), and conditionally independent variables may be
+marginally dependent.
 \end{remark}
 
-\begin{rlconnection}[Connection to RL]
-The \textbf{Markov property} is a conditional independence statement: given $S_t$, the future $(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$ is conditionally independent of the past $(S_0, A_0, \ldots, S_{t-1}, A_{t-1})$. This is the foundational structural assumption of MDPs and is used in every Bellman equation derivation and every TD convergence proof.
+\begin{rlconnection}[title={The Markov Property as Conditional Independence}]
+The Markov property of an MDP is a conditional independence
+statement: given $S_t$, the future
+$(S_{t+1}, R_{t+1}, S_{t+2}, \ldots)$ is conditionally
+independent of the past
+$(S_0, A_0, R_1, \ldots, S_{t-1}, A_{t-1})$.  Symbolically:
+\[
+  (S_{t+1}, R_{t+1}, S_{t+2}, \ldots)
+  \perp (S_0, A_0, \ldots, S_{t-1}, A_{t-1})
+  \mid S_t.
+\]
+This is the foundational structural assumption of MDPs and is
+used in every Bellman equation derivation and every TD convergence
+proof.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 8: FILTRATIONS
+%% SECTION 8: EXERCISES
 %% ============================================================
 
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}
+\label{ex:var_uniform}
+Let $X$ be uniform on $\{1, 2, \ldots, n\}$, i.e.,
+$\Prob(X = k) = 1/n$ for $k = 1, \ldots, n$.  Compute
+$\E[X]$, $\E[X^2]$, and $\Var(X)$.
+\textit{Hint:} Use $\sum_{k=1}^n k = n(n+1)/2$ and
+$\sum_{k=1}^n k^2 = n(n+1)(2n+1)/6$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:cov_bilinearity}
+Let $X_1, X_2, Y$ be random variables with finite second moments
+and let $a_1, a_2 \in \R$.  Show that
+$\Cov(a_1 X_1 + a_2 X_2,\, Y)
+= a_1 \Cov(X_1, Y) + a_2 \Cov(X_2, Y)$
+(bilinearity of covariance).
+\end{exercise}
+
+\begin{exercise}
+\label{ex:total_var_two_state}
+In a two-state MDP with $\mathcal{S} = \{0, 1\}$, single action,
+$P(0 \mid 0) = 0.5$, $P(1 \mid 0) = 0.5$,
+$P(0 \mid 1) = 0.3$, $P(1 \mid 1) = 0.7$,
+$r(0) = 1$, $r(1) = 3$, $\gamma = 0.5$, and the trivial policy,
+compute $V^\pi(0)$ and $V^\pi(1)$.  Then decompose
+$\Var(G_0 \mid S_0 = 0)$ using the law of total variance.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:uncorrelated_not_independent}
+Let $X$ be uniform on $\{-1, 0, 1\}$ and $Y = X^2$.  Verify
+that $\Cov(X, Y) = 0$ but $X$ and $Y$ are not independent.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:var_sample_mean}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with mean $\mu$ and variance
+$\sigma^2$.  Show that the sample mean
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$ satisfies
+$\E[\bar{X}_n] = \mu$ and
+$\Var(\bar{X}_n) = \sigma^2/n$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:conditional_variance_compute}
+Let $X \sim \operatorname{Bernoulli}(1/2)$ and
+$Y \mid X = 0 \sim \operatorname{Bernoulli}(1/3)$,
+$Y \mid X = 1 \sim \operatorname{Bernoulli}(2/3)$.
+Compute $\E[Y \mid X]$, $\Var(Y \mid X)$, and verify the law of
+total variance $\Var(Y) = \E[\Var(Y \mid X)] + \Var(\E[Y \mid X])$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:pairwise_mutual}
+Construct an example of three random variables
+$X_1, X_2, X_3$ that are pairwise independent but not mutually
+independent.
+\textit{Hint:} Define them as functions of the events in
+Example~\ref{ex:pairwise_not_mutual}.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{4cm} p{5.5cm} p{4.5cm}}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{RL Role} \\
+\midrule
+Variance &
+  $\Var(X) = \E[X^2] - (\E[X])^2$ &
+  Measures estimator spread \\
+Covariance &
+  $\Cov(X,Y) = \E[XY] - \E[X]\E[Y]$ &
+  Cross-term in variance \\
+Law of total variance &
+  $\Var(X) = \E[\Var(X|Y)] + \Var(\E[X|Y])$ &
+  TD vs.\ MC variance \\
+Product rule &
+  $\E[XY] = \E[X]\E[Y]$ (indep.) &
+  Cross-terms vanish \\
+Var.\ of sums &
+  $\Var(\sum X_i) = \sum \Var(X_i)$ (indep.) &
+  Error accumulation \\
+Pairwise $\neq$ mutual &
+  Example~\ref{ex:pairwise_not_mutual} &
+  Check which is needed \\
+Conditional indep.\ &
+  $\Prob(X,Y|Z) = \Prob(X|Z)\Prob(Y|Z)$ &
+  Markov property \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\textbf{Next lesson:} Filtrations and Martingale
+Difference Sequences --- the information-theoretic framework for
+sequential decisions and the key noise structure (MDS) in
+temporal-difference learning.
+
+\bibliography{measure-theory-refs}
 
 \end{document}

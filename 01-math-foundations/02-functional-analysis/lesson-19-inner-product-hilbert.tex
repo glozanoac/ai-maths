@@ -1,443 +1,907 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 7: Hilbert Spaces and Operators}}
+\fancyhead[L]{\textsc{Lesson 19: Inner Product Spaces and Hilbert Spaces}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\interior}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\spn}{span}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\range}{range}
-\DeclareMathOperator{\nullspace}{null}
-\DeclareMathOperator{\diam}{diam}
-
-% ---- Title ----
 \title{Lesson 19: Inner Product Spaces and Hilbert Spaces}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{0}
+%% ============================================================
+%% SECTION 1: MOTIVATION
+%% ============================================================
 
-\section{Introduction}\label{sec:introduction}
+\section{Motivation}
+\label{sec:motivation}
 
-The passage from normed spaces to inner product spaces provides the crucial
-ingredient of \emph{geometry}: an inner product defines angles, orthogonality,
-and projections. These geometric tools are not merely elegant abstractions---they
-are the backbone of least-squares methods, kernel machines, and the projection
-operators used in temporal-difference learning (LSTD, LSPE).
+Normed spaces provide a notion of size (the norm), but they lack geometry.
+An inner product adds the crucial concepts of angle and orthogonality,
+enabling projections, decompositions, and least-squares approximation. A
+Hilbert space---a complete inner product space---is the richest and most
+well-behaved infinite-dimensional space, enjoying a geometry that directly
+generalizes finite-dimensional Euclidean space.
 
-Complete inner product spaces---\emph{Hilbert spaces}---enjoy the richest
-structure among Banach spaces. The Projection Theorem, the Riesz Representation
-Theorem, and the spectral theory of operators on Hilbert spaces all depend on
-this completeness.
-
-Beyond Hilbert spaces, the four fundamental theorems of functional analysis
-(Hahn--Banach, Uniform Boundedness, Open Mapping, Closed Graph) are tools
-of immense power for proving existence and continuity results in abstract spaces.
-
-Finally, fixed point theorems translate the abstract structure of function spaces
-into concrete algorithmic guarantees:
-
-\begin{itemize}[leftmargin=2em]
-    \item The \textbf{Banach Contraction Mapping Theorem} guarantees that
-          value iteration converges: the Bellman operator is a
-          $\gamma$-contraction on the space of bounded value functions.
-    \item The \textbf{Brouwer and Schauder Fixed Point Theorems} guarantee
-          existence of fixed points for continuous maps on compact convex sets.
-    \item The \textbf{Kakutani Fixed Point Theorem} extends Brouwer to
-          set-valued maps, providing the standard proof that every finite
-          game has a Nash equilibrium.
+The passage from normed spaces to inner product spaces is not merely an
+abstraction. In reinforcement learning and machine learning, inner product
+structure arises naturally:
+\begin{itemize}[leftmargin=2em,nosep]
+    \item \textbf{Least-squares value function approximation:} Projecting
+          the Bellman target onto a linear subspace requires the inner product
+          on $L^2$ (or $\R^n$ with a weighted inner product).
+    \item \textbf{Reproducing kernel Hilbert spaces (RKHS):} Kernel methods
+          operate in Hilbert spaces of functions, where the representer
+          theorem guarantees finite-dimensional solutions.
+    \item \textbf{Natural gradient methods:} The Fisher information matrix
+          defines an inner product on the parameter space, and the natural
+          gradient is the steepest descent direction in this geometry.
 \end{itemize}
 
-\begin{rlconnection}[Why This Lesson Matters for RL/ML]
-\begin{enumerate}[leftmargin=2em]
-    \item \textbf{Projections and least-squares}: Temporal-difference methods
-          with linear function approximation (LSTD) project the Bellman
-          equation onto a subspace. The Projection Theorem makes this rigorous.
-    \item \textbf{Kernel methods}: Reproducing kernel Hilbert spaces (RKHS)
-          are Hilbert spaces of functions. The Riesz Representation Theorem
-          is the starting point for representer theorems.
-    \item \textbf{Value iteration convergence}: The Banach Contraction Mapping
-          Theorem, applied to the Bellman operator, gives both existence of
-          the optimal value function and the geometric convergence rate
-          $\|V_n - V^*\| \leq \gamma^n \|V_0 - V^*\|$.
-    \item \textbf{Nash equilibrium existence}: The Kakutani Fixed Point Theorem,
-          applied to the best-response correspondence, proves existence of
-          Nash equilibria in finite games---the theoretical anchor of MARL.
-    \item \textbf{Uniform Boundedness}: Ensures that pointwise-bounded
-          families of operators are uniformly bounded, a key tool in proving
-          convergence of approximation schemes.
+\begin{rlconnection}[title={Why Inner Products Matter for RL/ML}]
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item \textbf{LSTD (Least-Squares Temporal Difference):} The fixed-point
+          equation $\Phi w = \Pi_\mu T(\Phi w)$ involves the orthogonal
+          projection $\Pi_\mu$ onto the column space of $\Phi$ in the
+          $L^2(\mu)$-inner product. Understanding this projection requires
+          the Hilbert space structure of $L^2(\mu)$.
+    \item \textbf{Kernel methods:} A positive-definite kernel $k(x,y)$
+          defines a unique RKHS $\mathcal{H}_k$. The reproducing property
+          $f(x) = \langle f, k(\cdot, x) \rangle_{\mathcal{H}_k}$ is an
+          application of the Riesz Representation Theorem on Hilbert spaces.
+    \item \textbf{Gradient geometry:} The Cauchy--Schwarz inequality, proved
+          in this lesson, is the foundation of gradient-based optimization:
+          it identifies the direction of steepest ascent of a linear
+          functional on a Hilbert space.
 \end{enumerate}
 \end{rlconnection}
 
 \medskip
-\noindent\textbf{Prerequisites.} Familiarity with metric spaces, normed spaces,
-Banach spaces, and bounded linear operators as covered in Lesson~6. Measure
-theory from Lessons~1--2 is used in $L^2$ examples.
+\noindent\textbf{Prerequisites.} Metric spaces, normed spaces, Banach
+spaces, and compactness (Lessons 15--18).
 
 \medskip
 \noindent\textbf{Outline.}
-Section~\ref{sec:inner-product} develops inner product spaces and proves the
-Cauchy--Schwarz inequality.
-Section~\ref{sec:hilbert} introduces Hilbert spaces, orthogonality, and
-orthogonal decomposition.
-Section~\ref{sec:projection} proves the Projection Theorem and studies
-projection operators.
-Section~\ref{sec:orthonormal} covers orthonormal systems, Bessel's inequality,
-and Parseval's identity.
-Section~\ref{sec:riesz} proves the Riesz Representation Theorem.
-Section~\ref{sec:fundamental} presents the four fundamental theorems of
-functional analysis with complete proofs.
-Section~\ref{sec:fixed-point} proves the Banach, Brouwer, Schauder, and
-Kakutani fixed point theorems.
+Section~\ref{sec:inner_product} defines inner product spaces and establishes
+their fundamental properties.
+Section~\ref{sec:cauchy_schwarz} proves the Cauchy--Schwarz inequality with
+a complete proof.
+Section~\ref{sec:parallelogram} develops the parallelogram law and
+polarization identity.
+Section~\ref{sec:hilbert} introduces Hilbert spaces and key examples.
+Section~\ref{sec:orthogonality} develops orthogonality and orthogonal
+complements.
 Section~\ref{sec:exercises} provides exercises.
-Section~\ref{sec:summary} summarizes the key results.
 
-
-%% ============================================================================
+%% ============================================================
 %% SECTION 2: INNER PRODUCT SPACES
-%% ============================================================================
+%% ============================================================
 
-\section{Inner Product Spaces}\label{sec:inner-product}
+\section{Inner Product Spaces}
+\label{sec:inner_product}
 
-\begin{definition}[Inner Product Space]\label{def:inner-product}
+\begin{definition}[Inner Product]
+\label{def:inner_product}
 Let $X$ be a vector space over $\mathbb{F} \in \{\R, \C\}$. An
 \emph{inner product} on $X$ is a map
 $\langle \cdot, \cdot \rangle \colon X \times X \to \mathbb{F}$ satisfying,
-for all $x, y, z \in X$ and $\alpha \in \mathbb{F}$:
-\begin{enumerate}[label=(\roman*)]
+for all $x, y, z \in X$ and all $\alpha, \beta \in \mathbb{F}$:
+\begin{enumerate}[label=(IP\arabic*),nosep]
     \item \textbf{Linearity in the first argument:}
-          $\langle \alpha x + y, z \rangle = \alpha \langle x, z \rangle
-          + \langle y, z \rangle$.
+          $\langle \alpha x + \beta y, z \rangle
+          = \alpha \langle x, z \rangle + \beta \langle y, z \rangle$.
     \item \textbf{Conjugate symmetry:}
           $\langle x, y \rangle = \overline{\langle y, x \rangle}$.
     \item \textbf{Positive definiteness:}
-          $\langle x, x \rangle \geq 0$, with equality if and only if $x = 0$.
+          $\langle x, x \rangle \ge 0$, with equality if and only if $x = 0$.
 \end{enumerate}
 A vector space equipped with an inner product is called an
 \emph{inner product space} (or \emph{pre-Hilbert space}).
+See~\cite{kreyszig1989} for an extensive treatment.
 \end{definition}
 
-\begin{remark}\label{rem:convention}
-We adopt the convention that the inner product is linear in the first argument
-and conjugate-linear in the second. Some texts use the opposite convention.
-In the real case, conjugate symmetry reduces to symmetry:
-$\langle x, y \rangle = \langle y, x \rangle$.
+\begin{remark}[Consequences of the Axioms]
+\label{rem:ip_consequences}
+From (IP1) and (IP2) we derive conjugate-linearity in the second argument:
+\[
+\langle x, \alpha y + \beta z \rangle
+= \overline{\langle \alpha y + \beta z, x \rangle}
+= \overline{\alpha \langle y, x \rangle + \beta \langle z, x \rangle}
+= \bar{\alpha} \langle x, y \rangle + \bar{\beta} \langle x, z \rangle.
+\]
+In the real case ($\mathbb{F} = \R$), conjugate symmetry reduces to
+symmetry $\langle x, y \rangle = \langle y, x \rangle$, and the inner
+product is bilinear.
 \end{remark}
 
-\begin{example}[Standard Inner Product Spaces]\label{ex:standard-ip}
-\begin{enumerate}[label=(\alph*)]
-    \item \textbf{Euclidean space $\R^n$:}
-          $\langle x, y \rangle = \sum_{i=1}^n x_i y_i$.
-    \item \textbf{Sequence space $\ell^2$:}
-          $\langle x, y \rangle = \sum_{i=1}^\infty x_i \overline{y_i}$
-          for $x = (x_i), y = (y_i) \in \ell^2$.
-    \item \textbf{Function space $L^2(\mu)$:}
-          $\langle f, g \rangle = \int f \,\overline{g}\, d\mu$
-          for $f, g \in L^2(\mu)$.
-    \item \textbf{Matrix space $\R^{m \times n}$:}
-          $\langle A, B \rangle = \mathrm{tr}(B^\top A)$, the Frobenius
-          inner product.
-\end{enumerate}
+\begin{remark}[Convention]
+\label{rem:convention}
+We adopt the convention that the inner product is linear in the first
+argument and conjugate-linear in the second (the ``physics convention'').
+Some texts, particularly in physics, use the opposite convention. The choice
+does not affect the theory; one must simply be consistent.
+\end{remark}
+
+\begin{definition}[Induced Norm]
+\label{def:induced_norm}
+Given an inner product space $(X, \langle \cdot, \cdot \rangle)$, the
+\emph{induced norm} is defined by
+\[
+\|x\| = \langle x, x \rangle^{1/2}.
+\]
+We verify below (after proving Cauchy--Schwarz) that this is indeed a norm.
+\end{definition}
+
+\subsection{Standard Examples}
+
+\begin{example}[Euclidean Space $\R^n$]
+\label{ex:Rn}
+The standard inner product on $\R^n$ is
+\[
+\langle x, y \rangle = \sum_{i=1}^n x_i y_i
+= x^\top y.
+\]
+The induced norm is the Euclidean norm
+$\|x\| = \bigl(\sum_{i=1}^n x_i^2\bigr)^{1/2}$.
+Verification of (IP1)--(IP3) is immediate.
 \end{example}
 
-\subsection{The Cauchy--Schwarz Inequality}
-
-The single most important inequality in all of analysis.
-
-\begin{theorem}[Cauchy--Schwarz Inequality]\label{thm:cauchy-schwarz}
-Let $X$ be an inner product space. For all $x, y \in X$,
+\begin{example}[Weighted Inner Product on $\R^n$]
+\label{ex:weighted_Rn}
+Let $D = \operatorname{diag}(d_1, \ldots, d_n)$ with all $d_i > 0$. Then
 \[
-    |\langle x, y \rangle| \leq \|x\| \cdot \|y\|,
+\langle x, y \rangle_D = x^\top D\, y = \sum_{i=1}^n d_i\, x_i\, y_i
+\]
+is an inner product on $\R^n$. The induced norm is
+$\|x\|_D = \bigl(\sum_{i=1}^n d_i\, x_i^2\bigr)^{1/2}$.
+\end{example}
+
+\begin{rlconnection}[title={Weighted Inner Products in RL}]
+In temporal-difference learning with linear function approximation, the
+projection $\Pi_\mu$ onto the feature subspace uses the weighted inner
+product $\langle f, g \rangle_\mu = \sum_{s \in \mathcal{S}} \mu(s)\,
+f(s)\, g(s)$, where $\mu$ is the stationary distribution of the policy.
+This is precisely the inner product of Example~\ref{ex:weighted_Rn} with
+$d_s = \mu(s)$.
+\end{rlconnection}
+
+\begin{example}[The Sequence Space $\ell^2$]
+\label{ex:ell2}
+The space $\ell^2$ consists of all sequences $x = (x_1, x_2, \ldots)$ of
+real (or complex) numbers with $\sum_{i=1}^\infty |x_i|^2 < \infty$. The
+inner product is
+\[
+\langle x, y \rangle = \sum_{i=1}^\infty x_i \overline{y_i}.
+\]
+\emph{Well-definedness:} By the Cauchy--Schwarz inequality for finite sums
+(applied to the partial sums and then taking limits), the series converges
+absolutely:
+$\sum_{i=1}^\infty |x_i \overline{y_i}|
+= \sum_{i=1}^\infty |x_i| |y_i|
+\le \bigl(\sum |x_i|^2\bigr)^{1/2} \bigl(\sum |y_i|^2\bigr)^{1/2}
+< \infty$.
+The induced norm is $\|x\| = \bigl(\sum_{i=1}^\infty |x_i|^2\bigr)^{1/2}$.
+\end{example}
+
+\begin{example}[The Function Space $L^2(\mu)$]
+\label{ex:L2}
+Let $(\Omega, \mathcal{A}, \mu)$ be a measure space. The space
+$L^2(\mu)$ consists of (equivalence classes of) measurable functions
+$f \colon \Omega \to \mathbb{F}$ with $\int |f|^2\, d\mu < \infty$. The
+inner product is
+\[
+\langle f, g \rangle = \int_\Omega f\, \overline{g}\, d\mu.
+\]
+The induced norm is $\|f\|_2 = \bigl(\int |f|^2\, d\mu\bigr)^{1/2}$.
+\end{example}
+
+\begin{example}[Matrix Inner Product (Frobenius)]
+\label{ex:frobenius}
+On $\R^{m \times n}$, the Frobenius inner product is
+\[
+\langle A, B \rangle_F = \tr(B^\top A) = \sum_{i=1}^m \sum_{j=1}^n A_{ij} B_{ij}.
+\]
+The induced norm is the Frobenius norm
+$\|A\|_F = \bigl(\sum_{i,j} A_{ij}^2\bigr)^{1/2}$.
+\end{example}
+
+\begin{warning}[title={Not Every Norm Comes from an Inner Product}]
+The spaces $\ell^p$ and $L^p$ for $p \ne 2$ are normed spaces but \emph{not}
+inner product spaces. We will see (Theorem~\ref{thm:parallelogram}) that a
+norm arises from an inner product if and only if it satisfies the
+parallelogram law, which fails for $p \ne 2$.
+\end{warning}
+
+%% ============================================================
+%% SECTION 3: THE CAUCHY--SCHWARZ INEQUALITY
+%% ============================================================
+
+\section{The Cauchy--Schwarz Inequality}
+\label{sec:cauchy_schwarz}
+
+The Cauchy--Schwarz inequality is arguably the single most important
+inequality in analysis. It appears in every branch of mathematics and its
+applications to ML are ubiquitous: from bounding inner products in gradient
+computations to establishing the well-definedness of cosine similarity.
+
+\begin{theorem}[Cauchy--Schwarz Inequality]
+\label{thm:cauchy_schwarz}
+Let $(X, \langle \cdot, \cdot \rangle)$ be an inner product space over
+$\mathbb{F} \in \{\R, \C\}$. For all $x, y \in X$,
+\[
+|\langle x, y \rangle| \le \|x\| \cdot \|y\|,
 \]
 where $\|x\| = \langle x, x \rangle^{1/2}$. Equality holds if and only if
-$x$ and $y$ are linearly dependent.
+$x$ and $y$ are linearly dependent (i.e., one is a scalar multiple of the
+other, or one of them is zero).
 \end{theorem}
 
 \begin{proof}
-If $y = 0$, both sides are zero and the inequality holds trivially.
-Assume $y \neq 0$. For any $\alpha \in \mathbb{F}$,
-\[
-    0 \leq \langle x - \alpha y, x - \alpha y \rangle
-    = \|x\|^2 - \alpha \langle y, x \rangle
-      - \overline{\alpha} \langle x, y \rangle
-      + |\alpha|^2 \|y\|^2.
-\]
-Choose $\alpha = \langle x, y \rangle / \|y\|^2$. Then
-$\overline{\alpha} = \overline{\langle x, y \rangle} / \|y\|^2
-= \langle y, x \rangle / \|y\|^2$, and
-\begin{align*}
-    0 &\leq \|x\|^2
-        - \frac{\langle x, y \rangle}{\|y\|^2} \langle y, x \rangle
-        - \frac{\langle y, x \rangle}{\|y\|^2} \langle x, y \rangle
-        + \frac{|\langle x, y \rangle|^2}{\|y\|^4} \|y\|^2 \\
-      &= \|x\|^2
-        - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
-        - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
-        + \frac{|\langle x, y \rangle|^2}{\|y\|^2} \\
-      &= \|x\|^2 - \frac{|\langle x, y \rangle|^2}{\|y\|^2}.
-\end{align*}
-Rearranging gives $|\langle x, y \rangle|^2 \leq \|x\|^2 \|y\|^2$, and
-taking square roots yields the result.
+If $y = 0$, both sides are zero and the inequality holds trivially (and
+equality holds with $x = x \cdot 0 + 0 \cdot y$ trivially dependent when
+one vector is zero).
 
-For the equality condition: if $x = \beta y$ for some $\beta \in \mathbb{F}$,
-then $|\langle x, y \rangle| = |\beta| \|y\|^2 = \|x\| \|y\|$.
-Conversely, equality in the above derivation means
-$\langle x - \alpha y, x - \alpha y \rangle = 0$, hence $x = \alpha y$.
+Assume $y \ne 0$. For any scalar $\alpha \in \mathbb{F}$, positive
+definiteness gives
+\begin{equation}
+\label{eq:cs_key}
+0 \le \langle x - \alpha y, x - \alpha y \rangle
+= \|x\|^2 - \alpha \langle y, x \rangle
+  - \bar{\alpha} \langle x, y \rangle
+  + |\alpha|^2 \|y\|^2.
+\end{equation}
+We choose $\alpha$ to minimize the right-hand side. The optimal choice is
+\begin{equation}
+\label{eq:cs_alpha}
+\alpha = \frac{\langle x, y \rangle}{\|y\|^2}.
+\end{equation}
+Then $\bar{\alpha} = \overline{\langle x, y \rangle} / \|y\|^2
+= \langle y, x \rangle / \|y\|^2$ (by conjugate symmetry), and
+$|\alpha|^2 = |\langle x, y \rangle|^2 / \|y\|^4$. Substituting into
+\eqref{eq:cs_key}:
+\begin{align*}
+0 &\le \|x\|^2
+    - \frac{\langle x, y \rangle}{\|y\|^2} \langle y, x \rangle
+    - \frac{\langle y, x \rangle}{\|y\|^2} \langle x, y \rangle
+    + \frac{|\langle x, y \rangle|^2}{\|y\|^4} \|y\|^2 \\
+  &= \|x\|^2
+    - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
+    - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
+    + \frac{|\langle x, y \rangle|^2}{\|y\|^2} \\
+  &= \|x\|^2 - \frac{|\langle x, y \rangle|^2}{\|y\|^2}.
+\end{align*}
+Rearranging gives $|\langle x, y \rangle|^2 \le \|x\|^2 \|y\|^2$. Taking
+square roots yields
+\[
+|\langle x, y \rangle| \le \|x\| \cdot \|y\|.
+\]
+
+\emph{Equality condition.} If $x$ and $y$ are linearly dependent, say
+$x = \beta y$, then
+$|\langle x, y \rangle| = |\beta| \|y\|^2 = \|x\| \|y\|$.
+
+Conversely, if equality holds and $y \ne 0$, then
+$\langle x - \alpha y, x - \alpha y \rangle = 0$ with $\alpha$ as in
+\eqref{eq:cs_alpha}. By positive definiteness, $x - \alpha y = 0$, i.e.,
+$x = \alpha y$.
 \end{proof}
 
-\begin{corollary}[Triangle Inequality]\label{cor:triangle}
-$\|x + y\| \leq \|x\| + \|y\|$ for all $x, y \in X$.
+\begin{keyresult}[title={The Cauchy--Schwarz Inequality}]
+For all $x, y$ in an inner product space:
+$|\langle x, y \rangle| \le \|x\| \cdot \|y\|$, with equality if and only
+if $x$ and $y$ are linearly dependent. This single inequality implies:
+\begin{itemize}[nosep]
+    \item the triangle inequality for the induced norm,
+    \item the well-definedness of cosine similarity,
+    \item the identification of the gradient direction as steepest ascent.
+\end{itemize}
+\end{keyresult}
+
+\begin{corollary}[Triangle Inequality for the Induced Norm]
+\label{cor:triangle}
+For all $x, y$ in an inner product space,
+$\|x + y\| \le \|x\| + \|y\|$.
 \end{corollary}
 
 \begin{proof}
-$\|x + y\|^2 = \|x\|^2 + 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2
-\leq \|x\|^2 + 2\|x\|\|y\| + \|y\|^2 = (\|x\| + \|y\|)^2$.
-\end{proof}
-
-Thus $\|x\| = \langle x, x \rangle^{1/2}$ defines a norm on $X$: the
-\emph{induced norm}. Every inner product space is a normed space.
-
-\begin{theorem}[Parallelogram Law]\label{thm:parallelogram}
-In an inner product space,
-\[
-    \|x + y\|^2 + \|x - y\|^2 = 2(\|x\|^2 + \|y\|^2)
-    \quad \text{for all } x, y \in X.
-\]
-\end{theorem}
-
-\begin{proof}
-Expand both sides:
+We compute:
 \begin{align*}
-    \|x + y\|^2 &= \|x\|^2 + 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2, \\
-    \|x - y\|^2 &= \|x\|^2 - 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2.
+\|x + y\|^2
+&= \langle x + y, x + y \rangle \\
+&= \|x\|^2 + \langle x, y \rangle + \langle y, x \rangle + \|y\|^2 \\
+&= \|x\|^2 + 2\operatorname{Re}\langle x, y \rangle + \|y\|^2 \\
+&\le \|x\|^2 + 2|\langle x, y \rangle| + \|y\|^2 \\
+&\le \|x\|^2 + 2\|x\|\|y\| + \|y\|^2 \quad \text{(Cauchy--Schwarz)} \\
+&= (\|x\| + \|y\|)^2.
 \end{align*}
-Adding these gives the result.
+Taking square roots gives the result.
 \end{proof}
 
-\begin{remark}\label{rem:parallelogram-converse}
-The converse holds: a norm satisfying the parallelogram law arises from an inner
-product (recovered via the polarization identity). This means, for example,
-that $\ell^p$ for $p \neq 2$ is \emph{not} an inner product space.
+\begin{remark}
+\label{rem:norm_verification}
+The induced norm $\|x\| = \langle x, x \rangle^{1/2}$ is indeed a norm:
+\begin{itemize}[nosep]
+    \item \emph{Positive definiteness:} $\|x\| = 0$ iff
+          $\langle x, x \rangle = 0$ iff $x = 0$ (by IP3).
+    \item \emph{Homogeneity:}
+          $\|\alpha x\| = \langle \alpha x, \alpha x \rangle^{1/2}
+          = (|\alpha|^2 \|x\|^2)^{1/2} = |\alpha| \|x\|$.
+    \item \emph{Triangle inequality:} Corollary~\ref{cor:triangle}.
+\end{itemize}
+Thus every inner product space is automatically a normed space (and hence a
+metric space with $d(x,y) = \|x - y\|$).
 \end{remark}
 
-\begin{proposition}[Polarization Identity]\label{prop:polarization}
-In a real inner product space,
+%% ============================================================
+%% SECTION 4: PARALLELOGRAM LAW AND POLARIZATION IDENTITY
+%% ============================================================
+
+\section{Parallelogram Law and Polarization Identity}
+\label{sec:parallelogram}
+
+The parallelogram law characterizes precisely which norms come from inner
+products. The polarization identity provides the formula for recovering the
+inner product from the norm.
+
+\begin{theorem}[Parallelogram Law]
+\label{thm:parallelogram}
+In any inner product space,
 \[
-    \langle x, y \rangle
-    = \frac{1}{4}\bigl(\|x+y\|^2 - \|x-y\|^2\bigr).
-\]
-In a complex inner product space,
-\[
-    \langle x, y \rangle
-    = \frac{1}{4}\sum_{k=0}^{3} i^k \|x + i^k y\|^2.
-\]
-\end{proposition}
-
-\begin{proof}
-For the real case, expand $\|x+y\|^2 - \|x-y\|^2 = 4\,\langle x, y \rangle$
-using the same computation as in the parallelogram law proof.
-
-For the complex case, let $\omega = i$ and compute:
-\begin{align*}
-    \sum_{k=0}^{3} i^k \|x + i^k y\|^2
-    &= \sum_{k=0}^{3} i^k \bigl(\|x\|^2 + i^k \langle y, x \rangle
-       + \overline{i^k} \langle x, y \rangle + \|y\|^2\bigr).
-\end{align*}
-Since $\sum_{k=0}^{3} i^k = 0$ and $\sum_{k=0}^{3} i^{2k} = 0$,
-the $\|x\|^2$ and $\|y\|^2$ terms vanish. We have
-$\sum_{k=0}^{3} i^k \cdot \overline{i^k} = \sum_{k=0}^{3} |i^k|^2 = 4$
-and $\sum_{k=0}^{3} i^k \cdot i^k = \sum_{k=0}^{3} i^{2k} = 0$.
-Therefore the sum equals $4\,\langle x, y \rangle$.
-\end{proof}
-
-\begin{proposition}[Continuity of the Inner Product]\label{prop:ip-continuity}
-The inner product is jointly continuous: if $x_n \to x$ and $y_n \to y$ in an
-inner product space, then $\langle x_n, y_n \rangle \to \langle x, y \rangle$.
-\end{proposition}
-
-\begin{proof}
-$|\langle x_n, y_n \rangle - \langle x, y \rangle|
-\leq |\langle x_n - x, y_n \rangle| + |\langle x, y_n - y \rangle|
-\leq \|x_n - x\| \|y_n\| + \|x\| \|y_n - y\|$.
-Since convergent sequences are bounded, $\|y_n\| \leq M$ for some $M$,
-so the right side tends to zero.
-\end{proof}
-
-
-%% ============================================================================
-%% SECTION 3: HILBERT SPACES
-%% ============================================================================
-
-\section{Hilbert Spaces}\label{sec:hilbert}
-
-\begin{definition}[Hilbert Space]\label{def:hilbert-space}
-A \emph{Hilbert space} is an inner product space that is complete with respect
-to the norm induced by its inner product. That is, every Cauchy sequence
-converges in the norm $\|x\| = \langle x, x \rangle^{1/2}$.
-\end{definition}
-
-\begin{example}[Standard Hilbert Spaces]\label{ex:hilbert-spaces}
-\begin{enumerate}[label=(\alph*)]
-    \item $\R^n$ with the Euclidean inner product is a Hilbert space (finite-dimensional
-          normed spaces are always complete).
-    \item $\ell^2 = \{(x_i)_{i=1}^\infty : \sum |x_i|^2 < \infty\}$ is a Hilbert space.
-    \item $L^2(\mu) = \{f : \int |f|^2 \, d\mu < \infty\} / {\sim}$ (equivalence
-          classes modulo a.e.\ equality) is a Hilbert space by the Riesz--Fischer theorem.
-\end{enumerate}
-\end{example}
-
-\begin{warning}[Non-Example]
-The space $C[0,1]$ with the $L^2$ inner product
-$\langle f, g \rangle = \int_0^1 f(t)g(t)\, dt$ is an inner product space
-but \emph{not} a Hilbert space: one can construct Cauchy sequences of
-continuous functions whose limit in $L^2$ is not continuous.
-\end{warning}
-
-\subsection{Orthogonality}
-
-\begin{definition}[Orthogonality]\label{def:orthogonality}
-Two elements $x, y$ in an inner product space are \emph{orthogonal}, written
-$x \perp y$, if $\langle x, y \rangle = 0$. A set $S \subset X$ is
-\emph{orthogonal} if any two distinct elements of $S$ are orthogonal.
-\end{definition}
-
-\begin{theorem}[Pythagorean Theorem]\label{thm:pythagorean}
-If $x_1, \ldots, x_n$ are pairwise orthogonal, then
-\[
-    \Bigl\|\sum_{k=1}^n x_k\Bigr\|^2 = \sum_{k=1}^n \|x_k\|^2.
+\|x + y\|^2 + \|x - y\|^2 = 2(\|x\|^2 + \|y\|^2)
+\quad \text{for all } x, y \in X.
 \]
 \end{theorem}
 
 \begin{proof}
-$\bigl\|\sum_k x_k\bigr\|^2 = \sum_k \sum_j \langle x_k, x_j \rangle
-= \sum_k \langle x_k, x_k \rangle = \sum_k \|x_k\|^2$,
-since $\langle x_k, x_j \rangle = 0$ for $k \neq j$.
+We expand each term using the inner product:
+\begin{align*}
+\|x + y\|^2 &= \langle x + y, x + y \rangle
+= \|x\|^2 + \langle x, y \rangle + \langle y, x \rangle + \|y\|^2
+= \|x\|^2 + 2\operatorname{Re}\langle x, y \rangle + \|y\|^2, \\
+\|x - y\|^2 &= \langle x - y, x - y \rangle
+= \|x\|^2 - \langle x, y \rangle - \langle y, x \rangle + \|y\|^2
+= \|x\|^2 - 2\operatorname{Re}\langle x, y \rangle + \|y\|^2.
+\end{align*}
+Adding these two equations:
+\[
+\|x + y\|^2 + \|x - y\|^2 = 2\|x\|^2 + 2\|y\|^2. \qedhere
+\]
 \end{proof}
 
-\begin{definition}[Orthogonal Complement]\label{def:orthogonal-complement}
-For a subset $S \subset X$, the \emph{orthogonal complement} of $S$ is
+\begin{remark}[Geometric Interpretation]
+\label{rem:parallelogram_geom}
+The parallelogram law states that the sum of the squares of the diagonals of
+a parallelogram equals the sum of the squares of its four sides. This is the
+defining geometric property of inner product spaces.
+\end{remark}
+
+\begin{theorem}[Jordan--von Neumann Theorem (Converse)]
+\label{thm:jordan_vonneumann}
+If a normed space $(X, \|\cdot\|)$ satisfies the parallelogram law, then
+the norm is induced by an inner product, which is recovered by the
+polarization identity.
+\end{theorem}
+
+The proof of this theorem is somewhat technical (one must verify all the
+inner product axioms for the candidate recovered by polarization) and is
+omitted. We state and prove the polarization identity itself.
+
+\begin{proposition}[Polarization Identity]
+\label{prop:polarization}
+In a real inner product space,
+\begin{equation}
+\label{eq:polar_real}
+\langle x, y \rangle
+= \frac{1}{4}\bigl(\|x + y\|^2 - \|x - y\|^2\bigr).
+\end{equation}
+In a complex inner product space,
+\begin{equation}
+\label{eq:polar_complex}
+\langle x, y \rangle
+= \frac{1}{4}\sum_{k=0}^{3} i^k \|x + i^k y\|^2.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+\emph{Real case.} Using the expansion from the parallelogram law proof:
 \[
-    S^\perp = \{x \in X : \langle x, s \rangle = 0 \text{ for all } s \in S\}.
+\|x + y\|^2 - \|x - y\|^2
+= (\|x\|^2 + 2\langle x, y \rangle + \|y\|^2)
+- (\|x\|^2 - 2\langle x, y \rangle + \|y\|^2)
+= 4\langle x, y \rangle.
+\]
+Dividing by 4 gives \eqref{eq:polar_real}.
+
+\emph{Complex case.} Compute $\sum_{k=0}^3 i^k \|x + i^k y\|^2$. For each
+$k$:
+\[
+\|x + i^k y\|^2 = \|x\|^2 + i^k \langle y, x \rangle
++ \overline{i^k} \langle x, y \rangle + |i^k|^2 \|y\|^2.
+\]
+Since $|i^k| = 1$ and $\overline{i^k} = i^{-k} = (-i)^k$, we have
+$\overline{i^k} = \overline{i}^k = (-i)^k$. Multiplying by $i^k$ and
+summing:
+\begin{align*}
+\sum_{k=0}^3 i^k \|x + i^k y\|^2
+&= \Bigl(\sum_{k=0}^3 i^k\Bigr) \|x\|^2
+ + \Bigl(\sum_{k=0}^3 i^{2k}\Bigr) \langle y, x \rangle
+ + \Bigl(\sum_{k=0}^3 i^k (-i)^k\Bigr) \langle x, y \rangle
+ + \Bigl(\sum_{k=0}^3 i^k\Bigr) \|y\|^2.
+\end{align*}
+Now $\sum_{k=0}^3 i^k = 1 + i + i^2 + i^3 = 1 + i - 1 - i = 0$ and
+$\sum_{k=0}^3 i^{2k} = 1 + i^2 + i^4 + i^6 = 1 - 1 + 1 - 1 = 0$.
+Also, $i^k(-i)^k = (i \cdot (-i))^k = 1^k = 1$, so
+$\sum_{k=0}^3 i^k(-i)^k = 4$. Therefore the entire sum equals
+$4\langle x, y \rangle$.
+\end{proof}
+
+\begin{rlconnection}[title={Polarization in Optimization}]
+The polarization identity shows that the inner product---and hence angles and
+orthogonality---can be recovered purely from norm computations. In practice,
+this means that if we can evaluate $\|v + w\|$ and $\|v - w\|$ for value
+function approximations, we can compute their inner product without direct
+access to the integral $\langle v, w \rangle = \int v\, w\, d\mu$.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: HILBERT SPACES
+%% ============================================================
+
+\section{Hilbert Spaces}
+\label{sec:hilbert}
+
+\begin{definition}[Hilbert Space]
+\label{def:hilbert_space}
+A \emph{Hilbert space} is an inner product space that is complete with
+respect to the norm induced by its inner product. Equivalently, a Hilbert
+space is a Banach space whose norm satisfies the parallelogram law.
+\end{definition}
+
+\begin{proposition}[Continuity of the Inner Product]
+\label{prop:ip_continuity}
+The inner product is jointly continuous: if $x_n \to x$ and $y_n \to y$ in
+an inner product space, then $\langle x_n, y_n \rangle \to \langle x, y
+\rangle$.
+\end{proposition}
+
+\begin{proof}
+We estimate:
+\begin{align*}
+|\langle x_n, y_n \rangle - \langle x, y \rangle|
+&= |\langle x_n, y_n \rangle - \langle x, y_n \rangle
+   + \langle x, y_n \rangle - \langle x, y \rangle| \\
+&\le |\langle x_n - x, y_n \rangle| + |\langle x, y_n - y \rangle| \\
+&\le \|x_n - x\| \cdot \|y_n\| + \|x\| \cdot \|y_n - y\|
+\quad \text{(Cauchy--Schwarz)}.
+\end{align*}
+Since $y_n \to y$, the sequence $(\|y_n\|)$ is bounded, say
+$\|y_n\| \le M$ for all $n$. Then
+\[
+|\langle x_n, y_n \rangle - \langle x, y \rangle|
+\le M \|x_n - x\| + \|x\| \|y_n - y\| \to 0. \qedhere
+\]
+\end{proof}
+
+\begin{remark}
+\label{rem:ip_separate_cts}
+In fact, each ``slot'' of the inner product is separately continuous (and
+linear/conjugate-linear), and by Cauchy--Schwarz, each evaluation
+$x \mapsto \langle x, y \rangle$ is a bounded linear functional with
+$\|\langle \cdot, y \rangle\| = \|y\|$. This observation leads to the Riesz
+Representation Theorem (Lesson 20).
+\end{remark}
+
+\subsection{Standard Hilbert Spaces}
+
+\begin{example}[Finite-Dimensional: $\R^n$ and $\C^n$]
+\label{ex:Rn_hilbert}
+$\R^n$ with the Euclidean inner product is a Hilbert space. More generally,
+$\R^n$ with any weighted inner product $\langle x, y \rangle_D = x^\top D\, y$
+(with $D$ positive definite) is a Hilbert space, since all norms on $\R^n$
+are equivalent and $\R^n$ is complete.
+\end{example}
+
+\begin{example}[The Sequence Space $\ell^2$]
+\label{ex:ell2_hilbert}
+The space $\ell^2$ with the inner product $\langle x, y \rangle =
+\sum_{i=1}^\infty x_i \bar{y}_i$ is a Hilbert space. Completeness: if
+$(x^{(n)})$ is Cauchy in $\ell^2$, then for each fixed $i$, the coordinate
+sequence $(x_i^{(n)})_{n \ge 1}$ is Cauchy in $\mathbb{F}$ (since
+$|x_i^{(n)} - x_i^{(m)}| \le \|x^{(n)} - x^{(m)}\|$), hence convergent to
+some $x_i^*$. One then verifies that $x^* = (x_i^*)_{i \ge 1} \in \ell^2$
+and $\|x^{(n)} - x^*\| \to 0$.
+\end{example}
+
+\begin{example}[The Function Space $L^2(\mu)$]
+\label{ex:L2_hilbert}
+For any $\sigma$-finite measure space $(\Omega, \mathcal{A}, \mu)$, the
+space $L^2(\mu)$ with the inner product
+$\langle f, g \rangle = \int f\, \bar{g}\, d\mu$ is a Hilbert space.
+Completeness is the content of the Riesz--Fischer theorem: every Cauchy
+sequence in $L^2(\mu)$ converges in $L^2(\mu)$
+(see~\cite{brezis2011} for details).
+\end{example}
+
+\begin{keyresult}[title={The Three Fundamental Hilbert Spaces}]
+The three most important Hilbert spaces for RL/ML are:
+\begin{enumerate}[nosep]
+    \item $\R^n$ (finite-state value functions, parameter spaces),
+    \item $\ell^2$ (countable-state value functions, neural network weight
+          spaces with $\ell^2$ regularization),
+    \item $L^2(\mu)$ (continuous-state value functions, policy gradients
+          with respect to a measure $\mu$).
+\end{enumerate}
+Every separable Hilbert space is isometrically isomorphic to $\ell^2$ (or
+to $\R^n$ if finite-dimensional)~\cite{conway1990}. This remarkable fact
+means that, up to isomorphism, there is essentially one
+infinite-dimensional separable Hilbert space.
+\end{keyresult}
+
+\begin{warning}[{title={$C[0,1]$ with the $L^2$ Inner Product is Not a Hilbert Space}}]
+The space $C[0,1]$ with the inner product
+$\langle f, g \rangle = \int_0^1 f(t)\, g(t)\, dt$ is an inner product space
+but \emph{not} a Hilbert space. One can construct a Cauchy sequence of
+continuous functions whose $L^2$ limit is a discontinuous function (for
+instance, approximate the indicator function $\indicator_{[0,1/2]}$ by
+continuous functions). The completion of this space is $L^2([0,1])$.
+\end{warning}
+
+%% ============================================================
+%% SECTION 6: ORTHOGONALITY AND ORTHOGONAL COMPLEMENTS
+%% ============================================================
+
+\section{Orthogonality and Orthogonal Complements}
+\label{sec:orthogonality}
+
+Orthogonality is the geometric heart of Hilbert space theory. It enables
+decompositions, projections, and the entire theory of least-squares
+approximation.
+
+\begin{definition}[Orthogonality]
+\label{def:orthogonality}
+Two elements $x, y$ in an inner product space are \emph{orthogonal}, written
+$x \perp y$, if $\langle x, y \rangle = 0$. A subset $S \subseteq X$ is an
+\emph{orthogonal set} if any two distinct elements of $S$ are orthogonal.
+An orthogonal set in which every element has norm $1$ is an
+\emph{orthonormal set}.
+\end{definition}
+
+\begin{theorem}[Pythagorean Theorem]
+\label{thm:pythagorean}
+If $x_1, \ldots, x_n$ are pairwise orthogonal elements of an inner product
+space, then
+\[
+\Bigl\|\sum_{k=1}^n x_k\Bigr\|^2 = \sum_{k=1}^n \|x_k\|^2.
+\]
+\end{theorem}
+
+\begin{proof}
+Expand the left-hand side using the inner product:
+\begin{align*}
+\Bigl\|\sum_{k=1}^n x_k\Bigr\|^2
+&= \Bigl\langle \sum_{k=1}^n x_k, \sum_{j=1}^n x_j \Bigr\rangle
+= \sum_{k=1}^n \sum_{j=1}^n \langle x_k, x_j \rangle.
+\end{align*}
+Since $\langle x_k, x_j \rangle = 0$ for $k \ne j$ (by orthogonality),
+only the diagonal terms survive:
+\[
+\sum_{k=1}^n \sum_{j=1}^n \langle x_k, x_j \rangle
+= \sum_{k=1}^n \langle x_k, x_k \rangle
+= \sum_{k=1}^n \|x_k\|^2. \qedhere
+\]
+\end{proof}
+
+\begin{remark}[Infinite Pythagorean Theorem]
+\label{rem:infinite_pythag}
+If $(x_k)_{k=1}^\infty$ is a sequence of pairwise orthogonal elements in a
+Hilbert space and $\sum_{k=1}^\infty \|x_k\|^2 < \infty$, then the series
+$\sum_{k=1}^\infty x_k$ converges (by completeness, since the partial sums
+form a Cauchy sequence by the Pythagorean theorem), and
+$\bigl\|\sum_{k=1}^\infty x_k\bigr\|^2 = \sum_{k=1}^\infty \|x_k\|^2$.
+\end{remark}
+
+\begin{definition}[Orthogonal Complement]
+\label{def:orth_complement}
+For a subset $S$ of an inner product space $X$, the \emph{orthogonal
+complement} of $S$ is
+\[
+S^\perp = \{x \in X : \langle x, s \rangle = 0 \text{ for all } s \in S\}.
 \]
 \end{definition}
 
-\begin{proposition}[Properties of Orthogonal Complements]\label{prop:orth-complement}
-Let $S, T$ be subsets of an inner product space $X$. Then:
-\begin{enumerate}[label=(\roman*)]
+\begin{proposition}[Properties of Orthogonal Complements]
+\label{prop:orth_complement}
+Let $S$ and $T$ be subsets of an inner product space $X$.
+\begin{enumerate}[label=(\roman*),nosep]
     \item $S^\perp$ is a closed subspace of $X$.
-    \item $S \subset T \implies T^\perp \subset S^\perp$.
-    \item $S \subset (S^\perp)^\perp$.
-    \item $S^\perp = (\overline{\spn(S)})^\perp$.
+    \item If $S \subseteq T$, then $T^\perp \subseteq S^\perp$.
+    \item $S \cap S^\perp \subseteq \{0\}$.
+    \item $S \subseteq (S^\perp)^\perp$.
+    \item $S^\perp = (\overline{\Span(S)})^\perp$.
 \end{enumerate}
 \end{proposition}
 
 \begin{proof}
-\begin{enumerate}[label=(\roman*)]
-    \item Linearity of the inner product in the first argument shows $S^\perp$
-          is a subspace. Continuity of the inner product
-          (Proposition~\ref{prop:ip-continuity}) shows it is closed:
-          if $x_n \in S^\perp$ and $x_n \to x$, then for every $s \in S$,
-          $\langle x, s \rangle = \lim_n \langle x_n, s \rangle = 0$.
-    \item If $x \in T^\perp$, then $\langle x, t \rangle = 0$ for all $t \in T
-          \supset S$, so $x \in S^\perp$.
-    \item If $s \in S$ and $x \in S^\perp$, then $\langle s, x \rangle = 0$,
-          so $s \in (S^\perp)^\perp$.
-    \item One inclusion: $S \subset \overline{\spn(S)}$ implies
-          $(\overline{\spn(S)})^\perp \subset S^\perp$.
-          Other inclusion: if $x \in S^\perp$, then $\langle x, s \rangle = 0$
-          for all $s \in S$. By linearity, $\langle x, y \rangle = 0$ for all
-          $y \in \spn(S)$. By continuity, $\langle x, y \rangle = 0$ for all
-          $y \in \overline{\spn(S)}$. \qedhere
-\end{enumerate}
+\textbf{(i)} \emph{Subspace:} For $x_1, x_2 \in S^\perp$ and scalars
+$\alpha, \beta$: $\langle \alpha x_1 + \beta x_2, s \rangle =
+\alpha \langle x_1, s \rangle + \beta \langle x_2, s \rangle = 0$ for
+all $s \in S$.
+
+\emph{Closed:} Let $(x_n)$ be a sequence in $S^\perp$ with $x_n \to x$.
+For any $s \in S$: $\langle x, s \rangle = \lim_{n \to \infty}
+\langle x_n, s \rangle = \lim_{n \to \infty} 0 = 0$ (by continuity of the
+inner product, Proposition~\ref{prop:ip_continuity}). So $x \in S^\perp$.
+
+\textbf{(ii)} If $x \in T^\perp$, then $\langle x, t \rangle = 0$ for all
+$t \in T$. Since $S \subseteq T$, this holds for all $s \in S$, so
+$x \in S^\perp$.
+
+\textbf{(iii)} If $x \in S \cap S^\perp$, then $\langle x, x \rangle = 0$
+(since $x \in S$ and $x \in S^\perp$), so $x = 0$ by positive definiteness.
+
+\textbf{(iv)} If $s \in S$ and $x \in S^\perp$, then
+$\langle s, x \rangle = \overline{\langle x, s \rangle} = 0$. Hence
+$s \in (S^\perp)^\perp$.
+
+\textbf{(v)} One inclusion: $S \subseteq \overline{\Span(S)}$ implies
+$(\overline{\Span(S)})^\perp \subseteq S^\perp$ by (ii).
+
+Other inclusion: Let $x \in S^\perp$. Then $\langle x, s \rangle = 0$ for
+all $s \in S$. By linearity, $\langle x, y \rangle = 0$ for all
+$y \in \Span(S)$. By continuity of the inner product, $\langle x, y \rangle
+= 0$ for all $y \in \overline{\Span(S)}$. Hence $x \in
+(\overline{\Span(S)})^\perp$.
 \end{proof}
 
+\begin{remark}
+\label{rem:double_perp}
+In a Hilbert space, we have the stronger result
+$(S^\perp)^\perp = \overline{\Span(S)}$. This is a consequence of the
+Projection Theorem (proved in Lesson 20), which states that every closed
+subspace $M$ of a Hilbert space satisfies $X = M \oplus M^\perp$. The
+inclusion $S \subseteq (S^\perp)^\perp$ from (iv) above may be strict in
+incomplete inner product spaces.
+\end{remark}
 
-%% ============================================================================
-%% SECTION 4: PROJECTION THEOREM
-%% ============================================================================
+\begin{proposition}[Orthogonal Elements are Linearly Independent]
+\label{prop:orth_indep}
+If $\{x_1, \ldots, x_n\}$ is an orthogonal set of non-zero vectors, then
+$x_1, \ldots, x_n$ are linearly independent.
+\end{proposition}
 
+\begin{proof}
+Suppose $\sum_{k=1}^n \alpha_k x_k = 0$. Taking the inner product with
+$x_j$ for any fixed $j$:
+\[
+0 = \Bigl\langle \sum_{k=1}^n \alpha_k x_k, x_j \Bigr\rangle
+= \sum_{k=1}^n \alpha_k \langle x_k, x_j \rangle
+= \alpha_j \|x_j\|^2.
+\]
+Since $x_j \ne 0$, we have $\|x_j\|^2 > 0$, so $\alpha_j = 0$. Since $j$
+was arbitrary, all coefficients are zero.
+\end{proof}
+
+\begin{example}[Orthogonal Complement in $\R^3$]
+\label{ex:orth_R3}
+Let $S = \{(1, 0, 0)\} \subseteq \R^3$. Then
+$S^\perp = \{(x_1, x_2, x_3) \in \R^3 : x_1 = 0\}$, which is the
+$x_2 x_3$-plane. This is a closed subspace of $\R^3$ with $\dim(S^\perp) =
+2$, and $\R^3 = \Span(S) \oplus S^\perp$.
+\end{example}
+
+\begin{example}[{Orthogonal Complement in $\ell^2$}]
+\label{ex:orth_ell2}
+Let $S = \{e_1\} \subseteq \ell^2$, where $e_1 = (1, 0, 0, \ldots)$. Then
+\[
+S^\perp = \{x \in \ell^2 : x_1 = 0\}
+= \{(0, x_2, x_3, \ldots) : \textstyle\sum_{i=2}^\infty |x_i|^2 < \infty\}.
+\]
+This is a closed subspace of $\ell^2$, and
+$\ell^2 = \Span\{e_1\} \oplus S^\perp$.
+\end{example}
+
+\begin{rlconnection}[title={Orthogonality in Value Function Approximation}]
+In LSTD with features $\phi_1, \ldots, \phi_d$, the value function
+approximation $\hat{V} = \Phi w$ is the element of
+$M = \Span\{\phi_1, \ldots, \phi_d\}$ closest to the Bellman target
+$TV^*$ in the $L^2(\mu)$ norm. The optimality condition is precisely
+orthogonality: the residual $TV^* - \hat{V}$ must lie in $M^\perp$,
+i.e., $\langle TV^* - \hat{V}, \phi_j \rangle_\mu = 0$ for all $j$.
+This is the normal equation of linear regression.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Verifying Inner Product Axioms]
+\label{ex:verify_ip}
+For each of the following, verify that the given map is an inner product:
+\begin{enumerate}[label=(\alph*),nosep]
+    \item $\langle x, y \rangle = x^\top A y$ on $\R^n$, where $A$ is a
+          symmetric positive definite matrix.
+    \item $\langle f, g \rangle = \int_0^1 f(t)\, g(t)\, w(t)\, dt$ on
+          $C[0,1]$, where $w \colon [0,1] \to (0,\infty)$ is continuous.
+    \item $\langle f, g \rangle = f(0) g(0) + \int_0^1 f'(t)\, g'(t)\, dt$
+          on $C^1[0,1]$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Cauchy--Schwarz in Specific Spaces]
+\label{ex:cs_specific}
+Write out the Cauchy--Schwarz inequality explicitly for:
+\begin{enumerate}[label=(\alph*),nosep]
+    \item $\R^n$ with the standard inner product.
+    \item $\ell^2$ with the standard inner product.
+    \item $L^2([a,b])$ with the standard inner product.
+\end{enumerate}
+In each case, state the equality condition.
+\end{exercise}
+
+\begin{exercise}[Parallelogram Law Fails for $p \ne 2$]
+\label{ex:parallelogram_fails}
+Show that the parallelogram law fails in $(\R^2, \|\cdot\|_p)$ for
+$p \ne 2$. Conclude that $\|\cdot\|_p$ does not arise from an inner product
+when $p \ne 2$.
+
+\noindent\textit{Hint:} Take $x = (1, 0)$ and $y = (0, 1)$ and compute
+both sides of the parallelogram law.
+\end{exercise}
+
+\begin{exercise}[The Polarization Identity Determines the Inner Product]
+\label{ex:polarization_unique}
+Let $\langle \cdot, \cdot \rangle_1$ and $\langle \cdot, \cdot \rangle_2$
+be two inner products on a vector space $X$ that induce the same norm:
+$\langle x, x \rangle_1 = \langle x, x \rangle_2$ for all $x$. Use the
+polarization identity to show that
+$\langle x, y \rangle_1 = \langle x, y \rangle_2$ for all $x, y$.
+\end{exercise}
+
+\begin{exercise}[Continuity of the Inner Product: Quantitative Bound]
+\label{ex:ip_quantitative}
+Show that for all $x, x', y, y'$ in an inner product space:
+\[
+|\langle x, y \rangle - \langle x', y' \rangle|
+\le \|x - x'\| \cdot \|y\| + \|x'\| \cdot \|y - y'\|.
+\]
+Conclude that the inner product is Lipschitz on bounded sets.
+\end{exercise}
+
+\begin{exercise}[Completeness of $\ell^2$]
+\label{ex:ell2_complete}
+Give a detailed proof that $\ell^2$ is complete (i.e., a Hilbert space):
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Let $(x^{(n)})$ be a Cauchy sequence in $\ell^2$. Show that for
+          each fixed $i$, the sequence $(x_i^{(n)})_{n \ge 1}$ is Cauchy in
+          $\R$ (or $\C$) and define $x_i^* = \lim_{n} x_i^{(n)}$.
+    \item Show that $x^* = (x_1^*, x_2^*, \ldots) \in \ell^2$.
+    \item Show that $\|x^{(n)} - x^*\|_{\ell^2} \to 0$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[{Orthogonal Complement of a Subspace of $\R^n$}]
+\label{ex:orth_comp_Rn}
+Let $M = \{x \in \R^4 : x_1 + x_2 = 0 \text{ and } x_3 - x_4 = 0\}$.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Find a basis for $M$.
+    \item Find a basis for $M^\perp$ (in the standard inner product).
+    \item Verify that $\R^4 = M \oplus M^\perp$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Pythagorean Theorem and Best Approximation]
+\label{ex:pythag_approx}
+Let $M$ be a subspace of an inner product space $X$, $x \in X$, and
+$m \in M$. Show that if $x - m \perp M$ (i.e., $\langle x - m, y \rangle =
+0$ for all $y \in M$), then $m$ is the unique closest point to $x$ in $M$:
+\[
+\|x - m\| < \|x - m'\| \quad \text{for all } m' \in M, \; m' \ne m.
+\]
+\textit{Hint:} Write $x - m' = (x - m) + (m - m')$ and use the Pythagorean
+theorem.
+\end{exercise}
+
+\begin{exercise}[Gram--Schmidt Orthogonalization]
+\label{ex:gram_schmidt}
+Let $x_1, x_2, x_3$ be linearly independent vectors in an inner product
+space.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Apply the Gram--Schmidt process: set $e_1 = x_1 / \|x_1\|$, then
+          $\tilde{e}_2 = x_2 - \langle x_2, e_1 \rangle e_1$, then
+          $e_2 = \tilde{e}_2 / \|\tilde{e}_2\|$, and similarly for $e_3$.
+          Show that $\{e_1, e_2, e_3\}$ is orthonormal and
+          $\Span\{e_1, \ldots, e_k\} = \Span\{x_1, \ldots, x_k\}$ for
+          each $k$.
+    \item Apply this to $x_1 = (1, 1, 0)$, $x_2 = (1, 0, 1)$,
+          $x_3 = (0, 1, 1)$ in $\R^3$ with the standard inner product.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[The Fisher Information Inner Product]
+\label{ex:fisher}
+Let $\pi_\theta(a | s)$ be a parameterized policy family with
+$\theta \in \R^d$. The Fisher information matrix is
+$F(\theta) = \E_{\pi_\theta}\bigl[\nabla \log \pi_\theta(a|s) \cdot
+\nabla \log \pi_\theta(a|s)^\top\bigr]$.
+\begin{enumerate}[label=(\alph*),nosep]
+    \item Show that $F(\theta)$ is symmetric and positive semi-definite.
+    \item Assuming $F(\theta)$ is positive definite, show that
+          $\langle u, v \rangle_F = u^\top F(\theta)\, v$ defines an inner
+          product on $\R^d$.
+    \item The \emph{natural gradient} is $\tilde{\nabla} J(\theta) =
+          F(\theta)^{-1} \nabla J(\theta)$. Show that $\tilde{\nabla}
+          J(\theta)$ is the steepest ascent direction of $J$ in the
+          Fisher metric, i.e., it solves
+          $\max_{\|v\|_F = 1} \langle \nabla J(\theta), v \rangle$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary of Key Results}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{4cm}p{5.8cm}p{4.5cm}@{}}
+\toprule
+\textbf{Result} & \textbf{Statement (Informal)} & \textbf{RL/ML Relevance} \\
+\midrule
+Inner product (Def.~\ref{def:inner_product})
+  & Bilinear form with positivity, symmetry, and definiteness
+  & Defines geometry on parameter and function spaces \\
+Cauchy--Schwarz (Thm.~\ref{thm:cauchy_schwarz})
+  & $|\langle x, y \rangle| \le \|x\| \cdot \|y\|$
+  & Gradient bounds, cosine similarity \\
+Triangle inequality (Cor.~\ref{cor:triangle})
+  & $\|x + y\| \le \|x\| + \|y\|$
+  & Norm is a valid distance measure \\
+Parallelogram law (Thm.~\ref{thm:parallelogram})
+  & Characterizes norms from inner products
+  & Identifies $L^2$ as the ``right'' space \\
+Polarization (Prop.~\ref{prop:polarization})
+  & Inner product recovered from norm
+  & Implicit inner product computation \\
+IP continuity (Prop.~\ref{prop:ip_continuity})
+  & $x_n \to x, y_n \to y \Rightarrow \langle x_n, y_n \rangle \to
+    \langle x, y \rangle$
+  & Stability of projections under approximation \\
+Pythagorean (Thm.~\ref{thm:pythagorean})
+  & $x \perp y \Rightarrow \|x + y\|^2 = \|x\|^2 + \|y\|^2$
+  & Bias-variance decomposition \\
+Orth.\ complement (Prop.~\ref{prop:orth_complement})
+  & $S^\perp$ is a closed subspace
+  & Normal equations in LSTD \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\begin{rlconnection}[title={Looking Ahead}]
+With inner products, orthogonality, and Hilbert space structure in hand, we
+are ready for:
+\begin{itemize}[nosep]
+    \item \textbf{Lesson 20:} The Projection Theorem and Riesz Representation
+          Theorem---the tools for orthogonal projection (least-squares
+          approximation) and for identifying Hilbert spaces with their duals.
+    \item \textbf{Lesson 21:} The fundamental theorems of functional analysis
+          (Hahn--Banach, Uniform Boundedness, Open Mapping, Closed
+          Graph)---powered by the Baire category theorem from Lesson 18.
+    \item \textbf{Lesson 22:} Fixed point theorems (Banach, Brouwer,
+          Schauder, Kakutani)---the convergence engine for value iteration
+          and the existence proof for Nash equilibria.
+\end{itemize}
+\end{rlconnection}
+
+\bibliography{functional-analysis-refs}
 
 \end{document}

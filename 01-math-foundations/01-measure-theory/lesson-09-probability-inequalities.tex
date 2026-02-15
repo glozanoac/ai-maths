@@ -1,370 +1,847 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 9: Probability Inequalities}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 9: Probability Inequalities}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{9}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
 
-\section{Probability Inequalities}
-\label{sec:inequalities}
+\section{Motivation and Overview}
+\label{sec:motivation}
 
-Concentration inequalities bound how far a random variable can deviate from its expectation. They are the workhorses of convergence proofs.
+How likely is a sample average to deviate from its expectation by
+more than $\varepsilon$?  How fast do empirical estimates of value
+functions converge?  These questions are answered by
+\emph{probability inequalities}---also called concentration
+inequalities---which bound tail probabilities in terms of
+moments, ranges, or structural properties of random variables.
+
+This lesson develops the fundamental chain of inequalities:
+\begin{enumerate}[nosep]
+  \item \textbf{Markov's inequality}: the weakest but most
+    general bound (requires only a finite first moment).
+  \item \textbf{Chebyshev's inequality}: uses variance for a
+    tighter bound.
+  \item \textbf{Cauchy--Schwarz inequality}: bounds covariances
+    and expected products.
+  \item \textbf{Hoeffding's inequality}: exponentially tight
+    bound for sums of bounded independent random variables.
+  \item \textbf{Azuma--Hoeffding inequality}: extends Hoeffding
+    to martingale difference sequences.
+  \item \textbf{Jensen's inequality}: relates expectations of
+    convex functions to convex functions of expectations.
+\end{enumerate}
+
+\begin{rlconnection}[title={Why This Matters for RL}]
+\begin{itemize}[nosep]
+  \item \textbf{Chebyshev} $\to$ weak law of large numbers
+    $\to$ justification of Monte Carlo estimation.
+  \item \textbf{Hoeffding} $\to$ PAC (probably approximately
+    correct) sample complexity bounds for multi-armed bandits.
+  \item \textbf{Azuma--Hoeffding} $\to$ finite-sample bounds for
+    TD error accumulation (the partial sums of TD errors form a
+    martingale, Lesson~8).
+  \item \textbf{Jensen} $\to$ non-expansiveness of the Bellman
+    operator in weighted norms, and the contraction argument for
+    TD fixed points.
+\end{itemize}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.}
+Lesson~5 (expectation, linearity), Lesson~6 (conditional
+expectation, tower property), Lesson~7 (variance, independence),
+and Lesson~8 (filtrations, MDS).
+
+%% ============================================================
+%% SECTION 2: MARKOV AND CHEBYSHEV
+%% ============================================================
+
+\section{Markov's and Chebyshev's Inequalities}
+\label{sec:markov_chebyshev}
 
 \subsection{Markov's Inequality}
 \label{subsec:markov}
 
-\begin{keyresult}[Markov's Inequality]
+\begin{keyresult}[title={Markov's Inequality}]
 \begin{theorem}[Markov's Inequality]
 \label{thm:markov}
-If $X \geq 0$ is a non-negative random variable and $a > 0$, then:
+If $X \geq 0$ is a non-negative random variable with
+$\E[X] < \infty$, then for any $a > 0$:
 \begin{equation}
-    \Prob(X \geq a) \leq \frac{\E[X]}{a}.
-    \label{eq:markov}
+  \Prob(X \geq a) \leq \frac{\E[X]}{a}.
+  \label{eq:markov}
 \end{equation}
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Since $X \geq 0$, we have $X \geq a \cdot \indicator_{\{X \geq a\}}$ pointwise (the indicator is $1$ when $X \geq a$ and $0$ otherwise; in both cases, $X$ is at least $a \cdot \indicator$). Taking expectations:
+Since $X \geq 0$, the inequality
+$X \geq a \cdot \indicator_{\{X \geq a\}}$ holds pointwise: when
+$X \geq a$, the right-hand side equals $a \leq X$; when $X < a$,
+the right-hand side equals $0 \leq X$.  Taking expectations:
 \begin{equation}
-    \E[X] \geq \E[a \cdot \indicator_{\{X \geq a\}}] = a \cdot \Prob(X \geq a).
+  \E[X] \geq a \cdot \E[\indicator_{\{X \geq a\}}]
+  = a \cdot \Prob(X \geq a).
+  \label{eq:markov_proof}
 \end{equation}
-Dividing by $a > 0$ gives the result.
+Dividing both sides by $a > 0$ gives the result.
 \end{proof}
 
 \begin{remark}
-Markov's inequality is the weakest concentration inequality but requires the least assumptions (only non-negativity and finite mean). All stronger inequalities in this section are derived from it by applying Markov to a transformed variable.
+Markov's inequality is the weakest concentration inequality but
+requires the least: only non-negativity and a finite first
+moment.  Every stronger inequality in this lesson is derived
+from Markov by applying it to a cleverly chosen transformation
+of the original variable.
 \end{remark}
+
+\begin{example}
+\label{ex:markov_die}
+Let $X$ be the outcome of a fair six-sided die.
+$\E[X] = 3.5$.  Markov gives
+$\Prob(X \geq 5) \leq 3.5/5 = 0.7$.  The true probability is
+$\Prob(X \geq 5) = 2/6 \approx 0.333$.  The bound is loose but
+valid.
+\end{example}
 
 \subsection{Chebyshev's Inequality}
 \label{subsec:chebyshev}
 
-\begin{keyresult}[Chebyshev's Inequality]
+\begin{keyresult}[title={Chebyshev's Inequality}]
 \begin{theorem}[Chebyshev's Inequality]
 \label{thm:chebyshev}
-If $X$ has finite variance $\sigma^2 = \Var(X)$, then for any $\varepsilon > 0$:
+If $X$ has finite variance $\sigma^2 = \Var(X)$, then for any
+$\varepsilon > 0$:
 \begin{equation}
-    \Prob(|X - \E[X]| \geq \varepsilon) \leq \frac{\Var(X)}{\varepsilon^2}.
-    \label{eq:chebyshev}
+  \Prob(|X - \E[X]| \geq \varepsilon)
+  \leq \frac{\Var(X)}{\varepsilon^2}.
+  \label{eq:chebyshev}
 \end{equation}
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Apply Markov's inequality (Theorem~\ref{thm:markov}) to the non-negative random variable $(X - \E[X])^2$ with threshold $\varepsilon^2$:
-\begin{equation}
-    \Prob(|X - \E[X]| \geq \varepsilon) = \Prob\!\left((X - \E[X])^2 \geq \varepsilon^2\right) \leq \frac{\E[(X - \E[X])^2]}{\varepsilon^2} = \frac{\Var(X)}{\varepsilon^2}.
-\end{equation}
+Apply Markov's inequality (Theorem~\ref{thm:markov}) to the
+non-negative random variable $(X - \E[X])^2$ with threshold
+$\varepsilon^2$:
+\begin{align}
+  \Prob(|X - \E[X]| \geq \varepsilon)
+  &= \Prob\!\left((X - \E[X])^2 \geq \varepsilon^2\right)
+  \nonumber\\
+  &\leq \frac{\E[(X - \E[X])^2]}{\varepsilon^2}
+  = \frac{\Var(X)}{\varepsilon^2}. \qedhere
+  \label{eq:chebyshev_proof}
+\end{align}
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-Chebyshev's inequality is used in the proof of the weak law of large numbers (Theorem~\ref{thm:wlln}), which justifies Monte Carlo estimation: the sample mean of returns converges in probability to $V^\pi(s)$.
-\end{rlconnection}
+\begin{corollary}[Chebyshev for Sample Mean]
+\label{cor:chebyshev_mean}
+If $X_1, \ldots, X_n$ are i.i.d.\ with mean $\mu$ and variance
+$\sigma^2$, then for $\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i$:
+\begin{equation}
+  \Prob(|\bar{X}_n - \mu| \geq \varepsilon)
+  \leq \frac{\sigma^2}{n\varepsilon^2}.
+  \label{eq:chebyshev_mean}
+\end{equation}
+\end{corollary}
 
-\subsection{Cauchy--Schwarz Inequality}
-\label{subsec:cauchy_schwarz}
+\begin{proof}
+$\Var(\bar{X}_n) = \sigma^2/n$ (by Lesson~7,
+Corollary~\ref{cor:chebyshev_mean}).  Apply
+Theorem~\ref{thm:chebyshev} with $X = \bar{X}_n$.
+\end{proof}
+
+\begin{remark}
+This corollary immediately gives the weak law of large numbers:
+$\bar{X}_n \cprob \mu$ as $n \to \infty$, since the right-hand
+side tends to $0$ for any fixed $\varepsilon > 0$.  This
+justifies Monte Carlo estimation of $V^\pi(s)$ from sample
+returns.
+\end{remark}
+
+%% ============================================================
+%% SECTION 3: CAUCHY--SCHWARZ
+%% ============================================================
+
+\section{Cauchy--Schwarz Inequality for Expectations}
+\label{sec:cauchy_schwarz}
 
 \begin{theorem}[Cauchy--Schwarz Inequality]
 \label{thm:cauchy_schwarz}
-For random variables $X, Y$ with $\E[X^2], \E[Y^2] < \infty$:
+For random variables $X, Y$ with
+$\E[X^2], \E[Y^2] < \infty$:
 \begin{equation}
-    |\E[XY]| \leq \sqrt{\E[X^2]\, \E[Y^2]}.
-    \label{eq:cauchy_schwarz}
+  |\E[XY]| \leq \sqrt{\E[X^2]\, \E[Y^2]}.
+  \label{eq:cauchy_schwarz}
 \end{equation}
-Equivalently, $(\E[XY])^2 \leq \E[X^2]\, \E[Y^2]$. Equality holds if and only if $Y = cX$ a.s.\ for some constant $c$.
+Equivalently, $(\E[XY])^2 \leq \E[X^2]\, \E[Y^2]$.
+Equality holds if and only if $Y = cX$ a.s.\ for some constant
+$c \in \R$ (or $X = 0$ a.s.).
 \end{theorem}
 
 \begin{proof}
-If $\E[Y^2] = 0$, then $Y = 0$ a.s., so $\E[XY] = 0$ and the inequality is trivial. Assume $\E[Y^2] > 0$.
+If $\E[Y^2] = 0$, then $Y = 0$ a.s., so $\E[XY] = 0$ and
+the inequality is trivial.  Assume $\E[Y^2] > 0$.
 
-For any $t \in \R$, $\E[(X + tY)^2] \geq 0$. Expanding:
+For any $t \in \R$, the random variable $(X + tY)^2 \geq 0$, so
 \begin{equation}
-    \E[X^2] + 2t\,\E[XY] + t^2\,\E[Y^2] \geq 0 \quad \text{for all } t \in \R.
-    \label{eq:cs_quadratic}
+  0 \leq \E[(X + tY)^2]
+  = \E[X^2] + 2t\,\E[XY] + t^2\,\E[Y^2].
+  \label{eq:cs_quadratic}
 \end{equation}
-This is a non-negative quadratic in $t$, so its discriminant must be non-positive:
+This is a quadratic polynomial $q(t) = At^2 + Bt + C$ with
+$A = \E[Y^2] > 0$, $B = 2\E[XY]$, $C = \E[X^2]$.  Since
+$q(t) \geq 0$ for all $t$, its discriminant must be
+non-positive:
 \begin{equation}
-    (2\,\E[XY])^2 - 4\,\E[X^2]\,\E[Y^2] \leq 0,
+  B^2 - 4AC \leq 0
+  \quad\Longrightarrow\quad
+  4(\E[XY])^2 - 4\E[X^2]\E[Y^2] \leq 0
+  \quad\Longrightarrow\quad
+  (\E[XY])^2 \leq \E[X^2]\E[Y^2].
+  \label{eq:cs_discrim}
 \end{equation}
-which gives $(\E[XY])^2 \leq \E[X^2]\,\E[Y^2]$.
+Taking square roots gives~\eqref{eq:cauchy_schwarz}.
+
+Equality holds iff the discriminant is zero, iff $q(t) = 0$ for
+some $t^*$, iff $(X + t^* Y)^2 = 0$ a.s., iff $X = -t^* Y$
+a.s.
 \end{proof}
 
 \begin{corollary}[Covariance Bound]
 \label{cor:cov_bound}
-$|\Cov(X, Y)| \leq \sqrt{\Var(X)\,\Var(Y)}$, with equality iff $Y = aX + b$ a.s.
+For random variables $X, Y$ with positive variances:
+\begin{equation}
+  |\Cov(X, Y)| \leq \sqrt{\Var(X)\, \Var(Y)}.
+  \label{eq:cov_bound}
+\end{equation}
+Equivalently, the correlation coefficient satisfies
+$|\rho(X,Y)| \leq 1$.  Equality holds iff $Y = aX + b$ a.s.\
+for some $a \neq 0, b \in \R$.
 \end{corollary}
 
 \begin{proof}
-Apply Theorem~\ref{thm:cauchy_schwarz} to $X - \E[X]$ and $Y - \E[Y]$.
+Apply Theorem~\ref{thm:cauchy_schwarz} to the centered variables
+$\tilde{X} = X - \E[X]$ and $\tilde{Y} = Y - \E[Y]$:
+\begin{equation}
+  |\E[\tilde{X}\tilde{Y}]|
+  \leq \sqrt{\E[\tilde{X}^2]\, \E[\tilde{Y}^2]},
+\end{equation}
+which is $|\Cov(X,Y)| \leq \sqrt{\Var(X)\Var(Y)}$.
 \end{proof}
 
-\subsection{Hoeffding's Inequality}
-\label{subsec:hoeffding}
+%% ============================================================
+%% SECTION 4: HOEFFDING'S LEMMA AND INEQUALITY
+%% ============================================================
+
+\section{Hoeffding's Lemma and Inequality}
+\label{sec:hoeffding}
+
+\subsection{Hoeffding's Lemma}
+\label{subsec:hoeffding_lemma}
 
 \begin{lemma}[Hoeffding's Lemma]
 \label{lem:hoeffding}
-If $X$ is a random variable with $\E[X] = 0$ and $a \leq X \leq b$ a.s., then for all $\lambda > 0$:
+If $X$ is a random variable with $\E[X] = 0$ and
+$a \leq X \leq b$ a.s., then for all $\lambda > 0$:
 \begin{equation}
-    \E[e^{\lambda X}] \leq \exp\!\left(\frac{\lambda^2 (b-a)^2}{8}\right).
-    \label{eq:hoeffding_lemma}
+  \E[e^{\lambda X}]
+  \leq \exp\!\left(\frac{\lambda^2 (b - a)^2}{8}\right).
+  \label{eq:hoeffding_lemma}
 \end{equation}
 \end{lemma}
 
 \begin{proof}
-Since $a \leq X \leq b$, we can write $X = \alpha a + (1-\alpha) b$ where $\alpha = (b - X)/(b - a) \in [0,1]$. By the convexity of $e^{\lambda x}$:
+\textbf{Step 1: Convexity bound.}
+Since $a \leq X \leq b$, we can write $X$ as a convex
+combination of $a$ and $b$:
+$X = \frac{b - X}{b - a} \cdot a + \frac{X - a}{b - a} \cdot b$.
+By the convexity of $t \mapsto e^{\lambda t}$:
 \begin{equation}
-    e^{\lambda X} \leq \frac{b - X}{b - a}\, e^{\lambda a} + \frac{X - a}{b - a}\, e^{\lambda b}.
-    \label{eq:hoeff_convex}
+  e^{\lambda X}
+  \leq \frac{b - X}{b - a}\, e^{\lambda a}
+    + \frac{X - a}{b - a}\, e^{\lambda b}.
+  \label{eq:hoeff_convex}
 \end{equation}
-Taking expectations (using $\E[X] = 0$):
+
+\textbf{Step 2: Take expectations.}
+Using $\E[X] = 0$:
+\begin{align}
+  \E[e^{\lambda X}]
+  &\leq \frac{b - \E[X]}{b - a}\, e^{\lambda a}
+    + \frac{\E[X] - a}{b - a}\, e^{\lambda b}
+  \nonumber\\
+  &= \frac{b}{b - a}\, e^{\lambda a}
+    + \frac{-a}{b - a}\, e^{\lambda b}.
+  \label{eq:hoeff_exp}
+\end{align}
+
+\textbf{Step 3: Auxiliary function.}
+Let $p = -a/(b - a)$ (so $1 - p = b/(b - a)$) and
+$u = \lambda(b - a)$.  Then the right-hand side of
+\eqref{eq:hoeff_exp} equals $e^{g(u)}$ where
 \begin{equation}
-    \E[e^{\lambda X}] \leq \frac{b}{b-a}\, e^{\lambda a} + \frac{-a}{b-a}\, e^{\lambda b}.
+  g(u) = -pu + \ln(1 - p + p\, e^u).
+  \label{eq:hoeff_g}
 \end{equation}
-Let $p = -a/(b-a)$ and $u = \lambda(b-a)$. Then the right-hand side equals $e^{g(u)}$ where $g(u) = -pu + \ln(1 - p + p e^u)$. One verifies $g(0) = 0$, $g'(0) = 0$, and $g''(u) \leq 1/4$ for all $u$ (since $g''(u) = p(1-p)e^u/(1-p+pe^u)^2 \leq 1/4$ by AM-GM). By Taylor's theorem with Lagrange remainder: $g(u) \leq u^2/8$. Thus $\E[e^{\lambda X}] \leq e^{\lambda^2(b-a)^2/8}$.
+We verify: $g(0) = \ln 1 = 0$ and
+\begin{equation}
+  g'(u) = -p + \frac{p\, e^u}{1 - p + p\, e^u},
+  \qquad g'(0) = -p + p = 0.
+  \label{eq:hoeff_g_prime}
+\end{equation}
+For the second derivative:
+\begin{equation}
+  g''(u) = \frac{p(1-p)\, e^u}{(1 - p + p\, e^u)^2}.
+  \label{eq:hoeff_g_double}
+\end{equation}
+Setting $q = p e^u / (1 - p + p e^u) \in (0,1)$, we have
+$g''(u) = q(1-q) \leq 1/4$ (since $q(1-q) \leq 1/4$ for all
+$q \in [0,1]$ by AM-GM).
+
+\textbf{Step 4: Taylor bound.}
+By Taylor's theorem with Lagrange remainder, there exists
+$\xi \in (0, u)$ such that
+$g(u) = g(0) + g'(0)u + \tfrac{1}{2} g''(\xi) u^2
+= \tfrac{1}{2} g''(\xi) u^2 \leq u^2/8$.
+Substituting $u = \lambda(b-a)$:
+\begin{equation}
+  \E[e^{\lambda X}]
+  \leq e^{g(u)} \leq e^{u^2/8}
+  = \exp\!\left(\frac{\lambda^2(b-a)^2}{8}\right). \qedhere
+  \label{eq:hoeff_final}
+\end{equation}
 \end{proof}
 
-\begin{keyresult}[Hoeffding's Inequality]
+\subsection{Hoeffding's Inequality}
+\label{subsec:hoeffding_ineq}
+
+\begin{keyresult}[title={Hoeffding's Inequality}]
 \begin{theorem}[Hoeffding's Inequality]
 \label{thm:hoeffding}
-Let $X_1, \ldots, X_n$ be independent random variables with $a_i \leq X_i \leq b_i$ a.s. Let $\bar{X} = \frac{1}{n}\sum_{i=1}^n X_i$. Then for any $t > 0$:
+Let $X_1, \ldots, X_n$ be independent random variables with
+$a_i \leq X_i \leq b_i$ a.s.  Let
+$\bar{X} = \frac{1}{n}\sum_{i=1}^n X_i$.  Then for any
+$t > 0$:
 \begin{equation}
-    \Prob\!\left(|\bar{X} - \E[\bar{X}]| \geq t\right) \leq 2\exp\!\left(-\frac{2n^2 t^2}{\sum_{i=1}^n (b_i - a_i)^2}\right).
-    \label{eq:hoeffding}
+  \Prob\!\left(|\bar{X} - \E[\bar{X}]| \geq t\right)
+  \leq 2\exp\!\left(
+    -\frac{2n^2 t^2}{\sum_{i=1}^n (b_i - a_i)^2}\right).
+  \label{eq:hoeffding}
 \end{equation}
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Let $S = \sum_{i=1}^n (X_i - \E[X_i])$. We bound $\Prob(S \geq nt)$; the other tail is symmetric.
+Let $Y_i = X_i - \E[X_i]$ (so $\E[Y_i] = 0$ and
+$Y_i \in [a_i - \E[X_i],\, b_i - \E[X_i]]$, an interval of
+length $b_i - a_i$).  Let $S = \sum_{i=1}^n Y_i$.  We bound
+$\Prob(S \geq nt)$; the bound for
+$\Prob(S \leq -nt)$ follows symmetrically.
 
-\textbf{Step 1: Chernoff bound.} For any $\lambda > 0$, by Markov's inequality:
+\textbf{Step 1: Chernoff bound (Markov for exponentials).}
+For any $\lambda > 0$:
 \begin{equation}
-    \Prob(S \geq nt) = \Prob(e^{\lambda S} \geq e^{\lambda nt}) \leq e^{-\lambda nt}\, \E[e^{\lambda S}].
-    \label{eq:hoeff_chernoff}
+  \Prob(S \geq nt)
+  = \Prob(e^{\lambda S} \geq e^{\lambda nt})
+  \leq e^{-\lambda nt}\, \E[e^{\lambda S}].
+  \label{eq:hoeff_chernoff}
 \end{equation}
 
-\textbf{Step 2: Factor the MGF.} Since the $X_i$ are independent, the centered variables $X_i - \E[X_i]$ are independent, so:
+\textbf{Step 2: Factor the moment generating function.}
+Since the $Y_i$ are independent:
 \begin{equation}
-    \E[e^{\lambda S}] = \prod_{i=1}^n \E[e^{\lambda(X_i - \E[X_i])}].
+  \E[e^{\lambda S}]
+  = \E\!\left[e^{\lambda \sum_i Y_i}\right]
+  = \prod_{i=1}^n \E[e^{\lambda Y_i}].
+  \label{eq:hoeff_factor}
 \end{equation}
 
-\textbf{Step 3: Apply Hoeffding's Lemma.} Each $X_i - \E[X_i]$ has mean $0$ and lies in $[a_i - \E[X_i],\, b_i - \E[X_i]]$, an interval of length $b_i - a_i$. By Lemma~\ref{lem:hoeffding}:
+\textbf{Step 3: Apply Hoeffding's Lemma.}
+Each $Y_i$ has mean $0$ and range $b_i - a_i$.  By
+Lemma~\ref{lem:hoeffding}:
 \begin{equation}
-    \E[e^{\lambda(X_i - \E[X_i])}] \leq \exp\!\left(\frac{\lambda^2(b_i - a_i)^2}{8}\right).
+  \E[e^{\lambda Y_i}]
+  \leq \exp\!\left(\frac{\lambda^2 (b_i - a_i)^2}{8}\right).
+  \label{eq:hoeff_each}
 \end{equation}
-Therefore $\E[e^{\lambda S}] \leq \exp\!\left(\frac{\lambda^2}{8}\sum_i (b_i - a_i)^2\right)$.
+Therefore:
+\begin{equation}
+  \E[e^{\lambda S}]
+  \leq \exp\!\left(\frac{\lambda^2}{8}
+    \sum_{i=1}^n (b_i - a_i)^2\right).
+  \label{eq:hoeff_product}
+\end{equation}
 
-\textbf{Step 4: Optimize over $\lambda$.} Combining with~\eqref{eq:hoeff_chernoff}:
+\textbf{Step 4: Optimize over $\lambda$.}
+Combining \eqref{eq:hoeff_chernoff} and \eqref{eq:hoeff_product}:
 \begin{equation}
-    \Prob(S \geq nt) \leq \exp\!\left(-\lambda nt + \frac{\lambda^2}{8}\sum_i (b_i - a_i)^2\right).
+  \Prob(S \geq nt)
+  \leq \exp\!\left(-\lambda nt
+    + \frac{\lambda^2}{8} \sum_i (b_i - a_i)^2\right).
+  \label{eq:hoeff_combined}
 \end{equation}
-The exponent is minimized at $\lambda^* = 4nt / \sum_i(b_i - a_i)^2$, giving:
+The exponent $h(\lambda) = -\lambda nt +
+\frac{\lambda^2}{8} \sum_i (b_i - a_i)^2$ is a quadratic in
+$\lambda$ with minimum at
+$\lambda^* = 4nt / \sum_i (b_i - a_i)^2$.  Substituting:
 \begin{equation}
-    \Prob(S \geq nt) \leq \exp\!\left(-\frac{2n^2t^2}{\sum_i(b_i-a_i)^2}\right).
+  h(\lambda^*) = -\frac{2n^2 t^2}{\sum_i (b_i - a_i)^2}.
+  \label{eq:hoeff_optimal}
 \end{equation}
-The same bound holds for $\Prob(S \leq -nt)$ by applying the argument to $-S$. Combining both tails with the union bound gives~\eqref{eq:hoeffding}.
+Thus $\Prob(S \geq nt) \leq
+\exp\!\left(-2n^2 t^2 / \sum_i (b_i - a_i)^2\right)$.
+
+\textbf{Step 5: Two-sided bound.}
+Applying the same argument to $-S$ (or equivalently to $-Y_i$,
+which has the same range):
+$\Prob(S \leq -nt) \leq
+\exp(-2n^2 t^2 / \sum_i (b_i - a_i)^2)$.
+By the union bound:
+\begin{equation}
+  \Prob(|S| \geq nt)
+  \leq 2\exp\!\left(
+    -\frac{2n^2 t^2}{\sum_i (b_i - a_i)^2}\right). \qedhere
+\end{equation}
 \end{proof}
 
-\subsection{Azuma--Hoeffding Inequality}
-\label{subsec:azuma}
-
-\begin{keyresult}[Azuma--Hoeffding Inequality]
-\begin{theorem}[Azuma--Hoeffding Inequality]
-\label{thm:azuma}
-Let $\{M_k\}_{k=0}^n$ be a martingale with respect to $\{\mathcal{F}_k\}$ such that $|M_k - M_{k-1}| \leq c_k$ a.s.\ for constants $c_k > 0$. Then for any $t > 0$:
+\begin{remark}[Special case: identical ranges]
+If all $X_i \in [a, b]$ (same range), then
+$\sum_i (b_i - a_i)^2 = n(b - a)^2$, and Hoeffding's inequality
+simplifies to
 \begin{equation}
-    \Prob(|M_n - M_0| \geq t) \leq 2\exp\!\left(-\frac{t^2}{2\sum_{k=1}^n c_k^2}\right).
-    \label{eq:azuma}
+  \Prob(|\bar{X} - \E[\bar{X}]| \geq t)
+  \leq 2\exp\!\left(-\frac{2nt^2}{(b-a)^2}\right).
+  \label{eq:hoeffding_simple}
 \end{equation}
-\end{theorem}
-\end{keyresult}
+This is an exponentially decreasing bound in $n$, far tighter
+than Chebyshev's $O(1/n)$ bound.
+\end{remark}
 
-\begin{proof}
-Let $D_k = M_k - M_{k-1}$. Then $\E[D_k \mid \mathcal{F}_{k-1}] = 0$ and $|D_k| \leq c_k$, so $-c_k \leq D_k \leq c_k$.
-
-For any $\lambda > 0$, by the Chernoff bound (Markov's inequality applied to $e^{\lambda(M_n - M_0)}$):
-\begin{equation}
-    \Prob(M_n - M_0 \geq t) \leq e^{-\lambda t}\, \E[e^{\lambda(M_n - M_0)}].
-\end{equation}
-We bound $\E[e^{\lambda \sum D_k}]$ by iterative conditioning. Note that:
-\begin{equation}
-    \E[e^{\lambda \sum_{k=1}^n D_k}] = \E\!\left[e^{\lambda \sum_{k=1}^{n-1} D_k} \cdot \E[e^{\lambda D_n} \mid \mathcal{F}_{n-1}]\right].
-\end{equation}
-Since $\E[D_n \mid \mathcal{F}_{n-1}] = 0$ and $|D_n| \leq c_n$ conditionally, Hoeffding's Lemma applied conditionally gives:
-\begin{equation}
-    \E[e^{\lambda D_n} \mid \mathcal{F}_{n-1}] \leq \exp(\lambda^2 c_n^2 / 2).
-\end{equation}
-(The interval is $[-c_n, c_n]$, so $(b-a)^2/8 = (2c_n)^2/8 = c_n^2/2$.)
-
-Iterating this $n$ times:
-\begin{equation}
-    \E[e^{\lambda(M_n - M_0)}] \leq \exp\!\left(\frac{\lambda^2}{2}\sum_{k=1}^n c_k^2\right).
-\end{equation}
-Optimizing over $\lambda$ as in Hoeffding's proof gives $\Prob(M_n - M_0 \geq t) \leq \exp(-t^2 / (2\sum c_k^2))$. The two-sided bound follows by symmetry (apply to $-M_k$).
-\end{proof}
-
-\begin{rlconnection}[Connection to RL]
-The Azuma--Hoeffding inequality bounds the fluctuations of martingales, which arise in TD learning as partial sums of TD errors. It provides finite-sample concentration bounds for value function estimates, complementing the asymptotic convergence guaranteed by stochastic approximation theory.
+\begin{rlconnection}[title={Connection to RL: Sample Complexity}]
+In a multi-armed bandit with $K$ arms, each arm's reward lies in
+$[0,1]$.  After $n$ pulls of arm $a$, the empirical mean reward
+$\hat{\mu}_a$ satisfies
+$\Prob(|\hat{\mu}_a - \mu_a| \geq \varepsilon)
+\leq 2e^{-2n\varepsilon^2}$ by Hoeffding.
+Setting the right-hand side equal to $\delta$ and solving:
+$n \geq \frac{1}{2\varepsilon^2}\ln\frac{2}{\delta}$
+samples suffice to estimate $\mu_a$ to within $\varepsilon$ with
+probability at least $1 - \delta$.  This is the foundation of PAC
+sample complexity bounds.
 \end{rlconnection}
 
-\subsection{Jensen's Inequality}
-\label{subsec:jensen}
+%% ============================================================
+%% SECTION 5: AZUMA--HOEFFDING FOR MARTINGALE DIFFERENCES
+%% ============================================================
+
+\section{Azuma--Hoeffding Inequality for Martingale Differences}
+\label{sec:azuma}
+
+\begin{keyresult}[title={Azuma--Hoeffding Inequality}]
+\begin{theorem}[Azuma--Hoeffding Inequality]
+\label{thm:azuma}
+Let $\{M_k\}_{k=0}^n$ be a martingale with respect to
+$\{\mathcal{F}_k\}$ such that
+$|M_k - M_{k-1}| \leq c_k$ a.s.\ for deterministic constants
+$c_k > 0$, $k = 1, \ldots, n$.  Then for any $t > 0$:
+\begin{equation}
+  \Prob(|M_n - M_0| \geq t)
+  \leq 2\exp\!\left(
+    -\frac{t^2}{2\sum_{k=1}^n c_k^2}\right).
+  \label{eq:azuma}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Define the martingale differences $D_k = M_k - M_{k-1}$ for
+$k = 1, \ldots, n$.  Then
+$\E[D_k \mid \mathcal{F}_{k-1}] = 0$ and
+$|D_k| \leq c_k$ a.s., so $D_k \in [-c_k, c_k]$.
+
+\textbf{Step 1: Chernoff bound.}
+For any $\lambda > 0$:
+\begin{equation}
+  \Prob(M_n - M_0 \geq t)
+  = \Prob\!\left(e^{\lambda(M_n - M_0)} \geq e^{\lambda t}\right)
+  \leq e^{-\lambda t}\, \E[e^{\lambda(M_n - M_0)}].
+  \label{eq:azuma_chernoff}
+\end{equation}
+
+\textbf{Step 2: Iterated conditioning.}
+Write $M_n - M_0 = \sum_{k=1}^n D_k$.  We bound the MGF by
+peeling off the outermost term:
+\begin{align}
+  \E\!\left[e^{\lambda \sum_{k=1}^n D_k}\right]
+  &= \E\!\left[
+    e^{\lambda \sum_{k=1}^{n-1} D_k}
+    \cdot \E\!\left[e^{\lambda D_n}
+      \;\middle|\; \mathcal{F}_{n-1}\right]
+    \right].
+  \label{eq:azuma_peel}
+\end{align}
+This uses the tower property: take the outer expectation of
+$\E[\,\cdot\, \mid \mathcal{F}_{n-1}]$, and pull out the
+$\mathcal{F}_{n-1}$-measurable factor
+$e^{\lambda \sum_{k=1}^{n-1} D_k}$.
+
+\textbf{Step 3: Conditional Hoeffding's Lemma.}
+Conditionally on $\mathcal{F}_{n-1}$, $D_n$ has conditional mean
+$0$ and $D_n \in [-c_n, c_n]$ (an interval of length $2c_n$).
+Hoeffding's Lemma (Lemma~\ref{lem:hoeffding}) applied
+conditionally gives:
+\begin{equation}
+  \E[e^{\lambda D_n} \mid \mathcal{F}_{n-1}]
+  \leq \exp\!\left(\frac{\lambda^2 (2c_n)^2}{8}\right)
+  = \exp\!\left(\frac{\lambda^2 c_n^2}{2}\right).
+  \label{eq:azuma_cond_hoeff}
+\end{equation}
+
+\textbf{Step 4: Iterate.}
+Substituting \eqref{eq:azuma_cond_hoeff}
+into~\eqref{eq:azuma_peel}:
+\begin{equation}
+  \E\!\left[e^{\lambda \sum_{k=1}^n D_k}\right]
+  \leq e^{\lambda^2 c_n^2/2}\,
+    \E\!\left[e^{\lambda \sum_{k=1}^{n-1} D_k}\right].
+\end{equation}
+Repeating for $k = n-1, n-2, \ldots, 1$:
+\begin{equation}
+  \E\!\left[e^{\lambda(M_n - M_0)}\right]
+  \leq \exp\!\left(\frac{\lambda^2}{2}
+    \sum_{k=1}^n c_k^2\right).
+  \label{eq:azuma_mgf}
+\end{equation}
+
+\textbf{Step 5: Optimize.}
+Combining \eqref{eq:azuma_chernoff} and \eqref{eq:azuma_mgf}:
+$\Prob(M_n - M_0 \geq t) \leq
+\exp(-\lambda t + \lambda^2 \sum c_k^2 / 2)$.
+Minimizing over $\lambda$:
+$\lambda^* = t / \sum c_k^2$, giving
+\begin{equation}
+  \Prob(M_n - M_0 \geq t)
+  \leq \exp\!\left(-\frac{t^2}{2\sum_{k=1}^n c_k^2}\right).
+  \label{eq:azuma_one_side}
+\end{equation}
+
+\textbf{Step 6: Two-sided bound.}
+Since $-M_k$ is also a martingale with
+$|(-M_k) - (-M_{k-1})| = |D_k| \leq c_k$, the same bound
+applies to $\Prob(M_0 - M_n \geq t)$.  By the union bound:
+\begin{equation}
+  \Prob(|M_n - M_0| \geq t)
+  \leq 2\exp\!\left(
+    -\frac{t^2}{2\sum_{k=1}^n c_k^2}\right). \qedhere
+\end{equation}
+\end{proof}
+
+\begin{remark}[Comparison with Hoeffding]
+If the martingale differences $D_k$ are independent (i.e., the
+martingale is a random walk), Azuma--Hoeffding recovers
+Hoeffding's inequality.  The power of Azuma--Hoeffding is that it
+does \emph{not} require independence---only the MDS property
+$\E[D_k \mid \mathcal{F}_{k-1}] = 0$ and bounded increments.
+\end{remark}
+
+\begin{rlconnection}[title={Connection to RL: TD Error Concentration}]
+In a finite MDP with $|R_{t+1}| \leq R_{\max}$ and
+$\gamma \in [0,1)$, the TD error
+$\delta_t^\pi = R_{t+1} + \gamma V^\pi(S_{t+1}) - V^\pi(S_t)$
+satisfies $|\delta_t^\pi| \leq 2R_{\max}/(1-\gamma)$.
+The partial sums $M_n = \sum_{t=0}^{n-1} \delta_t^\pi$ form a
+martingale (Lesson~8), and Azuma--Hoeffding gives:
+\[
+  \Prob\!\left(\left|\sum_{t=0}^{n-1} \delta_t^\pi\right|
+    \geq \varepsilon\right)
+  \leq 2\exp\!\left(
+    -\frac{\varepsilon^2 (1-\gamma)^2}{8n R_{\max}^2}\right).
+\]
+This provides finite-sample concentration bounds for accumulated
+TD errors, complementing the asymptotic convergence guaranteed by
+stochastic approximation theory.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: JENSEN'S INEQUALITY
+%% ============================================================
+
+\section{Jensen's Inequality}
+\label{sec:jensen}
+
+\subsection{Convex Functions}
+\label{subsec:convex}
 
 \begin{definition}[Convex Function]
 \label{def:convex}
-A function $\varphi: \R \to \R$ is \emph{convex} if for all $x, y \in \R$ and $\lambda \in [0,1]$:
+A function $\varphi: I \to \R$ (where $I \subseteq \R$ is an
+interval) is \emph{convex} if for all $x, y \in I$ and
+$\lambda \in [0, 1]$:
 \begin{equation}
-    \varphi(\lambda x + (1-\lambda) y) \leq \lambda\, \varphi(x) + (1-\lambda)\, \varphi(y).
-    \label{eq:convex_def}
+  \varphi(\lambda x + (1 - \lambda) y)
+  \leq \lambda\, \varphi(x) + (1 - \lambda)\, \varphi(y).
+  \label{eq:convex_def}
 \end{equation}
+The function is \emph{strictly convex} if strict inequality holds
+whenever $x \neq y$ and $\lambda \in (0, 1)$.
 \end{definition}
 
-\begin{lemma}[Supporting Hyperplane / Tangent Line]
+\begin{example}
+Common convex functions: $x^2$, $|x|$, $e^x$,
+$-\ln x$ (on $x > 0$), $x \ln x$ (on $x > 0$).
+Common concave functions: $\ln x$, $\sqrt{x}$ (on $x \geq 0$).
+\end{example}
+
+\subsection{Supporting Hyperplane Lemma}
+\label{subsec:supporting}
+
+\begin{lemma}[Supporting Hyperplane]
 \label{lem:supporting}
-If $\varphi$ is convex, then for any $c \in \R$, there exists a constant $m \in \R$ (a subgradient) such that:
+If $\varphi: I \to \R$ is convex, then for any $c \in I$, there
+exists $m \in \R$ (a subgradient at $c$) such that
 \begin{equation}
-    \varphi(x) \geq \varphi(c) + m(x - c) \quad \text{for all } x \in \R.
-    \label{eq:supporting}
+  \varphi(x) \geq \varphi(c) + m(x - c)
+  \quad \text{for all } x \in I.
+  \label{eq:supporting}
 \end{equation}
 \end{lemma}
 
 \begin{proof}
-Define $m = \sup_{y < c} \frac{\varphi(c) - \varphi(y)}{c - y}$. By convexity, the slopes of secant lines through $(c, \varphi(c))$ are non-decreasing. For any $x > c$, the secant slope from $c$ to $x$ is at least $m$:
+Define the left-derivative slope:
 \begin{equation}
-    \frac{\varphi(x) - \varphi(c)}{x - c} \geq m,
+  m = \sup_{y < c} \frac{\varphi(c) - \varphi(y)}{c - y}.
+  \label{eq:subgradient}
 \end{equation}
-which gives $\varphi(x) \geq \varphi(c) + m(x - c)$. For $x < c$, the secant slope from $x$ to $c$ is at most $m$:
+By convexity, the slopes of secant lines through
+$(c, \varphi(c))$ are non-decreasing: if $y_1 < y_2 < c$, then
 \begin{equation}
-    \frac{\varphi(c) - \varphi(x)}{c - x} \leq m,
+  \frac{\varphi(c) - \varphi(y_1)}{c - y_1}
+  \leq \frac{\varphi(c) - \varphi(y_2)}{c - y_2}.
 \end{equation}
-which rearranges to $\varphi(x) \geq \varphi(c) + m(x - c)$. The case $x = c$ is trivial.
+Similarly, for $x > c$, the secant slope from $c$ to $x$ is at
+least $m$:
+\begin{equation}
+  \frac{\varphi(x) - \varphi(c)}{x - c} \geq m,
+\end{equation}
+which gives $\varphi(x) \geq \varphi(c) + m(x - c)$.
+
+For $x < c$, the secant slope from $x$ to $c$ satisfies:
+\begin{equation}
+  \frac{\varphi(c) - \varphi(x)}{c - x} \leq m,
+\end{equation}
+which rearranges to $\varphi(x) \geq \varphi(c) + m(x - c)$.
+The case $x = c$ is trivial.
 \end{proof}
 
-\begin{keyresult}[Jensen's Inequality]
+\subsection{Jensen's Inequality}
+\label{subsec:jensen_thm}
+
+\begin{keyresult}[title={Jensen's Inequality}]
 \begin{theorem}[Jensen's Inequality]
 \label{thm:jensen}
-If $\varphi$ is convex and $\E[|X|] < \infty$, then:
+Let $\varphi$ be convex and let $X$ be a random variable with
+$\E[|X|] < \infty$ and $\E[|\varphi(X)|] < \infty$.  Then:
 \begin{equation}
-    \varphi\!\left(\E[X]\right) \leq \E[\varphi(X)].
-    \label{eq:jensen}
+  \varphi\!\left(\E[X]\right) \leq \E[\varphi(X)].
+  \label{eq:jensen}
 \end{equation}
-Conditional version: $\varphi\!\left(\E[X \mid Y]\right) \leq \E[\varphi(X) \mid Y]$.
+If $\varphi$ is concave, the inequality is reversed:
+$\varphi(\E[X]) \geq \E[\varphi(X)]$.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Let $c = \E[X]$. By Lemma~\ref{lem:supporting}, there exists $m$ such that $\varphi(X) \geq \varphi(c) + m(X - c)$ pointwise. Taking expectations:
+Let $c = \E[X]$.  By Lemma~\ref{lem:supporting}, there exists
+$m$ such that $\varphi(x) \geq \varphi(c) + m(x - c)$ for all
+$x$.  Applying this pointwise to $X$:
+\begin{equation}
+  \varphi(X) \geq \varphi(c) + m(X - c).
+  \label{eq:jensen_pointwise}
+\end{equation}
+Taking expectations and using linearity:
 \begin{align}
-    \E[\varphi(X)]
-    &\geq \E[\varphi(c) + m(X - c)] \nonumber\\
-    &= \varphi(c) + m\bigl(\E[X] - c\bigr) \tag{linearity}\\
-    &= \varphi(c) + m \cdot 0 = \varphi(c) = \varphi(\E[X]). \label{eq:jensen_proof}
+  \E[\varphi(X)]
+  &\geq \E[\varphi(c) + m(X - c)]
+  \nonumber\\
+  &= \varphi(c) + m(\E[X] - c)
+  = \varphi(c) + m \cdot 0
+  = \varphi(c)
+  = \varphi(\E[X]).
+  \label{eq:jensen_final}
 \end{align}
-
-For the conditional version, fix $Y = y$ and apply the unconditional Jensen's inequality to the conditional distribution of $X$ given $Y = y$. Since this holds for every $y$, it holds as a random variable inequality.
+For concave $\varphi$, apply the convex case to $-\varphi$.
 \end{proof}
 
-\begin{tdconnection}[Connection to TD Learning]
-Jensen's inequality is used in Appendix B of the article to prove the contraction property $\|\mathbf{P}_\pi \mathbf{v}\|_{d^\pi} \leq \|\mathbf{v}\|_{d^\pi}$. The key step: $(\mathbf{P}_\pi \mathbf{v})(s') = \sum_s \frac{d^\pi(s) P_\pi(s'|s)}{d^\pi(s')} v(s)$ is a weighted average of $v(s)$ with weights summing to $1$ (a conditional expectation). Since $\varphi(x) = x^2$ is convex:
+\begin{theorem}[Conditional Jensen's Inequality]
+\label{thm:cond_jensen}
+If $\varphi$ is convex and $\E[|\varphi(X)|] < \infty$, then
+\begin{equation}
+  \varphi\!\left(\E[X \mid Y]\right)
+  \leq \E[\varphi(X) \mid Y]
+  \quad \text{a.s.}
+  \label{eq:cond_jensen}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Fix $Y = y$.  Apply the unconditional Jensen's inequality to the
+conditional distribution of $X$ given $Y = y$:
+$\varphi(\E[X \mid Y = y]) \leq \E[\varphi(X) \mid Y = y]$.
+Since this holds for every $y$, it holds as a random variable
+inequality.
+\end{proof}
+
+\begin{rlconnection}[title={Connection to RL: Bellman Operator Contraction}]
+Jensen's inequality is used to prove that the Bellman operator
+$\mathcal{T}^\pi$ is non-expansive in weighted norms.  The key
+step: the transition operator
+$(\mathbf{P}_\pi v)(s') = \sum_s w_{s's}\, v(s)$ computes a
+weighted average of $v(s)$ with non-negative weights summing to
+$1$.  Since $\varphi(x) = x^2$ is convex, Jensen gives:
 \[
-    \left(\sum_s w_s\, v(s)\right)^2 \leq \sum_s w_s\, v(s)^2.
+  \left(\sum_s w_{s's}\, v(s)\right)^2
+  \leq \sum_s w_{s's}\, v(s)^2.
 \]
-This proves $\mathbf{P}_\pi$ is non-expansive in the $d^\pi$-weighted norm, which in turn shows the matrix $\mathbf{A}$ in the linear TD fixed-point equation is negative definite.
-\end{tdconnection}
+Summing over $s'$ with appropriate weights proves
+$\|\mathbf{P}_\pi v\|_{d^\pi} \leq \|v\|_{d^\pi}$, i.e.,
+$\mathbf{P}_\pi$ is a contraction in the $d^\pi$-weighted
+$L^2$-norm.  This is essential for the convergence of linear TD.
+\end{rlconnection}
 
 %% ============================================================
-%% SECTION 10: MODES OF CONVERGENCE
+%% SECTION 7: EXERCISES
 %% ============================================================
 
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}
+\label{ex:markov_nonneg}
+Let $X$ be a random variable (not necessarily non-negative) with
+$\E[X^2] < \infty$.  Use Markov's inequality applied to $X^2$ to
+show that $\Prob(|X| \geq a) \leq \E[X^2]/a^2$ for any $a > 0$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:chebyshev_bernoulli}
+Let $X_1, \ldots, X_n$ be i.i.d.\
+$\operatorname{Bernoulli}(1/2)$ and
+$\bar{X}_n = \frac{1}{n}\sum X_i$.  Use Chebyshev's inequality
+to find the smallest $n$ such that
+$\Prob(|\bar{X}_n - 1/2| \geq 0.1) \leq 0.05$.  Compare with
+the Hoeffding bound.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:cs_l2}
+Use the Cauchy--Schwarz inequality to prove that if
+$\E[X^2] < \infty$, then $\E[|X|] < \infty$.
+\textit{Hint:} Apply Cauchy--Schwarz with $Y = 1$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:hoeffding_confidence}
+A bandit arm has unknown mean $\mu \in [0,1]$.  After $n$
+independent pulls with rewards $X_1, \ldots, X_n \in [0,1]$,
+we estimate $\hat{\mu} = \bar{X}_n$.  Use Hoeffding's inequality
+to construct a $95\%$ confidence interval for $\mu$ as a
+function of $n$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:azuma_random_walk}
+Let $X_1, \ldots, X_n$ be i.i.d.\ with
+$\Prob(X_i = 1) = \Prob(X_i = -1) = 1/2$.
+Use Azuma--Hoeffding to bound
+$\Prob(|\sum_{i=1}^n X_i| \geq c\sqrt{n})$ for $c > 0$.
+Compare with the exact probability for $n = 100$, $c = 2$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:jensen_log}
+Let $X > 0$ a.s.\ with $\E[X] < \infty$.  Use Jensen's
+inequality with $\varphi(x) = -\ln x$ (convex on $(0,\infty)$)
+to prove that $\E[\ln X] \leq \ln \E[X]$ (the AM-GM inequality
+for expectations).
+\end{exercise}
+
+\begin{exercise}
+\label{ex:jensen_variance}
+Use Jensen's inequality with $\varphi(x) = x^2$ to give an
+alternative proof that $\Var(X) \geq 0$, i.e.,
+$\E[X^2] \geq (\E[X])^2$.
+\end{exercise}
+
+\begin{exercise}
+\label{ex:conditional_markov}
+Prove the \emph{conditional Markov inequality}: if $X \geq 0$
+and $\E[X \mid Y] < \infty$ a.s., then for any $a > 0$:
+\[
+  \Prob(X \geq a \mid Y) \leq \frac{\E[X \mid Y]}{a}
+  \quad \text{a.s.}
+\]
+\textit{Hint:} Apply the standard proof of Markov's inequality
+conditionally on $Y$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{3.5cm} p{5cm} p{5.5cm}}
+\toprule
+\textbf{Inequality} & \textbf{Statement} &
+  \textbf{RL Application} \\
+\midrule
+Markov &
+  $\Prob(X \geq a) \leq \E[X]/a$ &
+  Building block for all others \\
+Chebyshev &
+  $\Prob(|X - \mu| \geq \varepsilon)
+    \leq \sigma^2/\varepsilon^2$ &
+  WLLN $\to$ MC justification \\
+Cauchy--Schwarz &
+  $|\E[XY]| \leq \sqrt{\E[X^2]\E[Y^2]}$ &
+  Covariance bounds \\
+Hoeffding &
+  $\Prob(|\bar{X} - \mu| \geq t)
+    \leq 2e^{-2nt^2/(b-a)^2}$ &
+  PAC bandit bounds \\
+Azuma--Hoeffding &
+  $\Prob(|M_n - M_0| \geq t)
+    \leq 2e^{-t^2/(2\sum c_k^2)}$ &
+  TD error concentration \\
+Jensen &
+  $\varphi(\E[X]) \leq \E[\varphi(X)]$ (convex) &
+  Bellman contraction \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent\textbf{Next lesson:} Convergence of Random Variables
+and the Borel--Cantelli Lemma --- the four modes of convergence
+(a.s., in probability, in $L^p$, in distribution), their
+relationships, and the lemma that connects summable probabilities
+to almost sure events.
+
+\bibliography{measure-theory-refs}
 
 \end{document}

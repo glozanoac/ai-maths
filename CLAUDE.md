@@ -138,3 +138,12 @@ Phase 06 -- Aerospace (requires: Phase 04 + Phase 05)
 - When creating a new document, add it to the Document Catalog in this file and update the corresponding phase `README.md`.
 - Only use ASCII characters to write documents.
 - After creating the PDF document from tex file, clean the temporal files that were generated.
+
+## Lesson structure
+Each lesson must have the following sections:
+1. Motivation and Overview: Show connections with the final objective (reinforcement learning)
+2. References: References to specific chapters of books or articles to complement the lecture.
+3. Sections related to the topic: Depends of the topics that is being developing
+4. Exercises: Enhance and challenge the builded knowledgment (score with * the dificulty of the problem)
+5. Summary: Summary of important points of the lesson
+6. Furter Readings: References to furter reading (another lecture or a reference books or article)
