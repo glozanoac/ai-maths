@@ -10,6 +10,10 @@ ten chapters skimmed.
 
 **Estimated total duration:** 14--20 months.
 
+**How to read the lesson specifications.** Each lesson lists the document sections to
+study, the definitions to learn, and the key results to master. Results in **bold** are
+the most important -- you should be able to state and prove these from memory.
+
 ---
 
 ## Phase 01: Mathematical Foundations (~38 lessons, 4--6 months)
@@ -19,38 +23,170 @@ ten chapters skimmed.
 **Primary text:** Durrett, R. *Probability: Theory and Examples* (5th ed., 2019)
 **Supplementary:** Billingsley, P. *Probability and Measure* (3rd ed.)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 1 | Durrett Ch.1.1--1.3: sigma-algebras, measures | Caratheodory extension theorem, pi-lambda theorem | [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf) |
-| 2 | Durrett Ch.1.4--1.7: measurable functions, integration | Construction of Lebesgue integral, simple function approximation | [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf) |
-| 3 | Durrett Ch.1.6--1.7: convergence theorems | Monotone Convergence Theorem, Fatou's Lemma, Dominated Convergence Theorem | [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf) |
-| 4 | Durrett Ch.2: product measures, Fubini | Product sigma-algebras, Fubini-Tonelli theorem | [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf) |
-| 5 | Durrett Ch.3.1--3.3: independence, WLLN | Independence of sigma-algebras, Weak Law of Large Numbers | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 6 | Durrett Ch.3.4--3.6: SLLN, Borel-Cantelli | Strong Law of Large Numbers, Borel-Cantelli Lemmas (both directions) | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 7 | Durrett Ch.4.1--4.3: characteristic functions | Levy continuity theorem, inversion formula | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 8 | Durrett Ch.4.4--4.5: Central Limit Theorem | CLT (Lindeberg-Feller), Berry-Esseen bound | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 9 | Durrett Ch.5.1--5.2: conditional expectation | Conditional expectation as projection, tower property | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 10 | Durrett Ch.5.3--5.4: martingales | Martingale definitions, submartingale, supermartingale, Doob decomposition | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 11 | Durrett Ch.5.5--5.6: martingale convergence | Martingale Convergence Theorem, Doob's Maximal Inequality | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 12 | Durrett Ch.5.7: optional stopping | Optional Stopping Theorem, uniform integrability | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 13 | Durrett Ch.6.1--6.3: Markov chains | Transition matrices, classification of states, stationary distributions | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
-| 14 | Durrett Ch.6.4--6.6: ergodic theory | Ergodic theorem, convergence to stationarity, coupling arguments | [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf) |
+#### Lesson 1: sigma-Algebras and the pi-lambda Theorem
+
+> [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf), Sections 1--2
+
+- **Definitions:** 2.1 sigma-algebra, 2.2 generated sigma-algebra, 2.3 Borel sigma-algebra, 2.4 pi-system, 2.5 lambda-system
+- **Key results:** Prop 2.1 basic properties of sigma-algebras, Lem 2.2 intersection of sigma-algebras, Prop 2.3 equivalent generators of Borel(R), Lem 2.4 pi + lambda = sigma, **Thm 2.5 pi-lambda theorem (Dynkin)**, **Cor 2.6 uniqueness of measures on sigma(P)**
+- **Examples:** 2.1 extreme sigma-algebras, 2.2 partition-generated sigma-algebra
+
+#### Lesson 2: Measures and the Caratheodory Extension
+
+> [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf), Sections 3--4
+
+- **Definitions:** 3.1 measure, 3.2 null set / complete measure, 4.1 algebra of sets, 4.2 pre-measure, 4.3 outer measure, 4.4 Caratheodory measurability
+- **Key results:** Thm 3.2 properties of measures (monotonicity, countable subadditivity, continuity), Prop 3.3 completion, Prop 4.1 pre-measure induces outer measure, **Thm 4.2 Caratheodory extension theorem**, Thm 4.3 existence of Lebesgue measure, Thm 4.4 Vitali non-measurable sets
+
+#### Lesson 3: Measurable Functions and Simple Approximation
+
+> [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf), Section 5
+
+- **Definitions:** 5.1 measurable function, 5.2 simple function, 5.3 sigma(X)
+- **Key results:** Thm 5.1 generator criterion for measurability, Cor 5.2 standard criterion for real-valued measurability, Thm 5.3 closure under algebraic operations, Thm 5.4 limits of measurable functions, **Thm 5.5 simple function approximation theorem**, **Thm 5.6 Doob--Dynkin lemma**
+
+#### Lesson 4: From Measures to Probability Spaces
+
+> [01-measure-spaces](01-math-foundations/01-measure-theory/01-measure-spaces.pdf), Sections 6--7
+
+- **Definitions:** 6.1 probability space, 6.2 random variable, 6.3 distribution (pushforward measure)
+- **Key results:** Prop 6.1 CDF determines distribution, Ex 6.1 probability space for a finite MDP
+- **Exercises:** 7.1--7.7 (including Ex 7.7: filtrations in an MDP)
+
+#### Lesson 5: Probability Spaces, Random Variables, and Expectation
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 2--3
+
+- **Definitions:** 2.3 probability measure (Kolmogorov axioms), 2.4 conditional probability, 3.1 random variable, 3.3 CDF, 3.4 expectation, 3.5--3.7 Bernoulli / categorical / geometric, 3.8 joint distribution, 3.9 marginal distribution
+- **Key results:** Thm 2.2 basic properties of probability, Thm 2.3 continuity of probability, Thm 2.5 chain rule, **Thm 2.6 law of total probability**, **Thm 2.7 Bayes' theorem**, Prop 3.2 CDF properties, **Thm 3.4 linearity of expectation**, Cor 3.5 linearity for finite sums
+
+#### Lesson 6: Conditional Expectation and the Tower Property
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 4--5
+
+- **Definitions:** 4.1 conditional expectation given an event, 4.2 conditional expectation given a random variable
+- **Key results:** Thm 4.1 linearity of conditional expectation, **Thm 4.2 pull-out property**, **Thm 4.3 law of total expectation (tower property)**, Thm 4.4 generalized tower property, Thm 5.1 MDP expectation expansion, **Cor 5.2 Bellman expectation equation**
+
+#### Lesson 7: Variance, Covariance, and Independence
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 6--7
+
+- **Definitions:** 6.1 variance, 6.2 covariance, 6.3 conditional variance, 7.1 independent events, 7.2 independent random variables, 7.3 conditional independence
+- **Key results:** **Thm 6.1 computational formula Var(X) = E[X^2] - (E[X])^2**, **Thm 6.2 law of total variance**, Thm 7.1 E[XY] = E[X]E[Y] for independent RVs, Cor 7.2 Var(X+Y) = Var(X) + Var(Y) for independent RVs
+- **Examples:** 7.1 pairwise but not mutual independence
+
+#### Lesson 8: Filtrations and Martingale Difference Sequences
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 8--9
+
+- **Definitions:** 8.1 filtration, 8.2 natural filtration of an MDP, 9.1 martingale, 9.2 martingale difference sequence (MDS)
+- **Key results:** Prop 8.1 conditioning on F_t refines conditioning on S_t, Thm 9.1 MDS has zero unconditional mean, **Thm 9.2 MDS partial sums form a martingale**, Thm 9.3 uncorrelated increments of an MDS
+
+#### Lesson 9: Probability Inequalities
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Section 10
+
+- **Definitions:** 10.1 convex function
+- **Key results:** **Thm 10.1 Markov's inequality**, **Thm 10.2 Chebyshev's inequality**, Thm 10.3 Cauchy--Schwarz inequality, Cor 10.4 covariance bound, Lem 10.5 Hoeffding's lemma, **Thm 10.6 Hoeffding's inequality**, **Thm 10.7 Azuma--Hoeffding inequality** (for martingale differences), Lem 10.8 supporting hyperplane, **Thm 10.9 Jensen's inequality**
+
+#### Lesson 10: Modes of Convergence and Borel--Cantelli
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 11--12
+
+- **Definitions:** 11.1 almost sure convergence, 11.2 convergence in probability, 11.3 L^p convergence, 11.4 convergence in distribution, 12.1 limsup of events
+- **Key results:** **Thm 11.1 hierarchy of convergence modes** (a.s. => prob => dist, L^p => prob), Thm 11.2 L^p => prob, Thm 11.3 a.s. => prob, Thm 11.4 prob => dist, Thm 11.5 a.s. and L^p are incomparable, **Thm 12.1 first Borel--Cantelli lemma**, **Thm 12.2 second Borel--Cantelli lemma**, Thm 12.3 BC characterization of a.s. convergence, Cor 12.4 sufficient condition for a.s. convergence
+
+#### Lesson 11: Limit Theorems
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Section 13
+
+- **Key results:** Thm 13.1 Weak Law of Large Numbers, **Thm 13.2 Strong Law of Large Numbers (Kolmogorov)**, **Thm 13.3 Central Limit Theorem**, **Thm 13.4 Monotone Convergence Theorem**, Thm 13.5 Fatou's lemma, **Thm 13.6 Dominated Convergence Theorem (Lebesgue)**
+
+#### Lesson 12: Markov Chains
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Section 14
+
+- **Definitions:** 14.1 Markov chain, 14.2 time-homogeneous transition matrix, 14.3 accessibility / communication, 14.4 irreducible chain, 14.5 recurrence / transience, 14.6 stationary distribution, 14.7 aperiodic chain, 14.8 positive recurrence, 14.9 ergodic chain, 14.10 detailed balance / reversibility
+- **Key results:** **Thm 14.1 Chapman--Kolmogorov equation**, Thm 14.3 recurrence criterion, Prop 14.4 recurrence is a class property, **Thm 14.5 stationary distribution existence** (for irreducible positive-recurrent chains), **Thm 14.6 ergodic theorem for finite Markov chains**, Prop 14.7 detailed balance implies stationarity
+
+#### Lesson 13: Martingale Convergence Theory
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Section 15
+
+- **Definitions:** 15.1 submartingale / supermartingale, 15.2 upcrossings
+- **Key results:** Prop 15.1 convex functions of martingales are submartingales, Cor 15.2 squared martingale is a submartingale, **Thm 15.3 Doob's upcrossing inequality**, **Thm 15.4 Doob's forward convergence theorem**, **Thm 15.5 Robbins--Siegmund theorem** (essential for SA convergence proofs)
+
+#### Lesson 14: Stochastic Approximation Noise Decomposition
+
+> [probability-foundations](01-math-foundations/01-measure-theory/probability-foundations.pdf), Sections 16--17
+
+- **Key results:** **Thm 16.1 TD noise decomposition** (noise in TD update is an MDS)
+- **Review:** Sec 17 summary table of all key results; work through selected exercises
 
 ### 1.2 Functional Analysis (Lessons 15--22)
 
 **Primary text:** Kreyszig, E. *Introductory Functional Analysis with Applications*
 **Alternative:** Conway, J.B. *A Course in Functional Analysis*
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 15 | Kreyszig Ch.1.1--1.4: metric spaces | Metric space axioms, open/closed sets, convergence, completeness | [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf) |
-| 16 | Kreyszig Ch.1.5--1.6: completeness, compactness | Baire Category Theorem, sequential compactness, total boundedness | [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf) |
-| 17 | Kreyszig Ch.2.1--2.4: normed spaces | Normed spaces, equivalence of norms in finite dimensions, Banach spaces | [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf) |
-| 18 | Kreyszig Ch.2.5--2.8: bounded operators | Bounded linear operators, operator norm, dual spaces | [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf) |
-| 19 | Kreyszig Ch.3.1--3.4: inner product spaces | Inner product axioms, Cauchy-Schwarz, Hilbert spaces, orthogonal complements | [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf) |
-| 20 | Kreyszig Ch.3.5--3.8: projections, Riesz | Orthogonal projections, Riesz Representation Theorem | [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf) |
-| 21 | Kreyszig Ch.4.1--4.3: fundamental theorems | Hahn-Banach Theorem, Uniform Boundedness Principle, Open Mapping Theorem | [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf) |
-| 22 | Kreyszig Ch.5.1--5.4: fixed point theorems | Banach (Contraction Mapping), Brouwer, Schauder, Kakutani FPTs | [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf) |
+#### Lesson 15: Metric Spaces
+
+> [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf), Sections 1--2
+
+- **Definitions:** 2.1 metric space, 2.2 open ball, 2.3 open / closed set, 2.4 interior / closure / boundary, 2.5 convergence, 2.6 Cauchy sequence, 2.7 complete metric space, 2.8 dense subset / separable space
+- **Key results:** Prop 2.1 properties of open/closed sets, Prop 2.2 closure characterization, Prop 2.3 uniqueness of limits, Prop 2.4 convergent => Cauchy, Thm 2.5 completeness of R, Thm 2.6 completeness of R^n, **Thm 2.7 completion of a metric space**
+- **Examples:** 2.1 Euclidean metric, 2.2 p-metrics on R^n, 2.3 discrete metric, 2.4 C[a,b] with sup norm, 2.5 sequence spaces ell^p
+
+#### Lesson 16: Normed Spaces and Banach Spaces
+
+> [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf), Sections 3--4
+
+- **Definitions:** 3.1 normed space, 3.5 equivalent norms, 4.1 Banach space, 4.2 absolute convergence, 4.3 Schauder basis
+- **Key results:** Prop 3.1 norm induces metric, Lem 3.2 Young's inequality, Prop 3.3 Holder's inequality, Prop 3.4 Minkowski's inequality, **Thm 3.5 all norms on R^n are equivalent**, Cor 3.6 every finite-dimensional normed space is complete, Thm 4.1 ell^p is Banach, Thm 4.2 C[a,b] is Banach under sup norm, **Thm 4.3 Banach space characterization via absolute convergence of series**
+
+#### Lesson 17: Bounded Linear Operators and Dual Spaces
+
+> [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf), Section 5
+
+- **Definitions:** 5.1 linear operator, 5.2 bounded linear operator, 5.3 space B(X,Y), 5.4 dual space
+- **Key results:** Prop 5.1 equivalent formulations of operator norm, **Thm 5.2 bounded iff continuous**, Thm 5.3 B(X,Y) is a normed space, **Thm 5.4 B(X,Y) is Banach when Y is Banach**, Prop 5.5 all linear operators on finite-dimensional spaces are bounded, Cor 5.6 dual space is always Banach
+- **Examples:** 5.1 matrix operators, 5.2 integral operator, 5.3 right shift operator, 5.4 dual of ell^p
+
+#### Lesson 18: Compactness and the Baire Category Theorem
+
+> [01-metric-and-normed-spaces](01-math-foundations/02-functional-analysis/01-metric-and-normed-spaces.pdf), Sections 6--7
+
+- **Definitions:** 6.1 compact set, 6.2 sequential compactness, 6.3 totally bounded, 6.4 equicontinuity, 6.5 compact operator, 7.1 nowhere dense, 7.2 first / second category
+- **Key results:** Prop 6.1 totally bounded => bounded, **Thm 6.2 compactness equivalence in metric spaces** (compact <=> seq. compact <=> complete + totally bounded), **Cor 6.3 Heine--Borel for R^n**, Lem 6.4 Riesz's lemma, **Thm 6.5 compact unit ball iff finite dimension** (Riesz), **Thm 6.6 Arzela--Ascoli theorem**, **Thm 7.1 Baire Category Theorem**
+
+#### Lesson 19: Inner Product Spaces and Hilbert Spaces
+
+> [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf), Sections 1--3
+
+- **Definitions:** 2.1 inner product space, 3.1 Hilbert space, 3.2 orthogonality, 3.3 orthogonal complement
+- **Key results:** **Thm 2.1 Cauchy--Schwarz inequality**, Cor 2.2 triangle inequality, Thm 2.3 parallelogram law, Prop 2.4 polarization identity, Prop 2.5 continuity of inner product, **Thm 3.1 Pythagorean theorem**, Prop 3.2 properties of orthogonal complements
+- **Examples:** 2.1 standard inner product spaces (R^n, ell^2, L^2), 3.1 standard Hilbert spaces
+
+#### Lesson 20: Projections, Orthonormal Bases, and Riesz Representation
+
+> [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf), Sections 4--6
+
+- **Definitions:** 4.1 orthogonal projection, 5.1 orthonormal set, 5.2 Fourier coefficients, 5.3 orthonormal basis (Hilbert basis)
+- **Key results:** **Thm 4.1 best approximation in closed convex sets**, **Thm 4.2 projection theorem** (H = M + M^perp), Prop 4.3 properties of orthogonal projections, Thm 5.1 Gram--Schmidt process, **Thm 5.2 Bessel's inequality**, **Thm 5.3 Parseval's identity and Fourier expansion**, Prop 5.4 separability and orthonormal bases, **Thm 6.1 Riesz representation theorem** (H* isomorphic to H)
+
+#### Lesson 21: Fundamental Theorems of Functional Analysis
+
+> [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf), Section 7
+
+- **Definitions:** 7.1 sublinear functional, 7.2 closed graph
+- **Key results:** **Thm 7.1 Hahn--Banach theorem** (real case), Cor 7.2 extension of bounded linear functionals, Cor 7.3 norming functional existence, Thm 7.4 Baire Category (review), **Thm 7.5 Uniform Boundedness Principle (Banach--Steinhaus)**, **Thm 7.6 Open Mapping Theorem**, Cor 7.7 Bounded Inverse Theorem, **Thm 7.8 Closed Graph Theorem**
+
+#### Lesson 22: Fixed Point Theorems
+
+> [02-hilbert-spaces-and-operators](01-math-foundations/02-functional-analysis/02-hilbert-spaces-and-operators.pdf), Section 8
+
+- **Definitions:** 8.1 contraction, 8.2 compact operator, 8.3 set-valued map / correspondence, 8.4 upper hemicontinuity
+- **Key results:** **Thm 8.1 Banach Contraction Mapping Theorem** (value iteration convergence), **Thm 8.2 Brouwer Fixed Point Theorem**, **Thm 8.3 Schauder Fixed Point Theorem**, **Thm 8.4 Kakutani Fixed Point Theorem** (Nash equilibrium existence)
+- **Exercises:** 9.1--9.10 (including Ex 9.6: Bellman operator is a contraction)
 
 ### 1.3 Optimization Theory (Lessons 23--32)
 
@@ -58,32 +194,136 @@ ten chapters skimmed.
 **Stage 2:** Nesterov, Y. *Introductory Lectures on Convex Optimization* (2004)
 **Stage 3:** Borkar, V.S. *Stochastic Approximation: A Dynamical Systems Viewpoint* (2008)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 23 | Boyd Ch.2: convex sets | Convex sets, cones, hyperplanes, separation theorems | [01-convex-analysis](01-math-foundations/03-optimization/01-convex-analysis.pdf) |
-| 24 | Boyd Ch.3: convex functions | Convex functions, operations preserving convexity, conjugate functions | [01-convex-analysis](01-math-foundations/03-optimization/01-convex-analysis.pdf) |
-| 25 | Boyd Ch.4: convex optimization problems | LP, QP, SOCP, SDP formulations | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 26 | Boyd Ch.5: Lagrangian duality | Lagrangian, dual problem, weak/strong duality, KKT conditions | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 27 | Boyd Ch.9: unconstrained optimization | Gradient descent, steepest descent, convergence analysis | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 28 | Boyd Ch.10--11: Newton, interior point | Newton's method, barrier method, interior point algorithms | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 29 | Nesterov Ch.1--2: smooth optimization | L-Lipschitz gradient, mu-strong convexity, O(1/k) and O(rho^k) rates | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 30 | Nesterov Ch.3--4: nonsmooth, proximal | Nesterov acceleration, proximal operators, proximal gradient methods | [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf) |
-| 31 | Borkar Ch.1--2: Robbins-Monro, ODE method | Stochastic approximation, Robbins-Monro algorithm, ODE characterization | [03-stochastic-approximation](01-math-foundations/03-optimization/03-stochastic-approximation.pdf) |
-| 32 | Borkar Ch.3, 6: convergence, two-timescale | Convergence analysis via ODE, two-timescale stochastic approximation | [03-stochastic-approximation](01-math-foundations/03-optimization/03-stochastic-approximation.pdf) |
+#### Lesson 23: Convex Sets
+
+> [01-convex-analysis](01-math-foundations/03-optimization/01-convex-analysis.pdf), Sections 1--2
+
+- **Definitions:** 2.1 affine set, 2.2 convex set, 2.3 convex combination / convex hull, 2.5 cone
+- **Key results:** Prop 2.4 convex hull is smallest convex superset, Prop 2.10 intersection preserves convexity, Prop 2.11 affine image/preimage preserves convexity, Prop 2.12 perspective function preserves convexity, **Thm 2.13 separating hyperplane theorem**, **Thm 2.14 supporting hyperplane theorem**
+- **Examples:** 2.6 hyperplanes / halfspaces, 2.7 balls / ellipsoids, 2.8 polyhedra, 2.9 positive semidefinite cone
+
+#### Lesson 24: Convex Functions, Conjugates, and Quasiconvexity
+
+> [01-convex-analysis](01-math-foundations/03-optimization/01-convex-analysis.pdf), Sections 3--7
+
+- **Definitions:** 3.1 convex function, 3.2 epigraph, 5.1 Fenchel conjugate, 6.1 sublevel set, 6.3 quasiconvex function, 7.1 log-concave / log-convex function
+- **Key results:** Prop 3.3 epigraph characterization (f convex <=> epi(f) convex), Prop 3.5 line restriction, **Thm 3.6 first-order condition for convexity**, Thm 3.7 second-order condition, **Thm 3.10 Jensen's inequality**, Prop 4.1--4.8 operations preserving convexity (sums, affine composition, pointwise max/sup, scalar composition, partial minimization, perspective), Prop 5.2 conjugate is always convex, **Thm 5.3 Fenchel's inequality**, **Thm 5.4 biconjugate theorem**
+- **Exercises:** 8.1--8.10
+
+#### Lesson 25: Convex Optimization Problems
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Sections 1--2
+
+- **Definitions:** 2.1 convex optimization problem (standard form), 2.2 feasible set / optimal value, 2.3 LP, 2.4 QP, 2.5 SOCP, 2.6 SDP
+- **Key results:** **Thm 2.1 local optimality implies global optimality** for convex problems, Rem 2.1 hierarchy LP < QP < SOCP < SDP
+
+#### Lesson 26: Lagrangian Duality and KKT Conditions
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Sections 3--4
+
+- **Definitions:** 3.1 Lagrangian, 3.2 Lagrange dual function, 3.3 dual problem, 3.4 strong duality, 3.5 Slater's condition, 4.1 KKT conditions
+- **Key results:** Prop 3.1 dual function is concave, **Thm 3.2 weak duality**, **Thm 3.3 Slater's condition implies strong duality**, **Thm 4.1 KKT necessary conditions** (under strong duality), **Thm 4.2 KKT sufficient conditions** (for convex problems)
+
+#### Lesson 27: Gradient Descent and Convergence Rates
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Section 5
+
+- **Definitions:** 5.1 L-smoothness, 5.2 mu-strong convexity
+- **Key results:** **Lem 5.1 descent lemma** (quadratic upper bound), **Thm 5.2 O(1/k) convergence for convex L-smooth functions**, **Thm 5.3 linear convergence for mu-strongly convex L-smooth functions** (rate (kappa-1)/(kappa+1))
+
+#### Lesson 28: Nesterov Acceleration
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Section 6
+
+- **Definitions:** 6.1 Nesterov's accelerated gradient method (momentum iteration)
+- **Key results:** **Thm 6.1 O(1/k^2) convergence of Nesterov's method**, Rem 6.1 this rate matches the lower bound (optimal among first-order methods)
+
+#### Lesson 29: Proximal Methods
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Section 7
+
+- **Definitions:** 7.1 proximal operator, 7.2 proximal gradient method, 7.3 FISTA
+- **Key results:** Prop 7.1 proximal operator is well-defined, **Thm 7.2 convergence of proximal gradient method**, **Thm 7.3 FISTA O(1/k^2) convergence**
+- **Examples:** 7.1 soft thresholding (l1 proximal), 7.2 indicator function (projection onto constraint set)
+
+#### Lesson 30: Interior-Point Methods
+
+> [02-convex-optimization-and-duality](01-math-foundations/03-optimization/02-convex-optimization-and-duality.pdf), Section 8
+
+- **Definitions:** 8.1 logarithmic barrier, 8.2 central path, 8.3 barrier method
+- **Key results:** Prop 8.1 barrier is convex, **Thm 8.2 central path optimality bound**, **Thm 8.3 O(sqrt(m) log(1/epsilon)) complexity of barrier method**
+- **Exercises:** 9.1--9.10 (including Ex 9.9: duality gap in constrained MDP)
+
+#### Lesson 31: Robbins--Monro and the ODE Method
+
+> [03-stochastic-approximation](01-math-foundations/03-optimization/03-stochastic-approximation.pdf), Sections 1--3
+
+- **Definitions:** 2.1 step-size sequence (Robbins--Monro conditions), 2.2 Robbins--Monro iteration, 2.3 standing assumptions, 3.1 associated ODE, 3.2 interpolated trajectory, 3.3 ODE method assumptions, 3.4 Borkar--Meyn assumptions
+- **Key results:** **Thm 2.1 Robbins--Monro convergence**, Lem 3.1 noise term vanishes asymptotically, **Thm 3.2 convergence via the ODE method**, **Thm 3.3 Borkar--Meyn stability theorem**
+- **Examples:** 2.1 stochastic root-finding
+
+#### Lesson 32: Convergence Rates, Two-Timescale SA, and RL Applications
+
+> [03-stochastic-approximation](01-math-foundations/03-optimization/03-stochastic-approximation.pdf), Sections 4--7
+
+- **Definitions:** 5.1 two-timescale SA, 5.2 two-timescale assumptions, 6.1 linear SA
+- **Key results:** **Thm 4.1 CLT for stochastic approximation**, **Thm 4.2 Polyak--Ruppert averaging**, **Thm 5.1 two-timescale convergence (Borkar)**, Prop 5.2 lock-in to attractors, Thm 6.1 convergence of linear SA, Cor 6.2 automatic stability for linear SA, Thm 6.3 complete convergence for linear SA
+- **RL connections:** Sec 7 -- TD(0) as SA, Q-learning as asynchronous SA, REINFORCE as SA on gradient ascent ODE, actor-critic as two-timescale SA
+- **Exercises:** 8.1--8.10 (including Ex 8.8: deadly triad, Ex 8.10: GTD2)
 
 ### 1.4 Game Theory (Lessons 33--38)
 
 **Primary text:** Fudenberg, D. & Tirole, J. *Game Theory* (1991)
 **Alternative:** Osborne, M.J. & Rubinstein, A. *A Course in Game Theory*
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 33 | F&T Ch.1: static games | Normal-form games, Nash equilibrium existence (via Kakutani/Brouwer), mixed strategies | [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf) |
-| 34 | F&T Ch.2: iterated dominance | Iterated strict dominance, rationalizability, correlated equilibrium | [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf) |
-| 35 | F&T Ch.3: extensive-form games | Game trees, information sets, subgame perfect equilibrium, backward induction | [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf) |
-| 36 | F&T Ch.6: repeated games | Infinitely repeated games, folk theorems, discount factor and cooperation | [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf) |
-| 37 | F&T Ch.12: Bayesian games | Incomplete information, Bayesian Nash equilibrium, type spaces | [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf) |
-| 38 | F&T Ch.13: signaling games | Signaling, Perfect Bayesian Equilibrium (PBE), potential games | [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf) |
+#### Lesson 33: Normal-Form Games and Pure Nash Equilibrium
+
+> [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf), Sections 1--3
+
+- **Definitions:** 2.1 normal-form game, 2.2 bimatrix game, 2.3 dominance (strict/weak), 2.4 IESDS, 2.5 best response, 2.6 rationalizable strategies, 3.1 pure strategy Nash equilibrium
+- **Key results:** Prop 2.1 dominated strategies are never best responses, **Thm 2.2 order independence of IESDS**, Prop 2.3 IESDS and rationalizability coincide in two-player games, Prop 3.1 NE as mutual best response, Prop 3.2 Matching Pennies has no pure NE
+- **Examples:** 2.1 Prisoner's Dilemma, 2.2 Battle of the Sexes, 2.3 Matching Pennies, 2.4 Stag Hunt
+
+#### Lesson 34: Mixed Strategies, Nash Existence, and the Minimax Theorem
+
+> [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf), Sections 4--7
+
+- **Definitions:** 4.1 mixed strategy, 4.2 support, 4.3 mixed extension, 4.4 mixed NE, 5.1 upper hemicontinuity, 6.1 zero-sum game, 6.2 maximin / minimax values, 7.1 correlated equilibrium
+- **Key results:** **Thm 4.1 indifference principle**, Thm 5.1 Kakutani's FPT (review from Lesson 22), **Thm 5.2 Nash's existence theorem** (every finite game has a mixed NE), Lem 6.1 maximin <= minimax, **Thm 6.2 von Neumann minimax theorem**, Cor 6.3 NE characterization in zero-sum games, Prop 6.4 solving zero-sum games via LP, **Thm 7.1 every NE is a correlated equilibrium**, Prop 7.2 CE as a linear program
+
+#### Lesson 35: Extensive-Form Games and Subgame Perfection
+
+> [01-static-and-extensive-form-games](01-math-foundations/04-game-theory/01-static-and-extensive-form-games.pdf), Sections 8--9
+
+- **Definitions:** 8.1 extensive-form game, 8.2 perfect information, 8.3 perfect recall, 8.4 pure strategy in extensive form, 8.5 behavioral strategy, 9.1 subgame, 9.2 subgame perfect equilibrium (SPE), 9.3 backward induction
+- **Key results:** Prop 8.1 normal-form representation, **Thm 8.2 Kuhn's theorem** (behavioral <=> mixed under perfect recall), Prop 9.1 SPE refines NE, **Thm 9.3 backward induction yields SPE**, **Thm 9.4 Zermelo's theorem** (perfect-information finite games have pure SPE), Cor 9.5 chess has a determined outcome
+- **Exercises:** 10.1--10.10
+
+#### Lesson 36: Repeated Games and Folk Theorems
+
+> [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf), Sections 1--4
+
+- **Definitions:** 2.1 finitely repeated game, 2.2 SPE for repeated games, 3.1 infinitely repeated game (discounted), 3.2 feasible payoff set, 3.3 minimax value / individually rational payoffs, 3.4 grim trigger strategy, 3.5 tit-for-tat, 4.1 full dimensionality condition
+- **Key results:** **Thm 2.1 unraveling** (unique stage-game NE => unique SPE in finitely repeated game), Prop 2.2 repetition enables new equilibria with multiple stage-game NE, Prop 3.1 NE payoff lower bound, **Thm 4.1 Nash folk theorem**, **Thm 4.2 subgame perfect folk theorem (Fudenberg--Maskin)**
+- **Examples:** 3.1 cooperation in repeated Prisoner's Dilemma
+
+#### Lesson 37: Learning in Games and Bayesian Games
+
+> [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf), Sections 5--6
+
+- **Definitions:** 5.1 fictitious play, 5.2 external regret, 5.3 multiplicative weights update (MWU), 6.1 Bayesian game, 6.2 Bayesian Nash equilibrium (BNE)
+- **Key results:** Thm 5.1 FP convergence in 2x2 zero-sum games, **Thm 5.2 Robinson's theorem** (FP converges in all zero-sum games), **Thm 5.3 MWU regret bound** O(sqrt(T log K)), **Thm 5.4 no-regret learning implies NE in zero-sum games**, **Thm 6.1 existence of BNE** (in finite Bayesian games)
+- **Examples:** 6.1 Cournot duopoly with unknown costs, 6.2 first-price sealed-bid auction
+
+#### Lesson 38: Signaling, Perfect Bayesian Equilibrium, and Potential Games
+
+> [02-repeated-games-and-incomplete-info](01-math-foundations/04-game-theory/02-repeated-games-and-incomplete-info.pdf), Sections 7--9
+
+- **Definitions:** 7.1 system of beliefs, 7.2 perfect Bayesian equilibrium (PBE), 7.3 signaling game, 7.4 equilibrium types (separating / pooling / semi-separating), 8.1 exact potential game, 8.2 ordinal potential game, 8.3 best-response dynamics, 8.4 congestion game
+- **Key results:** Prop 7.1 PBE existence in finite signaling games, **Thm 8.1 potential games have pure NE**, **Thm 8.2 finite improvement property**, Cor 8.3 better-response dynamics converge, **Thm 8.4 Rosenthal's theorem** (congestion games are exact potential games), Cor 8.5 congestion games have pure NE
+- **RL connections:** Sec 9 -- independent learners in repeated games, self-play and fictitious play, opponent modeling as Bayesian inference, potential-based reward shaping
+- **Examples:** 7.1 Spence's job market signaling, 8.1 network routing, 8.2 resource allocation
+- **Exercises:** 10.1--10.10
 
 ---
 
