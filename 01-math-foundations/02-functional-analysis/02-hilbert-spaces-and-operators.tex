@@ -1,0 +1,1611 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 7: Hilbert Spaces and Operators}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\interior}{int}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\spn}{span}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\range}{range}
+\DeclareMathOperator{\nullspace}{null}
+\DeclareMathOperator{\diam}{diam}
+
+% ---- Title ----
+\title{\textbf{Lesson 7: Hilbert Spaces and Operators}\\[10pt]
+\large Inner Product Spaces, Fundamental Theorems, and Fixed Point Theory\\[5pt]
+\normalsize Session 7 of 102 $\mid$ Phase I: Mathematical Foundations $\mid$ 8\,h\\
+\normalsize Primary text: Kreyszig, \emph{Introductory Functional Analysis with Applications}, Chapters 3--5}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This lesson develops the theory of Hilbert spaces, proves the fundamental theorems
+of functional analysis, and establishes the fixed point theorems that underpin
+reinforcement learning convergence proofs and game-theoretic equilibrium existence.
+We begin with inner product spaces and the geometry they provide---projections,
+orthogonal decompositions, and best approximation---then prove the Riesz
+Representation Theorem identifying a Hilbert space with its dual. We present
+complete proofs of the Hahn--Banach Theorem, the Uniform Boundedness Principle,
+the Open Mapping Theorem, and the Closed Graph Theorem. Finally, we prove the
+Banach Contraction Mapping Theorem (the engine behind value iteration) and state
+the Brouwer, Schauder, and Kakutani fixed point theorems (the foundations for
+Nash equilibrium existence). Every theorem has a complete proof or detailed
+proof sketch, and RL/ML connections are highlighted throughout.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================================
+\section{Introduction}\label{sec:introduction}
+
+The passage from normed spaces to inner product spaces provides the crucial
+ingredient of \emph{geometry}: an inner product defines angles, orthogonality,
+and projections. These geometric tools are not merely elegant abstractions---they
+are the backbone of least-squares methods, kernel machines, and the projection
+operators used in temporal-difference learning (LSTD, LSPE).
+
+Complete inner product spaces---\emph{Hilbert spaces}---enjoy the richest
+structure among Banach spaces. The Projection Theorem, the Riesz Representation
+Theorem, and the spectral theory of operators on Hilbert spaces all depend on
+this completeness.
+
+Beyond Hilbert spaces, the four fundamental theorems of functional analysis
+(Hahn--Banach, Uniform Boundedness, Open Mapping, Closed Graph) are tools
+of immense power for proving existence and continuity results in abstract spaces.
+
+Finally, fixed point theorems translate the abstract structure of function spaces
+into concrete algorithmic guarantees:
+
+\begin{itemize}[leftmargin=2em]
+    \item The \textbf{Banach Contraction Mapping Theorem} guarantees that
+          value iteration converges: the Bellman operator is a
+          $\gamma$-contraction on the space of bounded value functions.
+    \item The \textbf{Brouwer and Schauder Fixed Point Theorems} guarantee
+          existence of fixed points for continuous maps on compact convex sets.
+    \item The \textbf{Kakutani Fixed Point Theorem} extends Brouwer to
+          set-valued maps, providing the standard proof that every finite
+          game has a Nash equilibrium.
+\end{itemize}
+
+\begin{rlconnection}[Why This Lesson Matters for RL/ML]
+\begin{enumerate}[leftmargin=2em]
+    \item \textbf{Projections and least-squares}: Temporal-difference methods
+          with linear function approximation (LSTD) project the Bellman
+          equation onto a subspace. The Projection Theorem makes this rigorous.
+    \item \textbf{Kernel methods}: Reproducing kernel Hilbert spaces (RKHS)
+          are Hilbert spaces of functions. The Riesz Representation Theorem
+          is the starting point for representer theorems.
+    \item \textbf{Value iteration convergence}: The Banach Contraction Mapping
+          Theorem, applied to the Bellman operator, gives both existence of
+          the optimal value function and the geometric convergence rate
+          $\|V_n - V^*\| \leq \gamma^n \|V_0 - V^*\|$.
+    \item \textbf{Nash equilibrium existence}: The Kakutani Fixed Point Theorem,
+          applied to the best-response correspondence, proves existence of
+          Nash equilibria in finite games---the theoretical anchor of MARL.
+    \item \textbf{Uniform Boundedness}: Ensures that pointwise-bounded
+          families of operators are uniformly bounded, a key tool in proving
+          convergence of approximation schemes.
+\end{enumerate}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.} Familiarity with metric spaces, normed spaces,
+Banach spaces, and bounded linear operators as covered in Lesson~6. Measure
+theory from Lessons~1--2 is used in $L^2$ examples.
+
+\medskip
+\noindent\textbf{Outline.}
+Section~\ref{sec:inner-product} develops inner product spaces and proves the
+Cauchy--Schwarz inequality.
+Section~\ref{sec:hilbert} introduces Hilbert spaces, orthogonality, and
+orthogonal decomposition.
+Section~\ref{sec:projection} proves the Projection Theorem and studies
+projection operators.
+Section~\ref{sec:orthonormal} covers orthonormal systems, Bessel's inequality,
+and Parseval's identity.
+Section~\ref{sec:riesz} proves the Riesz Representation Theorem.
+Section~\ref{sec:fundamental} presents the four fundamental theorems of
+functional analysis with complete proofs.
+Section~\ref{sec:fixed-point} proves the Banach, Brouwer, Schauder, and
+Kakutani fixed point theorems.
+Section~\ref{sec:exercises} provides exercises.
+Section~\ref{sec:summary} summarizes the key results.
+
+
+%% ============================================================================
+%% SECTION 2: INNER PRODUCT SPACES
+%% ============================================================================
+\section{Inner Product Spaces}\label{sec:inner-product}
+
+\begin{definition}[Inner Product Space]\label{def:inner-product}
+Let $X$ be a vector space over $\mathbb{F} \in \{\R, \C\}$. An
+\emph{inner product} on $X$ is a map
+$\langle \cdot, \cdot \rangle \colon X \times X \to \mathbb{F}$ satisfying,
+for all $x, y, z \in X$ and $\alpha \in \mathbb{F}$:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Linearity in the first argument:}
+          $\langle \alpha x + y, z \rangle = \alpha \langle x, z \rangle
+          + \langle y, z \rangle$.
+    \item \textbf{Conjugate symmetry:}
+          $\langle x, y \rangle = \overline{\langle y, x \rangle}$.
+    \item \textbf{Positive definiteness:}
+          $\langle x, x \rangle \geq 0$, with equality if and only if $x = 0$.
+\end{enumerate}
+A vector space equipped with an inner product is called an
+\emph{inner product space} (or \emph{pre-Hilbert space}).
+\end{definition}
+
+\begin{remark}\label{rem:convention}
+We adopt the convention that the inner product is linear in the first argument
+and conjugate-linear in the second. Some texts use the opposite convention.
+In the real case, conjugate symmetry reduces to symmetry:
+$\langle x, y \rangle = \langle y, x \rangle$.
+\end{remark}
+
+\begin{example}[Standard Inner Product Spaces]\label{ex:standard-ip}
+\begin{enumerate}[label=(\alph*)]
+    \item \textbf{Euclidean space $\R^n$:}
+          $\langle x, y \rangle = \sum_{i=1}^n x_i y_i$.
+    \item \textbf{Sequence space $\ell^2$:}
+          $\langle x, y \rangle = \sum_{i=1}^\infty x_i \overline{y_i}$
+          for $x = (x_i), y = (y_i) \in \ell^2$.
+    \item \textbf{Function space $L^2(\mu)$:}
+          $\langle f, g \rangle = \int f \,\overline{g}\, d\mu$
+          for $f, g \in L^2(\mu)$.
+    \item \textbf{Matrix space $\R^{m \times n}$:}
+          $\langle A, B \rangle = \mathrm{tr}(B^\top A)$, the Frobenius
+          inner product.
+\end{enumerate}
+\end{example}
+
+\subsection{The Cauchy--Schwarz Inequality}
+
+The single most important inequality in all of analysis.
+
+\begin{theorem}[Cauchy--Schwarz Inequality]\label{thm:cauchy-schwarz}
+Let $X$ be an inner product space. For all $x, y \in X$,
+\[
+    |\langle x, y \rangle| \leq \|x\| \cdot \|y\|,
+\]
+where $\|x\| = \langle x, x \rangle^{1/2}$. Equality holds if and only if
+$x$ and $y$ are linearly dependent.
+\end{theorem}
+
+\begin{proof}
+If $y = 0$, both sides are zero and the inequality holds trivially.
+Assume $y \neq 0$. For any $\alpha \in \mathbb{F}$,
+\[
+    0 \leq \langle x - \alpha y, x - \alpha y \rangle
+    = \|x\|^2 - \alpha \langle y, x \rangle
+      - \overline{\alpha} \langle x, y \rangle
+      + |\alpha|^2 \|y\|^2.
+\]
+Choose $\alpha = \langle x, y \rangle / \|y\|^2$. Then
+$\overline{\alpha} = \overline{\langle x, y \rangle} / \|y\|^2
+= \langle y, x \rangle / \|y\|^2$, and
+\begin{align*}
+    0 &\leq \|x\|^2
+        - \frac{\langle x, y \rangle}{\|y\|^2} \langle y, x \rangle
+        - \frac{\langle y, x \rangle}{\|y\|^2} \langle x, y \rangle
+        + \frac{|\langle x, y \rangle|^2}{\|y\|^4} \|y\|^2 \\
+      &= \|x\|^2
+        - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
+        - \frac{|\langle x, y \rangle|^2}{\|y\|^2}
+        + \frac{|\langle x, y \rangle|^2}{\|y\|^2} \\
+      &= \|x\|^2 - \frac{|\langle x, y \rangle|^2}{\|y\|^2}.
+\end{align*}
+Rearranging gives $|\langle x, y \rangle|^2 \leq \|x\|^2 \|y\|^2$, and
+taking square roots yields the result.
+
+For the equality condition: if $x = \beta y$ for some $\beta \in \mathbb{F}$,
+then $|\langle x, y \rangle| = |\beta| \|y\|^2 = \|x\| \|y\|$.
+Conversely, equality in the above derivation means
+$\langle x - \alpha y, x - \alpha y \rangle = 0$, hence $x = \alpha y$.
+\end{proof}
+
+\begin{corollary}[Triangle Inequality]\label{cor:triangle}
+$\|x + y\| \leq \|x\| + \|y\|$ for all $x, y \in X$.
+\end{corollary}
+
+\begin{proof}
+$\|x + y\|^2 = \|x\|^2 + 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2
+\leq \|x\|^2 + 2\|x\|\|y\| + \|y\|^2 = (\|x\| + \|y\|)^2$.
+\end{proof}
+
+Thus $\|x\| = \langle x, x \rangle^{1/2}$ defines a norm on $X$: the
+\emph{induced norm}. Every inner product space is a normed space.
+
+\begin{theorem}[Parallelogram Law]\label{thm:parallelogram}
+In an inner product space,
+\[
+    \|x + y\|^2 + \|x - y\|^2 = 2(\|x\|^2 + \|y\|^2)
+    \quad \text{for all } x, y \in X.
+\]
+\end{theorem}
+
+\begin{proof}
+Expand both sides:
+\begin{align*}
+    \|x + y\|^2 &= \|x\|^2 + 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2, \\
+    \|x - y\|^2 &= \|x\|^2 - 2\,\mathrm{Re}\,\langle x, y \rangle + \|y\|^2.
+\end{align*}
+Adding these gives the result.
+\end{proof}
+
+\begin{remark}\label{rem:parallelogram-converse}
+The converse holds: a norm satisfying the parallelogram law arises from an inner
+product (recovered via the polarization identity). This means, for example,
+that $\ell^p$ for $p \neq 2$ is \emph{not} an inner product space.
+\end{remark}
+
+\begin{proposition}[Polarization Identity]\label{prop:polarization}
+In a real inner product space,
+\[
+    \langle x, y \rangle
+    = \frac{1}{4}\bigl(\|x+y\|^2 - \|x-y\|^2\bigr).
+\]
+In a complex inner product space,
+\[
+    \langle x, y \rangle
+    = \frac{1}{4}\sum_{k=0}^{3} i^k \|x + i^k y\|^2.
+\]
+\end{proposition}
+
+\begin{proof}
+For the real case, expand $\|x+y\|^2 - \|x-y\|^2 = 4\,\langle x, y \rangle$
+using the same computation as in the parallelogram law proof.
+
+For the complex case, let $\omega = i$ and compute:
+\begin{align*}
+    \sum_{k=0}^{3} i^k \|x + i^k y\|^2
+    &= \sum_{k=0}^{3} i^k \bigl(\|x\|^2 + i^k \langle y, x \rangle
+       + \overline{i^k} \langle x, y \rangle + \|y\|^2\bigr).
+\end{align*}
+Since $\sum_{k=0}^{3} i^k = 0$ and $\sum_{k=0}^{3} i^{2k} = 0$,
+the $\|x\|^2$ and $\|y\|^2$ terms vanish. We have
+$\sum_{k=0}^{3} i^k \cdot \overline{i^k} = \sum_{k=0}^{3} |i^k|^2 = 4$
+and $\sum_{k=0}^{3} i^k \cdot i^k = \sum_{k=0}^{3} i^{2k} = 0$.
+Therefore the sum equals $4\,\langle x, y \rangle$.
+\end{proof}
+
+\begin{proposition}[Continuity of the Inner Product]\label{prop:ip-continuity}
+The inner product is jointly continuous: if $x_n \to x$ and $y_n \to y$ in an
+inner product space, then $\langle x_n, y_n \rangle \to \langle x, y \rangle$.
+\end{proposition}
+
+\begin{proof}
+$|\langle x_n, y_n \rangle - \langle x, y \rangle|
+\leq |\langle x_n - x, y_n \rangle| + |\langle x, y_n - y \rangle|
+\leq \|x_n - x\| \|y_n\| + \|x\| \|y_n - y\|$.
+Since convergent sequences are bounded, $\|y_n\| \leq M$ for some $M$,
+so the right side tends to zero.
+\end{proof}
+
+
+%% ============================================================================
+%% SECTION 3: HILBERT SPACES
+%% ============================================================================
+\section{Hilbert Spaces}\label{sec:hilbert}
+
+\begin{definition}[Hilbert Space]\label{def:hilbert-space}
+A \emph{Hilbert space} is an inner product space that is complete with respect
+to the norm induced by its inner product. That is, every Cauchy sequence
+converges in the norm $\|x\| = \langle x, x \rangle^{1/2}$.
+\end{definition}
+
+\begin{example}[Standard Hilbert Spaces]\label{ex:hilbert-spaces}
+\begin{enumerate}[label=(\alph*)]
+    \item $\R^n$ with the Euclidean inner product is a Hilbert space (finite-dimensional
+          normed spaces are always complete).
+    \item $\ell^2 = \{(x_i)_{i=1}^\infty : \sum |x_i|^2 < \infty\}$ is a Hilbert space.
+    \item $L^2(\mu) = \{f : \int |f|^2 \, d\mu < \infty\} / {\sim}$ (equivalence
+          classes modulo a.e.\ equality) is a Hilbert space by the Riesz--Fischer theorem.
+\end{enumerate}
+\end{example}
+
+\begin{warning}[Non-Example]
+The space $C[0,1]$ with the $L^2$ inner product
+$\langle f, g \rangle = \int_0^1 f(t)g(t)\, dt$ is an inner product space
+but \emph{not} a Hilbert space: one can construct Cauchy sequences of
+continuous functions whose limit in $L^2$ is not continuous.
+\end{warning}
+
+\subsection{Orthogonality}
+
+\begin{definition}[Orthogonality]\label{def:orthogonality}
+Two elements $x, y$ in an inner product space are \emph{orthogonal}, written
+$x \perp y$, if $\langle x, y \rangle = 0$. A set $S \subset X$ is
+\emph{orthogonal} if any two distinct elements of $S$ are orthogonal.
+\end{definition}
+
+\begin{theorem}[Pythagorean Theorem]\label{thm:pythagorean}
+If $x_1, \ldots, x_n$ are pairwise orthogonal, then
+\[
+    \Bigl\|\sum_{k=1}^n x_k\Bigr\|^2 = \sum_{k=1}^n \|x_k\|^2.
+\]
+\end{theorem}
+
+\begin{proof}
+$\bigl\|\sum_k x_k\bigr\|^2 = \sum_k \sum_j \langle x_k, x_j \rangle
+= \sum_k \langle x_k, x_k \rangle = \sum_k \|x_k\|^2$,
+since $\langle x_k, x_j \rangle = 0$ for $k \neq j$.
+\end{proof}
+
+\begin{definition}[Orthogonal Complement]\label{def:orthogonal-complement}
+For a subset $S \subset X$, the \emph{orthogonal complement} of $S$ is
+\[
+    S^\perp = \{x \in X : \langle x, s \rangle = 0 \text{ for all } s \in S\}.
+\]
+\end{definition}
+
+\begin{proposition}[Properties of Orthogonal Complements]\label{prop:orth-complement}
+Let $S, T$ be subsets of an inner product space $X$. Then:
+\begin{enumerate}[label=(\roman*)]
+    \item $S^\perp$ is a closed subspace of $X$.
+    \item $S \subset T \implies T^\perp \subset S^\perp$.
+    \item $S \subset (S^\perp)^\perp$.
+    \item $S^\perp = (\overline{\spn(S)})^\perp$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\begin{enumerate}[label=(\roman*)]
+    \item Linearity of the inner product in the first argument shows $S^\perp$
+          is a subspace. Continuity of the inner product
+          (Proposition~\ref{prop:ip-continuity}) shows it is closed:
+          if $x_n \in S^\perp$ and $x_n \to x$, then for every $s \in S$,
+          $\langle x, s \rangle = \lim_n \langle x_n, s \rangle = 0$.
+    \item If $x \in T^\perp$, then $\langle x, t \rangle = 0$ for all $t \in T
+          \supset S$, so $x \in S^\perp$.
+    \item If $s \in S$ and $x \in S^\perp$, then $\langle s, x \rangle = 0$,
+          so $s \in (S^\perp)^\perp$.
+    \item One inclusion: $S \subset \overline{\spn(S)}$ implies
+          $(\overline{\spn(S)})^\perp \subset S^\perp$.
+          Other inclusion: if $x \in S^\perp$, then $\langle x, s \rangle = 0$
+          for all $s \in S$. By linearity, $\langle x, y \rangle = 0$ for all
+          $y \in \spn(S)$. By continuity, $\langle x, y \rangle = 0$ for all
+          $y \in \overline{\spn(S)}$. \qedhere
+\end{enumerate}
+\end{proof}
+
+
+%% ============================================================================
+%% SECTION 4: PROJECTION THEOREM
+%% ============================================================================
+\section{The Projection Theorem}\label{sec:projection}
+
+\begin{theorem}[Best Approximation in Closed Convex Sets]\label{thm:best-approx}
+Let $H$ be a Hilbert space and $C \subset H$ a nonempty, closed, convex set.
+For every $x \in H$, there exists a unique $y_0 \in C$ such that
+\[
+    \|x - y_0\| = \inf_{y \in C} \|x - y\| =: d(x, C).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $d = \inf_{y \in C} \|x - y\|$. Choose a minimizing sequence
+$(y_n)$ in $C$ with $\|x - y_n\| \to d$.
+
+\textbf{Claim:} $(y_n)$ is Cauchy. By the parallelogram law applied to
+$a = x - y_n$ and $b = x - y_m$:
+\[
+    \|a + b\|^2 + \|a - b\|^2 = 2(\|a\|^2 + \|b\|^2).
+\]
+Here $a - b = y_m - y_n$ and
+$a + b = 2x - y_n - y_m = 2\bigl(x - \frac{y_n + y_m}{2}\bigr)$.
+Since $C$ is convex, $\frac{y_n + y_m}{2} \in C$, so
+$\|a + b\| = 2\bigl\|x - \frac{y_n + y_m}{2}\bigr\| \geq 2d$.
+Therefore
+\[
+    \|y_n - y_m\|^2
+    = 2(\|x - y_n\|^2 + \|x - y_m\|^2) - 4\Bigl\|x - \frac{y_n + y_m}{2}\Bigr\|^2
+    \leq 2(\|x - y_n\|^2 + \|x - y_m\|^2) - 4d^2.
+\]
+As $n, m \to \infty$, $\|x - y_n\|^2 \to d^2$ and $\|x - y_m\|^2 \to d^2$,
+so $\|y_n - y_m\|^2 \to 2d^2 + 2d^2 - 4d^2 = 0$. Thus $(y_n)$ is Cauchy.
+
+Since $H$ is complete and $C$ is closed, $y_n \to y_0 \in C$, and
+$\|x - y_0\| = \lim \|x - y_n\| = d$.
+
+\textbf{Uniqueness:} If $y_0, y_0'$ both achieve the infimum, apply the
+parallelogram law to $a = x - y_0, b = x - y_0'$:
+$\|y_0 - y_0'\|^2 = 2d^2 + 2d^2 - 4\|x - \frac{y_0 + y_0'}{2}\|^2
+\leq 4d^2 - 4d^2 = 0$, so $y_0 = y_0'$.
+\end{proof}
+
+\begin{theorem}[Projection Theorem]\label{thm:projection}
+Let $H$ be a Hilbert space and $M \subset H$ a closed subspace. For every
+$x \in H$, there exist unique elements $m \in M$ and $z \in M^\perp$ such that
+\[
+    x = m + z.
+\]
+The element $m$ is the unique best approximation of $x$ in $M$, and is
+characterized by the condition $x - m \in M^\perp$.
+\end{theorem}
+
+\begin{proof}
+By Theorem~\ref{thm:best-approx}, there exists a unique $m \in M$ minimizing
+$\|x - m\|$. Set $z = x - m$.
+
+\textbf{Claim:} $z \in M^\perp$. For any $v \in M$ and $\alpha \in \mathbb{F}$,
+$m + \alpha v \in M$ (since $M$ is a subspace), so
+\[
+    \|z\|^2 \leq \|x - (m + \alpha v)\|^2 = \|z - \alpha v\|^2
+    = \|z\|^2 - 2\,\mathrm{Re}\,(\alpha \langle v, z \rangle)
+      + |\alpha|^2 \|v\|^2.
+\]
+For $v \neq 0$, choose $\alpha = \langle z, v \rangle / \|v\|^2$.
+Then $\overline{\alpha} = \langle v, z \rangle / \|v\|^2$ and
+$\alpha \langle v, z \rangle = |\langle z, v \rangle|^2 / \|v\|^2$, giving
+\[
+    0 \leq -\frac{|\langle z, v \rangle|^2}{\|v\|^2},
+\]
+hence $\langle z, v \rangle = 0$ for all $v \in M$, i.e., $z \in M^\perp$.
+
+\textbf{Uniqueness:} If $x = m_1 + z_1 = m_2 + z_2$ with $m_i \in M$ and
+$z_i \in M^\perp$, then $m_1 - m_2 = z_2 - z_1 \in M \cap M^\perp$.
+But $\langle w, w \rangle = 0$ for any $w \in M \cap M^\perp$, so $w = 0$.
+\end{proof}
+
+\begin{keyresult}[Orthogonal Decomposition]
+If $M$ is a closed subspace of a Hilbert space $H$, then
+$H = M \oplus M^\perp$ (internal direct sum), meaning every $x \in H$ has
+a unique decomposition $x = m + z$ with $m \in M$, $z \in M^\perp$.
+Moreover, $(M^\perp)^\perp = M$.
+\end{keyresult}
+
+\begin{definition}[Orthogonal Projection]\label{def:projection-operator}
+The \emph{orthogonal projection} onto a closed subspace $M$ of a Hilbert
+space $H$ is the map $P_M \colon H \to H$ defined by $P_M(x) = m$, where
+$x = m + z$ is the unique decomposition from Theorem~\ref{thm:projection}.
+\end{definition}
+
+\begin{proposition}[Properties of Orthogonal Projections]\label{prop:projection-props}
+Let $P = P_M$ be the orthogonal projection onto a closed subspace $M$. Then:
+\begin{enumerate}[label=(\roman*)]
+    \item $P$ is linear.
+    \item $P^2 = P$ (idempotent).
+    \item $\range(P) = M$ and $\nullspace(P) = M^\perp$.
+    \item $\langle Px, y \rangle = \langle x, Py \rangle$ for all $x, y \in H$
+          (self-adjoint).
+    \item $\|P\| = 1$ if $M \neq \{0\}$ (bounded with operator norm 1).
+    \item $\|x - Px\| \leq \|x - m\|$ for all $m \in M$, with equality iff
+          $m = Px$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\begin{enumerate}[label=(\roman*)]
+    \item If $x = m_1 + z_1$ and $y = m_2 + z_2$, then
+          $\alpha x + \beta y = (\alpha m_1 + \beta m_2) + (\alpha z_1 + \beta z_2)$,
+          which is the decomposition since $M$ and $M^\perp$ are subspaces.
+          Thus $P(\alpha x + \beta y) = \alpha m_1 + \beta m_2 = \alpha Px + \beta Py$.
+    \item $Px \in M$, so $Px = Px + 0$ is the decomposition of $Px$,
+          giving $P(Px) = Px$.
+    \item Immediate from the decomposition.
+    \item $\langle Px, y \rangle = \langle Px, Py + (I - P)y \rangle
+          = \langle Px, Py \rangle + \langle Px, (I-P)y \rangle$.
+          Since $Px \in M$ and $(I-P)y \in M^\perp$, the second term vanishes.
+          Similarly $\langle x, Py \rangle = \langle Px, Py \rangle$.
+    \item $\|Px\|^2 = \langle Px, Px \rangle = \langle Px, x \rangle
+          \leq \|Px\| \|x\|$ by Cauchy--Schwarz, so $\|Px\| \leq \|x\|$,
+          hence $\|P\| \leq 1$. For $0 \neq m \in M$, $Pm = m$, so $\|P\| = 1$.
+    \item This is the best approximation property from Theorem~\ref{thm:best-approx}. \qedhere
+\end{enumerate}
+\end{proof}
+
+\begin{rlconnection}[Projections in Temporal-Difference Learning]
+In linear function approximation for RL, the value function is approximated
+in a subspace $M = \{X w : w \in \R^d\}$ where $X$ is a feature matrix.
+The LSTD (Least-Squares TD) algorithm computes an approximation
+$\hat{V} = P_M T V$ where $T$ is the Bellman operator and $P_M$ is the
+orthogonal projection onto $M$ (in a weighted $L^2$ norm). Understanding
+that $P_M$ is a bounded, idempotent, self-adjoint operator with
+$\|P_M\| = 1$ is essential for proving that the projected Bellman equation
+$V = P_M T V$ has a unique fixed point and that LSTD converges to it.
+\end{rlconnection}
+
+
+%% ============================================================================
+%% SECTION 5: ORTHONORMAL SYSTEMS
+%% ============================================================================
+\section{Orthonormal Systems}\label{sec:orthonormal}
+
+\begin{definition}[Orthonormal Set]\label{def:orthonormal}
+A set $\{e_\alpha\}_{\alpha \in A}$ in an inner product space is
+\emph{orthonormal} if
+\[
+    \langle e_\alpha, e_\beta \rangle = \delta_{\alpha\beta}
+    = \begin{cases} 1 & \text{if } \alpha = \beta, \\ 0 & \text{if } \alpha \neq \beta. \end{cases}
+\]
+\end{definition}
+
+\begin{theorem}[Gram--Schmidt Process]\label{thm:gram-schmidt}
+Let $(x_n)_{n=1}^\infty$ be a linearly independent sequence in an inner
+product space $X$. Define
+\begin{align*}
+    e_1 &= \frac{x_1}{\|x_1\|}, \\
+    \tilde{e}_n &= x_n - \sum_{k=1}^{n-1} \langle x_n, e_k \rangle e_k,
+    \qquad e_n = \frac{\tilde{e}_n}{\|\tilde{e}_n\|}
+    \quad (n \geq 2).
+\end{align*}
+Then $(e_n)$ is an orthonormal sequence with
+$\spn\{e_1, \ldots, e_n\} = \spn\{x_1, \ldots, x_n\}$ for every $n$.
+\end{theorem}
+
+\begin{proof}
+By induction. The base case $n = 1$ is clear. Suppose $e_1, \ldots, e_{n-1}$
+are orthonormal with $\spn\{e_1, \ldots, e_{n-1}\} = \spn\{x_1, \ldots, x_{n-1}\}$.
+Then $\tilde{e}_n = x_n - \sum_{k=1}^{n-1} \langle x_n, e_k \rangle e_k$
+satisfies $\langle \tilde{e}_n, e_j \rangle = \langle x_n, e_j \rangle
+- \langle x_n, e_j \rangle = 0$ for $j = 1, \ldots, n-1$.
+Since $(x_k)$ is linearly independent, $x_n \notin \spn\{x_1, \ldots, x_{n-1}\}$,
+so $\tilde{e}_n \neq 0$. Setting $e_n = \tilde{e}_n / \|\tilde{e}_n\|$ gives
+$\|e_n\| = 1$ and $\langle e_n, e_j \rangle = 0$ for $j < n$.
+The span equality follows since $x_n = \tilde{e}_n + \sum_{k=1}^{n-1}
+\langle x_n, e_k \rangle e_k$ expresses $x_n$ in terms of $e_1, \ldots, e_n$,
+and conversely $e_n$ is a linear combination of $x_1, \ldots, x_n$.
+\end{proof}
+
+\begin{definition}[Fourier Coefficients]\label{def:fourier}
+Given an orthonormal set $\{e_\alpha\}_{\alpha \in A}$ and $x \in X$, the
+\emph{Fourier coefficients} of $x$ are $\hat{x}_\alpha = \langle x, e_\alpha \rangle$.
+\end{definition}
+
+\begin{theorem}[Bessel's Inequality]\label{thm:bessel}
+Let $\{e_n\}_{n=1}^\infty$ be an orthonormal sequence in an inner product
+space $X$. For every $x \in X$,
+\[
+    \sum_{n=1}^\infty |\langle x, e_n \rangle|^2 \leq \|x\|^2.
+\]
+\end{theorem}
+
+\begin{proof}
+For any $N \in \N$, let $s_N = \sum_{n=1}^N \langle x, e_n \rangle e_n$.
+Then
+\[
+    0 \leq \|x - s_N\|^2
+    = \|x\|^2 - 2\,\mathrm{Re}\sum_{n=1}^N \langle x, e_n \rangle
+      \langle e_n, x \rangle + \sum_{n=1}^N |\langle x, e_n \rangle|^2
+    = \|x\|^2 - \sum_{n=1}^N |\langle x, e_n \rangle|^2,
+\]
+where we used orthonormality to compute $\|s_N\|^2 = \sum_{n=1}^N
+|\langle x, e_n \rangle|^2$ (Pythagorean theorem) and expanded the cross term.
+Rearranging gives $\sum_{n=1}^N |\langle x, e_n \rangle|^2 \leq \|x\|^2$.
+Since this holds for all $N$, the series converges and the inequality persists.
+\end{proof}
+
+\begin{definition}[Orthonormal Basis (Hilbert Basis)]\label{def:onb}
+An orthonormal set $\{e_\alpha\}_{\alpha \in A}$ in a Hilbert space $H$ is an
+\emph{orthonormal basis} (or \emph{complete orthonormal system}) if
+$\overline{\spn\{e_\alpha : \alpha \in A\}} = H$.
+Equivalently, $\{e_\alpha\}^\perp = \{0\}$.
+\end{definition}
+
+\begin{theorem}[Parseval's Identity and Fourier Expansion]\label{thm:parseval}
+Let $\{e_n\}_{n=1}^\infty$ be an orthonormal basis of a Hilbert space $H$.
+Then for every $x \in H$:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Fourier expansion:}
+          $x = \sum_{n=1}^\infty \langle x, e_n \rangle e_n$
+          (convergence in norm).
+    \item \textbf{Parseval's identity:}
+          $\|x\|^2 = \sum_{n=1}^\infty |\langle x, e_n \rangle|^2$.
+    \item \textbf{Generalized Parseval:}
+          $\langle x, y \rangle = \sum_{n=1}^\infty \langle x, e_n \rangle
+          \overline{\langle y, e_n \rangle}$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+Let $s_N = \sum_{n=1}^N \langle x, e_n \rangle e_n$.
+
+\textbf{(i)} We show $s_N \to x$. Let $M_N = \spn\{e_1, \ldots, e_N\}$.
+By Proposition~\ref{prop:projection-props}, $s_N = P_{M_N} x$ (the projection
+onto $M_N$) since $x - s_N \perp e_n$ for $n = 1, \ldots, N$.
+For any $\varepsilon > 0$, since $\overline{\spn\{e_n\}} = H$, there exist
+$N$ and scalars $c_1, \ldots, c_N$ with $\|x - \sum_{n=1}^N c_n e_n\| < \varepsilon$.
+Then $\|x - s_N\| \leq \|x - \sum c_n e_n\| < \varepsilon$ by best
+approximation. Thus $\|x - s_N\| \to 0$.
+
+\textbf{(ii)} $\|x\|^2 = \lim_N \|s_N\|^2 + \|x - s_N\|^2$... more directly,
+$\|x\|^2 = \lim_N (\|s_N\|^2 + \|x - s_N\|^2)$ by the Pythagorean theorem
+(since $s_N \perp (x - s_N)$). Since $\|x - s_N\| \to 0$,
+$\|x\|^2 = \lim_N \|s_N\|^2 = \sum_{n=1}^\infty |\langle x, e_n \rangle|^2$.
+
+\textbf{(iii)} Expand:
+$\langle x, y \rangle = \langle \sum_n \langle x, e_n \rangle e_n,
+\sum_m \langle y, e_m \rangle e_m \rangle$. By continuity of the inner
+product and orthonormality,
+$= \sum_n \langle x, e_n \rangle \overline{\langle y, e_n \rangle}$.
+\end{proof}
+
+\begin{proposition}[Separability and Orthonormal Bases]\label{prop:separability}
+A Hilbert space is separable if and only if it admits a countable orthonormal
+basis.
+\end{proposition}
+
+\begin{proof}
+$(\Leftarrow)$ If $\{e_n\}_{n=1}^\infty$ is a countable orthonormal basis,
+then finite rational linear combinations of the $e_n$ form a countable
+dense subset.
+
+$(\Rightarrow)$ Let $D = \{d_n\}$ be a countable dense subset. Apply
+Gram--Schmidt to any maximal linearly independent subsequence. The resulting
+orthonormal sequence has the same closed span as $D$, which is $H$.
+\end{proof}
+
+
+%% ============================================================================
+%% SECTION 6: RIESZ REPRESENTATION THEOREM
+%% ============================================================================
+\section{The Riesz Representation Theorem}\label{sec:riesz}
+
+\begin{theorem}[Riesz Representation Theorem]\label{thm:riesz}
+Let $H$ be a Hilbert space and $f \colon H \to \mathbb{F}$ a bounded linear
+functional ($f \in H^*$). Then there exists a unique $y \in H$ such that
+\[
+    f(x) = \langle x, y \rangle \quad \text{for all } x \in H.
+\]
+Moreover, $\|f\|_{H^*} = \|y\|_H$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Existence.} If $f = 0$, take $y = 0$.
+Suppose $f \neq 0$. Let $M = \ker f = \{x \in H : f(x) = 0\}$, which is
+a closed subspace (since $f$ is continuous). Since $f \neq 0$, there exists
+$z \in M^\perp$ with $z \neq 0$.
+
+By the Projection Theorem, $H = M \oplus M^\perp$. We claim
+$\dim(M^\perp) = 1$: if $z_1, z_2 \in M^\perp \setminus \{0\}$, then
+$f(z_2) z_1 - f(z_1) z_2 \in M$ (check: $f(f(z_2)z_1 - f(z_1)z_2) = 0$)
+and also in $M^\perp$, so it equals 0. Thus $z_1$ and $z_2$ are linearly
+dependent, confirming $\dim(M^\perp) = 1$.
+
+Hence $M^\perp = \spn\{z\}$ for some $z \neq 0$ with $f(z) \neq 0$.
+Every $x \in H$ can be written $x = m + \alpha z$ with $m \in M$, so
+$f(x) = \alpha f(z)$.
+
+Also, $\langle x, z \rangle = \langle m + \alpha z, z \rangle
+= \alpha \|z\|^2$ (since $m \perp z$), giving $\alpha = \langle x, z \rangle / \|z\|^2$.
+
+Therefore
+$f(x) = \frac{f(z)}{\|z\|^2} \langle x, z \rangle
+= \langle x, \frac{\overline{f(z)}}{\|z\|^2} z \rangle$.
+Set $y = \frac{\overline{f(z)}}{\|z\|^2} z$.
+
+\textbf{Uniqueness.} If $\langle x, y_1 \rangle = \langle x, y_2 \rangle$
+for all $x$, then $\langle x, y_1 - y_2 \rangle = 0$ for all $x$.
+Taking $x = y_1 - y_2$ gives $\|y_1 - y_2\|^2 = 0$.
+
+\textbf{Norm equality.}
+$|f(x)| = |\langle x, y \rangle| \leq \|x\| \|y\|$ by Cauchy--Schwarz,
+so $\|f\| \leq \|y\|$. Taking $x = y$:
+$f(y) = \langle y, y \rangle = \|y\|^2$, so $\|f\| \geq |f(y/\|y\|)| = \|y\|$.
+\end{proof}
+
+\begin{keyresult}[Riesz Representation -- Dual of a Hilbert Space]
+The map $\Phi \colon H \to H^*$ defined by $\Phi(y)(x) = \langle x, y \rangle$
+is a conjugate-linear isometric isomorphism. Thus $H \cong H^*$: a Hilbert
+space is isometrically isomorphic to its dual. This is a property
+\emph{unique} to Hilbert spaces among Banach spaces.
+\end{keyresult}
+
+\begin{rlconnection}[Riesz Representation and Kernel Methods]
+In a reproducing kernel Hilbert space (RKHS) $\mathcal{H}_K$, the evaluation
+functional $f \mapsto f(x)$ is bounded linear. By the Riesz Representation
+Theorem, there exists $K_x \in \mathcal{H}_K$ with $f(x) = \langle f, K_x \rangle$.
+The function $K(x, y) = \langle K_x, K_y \rangle$ is the reproducing kernel.
+This is the foundation of kernel methods in ML: support vector machines,
+Gaussian processes, and kernel-based policy evaluation in RL all rest on
+this identification.
+\end{rlconnection}
+
+
+%% ============================================================================
+%% SECTION 7: FUNDAMENTAL THEOREMS OF FUNCTIONAL ANALYSIS
+%% ============================================================================
+\section{Fundamental Theorems of Functional Analysis}\label{sec:fundamental}
+
+We now present the four pillars of linear functional analysis. These theorems
+hold in general Banach spaces (not just Hilbert spaces).
+
+\subsection{Hahn--Banach Theorem}
+
+\begin{definition}[Sublinear Functional]\label{def:sublinear}
+A function $p \colon X \to \R$ on a real vector space $X$ is \emph{sublinear} if:
+\begin{enumerate}[label=(\roman*)]
+    \item $p(\alpha x) = \alpha\, p(x)$ for all $\alpha > 0$ and $x \in X$
+          (positive homogeneity).
+    \item $p(x + y) \leq p(x) + p(y)$ for all $x, y \in X$ (subadditivity).
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Hahn--Banach Theorem, Real Case]\label{thm:hahn-banach}
+Let $X$ be a real vector space, $p \colon X \to \R$ a sublinear functional,
+and $Y \subset X$ a subspace. If $f \colon Y \to \R$ is a linear functional
+with $f(y) \leq p(y)$ for all $y \in Y$, then there exists a linear functional
+$F \colon X \to \R$ extending $f$ (i.e., $F|_Y = f$) such that
+$F(x) \leq p(x)$ for all $x \in X$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Extension by one dimension.}
+Let $x_0 \in X \setminus Y$ and $Y_1 = Y + \R x_0 = \{y + t x_0 : y \in Y, t \in \R\}$.
+We seek $c = F(x_0) \in \R$ such that $F(y + t x_0) = f(y) + tc$ satisfies
+$F \leq p$ on $Y_1$.
+
+For $t > 0$: $f(y) + tc \leq p(y + tx_0)$, i.e.,
+$c \leq \frac{1}{t}[p(y + tx_0) - f(y)] = p(y/t + x_0) - f(y/t)$.
+Since $y/t$ ranges over $Y$, we need
+$c \leq \inf_{u \in Y}[p(u + x_0) - f(u)]$.
+
+For $t < 0$: setting $s = -t > 0$, we need $f(y) - sc \leq p(y - sx_0)$,
+i.e., $c \geq f(y/s) - p(y/s - x_0)$, so
+$c \geq \sup_{v \in Y}[f(v) - p(v - x_0)]$.
+
+We must verify:
+$f(v) - p(v - x_0) \leq p(u + x_0) - f(u)$ for all $u, v \in Y$.
+This reduces to $f(u) + f(v) \leq p(u + x_0) + p(v - x_0)$.
+Indeed, $f(u) + f(v) = f(u + v) \leq p(u + v) = p((u + x_0) + (v - x_0))
+\leq p(u + x_0) + p(v - x_0)$.
+
+So we can choose $c$ in the interval
+$[\sup_v(f(v) - p(v - x_0)),\, \inf_u(p(u + x_0) - f(u))]$.
+
+\textbf{Step 2: Zorn's Lemma.}
+Let $\mathcal{F}$ be the set of all pairs $(Z, g)$ where $Y \subset Z \subset X$
+is a subspace and $g \colon Z \to \R$ is linear with $g|_Y = f$ and
+$g(z) \leq p(z)$ for all $z \in Z$. Order $\mathcal{F}$ by extension:
+$(Z_1, g_1) \leq (Z_2, g_2)$ if $Z_1 \subset Z_2$ and $g_2|_{Z_1} = g_1$.
+
+Every chain has an upper bound (take the union of subspaces and the common
+extension). By Zorn's Lemma, $\mathcal{F}$ has a maximal element $(Z^*, F)$.
+If $Z^* \neq X$, Step~1 would produce a proper extension, contradicting
+maximality. Hence $Z^* = X$.
+\end{proof}
+
+\begin{corollary}[Extension of Bounded Linear Functionals]\label{cor:hahn-banach-normed}
+Let $Y$ be a subspace of a normed space $X$ and $f \in Y^*$. Then there exists
+$F \in X^*$ with $F|_Y = f$ and $\|F\|_{X^*} = \|f\|_{Y^*}$.
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:hahn-banach} with $p(x) = \|f\| \cdot \|x\|$.
+Then $f(y) \leq |f(y)| \leq \|f\| \|y\| = p(y)$, and the extension $F$
+satisfies $F(x) \leq \|f\| \|x\|$ and $F(-x) \leq \|f\| \|x\|$,
+giving $|F(x)| \leq \|f\| \|x\|$, so $\|F\| \leq \|f\|$.
+Since $F$ extends $f$, $\|F\| \geq \|f\|$.
+\end{proof}
+
+\begin{corollary}\label{cor:hahn-banach-separation}
+For any $x_0 \neq 0$ in a normed space $X$, there exists $f \in X^*$ with
+$\|f\| = 1$ and $f(x_0) = \|x_0\|$.
+\end{corollary}
+
+\begin{proof}
+Define $g \colon \R x_0 \to \R$ by $g(\alpha x_0) = \alpha \|x_0\|$.
+Then $\|g\| = 1$ and $g(x_0) = \|x_0\|$.
+Extend by Corollary~\ref{cor:hahn-banach-normed}.
+\end{proof}
+
+\subsection{Baire Category Theorem and Uniform Boundedness}
+
+We need a preliminary result.
+
+\begin{theorem}[Baire Category Theorem]\label{thm:baire}
+Let $(X, d)$ be a complete metric space. If $X = \bigcup_{n=1}^\infty F_n$
+where each $F_n$ is closed, then at least one $F_n$ has nonempty interior.
+Equivalently, a countable intersection of open dense sets is dense.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that every $F_n$ has empty interior. Then each
+$G_n = X \setminus F_n$ is open and dense. We construct a nested sequence of
+closed balls: since $G_1$ is dense, pick $x_1 \in G_1$ and $r_1 < 1$ with
+$\overline{B(x_1, r_1)} \subset G_1$. Since $G_2$ is dense and
+$B(x_1, r_1)$ is open, pick $x_2 \in G_2 \cap B(x_1, r_1)$ and $r_2 < 1/2$
+with $\overline{B(x_2, r_2)} \subset G_2 \cap B(x_1, r_1)$.
+
+Inductively, we obtain $\overline{B(x_{n+1}, r_{n+1})} \subset G_{n+1}
+\cap B(x_n, r_n)$ with $r_n < 1/n$. The centers $(x_n)$ form a Cauchy
+sequence (since $d(x_m, x_n) < 2/\min(m,n)$ for $m, n$ large), converging
+to some $x^* \in X$ by completeness. Then $x^* \in \overline{B(x_n, r_n)}
+\subset G_n$ for all $n$, so $x^* \in \bigcap G_n = X \setminus \bigcup F_n
+= \emptyset$, a contradiction.
+\end{proof}
+
+\begin{theorem}[Uniform Boundedness Principle / Banach--Steinhaus]\label{thm:ubp}
+Let $X$ be a Banach space, $Y$ a normed space, and
+$\{T_\alpha\}_{\alpha \in A} \subset \mathcal{B}(X, Y)$ a family of bounded
+linear operators. If $\sup_\alpha \|T_\alpha x\| < \infty$ for every $x \in X$
+(pointwise bounded), then $\sup_\alpha \|T_\alpha\| < \infty$ (uniformly bounded).
+\end{theorem}
+
+\begin{proof}
+For each $n \in \N$, define the closed set
+\[
+    F_n = \{x \in X : \|T_\alpha x\| \leq n \text{ for all } \alpha \in A\}
+    = \bigcap_{\alpha \in A} \{x : \|T_\alpha x\| \leq n\}.
+\]
+Each $F_n$ is closed (as an intersection of closed sets, since each
+$x \mapsto \|T_\alpha x\|$ is continuous). Since the family is pointwise
+bounded, for each $x$ there exists $n$ with $x \in F_n$, so
+$X = \bigcup_{n=1}^\infty F_n$.
+
+By the Baire Category Theorem~\ref{thm:baire}, some $F_N$ has nonempty
+interior: there exist $x_0 \in X$ and $r > 0$ with $B(x_0, r) \subset F_N$.
+
+For any $x \in X$ with $\|x\| \leq 1$, we have $x_0 + rx \in B(x_0, r) \subset F_N$
+and $x_0 \in F_N$, so for all $\alpha$:
+\[
+    \|T_\alpha(rx)\| = \|T_\alpha(x_0 + rx) - T_\alpha(x_0)\|
+    \leq \|T_\alpha(x_0 + rx)\| + \|T_\alpha(x_0)\| \leq N + N = 2N.
+\]
+Thus $\|T_\alpha x\| \leq 2N/r$ for all $\|x\| \leq 1$, giving
+$\|T_\alpha\| \leq 2N/r$ for all $\alpha$.
+\end{proof}
+
+\begin{rlconnection}[Uniform Boundedness in Approximation Theory]
+The Uniform Boundedness Principle is used to prove negative results in
+approximation theory: certain approximation schemes \emph{must} diverge
+for some continuous functions. In RL, it guarantees that if a sequence
+of operators (e.g., truncated Bellman operators or finite-sample
+approximations) converges pointwise, the operator norms remain controlled.
+This is crucial for interchanging limits in convergence proofs.
+\end{rlconnection}
+
+\subsection{Open Mapping Theorem}
+
+\begin{theorem}[Open Mapping Theorem]\label{thm:open-mapping}
+Let $X$ and $Y$ be Banach spaces and $T \colon X \to Y$ a bounded linear
+operator that is surjective. Then $T$ is an open map: $T(U)$ is open in $Y$
+whenever $U$ is open in $X$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1:} We show $T(B_X(0, 1))$ contains a ball centered at 0 in $Y$.
+Write $B_X = B_X(0,1)$ and $B_Y = B_Y(0,1)$.
+
+Since $T$ is surjective, $Y = \bigcup_{n=1}^\infty T(nB_X) = \bigcup_{n=1}^\infty n \cdot T(B_X)$.
+By Baire's theorem, some $\overline{n \cdot T(B_X)}$ has nonempty interior.
+By scaling, $\overline{T(B_X)}$ has nonempty interior: there exist
+$y_0 \in Y$ and $s > 0$ with $B_Y(y_0, s) \subset \overline{T(B_X)}$.
+
+Since $\overline{T(B_X)}$ is symmetric (if $y \in \overline{T(B_X)}$, then
+$-y \in \overline{T(B_X)}$) and convex, we get
+$B_Y(0, s) \subset \overline{T(B_X)}$: for any $\|y\| < s$,
+$y + y_0 \in \overline{T(B_X)}$ and $-y + y_0 \in \overline{T(B_X)}$,
+and $y_0 \in \overline{T(B_X)}$, so
+$y = (y + y_0)/2 + (-y_0 + y)/2 + y_0 - y_0$... Let us be more careful.
+We have $y + y_0$ and $-y + y_0$ both in $\overline{T(B_X)}$, and
+$\overline{T(B_X)} - \overline{T(B_X)} \subset \overline{T(2B_X)}$
+(since $T(B_X) + T(B_X) \subset T(2B_X)$). In particular,
+$(y + y_0) - (-y + y_0) = 2y \in \overline{T(2B_X)}$, so
+$y \in \overline{T(B_X)}$. Hence $B_Y(0, s) \subset \overline{T(B_X)}$.
+
+\textbf{Step 2:} We show $\overline{T(B_X)} \subset T(2B_X)$, i.e.,
+the closure can be ``opened.'' Take $y \in \overline{T(B_X)}$. From Step 1,
+$B_Y(0, s) \subset \overline{T(B_X)}$, so for each $r > 0$,
+$B_Y(0, rs) \subset \overline{T(rB_X)}$.
+
+Choose $x_1 \in B_X$ with $\|y - Tx_1\| < s/2$. Then
+$y - Tx_1 \in B_Y(0, s/2) \subset \overline{T(\frac{1}{2}B_X)}$, so choose
+$x_2 \in \frac{1}{2}B_X$ with $\|y - Tx_1 - Tx_2\| < s/4$.
+Inductively, choose $x_n \in 2^{-(n-1)} B_X$ with
+$\|y - \sum_{k=1}^n Tx_k\| < s \cdot 2^{-n}$.
+
+Then $\sum_n \|x_n\| < 1 + 1/2 + 1/4 + \cdots = 2$. Since $X$ is complete,
+$x = \sum_{n=1}^\infty x_n$ converges with $\|x\| < 2$, and
+$Tx = \lim_{n \to \infty} T(\sum_{k=1}^n x_k) = y$. So $y \in T(2B_X)$.
+
+\textbf{Step 3:} Combining Steps 1 and 2:
+$B_Y(0, s) \subset \overline{T(B_X)} \subset T(2B_X)$, so
+$B_Y(0, s/2) \subset T(B_X)$.
+
+\textbf{Step 4:} $T$ is open. Let $U \subset X$ be open and $y_0 = Tx_0 \in T(U)$.
+Choose $r > 0$ with $B_X(x_0, r) \subset U$. Then
+$T(U) \supset T(B_X(x_0, r)) = Tx_0 + T(rB_X) \supset y_0 + B_Y(0, rs/2)$,
+so $T(U)$ is open.
+\end{proof}
+
+\begin{corollary}[Bounded Inverse Theorem]\label{cor:bounded-inverse}
+If $T \colon X \to Y$ is a bounded linear bijection between Banach spaces,
+then $T^{-1}$ is bounded.
+\end{corollary}
+
+\begin{proof}
+$T$ is an open map, so $T^{-1}$ is continuous (preimages of open sets under
+$T^{-1}$ are images of open sets under $T$).
+\end{proof}
+
+\subsection{Closed Graph Theorem}
+
+\begin{definition}[Closed Graph]\label{def:closed-graph}
+A linear operator $T \colon X \to Y$ between normed spaces has a
+\emph{closed graph} if its graph
+$G(T) = \{(x, Tx) : x \in X\} \subset X \times Y$ is closed in the
+product topology (equivalently, in the norm $\|(x,y)\| = \|x\| + \|y\|$).
+Equivalently: if $x_n \to x$ in $X$ and $Tx_n \to y$ in $Y$, then $y = Tx$.
+\end{definition}
+
+\begin{theorem}[Closed Graph Theorem]\label{thm:closed-graph}
+Let $X$ and $Y$ be Banach spaces. A linear operator $T \colon X \to Y$ is
+bounded if and only if it has a closed graph.
+\end{theorem}
+
+\begin{proof}
+$(\Rightarrow)$ If $T$ is bounded and $x_n \to x$, $Tx_n \to y$, then
+$Tx_n \to Tx$ by continuity, so $y = Tx$ by uniqueness of limits.
+
+$(\Leftarrow)$ Assume $G(T)$ is closed. Consider $X \times Y$ with the norm
+$\|(x,y)\| = \|x\| + \|y\|$, which is a Banach space. $G(T)$ is a closed
+subspace, hence itself a Banach space.
+
+Define $\pi_1 \colon G(T) \to X$ by $\pi_1(x, Tx) = x$ and
+$\pi_2 \colon G(T) \to Y$ by $\pi_2(x, Tx) = Tx$.
+Then $\pi_1$ is bounded, linear, and bijective. By the Bounded Inverse
+Theorem (Corollary~\ref{cor:bounded-inverse}), $\pi_1^{-1} \colon X \to G(T)$
+is bounded. Since $T = \pi_2 \circ \pi_1^{-1}$ and both $\pi_2$ and
+$\pi_1^{-1}$ are bounded, $T$ is bounded.
+\end{proof}
+
+\begin{remark}\label{rem:closed-graph-usage}
+The Closed Graph Theorem is often the most convenient way to prove that
+an operator is bounded: instead of estimating $\|Tx\|$ directly, one
+only needs to verify the sequential closedness condition, which is often
+easier in applications.
+\end{remark}
+
+
+%% ============================================================================
+%% SECTION 8: FIXED POINT THEOREMS
+%% ============================================================================
+\section{Fixed Point Theorems}\label{sec:fixed-point}
+
+Fixed point theorems guarantee the existence (and sometimes uniqueness) of
+solutions to equations of the form $T(x) = x$. They are among the most
+powerful tools in analysis, with direct applications to existence and
+convergence theorems in RL.
+
+\subsection{Banach Contraction Mapping Theorem}
+
+\begin{definition}[Contraction]\label{def:contraction}
+Let $(X, d)$ be a metric space. A map $T \colon X \to X$ is a
+\emph{contraction} (or \emph{contraction mapping}) if there exists
+$\gamma \in [0, 1)$ such that
+\[
+    d(Tx, Ty) \leq \gamma \, d(x, y) \quad \text{for all } x, y \in X.
+\]
+The constant $\gamma$ is called the \emph{contraction factor}.
+\end{definition}
+
+\begin{theorem}[Banach Contraction Mapping Theorem]\label{thm:banach-contraction}
+Let $(X, d)$ be a nonempty complete metric space and $T \colon X \to X$ a
+contraction with factor $\gamma \in [0,1)$. Then:
+\begin{enumerate}[label=(\roman*)]
+    \item $T$ has a unique fixed point $x^* \in X$ (i.e., $Tx^* = x^*$).
+    \item For any $x_0 \in X$, the iterates $x_{n+1} = Tx_n$ satisfy
+          $x_n \to x^*$.
+    \item The rate of convergence is geometric:
+          $d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma} d(x_0, x_1)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(i) and (ii): Existence and convergence.}
+Fix $x_0 \in X$ and define $x_{n+1} = Tx_n$. First,
+\[
+    d(x_{n+1}, x_n) = d(Tx_n, Tx_{n-1}) \leq \gamma \, d(x_n, x_{n-1})
+    \leq \cdots \leq \gamma^n d(x_1, x_0).
+\]
+For $m > n$, by the triangle inequality:
+\begin{align*}
+    d(x_m, x_n) &\leq \sum_{k=n}^{m-1} d(x_{k+1}, x_k)
+    \leq \sum_{k=n}^{m-1} \gamma^k d(x_1, x_0)
+    \leq \frac{\gamma^n}{1 - \gamma} d(x_1, x_0).
+\end{align*}
+Since $\gamma < 1$, $\gamma^n \to 0$, so $(x_n)$ is Cauchy. By completeness,
+$x_n \to x^*$ for some $x^* \in X$.
+
+Since $T$ is continuous (in fact, Lipschitz), $Tx^* = T(\lim x_n) = \lim Tx_n
+= \lim x_{n+1} = x^*$.
+
+\textbf{Uniqueness.} If $Tx^* = x^*$ and $Ty^* = y^*$, then
+$d(x^*, y^*) = d(Tx^*, Ty^*) \leq \gamma \, d(x^*, y^*)$, so
+$(1 - \gamma) d(x^*, y^*) \leq 0$, giving $d(x^*, y^*) = 0$.
+
+\textbf{(iii): Rate of convergence.}
+Letting $m \to \infty$ in the estimate above:
+$d(x^*, x_n) = \lim_{m \to \infty} d(x_m, x_n)
+\leq \frac{\gamma^n}{1 - \gamma} d(x_1, x_0)$.
+\end{proof}
+
+\begin{keyresult}[Banach Contraction Mapping Theorem]
+In a complete metric space, a contraction has a unique fixed point, iterative
+computation converges from any starting point, and the convergence rate is
+geometric: $d(x_n, x^*) \leq \frac{\gamma^n}{1 - \gamma} d(x_0, Tx_0)$.
+\end{keyresult}
+
+\begin{rlconnection}[Value Iteration Convergence]
+Let $\mathcal{S}$ be a finite state space and consider the Banach space
+$(V(\mathcal{S}), \|\cdot\|_\infty)$ of bounded value functions. The
+\textbf{Bellman optimality operator} $T \colon V(\mathcal{S}) \to V(\mathcal{S})$
+is defined by
+\[
+    (TV)(s) = \max_{a \in \mathcal{A}} \Bigl[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s')\Bigr].
+\]
+One verifies that $T$ is a $\gamma$-contraction in $\|\cdot\|_\infty$:
+\[
+    \|TV - TW\|_\infty \leq \gamma \|V - W\|_\infty.
+\]
+By the Banach Contraction Mapping Theorem:
+\begin{enumerate}[leftmargin=2em]
+    \item There exists a unique optimal value function $V^*$ with $TV^* = V^*$
+          (the Bellman equation).
+    \item \textbf{Value iteration} $V_{n+1} = TV_n$ converges to $V^*$ from
+          any initialization.
+    \item The convergence rate is
+          $\|V_n - V^*\|_\infty \leq \frac{\gamma^n}{1 - \gamma} \|V_1 - V_0\|_\infty$.
+\end{enumerate}
+This is the \emph{fundamental convergence guarantee} for value iteration.
+The same argument applies to the Bellman evaluation operator for policy
+evaluation, and to $Q$-value iteration.
+\end{rlconnection}
+
+\subsection{Brouwer Fixed Point Theorem}
+
+\begin{theorem}[Brouwer Fixed Point Theorem]\label{thm:brouwer}
+Let $C \subset \R^n$ be a nonempty compact convex set and $f \colon C \to C$
+a continuous map. Then $f$ has a fixed point: there exists $x^* \in C$ with
+$f(x^*) = x^*$.
+\end{theorem}
+
+\begin{proof}
+We prove the theorem for $C = \overline{B}^n = \{x \in \R^n : \|x\| \leq 1\}$
+(the closed unit ball). The general case follows since any nonempty compact
+convex set in $\R^n$ is homeomorphic to $\overline{B}^n$ (or a lower-dimensional
+ball, where the argument is analogous).
+
+\textbf{Proof by contradiction using the retraction argument.}
+Suppose $f$ has no fixed point, i.e., $f(x) \neq x$ for all $x \in \overline{B}^n$.
+Define $r \colon \overline{B}^n \to S^{n-1}$ (the boundary sphere) as follows:
+for each $x$, draw the ray from $f(x)$ through $x$; let $r(x)$ be the point
+where this ray hits $S^{n-1}$.
+
+Explicitly, $r(x) = x + t(x)(x - f(x))$ where $t(x) \geq 0$ is chosen so
+that $\|r(x)\| = 1$. This leads to a quadratic equation in $t$ which has a
+unique nonnegative solution depending continuously on $x$ (since $f(x) \neq x$).
+
+The map $r$ is continuous, and for $x \in S^{n-1}$, we have
+$\|x\| = 1$ and the ray from $f(x)$ through $x$ hits $S^{n-1}$ at $x$ itself
+(taking $t = 0$), so $r(x) = x$.
+
+Thus $r \colon \overline{B}^n \to S^{n-1}$ is a \emph{retraction}: a
+continuous map that is the identity on $S^{n-1}$.
+
+\textbf{Claim:} No such retraction exists. This is the
+``no-retraction theorem,'' which can be proved via:
+\begin{enumerate}[leftmargin=2em]
+    \item \emph{Algebraic topology:} $r$ would induce a surjection
+          $r_* \colon \pi_{n-1}(\overline{B}^n) \to \pi_{n-1}(S^{n-1})$,
+          but $\pi_{n-1}(\overline{B}^n) = 0$ (the ball is contractible)
+          while $\pi_{n-1}(S^{n-1}) \cong \Z$ (for $n \geq 2$), contradiction.
+    \item \emph{Smooth approximation + degree theory:} Approximate $r$ by a
+          smooth map; the degree of the restriction $r|_{S^{n-1}} = \mathrm{id}$
+          is 1, but the degree of any map extending to the ball must be 0.
+    \item \emph{Combinatorial (Sperner's lemma):} Triangulate $\overline{B}^n$
+          and use Sperner's lemma to show that any continuous map satisfying
+          the boundary condition must have a ``completely labeled'' simplex,
+          from which a fixed point is obtained in the limit of refinements.
+\end{enumerate}
+Each approach yields the contradiction. Hence the assumption that $f$ has no
+fixed point is false.
+\end{proof}
+
+\begin{remark}\label{rem:brouwer-nonconstructive}
+Brouwer's theorem is a pure existence result: it gives no algorithm for
+finding the fixed point (in fact, computing Brouwer fixed points is
+PPAD-complete). For algorithmic purposes, the Banach contraction theorem
+is far more useful when it applies.
+\end{remark}
+
+\subsection{Schauder Fixed Point Theorem}
+
+The Schauder theorem generalizes Brouwer's theorem to infinite-dimensional
+spaces. The key idea is to approximate a compact operator by finite-dimensional
+maps and apply Brouwer.
+
+\begin{definition}[Compact Operator]\label{def:compact-op}
+A map $T \colon C \to X$ (where $C \subset X$) is \emph{compact} if $T$ is
+continuous and maps bounded sets to relatively compact sets (i.e., sets whose
+closure is compact).
+\end{definition}
+
+\begin{theorem}[Schauder Fixed Point Theorem]\label{thm:schauder}
+Let $X$ be a Banach space, $C \subset X$ a nonempty closed bounded convex set,
+and $T \colon C \to C$ a compact map. Then $T$ has a fixed point.
+\end{theorem}
+
+\begin{proof}
+Since $T(C)$ is relatively compact (as $C$ is bounded and $T$ is compact),
+$K = \overline{T(C)}$ is compact. For each $n \in \N$, cover $K$ by finitely
+many balls of radius $1/n$: there exist $y_1^n, \ldots, y_{k_n}^n \in T(C)$
+with $K \subset \bigcup_{i=1}^{k_n} B(y_i^n, 1/n)$.
+
+Define $C_n = \conv\{y_1^n, \ldots, y_{k_n}^n\} \subset C$ (since $C$ is
+convex and $y_i^n \in T(C) \subset C$). This is a compact convex subset of
+a finite-dimensional subspace.
+
+Define $P_n \colon K \to C_n$ by
+\[
+    P_n(x) = \frac{\sum_{i=1}^{k_n} \lambda_i^n(x)\, y_i^n}{\sum_{i=1}^{k_n} \lambda_i^n(x)},
+    \quad \text{where } \lambda_i^n(x) = \max\bigl(0, 1/n - \|x - y_i^n\|\bigr).
+\]
+This is the \emph{Schauder projection}. Note that $\sum_i \lambda_i^n(x) > 0$
+for $x \in K$ (since $K \subset \bigcup_i B(y_i^n, 1/n)$), so $P_n$ is
+well-defined. Moreover, $P_n$ is continuous, maps into $C_n$, and satisfies
+\[
+    \|P_n(x) - x\| \leq 1/n \quad \text{for all } x \in K.
+\]
+To see this: $\lambda_i^n(x) > 0$ only when $\|x - y_i^n\| < 1/n$, so
+$P_n(x)$ is a convex combination of points within distance $1/n$ of $x$,
+hence $\|P_n(x) - x\| < 1/n$.
+
+Now consider $T_n = P_n \circ T|_{C_n} \colon C_n \to C_n$. This is a
+continuous self-map of a compact convex subset of a finite-dimensional space.
+By the Brouwer Fixed Point Theorem, there exists $x_n \in C_n$ with
+$T_n(x_n) = x_n$, i.e.,
+\[
+    x_n = P_n(Tx_n).
+\]
+Then $\|x_n - Tx_n\| = \|P_n(Tx_n) - Tx_n\| < 1/n$.
+
+Since $(x_n)$ is a sequence in $C$ and $T$ is compact, $(Tx_n)$ has a
+convergent subsequence. Along this subsequence, $x_n - Tx_n \to 0$ and
+$Tx_n \to y$, so $x_n \to y$ as well. Since $C$ is closed, $y \in C$.
+By continuity of $T$: $Ty = \lim T(x_n) = y$.
+\end{proof}
+
+\begin{remark}\label{rem:schauder-variants}
+There are several variants of Schauder's theorem. The version above
+(sometimes called the Schauder--Tychonoff theorem for the compact convex
+set case) is the most commonly used. A more general version states:
+if $C$ is a nonempty convex subset of a Banach space (not necessarily closed
+or bounded) and $T \colon C \to C$ is continuous with $T(C)$ relatively
+compact, then $T$ has a fixed point. The proof is similar.
+\end{remark}
+
+\subsection{Kakutani Fixed Point Theorem}
+
+\begin{definition}[Set-Valued Map / Correspondence]\label{def:set-valued}
+A \emph{set-valued map} (or \emph{correspondence}) from a set $X$ to a set $Y$
+is a map $\Phi \colon X \rightrightarrows Y$ that assigns to each $x \in X$
+a subset $\Phi(x) \subset Y$. A \emph{fixed point} of $\Phi \colon X
+\rightrightarrows X$ is a point $x^*$ with $x^* \in \Phi(x^*)$.
+\end{definition}
+
+\begin{definition}[Upper Hemicontinuity]\label{def:uhc}
+A set-valued map $\Phi \colon X \rightrightarrows Y$ between topological
+spaces is \emph{upper hemicontinuous} (u.h.c.) if for every open set
+$V \subset Y$, the set $\{x \in X : \Phi(x) \subset V\}$ is open in $X$.
+Equivalently (when $Y$ is compact): if $x_n \to x$ and $y_n \in \Phi(x_n)$
+with $y_n \to y$, then $y \in \Phi(x)$ (closed graph property when the
+image sets are compact).
+\end{definition}
+
+\begin{theorem}[Kakutani Fixed Point Theorem]\label{thm:kakutani}
+Let $C \subset \R^n$ be a nonempty compact convex set and
+$\Phi \colon C \rightrightarrows C$ a set-valued map such that:
+\begin{enumerate}[label=(\roman*)]
+    \item $\Phi(x)$ is nonempty and convex for every $x \in C$.
+    \item $\Phi$ is upper hemicontinuous.
+\end{enumerate}
+Then $\Phi$ has a fixed point: there exists $x^* \in C$ with
+$x^* \in \Phi(x^*)$.
+\end{theorem}
+
+\begin{proof}
+We prove this by approximation with single-valued maps and application of
+Brouwer's theorem.
+
+\textbf{Step 1: Approximate selections.}
+For each $k \in \N$, we construct a continuous function
+$f_k \colon C \to C$ such that the graph of $f_k$ is ``close'' to the
+graph of $\Phi$.
+
+For each $k$, cover $C$ by finitely many open balls $B(x_i, 1/k)$,
+$i = 1, \ldots, m_k$, with $x_i \in C$. Let $\{\lambda_i\}$ be a partition
+of unity subordinate to this cover. For each $i$, pick any
+$y_i \in \Phi(x_i)$. Define
+\[
+    f_k(x) = \sum_{i=1}^{m_k} \lambda_i(x) \, y_i.
+\]
+This is continuous, and $f_k(x) \in C$ since $y_i \in C$ and $C$ is convex.
+
+\textbf{Step 2: Apply Brouwer.}
+By Brouwer's Fixed Point Theorem, each $f_k$ has a fixed point
+$x_k \in C$ with $f_k(x_k) = x_k$.
+
+\textbf{Step 3: Pass to the limit.}
+Since $C$ is compact, $(x_k)$ has a convergent subsequence $x_{k_j} \to x^*$.
+We claim $x^* \in \Phi(x^*)$.
+
+Fix $\varepsilon > 0$. Since $\Phi$ is u.h.c.\ and $\Phi(x^*)$ is convex
+(hence, being a convex compact subset of $\R^n$, it equals the intersection
+of all open convex sets containing it), let $V$ be an open convex set with
+$\Phi(x^*) \subset V$. By upper hemicontinuity, $\{x : \Phi(x) \subset V\}$
+is open and contains $x^*$, so for large $j$, $\Phi(x_{k_j}) \subset V$
+and $\|x_{k_j} - x^*\| < \varepsilon$.
+
+For large $k_j > 1/\varepsilon$: $\lambda_i(x_{k_j}) > 0$ only when
+$\|x_{k_j} - x_i\| < 1/k_j < \varepsilon$, so $\|x_i - x^*\| < 2\varepsilon$.
+For such $i$, when $j$ is large enough, $x_i$ is close to $x^*$, so
+$\Phi(x_i) \subset V$ (by upper hemicontinuity), hence $y_i \in V$.
+Then $f_{k_j}(x_{k_j}) = x_{k_j}$ is a convex combination of $y_i$'s in $V$.
+Since $V$ is convex, $x_{k_j} \in V$.
+
+Since $V$ was an arbitrary open convex neighborhood of $\Phi(x^*)$, and
+$x_{k_j} \to x^*$, we get $x^* \in \overline{V}$ for every such $V$.
+Since $\Phi(x^*)$ is compact and convex,
+$x^* \in \bigcap \{\overline{V} : V \supset \Phi(x^*), V \text{ open convex}\}
+= \Phi(x^*)$.
+\end{proof}
+
+\begin{rlconnection}[Nash Equilibrium Existence via Kakutani]
+Consider a finite $n$-player game. Player $i$ has a finite action set $A_i$
+and a payoff function $u_i \colon \prod_j A_j \to \R$. A \emph{mixed strategy}
+for player $i$ is a probability distribution $\sigma_i \in \Delta(A_i)$
+(the simplex over $A_i$).
+
+The \textbf{best-response correspondence} of player $i$ is
+\[
+    BR_i(\sigma_{-i}) = \arg\max_{\sigma_i \in \Delta(A_i)}
+    \sum_{a \in A} \Bigl(\prod_j \sigma_j(a_j)\Bigr) u_i(a).
+\]
+Define the joint best-response $\Phi(\sigma) = \prod_i BR_i(\sigma_{-i})$
+on $C = \prod_i \Delta(A_i)$, which is a nonempty compact convex set in
+$\R^{\sum_i |A_i|}$.
+
+One verifies:
+\begin{enumerate}[leftmargin=2em]
+    \item Each $BR_i(\sigma_{-i})$ is nonempty and convex (it is the set of
+          maximizers of a linear function over a simplex).
+    \item $\Phi$ is upper hemicontinuous (by Berge's Maximum Theorem: the
+          payoff is continuous and the constraint set is constant).
+\end{enumerate}
+
+By Kakutani's theorem, $\Phi$ has a fixed point $\sigma^*$, which is
+precisely a \textbf{Nash equilibrium}: every player is best-responding to the
+others. This is the original proof by Nash (1950).
+\end{rlconnection}
+
+\begin{remark}\label{rem:fixed-point-hierarchy}
+The fixed point theorems form a hierarchy:
+\[
+    \text{Banach} \subset \text{Brouwer} \subset \text{Schauder}
+    \quad \text{and} \quad
+    \text{Brouwer} \subset \text{Kakutani}.
+\]
+Banach gives uniqueness and algorithms (iterative computation);
+Brouwer/Schauder/Kakutani give only existence. The choice depends on the
+structure available:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Theorem} & \textbf{Setting} & \textbf{Gives} \\
+\midrule
+Banach & Complete metric, contraction & Unique FP + algorithm \\
+Brouwer & Compact convex $\subset \R^n$, continuous & Existence \\
+Schauder & Bounded closed convex, compact map & Existence \\
+Kakutani & Compact convex $\subset \R^n$, u.h.c.\ correspondence & Existence \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{remark}
+
+
+%% ============================================================================
+%% SECTION 9: EXERCISES
+%% ============================================================================
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Parallelogram Law Characterization]\label{ex:parallelogram}
+Let $(X, \|\cdot\|)$ be a normed space satisfying the parallelogram law:
+$\|x + y\|^2 + \|x - y\|^2 = 2(\|x\|^2 + \|y\|^2)$ for all $x, y \in X$.
+Show that the formula
+\[
+    \langle x, y \rangle = \frac{1}{4}(\|x+y\|^2 - \|x-y\|^2)
+\]
+defines an inner product on $X$ whose induced norm equals $\|\cdot\|$.
+\emph{Hint:} Verify additivity $\langle x + z, y \rangle = \langle x, y \rangle
++ \langle z, y \rangle$ first for $z = x$, then for $z = y$, extend to
+rational scalars, then use continuity.
+\end{exercise}
+
+\begin{exercise}[Non-Inner-Product Spaces]\label{ex:non-ip}
+Show that $\ell^1$ and $\ell^\infty$ do not satisfy the parallelogram law,
+and therefore are not inner product spaces. Find explicit vectors $x, y$
+witnessing the failure.
+\end{exercise}
+
+\begin{exercise}[Orthogonal Projection Computation]\label{ex:proj-computation}
+Let $H = L^2([0, 1])$ and $M = \spn\{1, t, t^2\}$ (polynomials of degree
+$\leq 2$). Compute the orthogonal projection of $f(t) = e^t$ onto $M$ using:
+\begin{enumerate}[label=(\alph*)]
+    \item The Gram--Schmidt process applied to $\{1, t, t^2\}$.
+    \item The normal equations $\langle f - Pf, g \rangle = 0$ for all $g \in M$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Riesz Representation and Gradient]\label{ex:riesz-gradient}
+Let $f \colon \R^n \to \R$ be differentiable. The derivative $Df(x)$ at a
+point $x$ is a bounded linear functional on $\R^n$. Use the Riesz
+Representation Theorem to show that there exists a unique $\nabla f(x) \in \R^n$
+such that $Df(x)[h] = \langle \nabla f(x), h \rangle$ for all $h \in \R^n$.
+This justifies calling $\nabla f(x)$ ``the gradient.'' How does the gradient
+depend on the choice of inner product?
+\end{exercise}
+
+\begin{exercise}[Banach Contraction and Successive Approximation]\label{ex:banach-ode}
+Consider the integral equation $x(t) = \int_0^t K(t,s) x(s)\, ds + g(t)$ on
+$C[0, 1]$ with $\|K\|_\infty \leq M$. Show that the operator
+$T(x)(t) = \int_0^t K(t,s) x(s)\, ds + g(t)$ may not be a contraction in
+$\|\cdot\|_\infty$, but $T^n$ is a contraction for large $n$, and deduce
+that $T$ has a unique fixed point. \emph{Hint:} Show
+$\|T^n x - T^n y\|_\infty \leq \frac{(Mt)^n}{n!} \|x - y\|_\infty$
+and use the fact that a map with a contractive iterate has a unique fixed point.
+\end{exercise}
+
+\begin{exercise}[Bellman Operator is a Contraction]\label{ex:bellman-contraction}
+Let $\mathcal{S}$ and $\mathcal{A}$ be finite sets, $R \colon \mathcal{S}
+\times \mathcal{A} \to \R$ a reward function, $P(\cdot | s, a)$ a transition
+kernel, and $\gamma \in (0, 1)$ a discount factor. Define the Bellman
+optimality operator $T$ on $V(\mathcal{S})$ (bounded real-valued functions on
+$\mathcal{S}$ with the sup norm) by
+\[
+    (TV)(s) = \max_{a \in \mathcal{A}}\Bigl[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s')\Bigr].
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Prove that $T$ is a $\gamma$-contraction:
+          $\|TV - TW\|_\infty \leq \gamma \|V - W\|_\infty$.
+          \emph{Hint:} For each $s$, let $a^*$ achieve the max for $TV(s)$;
+          then bound $TV(s) - TW(s) \leq \gamma \sum_{s'} P(s'|s,a^*)|V(s') - W(s')|$.
+    \item Deduce from the Banach contraction theorem that value iteration
+          converges geometrically and that $V^*$ is the unique solution of
+          the Bellman equation.
+    \item How many iterations are needed to guarantee
+          $\|V_n - V^*\|_\infty \leq \varepsilon$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Closed Graph Theorem Application]\label{ex:closed-graph-app}
+Let $H$ be a Hilbert space and $T \colon H \to H$ a linear operator satisfying
+$\langle Tx, y \rangle = \langle x, Ty \rangle$ for all $x, y \in H$.
+Use the Closed Graph Theorem to show that $T$ is bounded.
+\emph{Hint:} Show that $T$ has a closed graph by using the symmetry condition
+to identify the limit.
+\end{exercise}
+
+\begin{exercise}[Uniform Boundedness Application]\label{ex:ubp-app}
+Let $(f_n)$ be a sequence in $H^*$ (the dual of a Hilbert space $H$) such
+that $\sum_{n=1}^\infty |f_n(x)|^2 < \infty$ for every $x \in H$. Show that
+$\sup_n \|f_n\| < \infty$.
+\emph{Hint:} The partial sums $S_N(x) = \sum_{n=1}^N |f_n(x)|^2$ are
+pointwise bounded; apply the Uniform Boundedness Principle to appropriate
+operators.
+\end{exercise}
+
+\begin{exercise}[Kakutani and Two-Player Zero-Sum Games]\label{ex:kakutani-zerosum}
+Let $A \in \R^{m \times n}$ be a payoff matrix for a two-player zero-sum game.
+Player 1 chooses $p \in \Delta_m$ (the $m$-simplex) and Player 2 chooses
+$q \in \Delta_n$, with payoff $p^\top A q$ to Player 1.
+\begin{enumerate}[label=(\alph*)]
+    \item Define the best-response correspondences $BR_1(q)$ and $BR_2(p)$.
+    \item Verify the hypotheses of Kakutani's theorem for the joint
+          best-response $\Phi(p,q) = BR_1(q) \times BR_2(p)$ on
+          $\Delta_m \times \Delta_n$.
+    \item Conclude that a Nash equilibrium (saddle point) exists and relate
+          this to the minimax theorem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Schauder Theorem Application]\label{ex:schauder-app}
+Let $K \colon [0,1] \times [0,1] \to \R$ be continuous and define
+$T \colon C[0,1] \to C[0,1]$ by $(Tf)(t) = \int_0^1 K(t,s) f(s)\, ds$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $T$ maps the closed ball
+          $\overline{B}(0, R) \subset C[0,1]$ into itself for
+          $R \geq \|K\|_\infty \cdot R$ (choose $R$ appropriately).
+    \item Show that $T(\overline{B}(0, R))$ is equicontinuous (use uniform
+          continuity of $K$).
+    \item Apply the Arzel\`{a}--Ascoli theorem to conclude $T$ is compact.
+    \item Apply Schauder's theorem to find a fixed point.
+\end{enumerate}
+\end{exercise}
+
+
+%% ============================================================================
+%% SECTION 10: SUMMARY
+%% ============================================================================
+\section{Summary of Key Results}\label{sec:summary}
+
+\begin{center}
+\small
+\begin{tabular}{p{4.0cm} p{5.5cm} p{4.5cm}}
+\toprule
+\textbf{Result} & \textbf{Statement (Informal)} & \textbf{RL/ML Connection} \\
+\midrule
+Cauchy--Schwarz (Thm.~\ref{thm:cauchy-schwarz})
+    & $|\langle x,y \rangle| \leq \|x\|\|y\|$
+    & Bounds on correlations; kernel evaluations \\
+\addlinespace
+Parallelogram Law (Thm.~\ref{thm:parallelogram})
+    & $\|x+y\|^2 + \|x-y\|^2 = 2(\|x\|^2 + \|y\|^2)$
+    & Characterizes inner product spaces \\
+\addlinespace
+Projection Theorem (Thm.~\ref{thm:projection})
+    & $H = M \oplus M^\perp$ for closed $M$
+    & LSTD projection; least-squares approximation \\
+\addlinespace
+Bessel's Inequality (Thm.~\ref{thm:bessel})
+    & $\sum |\langle x, e_n \rangle|^2 \leq \|x\|^2$
+    & Energy bounds for Fourier coefficients \\
+\addlinespace
+Parseval's Identity (Thm.~\ref{thm:parseval})
+    & $\|x\|^2 = \sum |\langle x, e_n \rangle|^2$ for ONB
+    & Isometry between signal and coefficient spaces \\
+\addlinespace
+Riesz Representation (Thm.~\ref{thm:riesz})
+    & Every $f \in H^*$ is $\langle \cdot, y \rangle$
+    & RKHS theory; gradient = Riesz representative \\
+\addlinespace
+Hahn--Banach (Thm.~\ref{thm:hahn-banach})
+    & Linear functionals extend with norm preserved
+    & Dual characterizations; separation theorems \\
+\addlinespace
+Uniform Boundedness (Thm.~\ref{thm:ubp})
+    & Pointwise bounded $\Rightarrow$ uniformly bounded
+    & Convergence of operator sequences \\
+\addlinespace
+Open Mapping (Thm.~\ref{thm:open-mapping})
+    & Surjective bounded linear maps are open
+    & Bounded inverse theorem \\
+\addlinespace
+Closed Graph (Thm.~\ref{thm:closed-graph})
+    & Closed graph $\Leftrightarrow$ bounded (Banach spaces)
+    & Proving operator continuity \\
+\addlinespace
+Banach Contraction (Thm.~\ref{thm:banach-contraction})
+    & Contraction has unique FP; iterates converge at rate $\gamma^n$
+    & Value iteration; policy evaluation; $Q$-learning \\
+\addlinespace
+Brouwer FPT (Thm.~\ref{thm:brouwer})
+    & Continuous self-map of compact convex set has FP
+    & Existence results in finite dimensions \\
+\addlinespace
+Schauder FPT (Thm.~\ref{thm:schauder})
+    & Compact self-map of closed bounded convex set has FP
+    & Existence of solutions to integral equations \\
+\addlinespace
+Kakutani FPT (Thm.~\ref{thm:kakutani})
+    & u.h.c.\ convex-valued correspondence has FP
+    & Nash equilibrium existence \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\noindent\textbf{Key Takeaways:}
+\begin{enumerate}[leftmargin=2em]
+    \item \textbf{Inner products provide geometry.} The Cauchy--Schwarz
+          inequality, projections, and orthogonal decompositions are all
+          consequences of the inner product structure. This geometry is
+          what makes Hilbert spaces the natural setting for least-squares
+          and projection methods.
+    \item \textbf{Hilbert spaces are self-dual.} The Riesz Representation
+          Theorem identifies $H$ with $H^*$, vastly simplifying the theory
+          compared to general Banach spaces.
+    \item \textbf{The four fundamental theorems are structural results} about
+          Banach spaces. They guarantee that linear operators and functionals
+          behave well: they can be extended (Hahn--Banach), pointwise bounds
+          imply uniform bounds (UBP), surjections are open (OMT), and
+          closed-graph operators are bounded (CGT).
+    \item \textbf{Fixed point theorems bridge analysis and algorithms.}
+          The Banach contraction theorem provides both existence, uniqueness,
+          and an algorithm. Brouwer/Schauder/Kakutani provide existence in
+          settings where contractions are not available, notably for Nash
+          equilibria.
+    \item \textbf{The hierarchy of fixed point theorems} matches the hierarchy
+          of RL/ML problems: contraction for value iteration, Kakutani for
+          Nash equilibria, Schauder for existence of solutions to
+          functional equations.
+\end{enumerate}
+
+\end{document}

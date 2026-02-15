@@ -1,0 +1,1730 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 11: Static and Extensive-Form Games}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\argmax}{argmax}
+\DeclareMathOperator{\argmin}{argmin}
+\DeclareMathOperator{\BR}{BR}
+
+% ---- Title ----
+\title{\textbf{Lesson 11: Static and Extensive-Form Games}\\[10pt]
+\large Nash Equilibrium, Minimax Theorem, and Subgame Perfection\\[5pt]
+\normalsize Session 11 of 102 $\mid$ Phase I: Mathematical Foundations $\mid$ 8\,h\\
+\normalsize Primary text: Fudenberg \& Tirole, \emph{Game Theory}, Chapters 1--3}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This lesson develops the foundational theory of strategic interaction: games in which
+multiple decision-makers choose actions simultaneously or sequentially, each seeking to
+maximize their own payoff. We define normal-form games, prove Nash's existence theorem
+for mixed-strategy equilibria via Kakutani's fixed point theorem, establish
+von Neumann's minimax theorem for zero-sum games, introduce correlated equilibrium,
+and then pass to extensive-form games where we define subgame perfect equilibrium
+and prove Zermelo's theorem by backward induction. Every theorem is proved in full.
+The reader who masters this material will possess the game-theoretic language and
+solution concepts that underpin all multi-agent reinforcement learning algorithms
+in Phase~05.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Why Game Theory for RL and ML?}
+\label{sec:intro}
+
+In single-agent reinforcement learning, the environment is typically modeled as a
+Markov decision process (MDP): the agent chooses actions, the environment responds
+according to a fixed (if unknown) transition kernel, and the agent seeks a policy
+maximizing cumulative reward. The key simplification is that the environment does
+not \emph{adapt} to the agent's behavior.
+
+Multi-agent reinforcement learning (MARL) breaks this assumption. When two or more
+learning agents interact in a shared environment, each agent's ``environment'' includes
+the other agents, whose behavior changes as they learn. The resulting non-stationarity
+means that standard single-agent convergence guarantees fail. To analyze MARL, we need
+a mathematical framework for strategic interaction --- and that framework is game theory.
+
+\begin{rlconnection}[MARL Is Game Theory + Learning]
+Every MARL algorithm implicitly assumes a game-theoretic solution concept:
+\begin{itemize}[nosep]
+    \item \textbf{Independent Q-learning}: each agent performs Q-learning ignoring
+    others. If it converges, the result is a Nash equilibrium of the stage game
+    (under restrictive conditions).
+    \item \textbf{Minimax-Q} (Littman, 1994): assumes a two-player zero-sum
+    stochastic game and seeks the minimax value --- directly applying
+    von Neumann's theorem (Theorem~\ref{thm:minimax}).
+    \item \textbf{Nash-Q} (Hu \& Wellman, 2003): computes Nash equilibria of
+    stage games at each step.
+    \item \textbf{MAPPO, QMIX}: cooperative MARL algorithms whose convergence
+    analysis relies on the team game structure (common payoff games).
+\end{itemize}
+Without understanding Nash equilibria, minimax, and subgame perfection, one cannot
+state what these algorithms are trying to compute, let alone prove convergence.
+\end{rlconnection}
+
+This lesson covers three progressively richer models of strategic interaction:
+\begin{enumerate}[nosep]
+    \item \textbf{Normal-form (static) games} (Sections~\ref{sec:normal_form}--\ref{sec:correlated}):
+    players choose actions simultaneously.
+    \item \textbf{Extensive-form (dynamic) games} (Sections~\ref{sec:extensive}--\ref{sec:spe}):
+    players move sequentially, possibly with imperfect information.
+    \item \textbf{Solution concepts}: Nash equilibrium, minimax strategies, correlated
+    equilibrium, and subgame perfect equilibrium.
+\end{enumerate}
+
+\noindent\textbf{Prerequisites.} Familiarity with basic probability (finite probability
+spaces suffice for this lesson), linear algebra (convex sets, hyperplane separation),
+and real analysis (continuity, compactness in $\R^n$). Knowledge of linear programming
+duality is helpful but not required; we state the needed result.
+
+%% ============================================================
+%% SECTION 2: NORMAL-FORM GAMES
+%% ============================================================
+\section{Normal-Form Games}
+\label{sec:normal_form}
+
+\subsection{Basic Definitions}
+\label{subsec:normal_form_def}
+
+\begin{definition}[Normal-Form Game]
+\label{def:normal_form}
+A \emph{normal-form game} (or \emph{strategic-form game}) is a tuple
+$\Gamma = (N, (S_i)_{i \in N}, (u_i)_{i \in N})$ where:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $N = \{1, 2, \ldots, n\}$ is a finite set of \emph{players}.
+    \item For each $i \in N$, $S_i$ is a non-empty set of \emph{strategies}
+    (or \emph{actions}) available to player~$i$. We write
+    $S = \prod_{i \in N} S_i$ for the set of \emph{strategy profiles}.
+    \item For each $i \in N$, $u_i : S \to \R$ is player~$i$'s \emph{payoff function}
+    (or \emph{utility function}).
+\end{enumerate}
+The game is \emph{finite} if each $S_i$ is a finite set.
+\end{definition}
+
+\begin{remark}[Notation for ``All but $i$'']
+\label{rem:notation}
+For a strategy profile $s = (s_1, \ldots, s_n) \in S$, we write
+$s_{-i} = (s_1, \ldots, s_{i-1}, s_{i+1}, \ldots, s_n) \in S_{-i}
+:= \prod_{j \neq i} S_j$.
+We often write $s = (s_i, s_{-i})$ to emphasize player~$i$'s strategy.
+\end{remark}
+
+\begin{definition}[Bimatrix Game]
+\label{def:bimatrix}
+A \emph{bimatrix game} is a two-player finite game presented as a pair of matrices
+$(A, B) \in \R^{m \times n} \times \R^{m \times n}$, where player~1 has $m$ strategies,
+player~2 has $n$ strategies, $A_{jk} = u_1(j,k)$, and $B_{jk} = u_2(j,k)$.
+If $B = -A$, the game is \emph{zero-sum}.
+\end{definition}
+
+\subsection{Classical Examples}
+\label{subsec:examples}
+
+\begin{example}[Prisoner's Dilemma]
+\label{ex:pd}
+Two players simultaneously choose to \emph{Cooperate} (C) or \emph{Defect} (D):
+\[
+\begin{array}{c|cc}
+ & C & D \\ \hline
+C & (3,3) & (0,5) \\
+D & (5,0) & (1,1)
+\end{array}
+\]
+Here $D$ strictly dominates $C$ for both players (Definition~\ref{def:dominance}),
+so the unique Nash equilibrium is $(D,D)$ with payoffs $(1,1)$, despite $(C,C)$
+giving both players a higher payoff.
+\end{example}
+
+\begin{example}[Battle of the Sexes]
+\label{ex:bos}
+Players~1 and~2 prefer different activities ($O$pera vs.\ $F$ootball) but prefer
+coordination to miscoordination:
+\[
+\begin{array}{c|cc}
+ & O & F \\ \hline
+O & (3,1) & (0,0) \\
+F & (0,0) & (1,3)
+\end{array}
+\]
+This game has two pure Nash equilibria --- $(O,O)$ and $(F,F)$ --- and one mixed
+equilibrium (computed in Example~\ref{ex:mixed_bos}).
+\end{example}
+
+\begin{example}[Matching Pennies]
+\label{ex:mp}
+A zero-sum game: each player chooses $H$eads or $T$ails. Player~1 wins if
+they match; player~2 wins if they differ:
+\[
+\begin{array}{c|cc}
+ & H & T \\ \hline
+H & (1,-1) & (-1,1) \\
+T & (-1,1) & (1,-1)
+\end{array}
+\]
+This game has no pure Nash equilibrium (Proposition~\ref{prop:mp_no_pure}),
+motivating the extension to mixed strategies.
+\end{example}
+
+\begin{example}[Stag Hunt]
+\label{ex:stag}
+Players choose to hunt a $S$tag (requiring cooperation) or a $H$are (safe but
+less rewarding):
+\[
+\begin{array}{c|cc}
+ & S & H \\ \hline
+S & (4,4) & (0,3) \\
+H & (3,0) & (3,3)
+\end{array}
+\]
+Both $(S,S)$ and $(H,H)$ are pure Nash equilibria. The equilibrium $(S,S)$ is
+\emph{payoff-dominant} (higher payoffs for both), while $(H,H)$ is \emph{risk-dominant}
+(safer against uncertainty about the opponent).
+\end{example}
+
+\begin{rlconnection}[Stag Hunt and Cooperative MARL]
+The stag hunt captures a fundamental tension in cooperative MARL: agents can achieve
+higher collective reward through coordination, but each agent bears risk if the others
+fail to coordinate. This is precisely the challenge faced by CTDE (centralized training,
+decentralized execution) algorithms like QMIX and MAPPO.
+\end{rlconnection}
+
+\subsection{Dominant and Dominated Strategies}
+\label{subsec:dominance}
+
+\begin{definition}[Dominance]
+\label{def:dominance}
+Let $\Gamma = (N, (S_i), (u_i))$ be a normal-form game and fix player~$i$.
+A strategy $s_i \in S_i$ \emph{strictly dominates} $s_i' \in S_i$ if
+\[
+    u_i(s_i, s_{-i}) > u_i(s_i', s_{-i}) \quad \text{for all } s_{-i} \in S_{-i}.
+\]
+A strategy $s_i$ \emph{weakly dominates} $s_i'$ if
+\[
+    u_i(s_i, s_{-i}) \geq u_i(s_i', s_{-i}) \quad \text{for all } s_{-i} \in S_{-i},
+\]
+with strict inequality for at least one $s_{-i}$.
+A strategy is \emph{strictly dominated} if some other strategy strictly dominates it.
+A strategy is a \emph{(strictly) dominant strategy} if it strictly dominates every
+other strategy of that player.
+\end{definition}
+
+\begin{proposition}[Dominated Strategies Are Never Best Responses]
+\label{prop:dominated_not_br}
+If $s_i'$ is strictly dominated by $s_i$, then $s_i'$ is never a best response:
+for every $s_{-i} \in S_{-i}$, $s_i' \notin \argmax_{t_i \in S_i} u_i(t_i, s_{-i})$.
+\end{proposition}
+
+\begin{proof}
+Fix any $s_{-i} \in S_{-i}$. Since $s_i$ strictly dominates $s_i'$, we have
+$u_i(s_i, s_{-i}) > u_i(s_i', s_{-i})$, so $s_i'$ does not maximize $u_i(\cdot, s_{-i})$.
+\end{proof}
+
+\subsection{Iterated Elimination of Strictly Dominated Strategies}
+\label{subsec:iesds}
+
+\begin{definition}[IESDS]
+\label{def:iesds}
+\emph{Iterated elimination of strictly dominated strategies} (IESDS) is the following
+procedure. Set $S_i^0 = S_i$ for all~$i$. For $k = 0, 1, 2, \ldots$, define
+\[
+    S_i^{k+1} = \big\{s_i \in S_i^k : \text{there is no } s_i' \in S_i^k
+    \text{ such that } u_i(s_i', s_{-i}) > u_i(s_i, s_{-i})
+    \text{ for all } s_{-i} \in S_{-i}^k\big\}.
+\]
+The set of \emph{surviving strategies} for player~$i$ is
+$S_i^\infty = \bigcap_{k=0}^\infty S_i^k$.
+\end{definition}
+
+\begin{theorem}[Order Independence of IESDS]
+\label{thm:iesds_order}
+In a finite game, the set of strategy profiles surviving iterated elimination of
+strictly dominated strategies is independent of the order of elimination.
+\end{theorem}
+
+\begin{proof}
+We prove that any strategy eliminated in some order of elimination is eventually
+eliminated in every order.
+
+Let $s_i^*$ be a strategy of player~$i$ that is eliminated at round~$k$ in some
+particular elimination order $E$. This means there exists $s_i' \in S_i^{k-1}(E)$
+such that $u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ for all $s_{-i} \in S_{-i}^{k-1}(E)$.
+
+Consider an alternative elimination order $E'$. We show $s_i^*$ is eventually
+eliminated under $E'$. Let $T = S_{-i}^\infty(E')$ be the surviving opponents'
+strategies under $E'$.
+
+Since $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E')$ and every strategy surviving
+under any order is in particular not eliminated in the first $k-1$ rounds under $E$
+(we prove this by induction on rounds), we need a cleaner argument.
+
+We proceed by induction on the round of elimination. For the base case ($k=0$),
+$s_i^*$ is strictly dominated in the original game, so it will be eliminated in
+round~0 under any order.
+
+For the inductive step, suppose every strategy eliminated in rounds $0, \ldots, k-1$
+under \emph{any} elimination order is eventually eliminated under every order. Now
+suppose $s_i^*$ is eliminated at round~$k$ under order~$E$. Then there exists
+$s_i' \in S_i^{k-1}(E)$ with $u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ for all
+$s_{-i} \in S_{-i}^{k-1}(E)$.
+
+Under order $E'$, the set $S_{-i}^{k-1}(E)$ may differ from $S_{-i}^{k-1}(E')$.
+However, the key observation is:
+
+\emph{Claim}: $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E)$.
+
+To prove the claim, note that any strategy $s_j$ removed before round~$k$ under
+order~$E$ was strictly dominated by some $s_j'$ against strategies surviving at
+that point. By the inductive hypothesis, $s_j$ is eventually removed under $E'$ as
+well, so $s_j \notin S_j^\infty(E')$. Taking contrapositives:
+$s_j \in S_j^\infty(E') \implies s_j \in S_j^{k-1}(E)$, establishing the claim.
+
+Now, since $S_{-i}^\infty(E') \subseteq S_{-i}^{k-1}(E)$, the domination
+$u_i(s_i', s_{-i}) > u_i(s_i^*, s_{-i})$ holds for all $s_{-i} \in S_{-i}^\infty(E')$.
+If $s_i' \in S_i^\infty(E')$, then $s_i^*$ is dominated (by $s_i'$) relative to
+the surviving strategies under $E'$ and hence is eliminated. If $s_i'$ is itself
+eliminated under $E'$, then $s_i'$ was dominated by some $s_i''$, and by transitivity
+of strict domination on the surviving set, $s_i^*$ remains dominated and is eliminated.
+
+By induction, the surviving sets coincide for all elimination orders.
+\end{proof}
+
+\subsection{Rationalizability}
+\label{subsec:rationalizability}
+
+\begin{definition}[Best Response]
+\label{def:best_response}
+Player~$i$'s \emph{best response correspondence} is the set-valued map
+$\BR_i : S_{-i} \rightrightarrows S_i$ defined by
+\[
+    \BR_i(s_{-i}) = \argmax_{s_i \in S_i} u_i(s_i, s_{-i}).
+\]
+\end{definition}
+
+\begin{definition}[Rationalizable Strategies]
+\label{def:rationalizable}
+A strategy $s_i$ is \emph{rationalizable} if it survives the iterated elimination
+of strategies that are never best responses. Formally, set $R_i^0 = S_i$ and define
+\[
+    R_i^{k+1} = \big\{s_i \in R_i^k : \exists\, s_{-i} \in R_{-i}^k
+    \text{ such that } s_i \in \BR_i(s_{-i})\big\}.
+\]
+The set of rationalizable strategies is $R_i^\infty = \bigcap_{k=0}^\infty R_i^k$.
+\end{definition}
+
+\begin{proposition}[IESDS and Rationalizability in Two-Player Games]
+\label{prop:iesds_rational}
+In finite two-player games, the set of rationalizable strategies coincides with the
+set of strategies surviving IESDS.
+\end{proposition}
+
+\begin{proof}
+Every strictly dominated strategy is never a best response
+(Proposition~\ref{prop:dominated_not_br}), so
+$S_i^\infty \supseteq R_i^\infty$. Conversely, in a two-player finite game,
+a strategy that is never a best response to any pure strategy of the opponent is
+strictly dominated (this follows from the supporting hyperplane theorem applied
+to the payoff polyhedron). Hence a strategy eliminated in the rationalizability
+procedure is strictly dominated relative to the surviving set, giving
+$R_i^\infty \supseteq S_i^\infty$.
+\end{proof}
+
+\begin{warning}[Three or More Players]
+For games with three or more players, IESDS may not eliminate all never-best-response
+strategies. Rationalizability can be a strictly coarser concept than IESDS survival
+in games with $n \geq 3$ players when we restrict to pure strategies. The equivalence
+is restored when we extend dominance to allow domination by mixed strategies.
+\end{warning}
+
+%% ============================================================
+%% SECTION 3: NASH EQUILIBRIUM
+%% ============================================================
+\section{Nash Equilibrium in Pure Strategies}
+\label{sec:nash_pure}
+
+\begin{definition}[Pure Strategy Nash Equilibrium]
+\label{def:nash_pure}
+A strategy profile $s^* = (s_1^*, \ldots, s_n^*) \in S$ is a \emph{(pure strategy)
+Nash equilibrium} (NE) if no player can unilaterally improve their payoff:
+\[
+    u_i(s_i^*, s_{-i}^*) \geq u_i(s_i, s_{-i}^*)
+    \quad \text{for all } s_i \in S_i, \text{ for all } i \in N.
+\]
+Equivalently, $s_i^* \in \BR_i(s_{-i}^*)$ for all $i \in N$.
+\end{definition}
+
+\begin{proposition}[NE as Mutual Best Response]
+\label{prop:ne_br}
+A strategy profile $s^*$ is a Nash equilibrium if and only if
+$s_i^* \in \BR_i(s_{-i}^*)$ for every $i \in N$.
+\end{proposition}
+
+\begin{proof}
+By Definition~\ref{def:nash_pure}, $s^*$ is a NE if and only if
+$u_i(s_i^*, s_{-i}^*) \geq u_i(s_i, s_{-i}^*)$ for all $s_i \in S_i$ and all~$i$.
+By Definition~\ref{def:best_response}, this is precisely
+$s_i^* \in \argmax_{s_i \in S_i} u_i(s_i, s_{-i}^*) = \BR_i(s_{-i}^*)$ for all~$i$.
+\end{proof}
+
+\begin{proposition}[Matching Pennies Has No Pure NE]
+\label{prop:mp_no_pure}
+The Matching Pennies game (Example~\ref{ex:mp}) has no pure strategy Nash equilibrium.
+\end{proposition}
+
+\begin{proof}
+We check all four profiles:
+\begin{itemize}[nosep]
+    \item $(H,H)$: Player~2 gains by deviating to~$T$ (payoff $-1 \to 1$).
+    \item $(H,T)$: Player~1 gains by deviating to~$T$ (payoff $-1 \to 1$).
+    \item $(T,H)$: Player~1 gains by deviating to~$H$ (payoff $-1 \to 1$).
+    \item $(T,T)$: Player~2 gains by deviating to~$H$ (payoff $-1 \to 1$).
+\end{itemize}
+Every profile admits a profitable deviation, so no pure NE exists.
+\end{proof}
+
+\begin{remark}
+The Prisoner's Dilemma has a unique NE at $(D,D)$, the Battle of the Sexes has two
+pure NE at $(O,O)$ and $(F,F)$, and the Stag Hunt has two at $(S,S)$ and $(H,H)$.
+Matching Pennies has none --- motivating the extension to mixed strategies.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: MIXED STRATEGIES
+%% ============================================================
+\section{Mixed Strategies and Mixed Extensions}
+\label{sec:mixed}
+
+\subsection{Definitions}
+\label{subsec:mixed_def}
+
+\begin{definition}[Mixed Strategy]
+\label{def:mixed_strategy}
+Let $\Gamma$ be a finite game with strategy set $S_i = \{s_i^1, \ldots, s_i^{m_i}\}$
+for player~$i$. A \emph{mixed strategy} for player~$i$ is a probability distribution
+$\sigma_i \in \Delta(S_i)$, where
+\[
+    \Delta(S_i) = \bigg\{\sigma_i \in \R^{m_i} : \sigma_i(s_i^j) \geq 0
+    \text{ for all } j, \;\; \sum_{j=1}^{m_i} \sigma_i(s_i^j) = 1\bigg\}
+\]
+is the \emph{$(m_i-1)$-simplex} over $S_i$. A \emph{mixed strategy profile} is
+$\sigma = (\sigma_1, \ldots, \sigma_n) \in \Delta := \prod_{i \in N} \Delta(S_i)$.
+\end{definition}
+
+\begin{definition}[Support]
+\label{def:support}
+The \emph{support} of a mixed strategy $\sigma_i$ is
+$\supp(\sigma_i) = \{s_i \in S_i : \sigma_i(s_i) > 0\}$.
+A pure strategy $s_i$ is identified with the degenerate distribution placing
+probability~1 on $s_i$.
+\end{definition}
+
+\begin{definition}[Mixed Extension]
+\label{def:mixed_extension}
+The \emph{mixed extension} of a finite game $\Gamma = (N, (S_i), (u_i))$ is the game
+$\bar{\Gamma} = (N, (\Delta(S_i)), (\bar{u}_i))$ where the expected payoff under
+independent mixing is
+\[
+    \bar{u}_i(\sigma) = \sum_{s \in S} \bigg(\prod_{j \in N} \sigma_j(s_j)\bigg) u_i(s)
+    = \E_{s \sim \sigma}[u_i(s)].
+\]
+We drop the bar and write $u_i(\sigma)$ when the context is clear.
+\end{definition}
+
+\begin{remark}[Multilinearity]
+\label{rem:multilinear}
+The expected payoff $u_i(\sigma)$ is \emph{multilinear}: it is linear in each
+$\sigma_i$ when the other players' strategies are held fixed. Explicitly,
+\[
+    u_i(\sigma_i, \sigma_{-i}) = \sum_{s_i \in S_i} \sigma_i(s_i)
+    \underbrace{\sum_{s_{-i} \in S_{-i}}
+    \bigg(\prod_{j \neq i} \sigma_j(s_j)\bigg) u_i(s_i, s_{-i})}_{=:\, u_i(s_i, \sigma_{-i})}.
+\]
+The quantity $u_i(s_i, \sigma_{-i})$ is the expected payoff to player~$i$ from playing
+the pure strategy $s_i$ when opponents play $\sigma_{-i}$.
+\end{remark}
+
+\subsection{Mixed Nash Equilibrium and the Indifference Principle}
+\label{subsec:mixed_ne}
+
+\begin{definition}[Mixed Strategy Nash Equilibrium]
+\label{def:mixed_ne}
+A mixed strategy profile $\sigma^*$ is a \emph{Nash equilibrium} if
+\[
+    u_i(\sigma_i^*, \sigma_{-i}^*) \geq u_i(\sigma_i, \sigma_{-i}^*)
+    \quad \text{for all } \sigma_i \in \Delta(S_i), \text{ for all } i \in N.
+\]
+\end{definition}
+
+\begin{theorem}[Indifference Principle]
+\label{thm:indifference}
+Let $\sigma^*$ be a mixed strategy Nash equilibrium. For each player~$i$, every pure
+strategy in $\supp(\sigma_i^*)$ yields the same expected payoff against $\sigma_{-i}^*$,
+and this common payoff is at least as large as the expected payoff from any pure
+strategy outside the support. Formally:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item If $s_i, s_i' \in \supp(\sigma_i^*)$, then
+    $u_i(s_i, \sigma_{-i}^*) = u_i(s_i', \sigma_{-i}^*)$.
+    \item If $s_i \in \supp(\sigma_i^*)$ and $t_i \notin \supp(\sigma_i^*)$, then
+    $u_i(s_i, \sigma_{-i}^*) \geq u_i(t_i, \sigma_{-i}^*)$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+By multilinearity (Remark~\ref{rem:multilinear}),
+\[
+    u_i(\sigma_i^*, \sigma_{-i}^*) = \sum_{s_i \in S_i} \sigma_i^*(s_i)\, u_i(s_i, \sigma_{-i}^*).
+\]
+Let $v_i^* = u_i(\sigma_i^*, \sigma_{-i}^*)$ be the equilibrium payoff for player~$i$.
+
+\textbf{Part (b):} Suppose $t_i \in S_i$ satisfies $u_i(t_i, \sigma_{-i}^*) > v_i^*$.
+Then the pure strategy $t_i$ (viewed as a degenerate mixed strategy) gives payoff
+$u_i(t_i, \sigma_{-i}^*) > v_i^* = u_i(\sigma_i^*, \sigma_{-i}^*)$, contradicting the
+NE condition. Hence $u_i(s_i, \sigma_{-i}^*) \leq v_i^*$ for all $s_i$ with equality
+impossible for all $s_i$ unless we also have a lower bound. Since
+$v_i^*$ is a convex combination of the payoffs $u_i(s_i, \sigma_{-i}^*)$ with
+weights $\sigma_i^*(s_i) \geq 0$ summing to~1, if any payoff in the support were
+strictly less than $v_i^*$, then some payoff (in or outside the support) must be
+strictly greater than $v_i^*$ (to make the weighted average equal $v_i^*$), which
+we just showed is impossible. Therefore:
+\begin{itemize}[nosep]
+    \item For all $s_i \in \supp(\sigma_i^*)$: $u_i(s_i, \sigma_{-i}^*) = v_i^*$.
+    \item For all $s_i \notin \supp(\sigma_i^*)$: $u_i(s_i, \sigma_{-i}^*) \leq v_i^*$.
+\end{itemize}
+
+\textbf{Part (a):} Immediate from the first bullet point.
+\end{proof}
+
+\begin{example}[Mixed NE in Battle of the Sexes]
+\label{ex:mixed_bos}
+In the Battle of the Sexes (Example~\ref{ex:bos}), let player~1 play $O$ with
+probability $p$ and player~2 play $O$ with probability $q$. By the indifference
+principle, in a fully mixed NE, player~1 must be indifferent:
+\[
+    u_1(O, q) = u_1(F, q) \implies 3q + 0(1-q) = 0 \cdot q + 1 \cdot (1-q)
+    \implies 3q = 1 - q \implies q = \tfrac{1}{4}.
+\]
+Similarly, player~2 must be indifferent:
+\[
+    u_2(p, O) = u_2(p, F) \implies 1 \cdot p + 0(1-p) = 0 \cdot p + 3(1-p)
+    \implies p = 3 - 3p \implies p = \tfrac{3}{4}.
+\]
+The mixed NE is $\sigma_1 = (\tfrac{3}{4}, \tfrac{1}{4})$,
+$\sigma_2 = (\tfrac{1}{4}, \tfrac{3}{4})$, with expected payoffs
+$(3 \cdot \tfrac{1}{4}, 1 \cdot \tfrac{3}{4}) = (\tfrac{3}{4}, \tfrac{3}{4})$.
+Both players fare worse in the mixed NE than in either pure NE.
+\end{example}
+
+\begin{rlconnection}[Mixed Strategies and Stochastic Policies]
+In RL, a stochastic policy $\pi(a|s)$ assigns probabilities to actions given a state.
+This is precisely a mixed strategy in the stage game at state~$s$. The indifference
+principle has a direct analog: in an optimal stochastic policy, every action in the
+support must yield the same Q-value. If some action had a strictly higher Q-value,
+the agent should place all probability on it. This is why $\epsilon$-greedy exploration
+is suboptimal --- it assigns probability to actions that may not be in the support of
+any Nash equilibrium.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: NASH EXISTENCE THEOREM
+%% ============================================================
+\section{Nash's Existence Theorem}
+\label{sec:nash_existence}
+
+The central result of this lesson: every finite game has at least one Nash equilibrium
+in mixed strategies. The proof uses Kakutani's fixed point theorem.
+
+\subsection{Kakutani's Fixed Point Theorem}
+\label{subsec:kakutani}
+
+\begin{definition}[Upper Hemicontinuity]
+\label{def:uhc}
+Let $X \subseteq \R^m$ and $Y \subseteq \R^n$. A correspondence (set-valued map)
+$F : X \rightrightarrows Y$ is \emph{upper hemicontinuous} (uhc) at $x_0 \in X$ if
+for every open set $V \supseteq F(x_0)$, there exists an open set $U \ni x_0$ such
+that $F(x) \subseteq V$ for all $x \in U \cap X$.
+
+Equivalently (when $Y$ is compact), $F$ is uhc at $x_0$ if whenever $x_k \to x_0$
+and $y_k \in F(x_k)$ with $y_k \to y_0$, we have $y_0 \in F(x_0)$. This is the
+\emph{closed graph} characterization.
+\end{definition}
+
+\begin{theorem}[Kakutani's Fixed Point Theorem]
+\label{thm:kakutani}
+Let $K \subseteq \R^n$ be non-empty, compact, and convex. Let $F : K \rightrightarrows K$
+be a correspondence such that:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $F(x)$ is non-empty for every $x \in K$.
+    \item $F(x)$ is convex for every $x \in K$.
+    \item $F$ is upper hemicontinuous.
+\end{enumerate}
+Then $F$ has a fixed point: there exists $x^* \in K$ with $x^* \in F(x^*)$.
+\end{theorem}
+
+\begin{proof}
+We provide the standard proof via Brouwer's fixed point theorem.
+
+For each $k \in \N$, let $T_k$ be a triangulation of $K$ with mesh size at most
+$1/k$ (the maximum diameter of any simplex in the triangulation). For each vertex $v$
+of $T_k$, choose $f_k(v) \in F(v)$ (possible since $F(v)$ is non-empty). Extend
+$f_k$ to all of $K$ by convex interpolation on each simplex: if
+$x = \sum_{j} \lambda_j v_j$ is the barycentric representation of $x$ in its simplex,
+set $f_k(x) = \sum_j \lambda_j f_k(v_j)$.
+
+We claim each $f_k : K \to K$ is continuous. Continuity within each simplex follows
+from the linearity of the interpolation. On shared faces of adjacent simplices, the
+interpolation agrees because barycentric coordinates are unique on the shared face.
+Since $K$ is convex and each $f_k(x)$ is a convex combination of points in $K$,
+we have $f_k(x) \in K$.
+
+By Brouwer's fixed point theorem (applicable since $K$ is compact and convex, and
+$f_k$ is continuous), each $f_k$ has a fixed point $x_k \in K$ with $f_k(x_k) = x_k$.
+
+Since $K$ is compact, the sequence $(x_k)$ has a convergent subsequence
+$x_{k_l} \to x^* \in K$.
+
+We show $x^* \in F(x^*)$. For each $l$, let $\sigma_l$ be the simplex of $T_{k_l}$
+containing $x_{k_l}$, with vertices $v_1^l, \ldots, v_p^l$ (where $p \leq n+1$).
+Then
+\[
+    x_{k_l} = f_{k_l}(x_{k_l}) = \sum_{j=1}^p \lambda_j^l f_{k_l}(v_j^l),
+    \quad \text{where } x_{k_l} = \sum_{j=1}^p \lambda_j^l v_j^l.
+\]
+Since the mesh size tends to~0, $\|v_j^l - x_{k_l}\| \leq 1/k_l \to 0$, so
+$v_j^l \to x^*$ for each~$j$.
+
+Now, $f_{k_l}(v_j^l) \in F(v_j^l)$. Since $K$ is compact, by passing to a further
+subsequence (using a diagonal argument over the finitely many vertices), we may assume
+$f_{k_l}(v_j^l) \to y_j$ for some $y_j \in K$.
+
+By the closed-graph characterization of upper hemicontinuity (Definition~\ref{def:uhc}):
+$v_j^l \to x^*$ and $f_{k_l}(v_j^l) \to y_j$ with $f_{k_l}(v_j^l) \in F(v_j^l)$
+implies $y_j \in F(x^*)$.
+
+The barycentric coordinates $\lambda_j^l \in [0,1]$ lie in a compact set, so
+(passing to a further subsequence) $\lambda_j^l \to \lambda_j^*$ with
+$\sum_j \lambda_j^* = 1$ and $\lambda_j^* \geq 0$.
+
+Taking the limit in $x_{k_l} = \sum_j \lambda_j^l f_{k_l}(v_j^l)$:
+\[
+    x^* = \sum_j \lambda_j^* y_j.
+\]
+Since each $y_j \in F(x^*)$ and $F(x^*)$ is convex, the convex combination
+$x^* = \sum_j \lambda_j^* y_j \in F(x^*)$.
+\end{proof}
+
+\subsection{Nash's Theorem}
+\label{subsec:nash_theorem}
+
+\begin{keyresult}[Nash's Existence Theorem]
+\begin{theorem}[Nash, 1950]
+\label{thm:nash_existence}
+Every finite normal-form game has at least one mixed strategy Nash equilibrium.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Let $\Gamma = (N, (S_i)_{i \in N}, (u_i)_{i \in N})$ be a finite game with
+$|S_i| = m_i$. Define the set of mixed strategy profiles
+$\Delta = \prod_{i \in N} \Delta(S_i)$, which is a product of simplices and hence
+compact and convex in $\R^{m_1 + \cdots + m_n}$.
+
+\textbf{Step 1: Define the best response correspondence.}
+For each player~$i$, the \emph{mixed best response correspondence}
+$\BR_i : \Delta_{-i} \rightrightarrows \Delta(S_i)$ is
+\[
+    \BR_i(\sigma_{-i}) = \argmax_{\sigma_i \in \Delta(S_i)} u_i(\sigma_i, \sigma_{-i}).
+\]
+Define the joint best response correspondence $\BR : \Delta \rightrightarrows \Delta$ by
+\[
+    \BR(\sigma) = \BR_1(\sigma_{-1}) \times \BR_2(\sigma_{-2}) \times \cdots
+    \times \BR_n(\sigma_{-n}).
+\]
+
+\textbf{Step 2: $\BR(\sigma)$ is non-empty.}
+For each~$i$, the function $\sigma_i \mapsto u_i(\sigma_i, \sigma_{-i})$ is
+continuous (in fact, linear) on the compact set $\Delta(S_i)$. By the extreme value
+theorem, the maximum is attained, so $\BR_i(\sigma_{-i}) \neq \emptyset$.
+
+\textbf{Step 3: $\BR(\sigma)$ is convex.}
+Fix~$i$ and $\sigma_{-i}$. Let $\sigma_i, \sigma_i' \in \BR_i(\sigma_{-i})$ and
+$\lambda \in [0,1]$. Set $\hat{\sigma}_i = \lambda \sigma_i + (1-\lambda)\sigma_i'$.
+By linearity of $u_i$ in $\sigma_i$ (Remark~\ref{rem:multilinear}):
+\[
+    u_i(\hat{\sigma}_i, \sigma_{-i})
+    = \lambda\, u_i(\sigma_i, \sigma_{-i}) + (1-\lambda)\, u_i(\sigma_i', \sigma_{-i})
+    = \lambda\, v_i^* + (1-\lambda)\, v_i^* = v_i^*,
+\]
+where $v_i^* = \max_{\tau_i} u_i(\tau_i, \sigma_{-i})$. So $\hat{\sigma}_i$ also
+achieves the maximum, hence $\hat{\sigma}_i \in \BR_i(\sigma_{-i})$. Thus
+$\BR_i(\sigma_{-i})$ is convex. Since $\BR(\sigma)$ is a product of convex sets,
+it is convex.
+
+\textbf{Step 4: $\BR$ is upper hemicontinuous.}
+We use the closed-graph characterization. Let $\sigma^k \to \sigma^*$ in $\Delta$
+and $\tau^k \in \BR(\sigma^k)$ with $\tau^k \to \tau^*$. We must show
+$\tau^* \in \BR(\sigma^*)$, i.e., $\tau_i^* \in \BR_i(\sigma_{-i}^*)$ for each~$i$.
+
+Fix player~$i$. Since $\tau_i^k \in \BR_i(\sigma_{-i}^k)$, for every
+$\sigma_i \in \Delta(S_i)$:
+\[
+    u_i(\tau_i^k, \sigma_{-i}^k) \geq u_i(\sigma_i, \sigma_{-i}^k).
+\]
+Since $u_i$ is continuous (it is multilinear on the compact set $\Delta$), taking
+$k \to \infty$:
+\[
+    u_i(\tau_i^*, \sigma_{-i}^*) \geq u_i(\sigma_i, \sigma_{-i}^*).
+\]
+Since this holds for all $\sigma_i$, we have $\tau_i^* \in \BR_i(\sigma_{-i}^*)$.
+
+\textbf{Step 5: Apply Kakutani.}
+The correspondence $\BR : \Delta \rightrightarrows \Delta$ satisfies all hypotheses of
+Kakutani's theorem (Theorem~\ref{thm:kakutani}): $\Delta$ is non-empty, compact, and
+convex; $\BR(\sigma)$ is non-empty and convex for each $\sigma$; and $\BR$ is upper
+hemicontinuous. Therefore, there exists $\sigma^* \in \Delta$ with
+$\sigma^* \in \BR(\sigma^*)$.
+
+By definition of $\BR$, $\sigma_i^* \in \BR_i(\sigma_{-i}^*)$ for all~$i$,
+which by Proposition~\ref{prop:ne_br} (extended to mixed strategies) means $\sigma^*$
+is a Nash equilibrium.
+\end{proof}
+
+\begin{remark}[Alternative Proof via Brouwer]
+\label{rem:brouwer_proof}
+An alternative proof avoids Kakutani by constructing a continuous function whose
+fixed points are NE. For each player~$i$ and pure strategy $s_i^j$, define the
+``excess payoff'':
+\[
+    g_i^j(\sigma) = \max\big\{0,\; u_i(s_i^j, \sigma_{-i}) - u_i(\sigma_i, \sigma_{-i})\big\}.
+\]
+Then define $f : \Delta \to \Delta$ by
+\[
+    f_i^j(\sigma) = \frac{\sigma_i(s_i^j) + g_i^j(\sigma)}
+    {1 + \sum_{k=1}^{m_i} g_i^k(\sigma)}.
+\]
+One verifies: (i) $f$ maps $\Delta$ to $\Delta$; (ii) $f$ is continuous; (iii)
+$\sigma^*$ is a fixed point of $f$ if and only if $g_i^j(\sigma^*) = 0$ for all
+$i, j$, which holds if and only if $\sigma^*$ is a NE. Brouwer's theorem gives a
+fixed point, hence a NE.
+\end{remark}
+
+\begin{rlconnection}[Existence Guarantees in MARL]
+Nash's theorem guarantees that every finite MARL problem (modeled as a stochastic game
+with finite state and action spaces) has at least one Nash equilibrium --- at least in
+the stage games. This justifies the goal of Nash-Q learning (Hu \& Wellman, 2003),
+which attempts to compute Nash equilibria at each state. However, the theorem is
+non-constructive: it guarantees existence but says nothing about efficient computation.
+Indeed, computing a Nash equilibrium is PPAD-complete (Daskalakis, Goldberg, Papadimitriou,
+2009), meaning no polynomial-time algorithm is known.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: MINIMAX THEOREM
+%% ============================================================
+\section{Von Neumann's Minimax Theorem}
+\label{sec:minimax}
+
+\subsection{Two-Player Zero-Sum Games}
+\label{subsec:zero_sum}
+
+\begin{definition}[Two-Player Zero-Sum Game]
+\label{def:zero_sum}
+A two-player game $(N, (S_1, S_2), (u_1, u_2))$ is \emph{zero-sum} if
+$u_1(s) + u_2(s) = 0$ for all $s \in S$. It is specified by a single payoff matrix
+$A \in \R^{m \times n}$ where $u_1(i,j) = A_{ij}$ and $u_2(i,j) = -A_{ij}$.
+Player~1 (the ``row player'') maximizes; player~2 (the ``column player'') minimizes.
+\end{definition}
+
+\begin{definition}[Maximin and Minimax Values]
+\label{def:maximin}
+For a zero-sum game with payoff matrix $A$, define:
+\begin{align*}
+    \underline{v} &= \max_{x \in \Delta_m} \min_{y \in \Delta_n} x^\top A y
+    \quad \text{(maximin value: player~1's guarantee)}, \\
+    \overline{v} &= \min_{y \in \Delta_n} \max_{x \in \Delta_m} x^\top A y
+    \quad \text{(minimax value: player~2's guarantee)},
+\end{align*}
+where $\Delta_k$ denotes the $(k-1)$-simplex in $\R^k$.
+\end{definition}
+
+\begin{lemma}[Maximin $\leq$ Minimax]
+\label{lem:maximin_leq}
+For any matrix $A \in \R^{m \times n}$, $\underline{v} \leq \overline{v}$.
+\end{lemma}
+
+\begin{proof}
+For any fixed $x \in \Delta_m$ and $y \in \Delta_n$:
+\[
+    \min_{y' \in \Delta_n} x^\top A y' \leq x^\top A y
+    \leq \max_{x' \in \Delta_m} (x')^\top A y.
+\]
+Taking $\max$ over $x$ on the left and $\min$ over $y$ on the right:
+\[
+    \underline{v} = \max_x \min_{y'} x^\top A y'
+    \leq \min_y \max_{x'} (x')^\top A y = \overline{v}. \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[Von Neumann's Minimax Theorem]
+\begin{theorem}[Von Neumann, 1928]
+\label{thm:minimax}
+For every matrix $A \in \R^{m \times n}$,
+\[
+    \max_{x \in \Delta_m} \min_{y \in \Delta_n} x^\top A y
+    = \min_{y \in \Delta_n} \max_{x \in \Delta_m} x^\top A y.
+\]
+The common value $v^* = \underline{v} = \overline{v}$ is called the \emph{value}
+of the game.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We give a proof using LP duality. By Lemma~\ref{lem:maximin_leq}, it suffices to
+show $\underline{v} \geq \overline{v}$.
+
+\textbf{Step 1: Reformulate as linear programs.}
+Player~1's maximin problem is:
+\[
+    \underline{v} = \max_{x \in \Delta_m} \min_{y \in \Delta_n} x^\top A y.
+\]
+Since $y \mapsto x^\top A y$ is linear in $y$ and $\Delta_n$ is a simplex, the minimum
+over $y$ is attained at a vertex $e_j$ (the $j$-th standard basis vector), giving
+$\min_y x^\top A y = \min_{j=1,\ldots,n} (A^\top x)_j$.
+
+Thus $\underline{v} = \max_{x \in \Delta_m} \min_{j} (A^\top x)_j$. Introducing an
+auxiliary variable $v$, this is equivalent to the linear program:
+\begin{align}
+    \text{(P)} \quad \max\;&\; v \notag \\
+    \text{s.t.}\;&\; A^\top x \geq v\, \mathbf{1}, \quad x \in \Delta_m, \quad v \in \R,
+    \label{eq:primal}
+\end{align}
+where $\mathbf{1} = (1, \ldots, 1)^\top \in \R^n$ and the inequality is componentwise.
+
+\textbf{Step 2: The dual LP.}
+Similarly, player~2's minimax problem gives:
+\[
+    \overline{v} = \min_{y \in \Delta_n} \max_{i} (Ay)_i.
+\]
+This is equivalent to:
+\begin{align}
+    \text{(D)} \quad \min\;&\; w \notag \\
+    \text{s.t.}\;&\; Ay \leq w\, \mathbf{1}, \quad y \in \Delta_n, \quad w \in \R.
+    \label{eq:dual}
+\end{align}
+
+\textbf{Step 3: LP duality.}
+We show that (P) and (D) are LP duals of each other. Rewrite (P) in standard form.
+Let $v = \underline{v}$. The constraints of (P) are:
+$A^\top x - v\, \mathbf{1} \geq 0$, $\mathbf{1}^\top x = 1$, $x \geq 0$.
+This is a linear program in the variables $(x, v) \in \R^{m+1}$.
+
+The dual of this LP (after careful bookkeeping of the dual variables associated
+with each primal constraint) yields precisely the LP (D). By strong LP duality
+(both problems are feasible --- take $x = (1/m, \ldots, 1/m)^\top$ and
+$y = (1/n, \ldots, 1/n)^\top$ --- and bounded), the optimal values are equal:
+\[
+    \underline{v} = \text{opt}(\text{P}) = \text{opt}(\text{D}) = \overline{v}. \qedhere
+\]
+\end{proof}
+
+\begin{corollary}[NE in Zero-Sum Games]
+\label{cor:ne_zero_sum}
+In a two-player zero-sum game with payoff matrix $A$ and value $v^*$:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item $(x^*, y^*)$ is a Nash equilibrium if and only if $x^*$ is a maximin
+    strategy and $y^*$ is a minimax strategy.
+    \item All NE yield the same payoff: $u_1 = v^*$, $u_2 = -v^*$.
+    \item NE strategies are interchangeable: if $(x^*, y^*)$ and $(x^{**}, y^{**})$
+    are both NE, then so are $(x^*, y^{**})$ and $(x^{**}, y^*)$.
+\end{enumerate}
+\end{corollary}
+
+\begin{proof}
+\textbf{(a)} $(\Rightarrow)$: Let $(x^*, y^*)$ be a NE. Then $x^*$ is a best response
+to $y^*$, so $(x^*)^\top A y^* = \max_x x^\top A y^*$. Similarly, $y^*$ minimizes
+$x^\top A y$ against $x^*$, so $(x^*)^\top A y^* = \min_y (x^*)^\top A y$. Therefore:
+\[
+    \max_x x^\top A y^* = (x^*)^\top A y^* = \min_y (x^*)^\top A y.
+\]
+But $\min_y (x^*)^\top A y \leq \underline{v} \leq \overline{v}
+\leq \max_x x^\top A y^*$,
+and by the minimax theorem $\underline{v} = \overline{v} = v^*$, so all inequalities
+are equalities. Hence $\min_y (x^*)^\top A y = v^*$ (so $x^*$ achieves the maximin)
+and $\max_x x^\top A y^* = v^*$ (so $y^*$ achieves the minimax).
+
+$(\Leftarrow)$: If $x^*$ achieves the maximin and $y^*$ achieves the minimax, then
+\[
+    (x^*)^\top A y^* \geq \min_y (x^*)^\top A y = v^*
+    = \max_x x^\top A y^* \geq (x^*)^\top A y^*,
+\]
+so $(x^*)^\top A y^* = v^*$. For any $x$: $x^\top A y^* \leq \max_{x'} (x')^\top A y^*
+= v^* = (x^*)^\top A y^*$, so $x^*$ is a best response to $y^*$. Similarly, $y^*$
+is a best response to $x^*$. Hence $(x^*, y^*)$ is a NE.
+
+\textbf{(b)} Follows from part (a): every NE strategy pair achieves the value $v^*$.
+
+\textbf{(c)} If $x^*$ and $x^{**}$ are both maximin and $y^*$, $y^{**}$ both minimax,
+then by part (a), any combination of a maximin and a minimax strategy forms a NE.
+\end{proof}
+
+\begin{rlconnection}[Minimax in RL]
+The minimax theorem is the theoretical foundation of:
+\begin{itemize}[nosep]
+    \item \textbf{Minimax-Q learning} (Littman, 1994): at each state of a two-player
+    zero-sum stochastic game, the Bellman operator computes
+    $V(s) = \max_x \min_y x^\top Q(s, \cdot, \cdot) y$, which is well-defined
+    by the minimax theorem.
+    \item \textbf{AlphaGo/AlphaZero}: the MCTS search implicitly approximates
+    minimax values in the game tree.
+    \item \textbf{GANs}: the generator-discriminator game is a continuous zero-sum
+    game $\min_G \max_D V(D,G)$. The minimax theorem (extended to continuous
+    strategy spaces) justifies seeking saddle points.
+\end{itemize}
+\end{rlconnection}
+
+\subsection{Connection to Linear Programming}
+\label{subsec:lp}
+
+\begin{proposition}[Solving Zero-Sum Games via LP]
+\label{prop:lp_zerosum}
+The maximin strategy $x^*$ and the game value $v^*$ can be computed by solving the
+LP~\eqref{eq:primal}. The minimax strategy $y^*$ is recovered from the dual
+LP~\eqref{eq:dual}. Both LPs have polynomial-time algorithms (e.g., interior point
+methods), so computing NE in two-player zero-sum games is in~P.
+\end{proposition}
+
+\begin{proof}
+This follows directly from the reformulation in the proof of
+Theorem~\ref{thm:minimax}. The LP~\eqref{eq:primal} has $m + 1$ variables and
+$n + m + 1$ constraints (including non-negativity and the simplex constraint), so
+it can be solved efficiently.
+\end{proof}
+
+\begin{warning}[Zero-Sum vs.\ General-Sum Complexity]
+While NE in two-player zero-sum games can be found in polynomial time via LP,
+computing a Nash equilibrium in a general two-player game is PPAD-complete
+(Chen, Deng, Teng, 2009; Daskalakis, Goldberg, Papadimitriou, 2009). This
+complexity-theoretic barrier is a fundamental challenge for MARL: even
+\emph{finding} the solution concept that algorithms like Nash-Q target is
+computationally intractable in general.
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: CORRELATED EQUILIBRIUM
+%% ============================================================
+\section{Correlated Equilibrium}
+\label{sec:correlated}
+
+\begin{definition}[Correlated Equilibrium]
+\label{def:ce}
+A \emph{correlated equilibrium} (CE) of a finite game $\Gamma = (N, (S_i), (u_i))$
+is a probability distribution $\pi$ over $S = \prod_{i \in N} S_i$ such that for
+every player~$i$ and every pair of strategies $s_i, s_i' \in S_i$:
+\[
+    \sum_{s_{-i} \in S_{-i}} \pi(s_i, s_{-i})\, u_i(s_i, s_{-i})
+    \geq \sum_{s_{-i} \in S_{-i}} \pi(s_i, s_{-i})\, u_i(s_i', s_{-i}).
+\]
+Equivalently, if a mediator draws $s = (s_1, \ldots, s_n)$ from $\pi$ and
+privately recommends $s_i$ to player~$i$, no player has an incentive to deviate
+from the recommendation (assuming the others follow theirs).
+\end{definition}
+
+\begin{theorem}[Every Nash Equilibrium Is a Correlated Equilibrium]
+\label{thm:ne_is_ce}
+If $\sigma^* = (\sigma_1^*, \ldots, \sigma_n^*)$ is a mixed strategy NE, then the
+product distribution $\pi(s) = \prod_{i \in N} \sigma_i^*(s_i)$ is a correlated
+equilibrium.
+\end{theorem}
+
+\begin{proof}
+Fix player~$i$ and strategies $s_i, s_i' \in S_i$. The CE incentive constraint
+requires:
+\[
+    \sum_{s_{-i}} \pi(s_i, s_{-i})\, u_i(s_i, s_{-i})
+    \geq \sum_{s_{-i}} \pi(s_i, s_{-i})\, u_i(s_i', s_{-i}).
+\]
+Since $\pi$ is a product distribution, $\pi(s_i, s_{-i}) = \sigma_i^*(s_i) \cdot
+\prod_{j \neq i} \sigma_j^*(s_j)$. If $\sigma_i^*(s_i) = 0$, both sides are~0
+and the inequality holds. If $\sigma_i^*(s_i) > 0$, dividing both sides by
+$\sigma_i^*(s_i)$ gives:
+\[
+    \sum_{s_{-i}} \bigg(\prod_{j \neq i} \sigma_j^*(s_j)\bigg) u_i(s_i, s_{-i})
+    \geq \sum_{s_{-i}} \bigg(\prod_{j \neq i} \sigma_j^*(s_j)\bigg) u_i(s_i', s_{-i}),
+\]
+i.e., $u_i(s_i, \sigma_{-i}^*) \geq u_i(s_i', \sigma_{-i}^*)$.
+Since $s_i \in \supp(\sigma_i^*)$, the indifference principle
+(Theorem~\ref{thm:indifference}) gives
+$u_i(s_i, \sigma_{-i}^*) \geq u_i(s_i', \sigma_{-i}^*)$ for all $s_i'$, which is
+exactly what we need.
+\end{proof}
+
+\begin{proposition}[CE as a Linear Program]
+\label{prop:ce_lp}
+The set of correlated equilibria of a finite game is a convex polytope, defined by the
+linear incentive-compatibility constraints in Definition~\ref{def:ce} together with
+$\pi(s) \geq 0$ for all $s$ and $\sum_s \pi(s) = 1$. In particular, optimizing any
+linear objective over the CE set is a linear program.
+\end{proposition}
+
+\begin{proof}
+The CE constraints are:
+\[
+    \sum_{s_{-i}} \pi(s_i, s_{-i})\big[u_i(s_i, s_{-i}) - u_i(s_i', s_{-i})\big] \geq 0
+    \quad \text{for all } i, s_i, s_i'.
+\]
+These are linear in the variables $\{\pi(s)\}_{s \in S}$. Combined with the simplex
+constraints $\pi(s) \geq 0$ and $\sum_s \pi(s) = 1$, the feasible set is a polytope
+(intersection of finitely many half-spaces). Any linear function of $\pi$ can be
+optimized over this polytope by solving an LP.
+\end{proof}
+
+\begin{example}[Correlated Equilibrium in Battle of the Sexes]
+\label{ex:ce_bos}
+In the Battle of the Sexes (Example~\ref{ex:bos}), consider the ``traffic light''
+correlated equilibrium: a mediator recommends $(O,O)$ with probability $1/2$ and
+$(F,F)$ with probability $1/2$. Under this distribution $\pi$:
+\[
+    \pi(O,O) = 1/2, \quad \pi(O,F) = 0, \quad \pi(F,O) = 0, \quad \pi(F,F) = 1/2.
+\]
+Check the CE condition for player~1, given recommendation $O$ (so $s_1 = O$):
+\[
+    \pi(O,O)\, u_1(O,O) = \tfrac{1}{2} \cdot 3 = \tfrac{3}{2}
+    \geq \pi(O,O)\, u_1(F,O) = \tfrac{1}{2} \cdot 0 = 0. \quad \checkmark
+\]
+Given recommendation $F$:
+\[
+    \pi(F,F)\, u_1(F,F) = \tfrac{1}{2} \cdot 1 = \tfrac{1}{2}
+    \geq \pi(F,F)\, u_1(O,F) = \tfrac{1}{2} \cdot 0 = 0. \quad \checkmark
+\]
+Similarly for player~2. The expected payoffs are
+$(1/2)(3) + (1/2)(1) = 2$ for player~1 and $(1/2)(1) + (1/2)(3) = 2$ for player~2,
+which Pareto-dominates the mixed NE payoffs of $(3/4, 3/4)$.
+\end{example}
+
+\begin{rlconnection}[Correlated Equilibrium and MARL]
+Correlated equilibrium has several advantages over Nash equilibrium for MARL:
+\begin{itemize}[nosep]
+    \item \textbf{Computational tractability}: finding a CE is an LP, polynomial in
+    the game size. Finding a NE is PPAD-complete.
+    \item \textbf{Natural emergence}: simple no-regret learning dynamics (e.g., regret
+    matching) converge to the set of CE, not NE. This makes CE a more natural
+    prediction for what independent learners will achieve.
+    \item \textbf{Better welfare}: CE can achieve higher social welfare than any NE,
+    as the Battle of the Sexes example illustrates.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXTENSIVE-FORM GAMES
+%% ============================================================
+\section{Extensive-Form Games}
+\label{sec:extensive}
+
+\subsection{Game Trees}
+\label{subsec:game_trees}
+
+\begin{definition}[Extensive-Form Game]
+\label{def:extensive}
+An \emph{extensive-form game} is a tuple
+$\Gamma = (N, H, P, (\mathcal{I}_i)_{i \in N}, u)$ where:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $N = \{1, \ldots, n\}$ is the set of players. We may include a ``chance''
+    player~0 (nature).
+    \item $H$ is a set of \emph{histories} (finite sequences of actions), including the
+    empty sequence $\emptyset$ (the root). $H$ is closed under prefixes: if
+    $(a_1, \ldots, a_k) \in H$ then $(a_1, \ldots, a_l) \in H$ for all $l \leq k$.
+    A history $h \in H$ is \emph{terminal} if there is no $a$ with $(h, a) \in H$.
+    The set of terminal histories is $Z \subseteq H$.
+    \item $P : H \setminus Z \to N \cup \{0\}$ is the \emph{player function}, assigning
+    to each non-terminal history the player who moves at that point.
+    \item For each player $i \in N$, $\mathcal{I}_i$ is a partition of
+    $\{h \in H \setminus Z : P(h) = i\}$ into \emph{information sets}. If
+    $h, h'$ are in the same information set $I \in \mathcal{I}_i$, then the
+    set of available actions $A(h) = A(h')$ is the same (denoted $A(I)$).
+    \item $u = (u_1, \ldots, u_n) : Z \to \R^n$ assigns payoffs to terminal histories.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Perfect Information]
+\label{def:perfect_info}
+An extensive-form game has \emph{perfect information} if every information set is a
+singleton: $|I| = 1$ for all $I \in \mathcal{I}_i$, for all $i \in N$. In a game
+with perfect information, every player knows exactly which node the game has reached
+when it is their turn to move.
+\end{definition}
+
+\begin{definition}[Perfect Recall]
+\label{def:perfect_recall}
+Player~$i$ has \emph{perfect recall} if, for any two histories $h, h'$ in the same
+information set $I \in \mathcal{I}_i$, player~$i$'s sequence of information sets and
+actions leading to $h$ and $h'$ is the same. Informally, no player forgets their own
+past actions or information.
+\end{definition}
+
+\begin{example}[Entry Game]
+\label{ex:entry}
+An incumbent (player~2) faces a potential entrant (player~1). The entrant first
+decides whether to \emph{Enter} ($E$) or \emph{Stay Out} ($O$). If the entrant enters,
+the incumbent decides whether to \emph{Fight} ($F$) or \emph{Accommodate} ($A$):
+\begin{itemize}[nosep]
+    \item $O$: payoffs $(0, 2)$.
+    \item $(E, F)$: payoffs $(-1, -1)$.
+    \item $(E, A)$: payoffs $(1, 1)$.
+\end{itemize}
+This is a game with perfect information (all information sets are singletons).
+\end{example}
+
+\subsection{Strategies in Extensive-Form Games}
+\label{subsec:strategies_extensive}
+
+\begin{definition}[Pure Strategy in Extensive Form]
+\label{def:strategy_extensive}
+A \emph{pure strategy} for player~$i$ in an extensive-form game is a function
+$s_i : \mathcal{I}_i \to \bigcup_{I \in \mathcal{I}_i} A(I)$ satisfying
+$s_i(I) \in A(I)$ for each $I \in \mathcal{I}_i$.
+\end{definition}
+
+\begin{remark}[Strategies as Complete Contingent Plans]
+\label{rem:contingent}
+A strategy specifies an action at \emph{every} information set, including those that
+cannot be reached given earlier choices. In the Entry Game (Example~\ref{ex:entry}),
+player~2's strategy must specify what to do if the entrant enters, even if that
+node is never reached. This redundancy is essential for the normal-form representation
+and for defining subgame perfection.
+\end{remark}
+
+\begin{definition}[Behavioral Strategy]
+\label{def:behavioral}
+A \emph{behavioral strategy} for player~$i$ is a function
+$b_i : \mathcal{I}_i \to \bigcup_{I \in \mathcal{I}_i} \Delta(A(I))$
+satisfying $b_i(I) \in \Delta(A(I))$. That is, $b_i$ assigns a probability
+distribution over actions at each information set, with independent randomization
+at different information sets.
+\end{definition}
+
+\begin{proposition}[Normal-Form Representation]
+\label{prop:normal_form_rep}
+Every extensive-form game has a corresponding normal-form game: the pure strategy
+sets are as in Definition~\ref{def:strategy_extensive}, and the payoff
+$u_i(s_1, \ldots, s_n)$ is determined by tracing the unique path through the game
+tree when each player follows their strategy (resolving chance moves by expectation).
+\end{proposition}
+
+\begin{proof}
+Given a strategy profile $(s_1, \ldots, s_n)$, the unique path from the root to a
+terminal node is determined inductively: at each non-terminal history $h$, the next
+action is $s_{P(h)}(I)$ where $I$ is the information set containing $h$ (or a
+probability distribution if $P(h) = 0$, i.e., nature moves). Since the game tree is
+finite, this process terminates at some terminal history $z \in Z$. Define
+$u_i(s_1, \ldots, s_n)$ as the expected value of $u_i(z)$ where the expectation is
+over any chance moves. The resulting tuple $(N, (S_i), (u_i))$ is a well-defined
+normal-form game.
+\end{proof}
+
+\begin{theorem}[Kuhn's Theorem]
+\label{thm:kuhn}
+In a finite extensive-form game with perfect recall, every mixed strategy of player~$i$
+has a \emph{realization-equivalent} behavioral strategy: a behavioral strategy that
+induces the same probability distribution over terminal histories for every strategy
+profile of the other players. Conversely, every behavioral strategy has a
+realization-equivalent mixed strategy.
+\end{theorem}
+
+\begin{proof}
+We prove the direction from mixed to behavioral, which is the more useful one.
+
+Let $\sigma_i$ be a mixed strategy (a distribution over pure strategies) for player~$i$
+in a game with perfect recall. We construct a behavioral strategy $b_i$ as follows.
+
+For each information set $I \in \mathcal{I}_i$ and action $a \in A(I)$, define
+\[
+    b_i(a | I) = \frac{\sigma_i\big(\{s_i : s_i(I) = a \text{ and }
+    s_i \text{ reaches } I\}\big)}
+    {\sigma_i\big(\{s_i : s_i \text{ reaches } I\}\big)},
+\]
+where ``$s_i$ reaches $I$'' means that the pure strategy $s_i$, together with some
+strategy profile of the opponents, leads to a history in $I$. In a game with perfect
+recall, whether $s_i$ reaches $I$ depends only on $s_i$'s earlier actions, so this
+is well-defined. If the denominator is zero (no pure strategy in the support of
+$\sigma_i$ reaches $I$), set $b_i(\cdot | I)$ arbitrarily.
+
+The key property of perfect recall is that it makes the randomization at different
+information sets conditionally independent: knowing that player~$i$ reaches information
+set $I$ does not reveal what $\sigma_i$ prescribes at other information sets that are
+not on the path to $I$. This ensures that the behavioral strategy $b_i$ produces the
+same realization probabilities (probability of reaching each terminal node) as $\sigma_i$.
+
+The converse (behavioral to mixed) follows by defining $\sigma_i(s_i) = \prod_I b_i(s_i(I)|I)$,
+viewing each pure strategy as specifying an action at each information set.
+\end{proof}
+
+\begin{rlconnection}[Behavioral Strategies and RL Policies]
+A behavioral strategy is exactly an RL policy: it maps information states (information
+sets) to probability distributions over actions. Kuhn's theorem justifies the standard
+RL assumption that we can restrict attention to behavioral strategies (policies)
+without loss of generality. The perfect recall condition is the Markov property in
+disguise: the agent's policy can depend on the current information state without
+needing to recall the randomization device used to reach that state.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: SUBGAME PERFECT EQUILIBRIUM
+%% ============================================================
+\section{Subgame Perfect Equilibrium}
+\label{sec:spe}
+
+\subsection{Motivation: Non-Credible Threats}
+\label{subsec:noncredible}
+
+\begin{example}[Non-Credible Threat in the Entry Game]
+\label{ex:noncredible}
+In the Entry Game (Example~\ref{ex:entry}), consider the strategy profile where
+player~1 plays $O$ (stay out) and player~2 plays $F$ (fight). The payoffs are
+$(0, 2)$. Is this a NE?
+
+Player~1's payoff from deviating to $E$ (enter): given player~2's strategy $F$,
+the payoff is $-1 < 0$. So player~1 has no incentive to deviate.
+
+Player~2's strategy $F$ is not tested because player~1 stays out, so player~2's
+information set is not reached. Player~2 trivially has no incentive to deviate
+(any strategy gives the same outcome of $(0,2)$ when player~1 plays $O$).
+
+Therefore $(O, F)$ is a NE. But it relies on a \emph{non-credible threat}:
+player~2 threatens to fight, but if the entrant actually entered, fighting
+gives player~2 a payoff of $-1$ versus $1$ for accommodating. Rational player~2
+would never actually fight. The Nash equilibrium concept fails to exclude such
+non-credible threats because it does not require rational behavior at unreached
+information sets.
+\end{example}
+
+\subsection{Subgames and Subgame Perfection}
+\label{subsec:subgame_def}
+
+\begin{definition}[Subgame]
+\label{def:subgame}
+A \emph{subgame} of an extensive-form game $\Gamma$ beginning at history $h \in H \setminus Z$
+is the restriction of $\Gamma$ to the histories that extend $h$, provided:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $h$ is a singleton information set: $\{h\}$ is an information set for
+    player $P(h)$.
+    \item Every information set that contains a successor of $h$ is entirely contained
+    within the subtree rooted at $h$.
+\end{enumerate}
+The subgame includes all histories $h' \in H$ such that $h$ is a prefix of $h'$,
+with the same player function, information sets (restricted to the subtree), and payoffs.
+\end{definition}
+
+\begin{remark}
+In a game with perfect information, every non-terminal history $h$ begins a subgame
+(since all information sets are singletons). In games with imperfect information,
+subgames may be rare --- the entire game is always a subgame (beginning at the root).
+\end{remark}
+
+\begin{definition}[Subgame Perfect Equilibrium]
+\label{def:spe}
+A strategy profile $s^*$ is a \emph{subgame perfect equilibrium} (SPE) if its
+restriction to every subgame is a Nash equilibrium of that subgame.
+\end{definition}
+
+\begin{proposition}[SPE Refines NE]
+\label{prop:spe_refines}
+Every subgame perfect equilibrium is a Nash equilibrium.
+\end{proposition}
+
+\begin{proof}
+The entire game is itself a subgame (beginning at the root). If $s^*$ is an SPE,
+then it is a NE of the entire game by definition.
+\end{proof}
+
+\begin{proposition}[SPE in the Entry Game]
+\label{prop:spe_entry}
+The Entry Game (Example~\ref{ex:entry}) has a unique SPE: $(E, A)$ (Enter, Accommodate)
+with payoffs $(1, 1)$.
+\end{proposition}
+
+\begin{proof}
+The game has two subgames: the entire game (rooted at the empty history) and the
+subgame starting after player~1 chooses $E$ (where player~2 decides between $F$ and $A$).
+
+In the subgame after $E$: player~2 chooses between $F$ (payoff $-1$) and $A$ (payoff $1$).
+The unique NE of this subgame is $A$.
+
+Given that player~2 plays $A$ in the subgame, player~1 in the full game chooses between
+$O$ (payoff $0$) and $E$ (payoff $1$, since player~2 accommodates). Player~1 chooses $E$.
+
+The unique SPE is $(E, A)$. The non-credible equilibrium $(O, F)$ is eliminated because
+$F$ is not a NE in the subgame after entry.
+\end{proof}
+
+\subsection{Backward Induction}
+\label{subsec:backward_induction}
+
+\begin{definition}[Backward Induction]
+\label{def:backward_induction}
+For a finite game with perfect information, \emph{backward induction} is the following
+procedure:
+\begin{enumerate}[nosep]
+    \item Identify all ``penultimate'' nodes: non-terminal histories $h$ such that all
+    successors $(h, a)$ are terminal. At each such $h$, the player $P(h)$ chooses the
+    action maximizing their payoff: $a^*(h) = \argmax_{a \in A(h)} u_{P(h)}(h, a)$.
+    \item Replace each penultimate node $h$ with a terminal node having payoff
+    $u(h, a^*(h))$.
+    \item Repeat until the root is reached.
+\end{enumerate}
+The resulting strategy profile specifies an action at every node of the original tree.
+\end{definition}
+
+\begin{theorem}[Backward Induction Yields SPE]
+\label{thm:bi_spe}
+In a finite game with perfect information and no ties (i.e., the payoff function is
+injective when restricted to any player's choices at any node), backward induction
+produces the unique subgame perfect equilibrium.
+\end{theorem}
+
+\begin{proof}
+We prove by strong induction on the depth $d$ of the game tree (the maximum number of
+actions in any history).
+
+\textbf{Base case ($d = 1$):} The game consists of a single player choosing an action
+at the root, with all successors being terminal. The backward induction strategy
+(choose the payoff-maximizing action) is trivially the unique NE and SPE.
+
+\textbf{Inductive step:} Assume the result holds for all games of depth $< d$.
+Consider a game $\Gamma$ of depth $d$ with perfect information and no ties.
+
+At the root, player $P(\emptyset)$ chooses action $a \in A(\emptyset)$. Each action $a$
+leads to a subgame $\Gamma_a$ of depth $< d$. By the inductive hypothesis, each
+$\Gamma_a$ has a unique SPE $s^*_a$ with a well-defined payoff vector $v(a)$.
+
+In the full game, backward induction assigns to the root the action
+$a^* = \argmax_{a \in A(\emptyset)} v_{P(\emptyset)}(a)$, which is unique (no ties).
+
+We show the resulting strategy profile $s^*$ is the unique SPE.
+
+\emph{$s^*$ is an SPE}: In any subgame $\Gamma_a$, the restriction of $s^*$ is $s^*_a$,
+which is an SPE of $\Gamma_a$ by the inductive hypothesis. It remains to check that no
+player wants to deviate at the root. But the root player $P(\emptyset)$ anticipates the
+SPE outcome in each subgame (by the inductive hypothesis, the SPE outcome is unique),
+and $a^*$ maximizes over these outcomes. The other players do not move at the root.
+
+\emph{Uniqueness}: Any SPE $\hat{s}$ must restrict to the unique SPE in each subgame
+$\Gamma_a$ (by the inductive hypothesis), so the root player faces the same payoffs
+$v(a)$ and, with no ties, must choose $a^*$. Hence $\hat{s} = s^*$.
+\end{proof}
+
+\subsection{Zermelo's Theorem}
+\label{subsec:zermelo}
+
+\begin{keyresult}[Zermelo's Theorem]
+\begin{theorem}[Zermelo, 1913]
+\label{thm:zermelo}
+Every finite extensive-form game with perfect information has a pure strategy subgame
+perfect equilibrium. If the game also has no ties (each player has distinct payoffs at
+all terminal nodes reachable from any decision node), the SPE is unique.
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{Existence.} We prove by strong induction on the number of non-terminal
+histories $|H \setminus Z|$.
+
+\emph{Base case}: If $|H \setminus Z| = 1$, the game has a single decision node (the
+root) followed by terminal nodes. The player at the root has at least one action
+maximizing their payoff (the strategy set is finite and non-empty). Any such action
+constitutes a pure strategy SPE.
+
+\emph{Inductive step}: Let $\Gamma$ have $|H \setminus Z| = k > 1$. The root player
+$P(\emptyset)$ has actions $A(\emptyset) = \{a_1, \ldots, a_l\}$, and each action $a_j$
+leads to a subgame $\Gamma_{a_j}$ with strictly fewer non-terminal histories. By the
+inductive hypothesis, each $\Gamma_{a_j}$ has a pure strategy SPE $s^*_{a_j}$ with
+payoff vector $v(a_j) \in \R^n$.
+
+Define the strategy profile $s^*$ as follows: at the root, choose
+$a^* \in \argmax_{a_j} v_{P(\emptyset)}(a_j)$ (this set is non-empty since $l$ is
+finite). In each subgame $\Gamma_{a_j}$, follow $s^*_{a_j}$.
+
+We verify $s^*$ is an SPE. For any subgame not containing the root, the restriction
+of $s^*$ is $s^*_{a_j}$ for the appropriate $j$, which is an SPE by hypothesis.
+For the entire game (which is also a subgame): the root player is choosing
+optimally given the SPE continuations (by construction), and no other player moves at the
+root, so no player has a profitable deviation. Hence $s^*$ is an SPE.
+
+\textbf{Uniqueness under no ties.} This follows from the backward induction argument
+in Theorem~\ref{thm:bi_spe}: at each node, the argmax is unique when payoffs are
+distinct, so the SPE is unique.
+\end{proof}
+
+\begin{corollary}[Chess Has a Determined Outcome]
+\label{cor:chess}
+In chess (viewed as a finite game with perfect information --- the 50-move rule and
+threefold repetition ensure finiteness), exactly one of the following holds: White has
+a winning strategy, Black has a winning strategy, or both players can force a draw.
+\end{corollary}
+
+\begin{proof}
+Chess is a two-player, finite, perfect-information game with three outcomes: White wins,
+Black wins, or draw. By Zermelo's theorem, a pure strategy SPE exists. In this SPE,
+the outcome is determined: it is either a White win, a Black win, or a draw. The SPE
+strategy for the favored player (or both in the draw case) is the ``winning'' (or
+``drawing'') strategy that guarantees this outcome regardless of the opponent's play.
+\end{proof}
+
+\begin{rlconnection}[Backward Induction and Dynamic Programming]
+Backward induction in game theory is the multi-agent analog of dynamic programming in
+single-agent MDPs. In both cases, we work backward from terminal states, computing
+optimal decisions at each stage given the optimal continuation. The difference is:
+\begin{itemize}[nosep]
+    \item \textbf{Single-agent DP}: The Bellman equation $V(s) = \max_a [r(s,a) +
+    \gamma V(s')]$ has a unique optimal value function (contraction mapping theorem).
+    \item \textbf{Multi-agent backward induction}: At each node, the ``optimal''
+    action depends on the other player's SPE strategy, making it a game-theoretic
+    rather than optimization problem. With perfect information and no ties, the
+    SPE is still unique. With imperfect information or ties, multiplicity arises.
+\end{itemize}
+AlphaGo and AlphaZero use MCTS (Monte Carlo Tree Search) to approximately perform
+backward induction in game trees too large for exact computation.
+\end{rlconnection}
+
+\subsection{Behavioral Strategies vs.\ Mixed Strategies in Extensive Form}
+\label{subsec:behavioral_vs_mixed}
+
+\begin{remark}[Kuhn's Theorem Revisited]
+\label{rem:kuhn_revisited}
+Theorem~\ref{thm:kuhn} establishes that in games with perfect recall, we can work
+with behavioral strategies (RL policies) without loss of generality. This is
+crucial for computational purposes: a behavioral strategy specifies a distribution at
+each information set independently, requiring $O(\sum_I |A(I)|)$ parameters, whereas
+a mixed strategy over pure strategies may require exponentially many parameters
+(one probability for each complete contingent plan).
+\end{remark}
+
+\begin{proposition}[Failure Without Perfect Recall]
+\label{prop:no_perfect_recall}
+In games without perfect recall, mixed and behavioral strategies may yield different
+sets of reachable outcome distributions. There exist games without perfect recall
+in which a mixed strategy NE exists but no behavioral strategy NE does.
+\end{proposition}
+
+\begin{proof}
+Consider a one-player game where the player moves twice but forgets their first action
+at the second move. Specifically: the player first chooses $L$ or $R$, then (in a
+single information set containing both post-$L$ and post-$R$ histories) chooses
+$A$ or $B$. Payoffs:
+\begin{itemize}[nosep]
+    \item $(L, A)$: payoff $1$, \quad $(L, B)$: payoff $0$,
+    \item $(R, A)$: payoff $0$, \quad $(R, B)$: payoff $1$.
+\end{itemize}
+A behavioral strategy specifies $p = \Prob(\text{choose } L)$ at the first node and
+$q = \Prob(\text{choose } A)$ at the second information set (which contains both
+post-$L$ and post-$R$). The expected payoff is $pq + (1-p)(1-q) = 1 - p - q + 2pq$.
+The maximum over behavioral strategies is $1/2$ (achieved, e.g., at $p = q = 1/2$).
+
+However, the mixed strategy that plays $(L, A)$ with probability $1/2$ and $(R, B)$
+with probability $1/2$ achieves expected payoff $1/2 \cdot 1 + 1/2 \cdot 1 = 1 > 1/2$.
+This mixed strategy has no realization-equivalent behavioral strategy, since the
+behavioral strategy cannot correlate the first and second moves.
+\end{proof}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Pure NE Enumeration]
+\label{ex:pure_ne}
+Find all pure strategy Nash equilibria of the following game:
+\[
+\begin{array}{c|ccc}
+ & L & C & R \\ \hline
+T & (2,1) & (0,4) & (1,2) \\
+M & (3,2) & (1,1) & (0,3) \\
+B & (1,0) & (2,3) & (3,1)
+\end{array}
+\]
+For each NE, verify the best response condition.
+\end{exercise}
+
+\begin{exercise}[IESDS Application]
+\label{ex:iesds}
+Apply iterated elimination of strictly dominated strategies to the game:
+\[
+\begin{array}{c|ccc}
+ & L & C & R \\ \hline
+T & (3,1) & (0,0) & (1,3) \\
+M & (1,2) & (2,4) & (3,0) \\
+B & (0,3) & (4,2) & (2,1)
+\end{array}
+\]
+At each step, identify the dominated strategy and the strategy that dominates it.
+State the surviving strategy profiles.
+\end{exercise}
+
+\begin{exercise}[Mixed NE in $2 \times 2$ Games]
+\label{ex:mixed_2x2}
+Compute all Nash equilibria (pure and mixed) of the Stag Hunt
+(Example~\ref{ex:stag}). Verify the indifference principle for the mixed NE.
+\end{exercise}
+
+\begin{exercise}[Minimax Computation]
+\label{ex:minimax}
+For the zero-sum game with payoff matrix
+\[
+A = \begin{pmatrix} 3 & -1 \\ -2 & 4 \end{pmatrix},
+\]
+compute the value of the game and the optimal mixed strategies for both players.
+Formulate the problem as a linear program and verify the minimax theorem directly.
+\end{exercise}
+
+\begin{exercise}[Correlated Equilibrium Construction]
+\label{ex:ce_construct}
+Consider the game of Chicken:
+\[
+\begin{array}{c|cc}
+ & D & S \\ \hline
+D & (-5,-5) & (2,-1) \\
+S & (-1,2) & (0,0)
+\end{array}
+\]
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Find all pure and mixed Nash equilibria.
+    \item Construct a correlated equilibrium that Pareto-dominates the mixed NE.
+    \item Verify that your CE satisfies the incentive-compatibility constraints.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Backward Induction]
+\label{ex:backward}
+Consider the following three-stage perfect-information game: Player~1 chooses $A$ or $B$.
+If $A$, player~2 chooses $C$ or $D$. If $B$, player~2 chooses $E$ or $F$.
+If $D$, player~1 chooses $G$ or $H$. Terminal payoffs (player~1, player~2):
+\begin{itemize}[nosep]
+    \item $A \to C$: $(3,2)$, \quad $A \to D \to G$: $(4,1)$, \quad $A \to D \to H$: $(1,3)$,
+    \item $B \to E$: $(2,4)$, \quad $B \to F$: $(5,0)$.
+\end{itemize}
+Apply backward induction to find the SPE. List the complete strategy for each player.
+\end{exercise}
+
+\begin{exercise}[Non-Credible Threats]
+\label{ex:noncredible}
+Consider a modified entry game: an entrant chooses $E$ or $O$. If $E$, the incumbent
+chooses $F$, $A$, or $P$ (where $P$ means ``price war''). Payoffs:
+\begin{itemize}[nosep]
+    \item $O$: $(0, 3)$, \quad $(E, F)$: $(-2, -1)$, \quad $(E, A)$: $(1, 1)$, \quad $(E, P)$: $(-3, -2)$.
+\end{itemize}
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Find all pure strategy NE of the normal-form representation.
+    \item Identify which NE involve non-credible threats.
+    \item Find the unique SPE.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Kuhn's Theorem Application]
+\label{ex:kuhn}
+In a two-player signaling game, player~1 (the sender) observes a private type
+$t \in \{H, L\}$ (each equally likely) and sends a message $m \in \{h, l\}$.
+Player~2 (the receiver) observes the message but not the type, and chooses an action
+$a \in \{U, D\}$. Player~1 has four pure strategies (mapping types to messages).
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item How many pure strategies does player~1 have? Player~2?
+    \item Write down the normal-form representation.
+    \item Verify that this game has perfect recall.
+    \item Construct a behavioral strategy for player~1 and its realization-equivalent
+    mixed strategy.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Properties of NE]
+\label{ex:ne_properties}
+Prove or disprove the following statements for finite games:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Every game with a dominant strategy equilibrium has a unique NE.
+    \item If IESDS yields a unique strategy profile, it is a NE.
+    \item The set of NE is always convex.
+    \item In a two-player zero-sum game, if $(x^*, y^*)$ and $(x^{**}, y^{**})$ are
+    both NE, then $(x^*, y^{**})$ is also a NE.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[SPE Existence Without Perfect Information]
+\label{ex:spe_imperfect}
+Construct a two-player extensive-form game with imperfect information that has:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Exactly one subgame (the entire game).
+    \item A NE that is not ``sequentially rational'' at the non-singleton information set.
+\end{enumerate}
+This illustrates why SPE has limited refinement power in games with imperfect information,
+motivating stronger concepts like sequential equilibrium.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary of Key Results}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{p{4.5cm} p{8.5cm} l}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{Ref.} \\
+\midrule
+Order Independence of IESDS &
+In finite games, the set of strategies surviving iterated elimination of strictly
+dominated strategies is independent of the elimination order. &
+Thm.~\ref{thm:iesds_order} \\
+
+NE as Mutual Best Response &
+$s^*$ is a NE iff $s_i^* \in \BR_i(s_{-i}^*)$ for all~$i$. &
+Prop.~\ref{prop:ne_br} \\
+
+Indifference Principle &
+In a mixed NE, all pure strategies in the support yield equal expected payoff;
+strategies outside the support yield weakly less. &
+Thm.~\ref{thm:indifference} \\
+
+Nash's Existence Theorem &
+Every finite game has at least one mixed strategy NE.
+Proved via Kakutani's fixed point theorem. &
+Thm.~\ref{thm:nash_existence} \\
+
+Kakutani's Fixed Point Thm &
+A uhc correspondence with non-empty convex values on a compact convex set
+has a fixed point. Proved via Brouwer. &
+Thm.~\ref{thm:kakutani} \\
+
+Von Neumann's Minimax Thm &
+$\max_x \min_y x^\top A y = \min_y \max_x x^\top A y$ for any matrix~$A$.
+Proved via LP duality. &
+Thm.~\ref{thm:minimax} \\
+
+NE in Zero-Sum Games &
+NE strategies are interchangeable and all yield the game value. &
+Cor.~\ref{cor:ne_zero_sum} \\
+
+NE $\subseteq$ CE &
+Every NE (as a product distribution) is a correlated equilibrium. &
+Thm.~\ref{thm:ne_is_ce} \\
+
+CE via LP &
+The CE set is a convex polytope; optimizing over it is an LP. &
+Prop.~\ref{prop:ce_lp} \\
+
+Kuhn's Theorem &
+With perfect recall, mixed and behavioral strategies are realization-equivalent. &
+Thm.~\ref{thm:kuhn} \\
+
+SPE Refines NE &
+Every subgame perfect equilibrium is a Nash equilibrium. &
+Prop.~\ref{prop:spe_refines} \\
+
+Backward Induction $\Rightarrow$ SPE &
+In finite perfect-information games with no ties, backward induction yields
+the unique SPE. &
+Thm.~\ref{thm:bi_spe} \\
+
+Zermelo's Theorem &
+Every finite perfect-information game has a pure strategy SPE.
+Unique if no ties. &
+Thm.~\ref{thm:zermelo} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\noindent\textbf{Looking ahead.} This lesson establishes the static and single-shot
+extensive-form game theory needed for multi-agent RL. The next game theory topics ---
+repeated games, stochastic games, and mechanism design --- build directly on these
+foundations. In Phase~02 (Core RL), the MDP framework can be viewed as a single-agent
+``game against nature.'' In Phase~05 (MARL), stochastic games combine MDPs with the
+multi-player game-theoretic structure developed here: at each state, agents play a
+stage game whose solution concept (Nash, minimax, correlated) determines the Bellman
+operator for the multi-agent value function.
+
+\end{document}

@@ -1,0 +1,1765 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 6: Metric and Normed Spaces}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\diam}{diam}
+\DeclareMathOperator{\Int}{int}
+\DeclareMathOperator{\cl}{cl}
+\DeclareMathOperator{\Span}{span}
+\DeclareMathOperator{\id}{id}
+
+% ---- Title ----
+\title{\textbf{Lesson 6: Metric and Normed Spaces}\\[10pt]
+\large Metric Spaces, Banach Spaces, and Bounded Linear Operators\\[5pt]
+\normalsize Session 6 of 102 $\mid$ Phase I: Mathematical Foundations $\mid$ 8\,h\\
+\normalsize Primary text: Kreyszig, \emph{Introductory Functional Analysis with Applications}, Chapters 1--2}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This lesson develops the theory of metric spaces, normed spaces, and Banach spaces
+from first principles. These are the natural settings for the function spaces and
+operators that appear throughout reinforcement learning: value functions live in
+Banach spaces, the Bellman operator acts on these spaces, and the convergence of
+iterative algorithms (value iteration, policy iteration, TD-learning) relies on
+completeness and contraction properties in these spaces. We prove every result,
+including the equivalence of norms in finite dimensions, the characterization of
+completeness via absolutely convergent series, the Arzel\`{a}--Ascoli theorem,
+Riesz's lemma, and the Baire category theorem. The reader who masters this
+material will have the tools to understand why the Bellman operator contracts,
+why value iteration converges, and why infinite-dimensional spaces behave
+fundamentally differently from $\R^n$.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: INTRODUCTION
+%% ============================================================
+\section{Why Functional Analysis?}
+\label{sec:intro}
+
+Reinforcement learning algorithms operate on \emph{function spaces}. A value
+function $V \colon \mathcal{S} \to \R$ assigns a real number to every state; a
+Q-function $Q \colon \mathcal{S} \times \mathcal{A} \to \R$ assigns a value to
+every state-action pair. When we write the Bellman optimality equation
+\begin{equation}
+\label{eq:bellman_intro}
+V^*(s) = \max_{a \in \mathcal{A}} \left[ r(s,a) + \gamma \sum_{s'} p(s' \mid s,a)\, V^*(s') \right],
+\end{equation}
+we are asserting that $V^*$ is a \emph{fixed point} of an operator $T$ acting on
+a space of functions. The fundamental questions are:
+
+\begin{enumerate}[nosep]
+    \item Does a fixed point exist?
+    \item Is it unique?
+    \item Does the iteration $V_{n+1} = T V_n$ converge to $V^*$?
+    \item How fast does it converge?
+\end{enumerate}
+
+Answering these questions requires the language of functional analysis:
+
+\begin{itemize}[nosep]
+    \item \textbf{Metric spaces} (Section~\ref{sec:metric}) provide the notion of
+    distance needed to say ``$V_n$ converges to $V^*$.''
+    \item \textbf{Normed spaces} (Section~\ref{sec:normed}) give us a notion of
+    ``size'' for functions and a way to measure error $\|V_n - V^*\|$.
+    \item \textbf{Completeness} (Section~\ref{sec:banach}) ensures that Cauchy
+    sequences converge, which is essential for the Banach fixed-point theorem.
+    \item \textbf{Bounded linear operators} (Section~\ref{sec:operators}) formalize
+    the maps between function spaces that arise in approximation theory.
+    \item \textbf{Compactness} (Section~\ref{sec:compactness}) is the key to
+    existence results and understanding the behavior of infinite-dimensional spaces.
+    \item \textbf{The Baire category theorem} (Section~\ref{sec:baire}) underpins
+    the three pillars of linear functional analysis: the Uniform Boundedness
+    Principle, the Open Mapping Theorem, and the Closed Graph Theorem.
+\end{itemize}
+
+\begin{rlconnection}[The Bellman Operator as Motivation]
+The Bellman optimality operator $T$ defined by the right-hand side of
+\eqref{eq:bellman_intro} acts on the Banach space $(b(\mathcal{S}), \|\cdot\|_\infty)$
+of bounded real-valued functions on the state space, equipped with the supremum
+norm. The contraction mapping theorem (Banach fixed-point theorem, which we prove
+in the next lesson) guarantees that $T$ has a unique fixed point and that
+$\|T^n V_0 - V^*\|_\infty \le \gamma^n \|V_0 - V^*\|_\infty$. Understanding
+\emph{why} this works requires every concept in this lesson: metric, norm,
+completeness, and the operator framework.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 2: METRIC SPACES
+%% ============================================================
+\section{Metric Spaces}
+\label{sec:metric}
+
+\subsection{Definition and Examples}
+\label{subsec:metric_def}
+
+\begin{definition}[Metric Space]
+\label{def:metric}
+A \emph{metric} on a set $X$ is a function $d \colon X \times X \to [0,\infty)$
+satisfying, for all $x, y, z \in X$:
+\begin{enumerate}[nosep,label=(M\arabic*)]
+    \item \label{M1} $d(x,y) = 0$ if and only if $x = y$.
+    \hfill(identity of indiscernibles)
+    \item \label{M2} $d(x,y) = d(y,x)$.
+    \hfill(symmetry)
+    \item \label{M3} $d(x,z) \le d(x,y) + d(y,z)$.
+    \hfill(triangle inequality)
+\end{enumerate}
+The pair $(X,d)$ is called a \emph{metric space}. Elements of $X$ are called
+\emph{points}.
+\end{definition}
+
+\begin{remark}
+Non-negativity $d(x,y) \ge 0$ follows from the axioms: by \ref{M3} and \ref{M1},
+$0 = d(x,x) \le d(x,y) + d(y,x) = 2d(x,y)$ by \ref{M2}, so $d(x,y) \ge 0$.
+\end{remark}
+
+\begin{example}[Euclidean Metric]
+\label{ex:euclidean}
+$X = \R^n$ with $d(x,y) = \bigl(\sum_{i=1}^n (x_i - y_i)^2\bigr)^{1/2}$. The
+triangle inequality follows from the Cauchy--Schwarz inequality.
+\end{example}
+
+\begin{example}[$p$-Metrics on $\R^n$]
+\label{ex:p_metric}
+For $1 \le p \le \infty$, define $d_p(x,y) = \|x - y\|_p$ where
+\[
+\|x\|_p =
+\begin{cases}
+\bigl(\sum_{i=1}^n |x_i|^p\bigr)^{1/p} & \text{if } 1 \le p < \infty,\\
+\max_{1 \le i \le n} |x_i| & \text{if } p = \infty.
+\end{cases}
+\]
+Each $d_p$ is a metric. The triangle inequality for $1 < p < \infty$ is
+Minkowski's inequality (proved in Proposition~\ref{prop:minkowski}).
+\end{example}
+
+\begin{example}[Discrete Metric]
+\label{ex:discrete}
+On any set $X$, define $d(x,y) = 0$ if $x = y$ and $d(x,y) = 1$ if $x \ne y$.
+This is a metric. Every subset of $X$ is open (and closed), so $X$ with the
+discrete metric is a \emph{discrete topological space}.
+\end{example}
+
+\begin{example}[Function Space $C[a,b]$]
+\label{ex:Cab}
+Let $C[a,b]$ denote the set of continuous real-valued functions on $[a,b]$. Define
+\[
+d_\infty(f,g) = \max_{t \in [a,b]} |f(t) - g(t)|, \qquad
+d_1(f,g) = \int_a^b |f(t) - g(t)|\, dt.
+\]
+Both are metrics on $C[a,b]$. The metric $d_\infty$ measures uniform distance;
+$d_1$ measures average distance.
+\end{example}
+
+\begin{example}[Sequence Spaces $\ell^p$]
+\label{ex:ell_p}
+For $1 \le p < \infty$, define $\ell^p = \{(x_n)_{n=1}^\infty \subset \R :
+\sum_{n=1}^\infty |x_n|^p < \infty\}$ with metric
+$d(x,y) = \bigl(\sum_{n=1}^\infty |x_n - y_n|^p\bigr)^{1/p}$.
+For $p = \infty$, $\ell^\infty = \{(x_n) : \sup_n |x_n| < \infty\}$ with
+$d(x,y) = \sup_n |x_n - y_n|$.
+\end{example}
+
+\begin{rlconnection}[State Spaces as Metric Spaces]
+In RL with a finite state space $\mathcal{S} = \{s_1, \ldots, s_n\}$, a value
+function $V \colon \mathcal{S} \to \R$ is simply a vector in $\R^n$. The space of
+all value functions is $(\R^n, \|\cdot\|_\infty)$, which is a metric space. For
+infinite or continuous state spaces, value functions live in function spaces like
+$C(\mathcal{S})$ or $\ell^\infty(\mathcal{S})$, and the theory of this section
+becomes essential.
+\end{rlconnection}
+
+\subsection{Topology of Metric Spaces}
+\label{subsec:topology}
+
+\begin{definition}[Open Ball]
+\label{def:open_ball}
+In a metric space $(X,d)$, the \emph{open ball} of radius $r > 0$ centered at
+$x \in X$ is
+\[
+B(x,r) = \{y \in X : d(x,y) < r\}.
+\]
+The \emph{closed ball} is $\overline{B}(x,r) = \{y \in X : d(x,y) \le r\}$.
+\end{definition}
+
+\begin{definition}[Open and Closed Sets]
+\label{def:open_closed}
+Let $(X,d)$ be a metric space.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item A set $G \subseteq X$ is \emph{open} if for every $x \in G$ there exists
+    $r > 0$ such that $B(x,r) \subseteq G$.
+    \item A set $F \subseteq X$ is \emph{closed} if its complement $X \setminus F$
+    is open.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Properties of Open and Closed Sets]
+\label{prop:open_closed}
+In a metric space $(X,d)$:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item $\emptyset$ and $X$ are both open and closed.
+    \item Any union of open sets is open.
+    \item Any finite intersection of open sets is open.
+    \item Any intersection of closed sets is closed.
+    \item Any finite union of closed sets is closed.
+    \item Every open ball $B(x,r)$ is open.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(a)} $\emptyset$ is open vacuously. $X$ is open because $B(x,r) \subseteq X$
+for all $x$ and $r > 0$.
+
+\textbf{(b)} Let $\{G_\alpha\}_{\alpha \in I}$ be a family of open sets and let
+$x \in \bigcup_\alpha G_\alpha$. Then $x \in G_\beta$ for some $\beta$, so there
+exists $r > 0$ with $B(x,r) \subseteq G_\beta \subseteq \bigcup_\alpha G_\alpha$.
+
+\textbf{(c)} Let $G_1, \ldots, G_n$ be open and let $x \in \bigcap_{i=1}^n G_i$.
+For each $i$, there exists $r_i > 0$ with $B(x,r_i) \subseteq G_i$. Set
+$r = \min(r_1, \ldots, r_n) > 0$. Then $B(x,r) \subseteq \bigcap_{i=1}^n G_i$.
+
+\textbf{(d)--(e)} Follow from (b)--(c) by taking complements (De Morgan's laws).
+
+\textbf{(f)} Let $y \in B(x,r)$ and set $\varepsilon = r - d(x,y) > 0$. For any
+$z \in B(y,\varepsilon)$, we have $d(x,z) \le d(x,y) + d(y,z) < d(x,y) +
+\varepsilon = r$, so $z \in B(x,r)$. Thus $B(y,\varepsilon) \subseteq B(x,r)$.
+\end{proof}
+
+\begin{definition}[Interior, Closure, Boundary]
+\label{def:int_cl_bd}
+Let $A \subseteq X$ in a metric space $(X,d)$.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{interior} of $A$ is $\Int(A) = \bigcup \{G \subseteq A : G \text{ is open}\}$.
+    \item The \emph{closure} of $A$ is $\cl(A) = \bigcap \{F \supseteq A : F \text{ is closed}\}$.
+    \item The \emph{boundary} of $A$ is $\partial A = \cl(A) \setminus \Int(A)$.
+    \item $A$ is \emph{dense} in $X$ if $\cl(A) = X$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Closure Characterization]
+\label{prop:closure_char}
+$x \in \cl(A)$ if and only if for every $r > 0$, $B(x,r) \cap A \ne \emptyset$.
+Equivalently, $x \in \cl(A)$ if and only if there exists a sequence $(x_n)$ in $A$
+with $x_n \to x$.
+\end{proposition}
+
+\begin{proof}
+($\Rightarrow$) Suppose $x \in \cl(A)$ and there exists $r > 0$ with
+$B(x,r) \cap A = \emptyset$. Then $A \subseteq X \setminus B(x,r)$, which is
+closed. So $\cl(A) \subseteq X \setminus B(x,r)$, contradicting $x \in \cl(A)$.
+
+($\Leftarrow$) Suppose every ball around $x$ meets $A$, and let $F$ be any closed
+set containing $A$. If $x \notin F$, then $x \in X \setminus F$, which is open,
+so there exists $r > 0$ with $B(x,r) \subseteq X \setminus F$. But then
+$B(x,r) \cap A \subseteq B(x,r) \cap F = \emptyset$, contradicting our assumption.
+So $x \in F$ for every closed $F \supseteq A$, hence $x \in \cl(A)$.
+
+For the sequential characterization: if $B(x,1/n) \cap A \ne \emptyset$ for each
+$n$, pick $x_n \in B(x,1/n) \cap A$; then $d(x_n,x) < 1/n \to 0$. Conversely, if
+$x_n \to x$ with each $x_n \in A$, then every ball $B(x,r)$ contains $x_n$ for
+large $n$, so $B(x,r) \cap A \ne \emptyset$.
+\end{proof}
+
+\subsection{Convergence and Completeness}
+\label{subsec:convergence}
+
+\begin{definition}[Convergence]
+\label{def:convergence}
+A sequence $(x_n)$ in a metric space $(X,d)$ \emph{converges} to $x \in X$ if
+$d(x_n, x) \to 0$ as $n \to \infty$, i.e., for every $\varepsilon > 0$ there
+exists $N \in \N$ such that $d(x_n, x) < \varepsilon$ for all $n \ge N$. We write
+$x_n \to x$ or $\lim_{n \to \infty} x_n = x$.
+\end{definition}
+
+\begin{proposition}[Uniqueness of Limits]
+\label{prop:unique_limit}
+In a metric space, limits are unique: if $x_n \to x$ and $x_n \to y$, then $x = y$.
+\end{proposition}
+
+\begin{proof}
+$0 \le d(x,y) \le d(x,x_n) + d(x_n,y) \to 0 + 0 = 0$, so $d(x,y) = 0$, hence $x = y$.
+\end{proof}
+
+\begin{definition}[Cauchy Sequence]
+\label{def:cauchy}
+A sequence $(x_n)$ in $(X,d)$ is a \emph{Cauchy sequence} if for every
+$\varepsilon > 0$ there exists $N \in \N$ such that $d(x_m, x_n) < \varepsilon$
+for all $m, n \ge N$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:convergent_is_cauchy}
+Every convergent sequence is Cauchy.
+\end{proposition}
+
+\begin{proof}
+If $x_n \to x$, then for $\varepsilon > 0$ there exists $N$ such that
+$d(x_n, x) < \varepsilon/2$ for $n \ge N$. For $m, n \ge N$:
+$d(x_m, x_n) \le d(x_m, x) + d(x, x_n) < \varepsilon/2 + \varepsilon/2 = \varepsilon$.
+\end{proof}
+
+\begin{warning}[Cauchy Does Not Imply Convergent]
+The converse fails in general. In $\Q$ with the usual metric, the sequence of
+rational approximations to $\sqrt{2}$ (e.g., defined by $x_1 = 1$,
+$x_{n+1} = (x_n + 2/x_n)/2$) is Cauchy but does not converge in $\Q$.
+The ``missing limit'' is $\sqrt{2} \notin \Q$.
+\end{warning}
+
+\begin{definition}[Complete Metric Space]
+\label{def:complete}
+A metric space $(X,d)$ is \emph{complete} if every Cauchy sequence in $X$
+converges to a limit in $X$.
+\end{definition}
+
+\begin{theorem}[Completeness of $\R$]
+\label{thm:R_complete}
+$(\R, |\cdot|)$ is a complete metric space.
+\end{theorem}
+
+\begin{proof}
+Let $(x_n)$ be a Cauchy sequence in $\R$. First, $(x_n)$ is bounded: there exists
+$N$ such that $|x_m - x_n| < 1$ for all $m, n \ge N$, so
+$|x_n| \le |x_N| + 1$ for $n \ge N$, giving
+$|x_n| \le \max(|x_1|, \ldots, |x_{N-1}|, |x_N| + 1)$ for all $n$.
+
+By the Bolzano--Weierstrass theorem (every bounded sequence in $\R$ has a
+convergent subsequence), there is a subsequence $x_{n_k} \to x$ for some $x \in \R$.
+
+We show $x_n \to x$. Given $\varepsilon > 0$, choose $N_1$ such that
+$|x_m - x_n| < \varepsilon/2$ for $m, n \ge N_1$, and $N_2$ such that
+$|x_{n_k} - x| < \varepsilon/2$ for $k \ge N_2$. For $n \ge N_1$, pick $k$ with
+$n_k \ge \max(N_1, n_{N_2})$. Then
+$|x_n - x| \le |x_n - x_{n_k}| + |x_{n_k} - x| < \varepsilon/2 + \varepsilon/2 = \varepsilon$.
+\end{proof}
+
+\begin{theorem}[Completeness of $\R^n$]
+\label{thm:Rn_complete}
+$(\R^n, d_p)$ is complete for every $1 \le p \le \infty$.
+\end{theorem}
+
+\begin{proof}
+Let $(x^{(k)})_{k=1}^\infty$ be a Cauchy sequence in $(\R^n, d_p)$, where
+$x^{(k)} = (x_1^{(k)}, \ldots, x_n^{(k)})$. For each coordinate $i$,
+$|x_i^{(k)} - x_i^{(m)}| \le \|x^{(k)} - x^{(m)}\|_p$ (since the $\ell^p$ norm
+dominates each coordinate), so $(x_i^{(k)})_{k=1}^\infty$ is Cauchy in $\R$.
+By Theorem~\ref{thm:R_complete}, $x_i^{(k)} \to x_i$ for some $x_i \in \R$.
+Set $x = (x_1, \ldots, x_n)$. Then
+$\|x^{(k)} - x\|_p = \bigl(\sum_{i=1}^n |x_i^{(k)} - x_i|^p\bigr)^{1/p} \to 0$
+as $k \to \infty$ (each term goes to $0$; this is a finite sum). So $x^{(k)} \to x$.
+\end{proof}
+
+\begin{definition}[Dense Subset, Separable Space]
+\label{def:separable}
+A metric space $(X,d)$ is \emph{separable} if it contains a countable dense subset,
+i.e., there exists a countable set $D \subseteq X$ with $\cl(D) = X$.
+\end{definition}
+
+\begin{example}
+$\R^n$ is separable: $\Q^n$ is countable and dense. The space $C[a,b]$ with the
+sup metric is separable: by the Weierstrass approximation theorem, polynomials with
+rational coefficients form a countable dense subset.
+\end{example}
+
+\begin{theorem}[Completion of a Metric Space]
+\label{thm:completion}
+Every metric space $(X,d)$ has a \emph{completion}: there exists a complete metric
+space $(\hat{X}, \hat{d})$ and an isometry $\iota \colon X \to \hat{X}$ (i.e.,
+$\hat{d}(\iota(x), \iota(y)) = d(x,y)$ for all $x, y \in X$) such that
+$\iota(X)$ is dense in $\hat{X}$. The completion is unique up to isometry.
+\end{theorem}
+
+\begin{proof}
+\textbf{Construction.}
+Let $\mathcal{C}$ be the set of all Cauchy sequences in $X$. Define an equivalence
+relation: $(x_n) \sim (y_n)$ if $d(x_n, y_n) \to 0$. Let
+$\hat{X} = \mathcal{C}/{\sim}$ be the set of equivalence classes, and write
+$[(x_n)]$ for the class of $(x_n)$.
+
+\textbf{The metric is well defined.}
+For $(x_n), (y_n) \in \mathcal{C}$, the sequence $(d(x_n, y_n))$ is Cauchy in $\R$
+(since $|d(x_m,y_m) - d(x_n,y_n)| \le d(x_m,x_n) + d(y_m,y_n)$ by the triangle
+inequality), hence convergent. Define
+$\hat{d}([(x_n)], [(y_n)]) = \lim_{n \to \infty} d(x_n, y_n)$.
+One checks that this is independent of representatives (if $(x_n) \sim (x_n')$
+and $(y_n) \sim (y_n')$, then $|d(x_n,y_n) - d(x_n',y_n')| \le d(x_n,x_n') +
+d(y_n,y_n') \to 0$) and satisfies the metric axioms.
+
+\textbf{Isometric embedding.}
+Define $\iota(x) = [(x, x, x, \ldots)]$ (the class of the constant sequence).
+Then $\hat{d}(\iota(x), \iota(y)) = \lim_n d(x,y) = d(x,y)$, so $\iota$ is an
+isometry.
+
+\textbf{Density of $\iota(X)$.}
+Given $[(x_n)] \in \hat{X}$ and $\varepsilon > 0$, choose $N$ with
+$d(x_m, x_n) < \varepsilon/2$ for $m, n \ge N$. Then
+$\hat{d}([(x_n)], \iota(x_N)) = \lim_n d(x_n, x_N) \le \varepsilon/2 < \varepsilon$.
+
+\textbf{Completeness of $\hat{X}$.}
+Let $(p_k)$ be Cauchy in $\hat{X}$. Since $\iota(X)$ is dense, for each $k$ choose
+$z_k \in X$ with $\hat{d}(p_k, \iota(z_k)) < 1/k$. We claim $(z_k)$ is Cauchy in
+$X$: indeed, $d(z_k, z_m) = \hat{d}(\iota(z_k), \iota(z_m)) \le
+\hat{d}(\iota(z_k), p_k) + \hat{d}(p_k, p_m) + \hat{d}(p_m, \iota(z_m)) <
+1/k + \hat{d}(p_k, p_m) + 1/m \to 0$. Let $p = [(z_k)] \in \hat{X}$. Then
+$\hat{d}(p_k, p) \le \hat{d}(p_k, \iota(z_k)) + \hat{d}(\iota(z_k), p) <
+1/k + \hat{d}(\iota(z_k), p) \to 0$ since
+$\hat{d}(\iota(z_k), p) = \lim_n d(z_k, z_n) \to 0$ as $k \to \infty$.
+
+\textbf{Uniqueness.}
+If $(\hat{X}_1, \hat{d}_1, \iota_1)$ and $(\hat{X}_2, \hat{d}_2, \iota_2)$ are
+two completions, define $\varphi \colon \iota_1(X) \to \iota_2(X)$ by
+$\varphi(\iota_1(x)) = \iota_2(x)$. This is an isometry, hence uniformly
+continuous, and extends uniquely to an isometry $\hat{X}_1 \to \hat{X}_2$ by
+density and completeness.
+\end{proof}
+
+\begin{rlconnection}[Completion and Function Approximation]
+In RL with function approximation, we often work with a parametric class of
+functions (e.g., neural networks) that is not complete under the sup norm. The
+completion theorem guarantees that this class can be embedded into a complete
+space. Understanding which space we ``complete to'' is crucial for analyzing
+whether approximate value iteration converges.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: NORMED SPACES
+%% ============================================================
+\section{Normed Spaces}
+\label{sec:normed}
+
+\subsection{Definition and Basic Properties}
+\label{subsec:norm_def}
+
+\begin{definition}[Normed Space]
+\label{def:normed}
+A \emph{normed space} (or \emph{normed vector space}) is a pair $(X, \|\cdot\|)$
+where $X$ is a vector space over $\R$ (or $\C$) and
+$\|\cdot\| \colon X \to [0,\infty)$ is a \emph{norm}, i.e., for all
+$x, y \in X$ and $\alpha$ scalar:
+\begin{enumerate}[nosep,label=(N\arabic*)]
+    \item \label{N1} $\|x\| = 0$ if and only if $x = 0$.
+    \hfill(positive definiteness)
+    \item \label{N2} $\|\alpha x\| = |\alpha| \, \|x\|$.
+    \hfill(absolute homogeneity)
+    \item \label{N3} $\|x + y\| \le \|x\| + \|y\|$.
+    \hfill(triangle inequality)
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Every Norm Induces a Metric]
+\label{prop:norm_metric}
+If $(X, \|\cdot\|)$ is a normed space, then $d(x,y) = \|x - y\|$ defines a metric
+on $X$. This metric is \emph{translation-invariant} ($d(x+z, y+z) = d(x,y)$) and
+\emph{homogeneous} ($d(\alpha x, \alpha y) = |\alpha| d(x,y)$).
+\end{proposition}
+
+\begin{proof}
+\ref{M1}: $d(x,y) = \|x - y\| = 0 \iff x - y = 0 \iff x = y$.
+\ref{M2}: $d(x,y) = \|x - y\| = \|{-(y-x)}\| = |{-1}| \cdot \|y - x\| = d(y,x)$.
+\ref{M3}: $d(x,z) = \|x - z\| = \|(x-y)+(y-z)\| \le \|x-y\| + \|y-z\| = d(x,y) + d(y,z)$.
+Translation invariance: $d(x+z, y+z) = \|(x+z)-(y+z)\| = \|x-y\| = d(x,y)$.
+Homogeneity: $d(\alpha x, \alpha y) = \|\alpha x - \alpha y\| = |\alpha| \|x - y\| = |\alpha| d(x,y)$.
+\end{proof}
+
+\begin{remark}
+Not every metric comes from a norm. The discrete metric on $\R^n$ (with $n \ge 1$)
+is not translation-invariant (take $x = 0$, $y = z$ with $z \ne 0$:
+$d(x,y) = 1$ but $d(x+z, y+z) = d(z, 2z) = 1$, which happens to be invariant in
+this case, but it is not homogeneous: $d(2x, 2y) = 1 \ne 2 = 2 d(x,y)$ when
+$x \ne y$). A metric arises from a norm if and only if it is translation-invariant
+and absolutely homogeneous.
+\end{remark}
+
+\subsection{H\"{o}lder's and Minkowski's Inequalities}
+
+To show that $\ell^p$ norms are indeed norms, we need the following fundamental
+inequalities.
+
+\begin{lemma}[Young's Inequality]
+\label{lem:young}
+For $a, b \ge 0$ and $p, q > 1$ with $\frac{1}{p} + \frac{1}{q} = 1$:
+\[
+ab \le \frac{a^p}{p} + \frac{b^q}{q}.
+\]
+\end{lemma}
+
+\begin{proof}
+The function $\varphi(t) = e^t$ is convex. By the definition of convexity,
+$e^{\lambda s + (1-\lambda)t} \le \lambda e^s + (1-\lambda) e^t$ for
+$\lambda \in [0,1]$. Set $\lambda = 1/p$, $s = p \ln a$, $t = q \ln b$ (assuming
+$a, b > 0$):
+\[
+ab = e^{\ln a + \ln b} = e^{(1/p)(p \ln a) + (1/q)(q \ln b)} \le
+\frac{1}{p} e^{p \ln a} + \frac{1}{q} e^{q \ln b} = \frac{a^p}{p} + \frac{b^q}{q}.
+\]
+The case $a = 0$ or $b = 0$ is trivial.
+\end{proof}
+
+\begin{proposition}[H\"{o}lder's Inequality]
+\label{prop:holder}
+Let $1 < p < \infty$ and $q = p/(p-1)$ (so $1/p + 1/q = 1$). For
+$x = (x_i), y = (y_i) \in \R^n$ (or sequences in $\ell^p, \ell^q$):
+\[
+\sum_{i} |x_i y_i| \le \|x\|_p \, \|y\|_q.
+\]
+\end{proposition}
+
+\begin{proof}
+If $\|x\|_p = 0$ or $\|y\|_q = 0$, the result is trivial. Otherwise, set
+$a_i = |x_i|/\|x\|_p$ and $b_i = |y_i|/\|y\|_q$. By Young's inequality:
+$a_i b_i \le a_i^p/p + b_i^q/q$. Summing:
+\[
+\sum_i a_i b_i \le \frac{1}{p} \sum_i \frac{|x_i|^p}{\|x\|_p^p} +
+\frac{1}{q} \sum_i \frac{|y_i|^q}{\|y\|_q^q} = \frac{1}{p} + \frac{1}{q} = 1.
+\]
+Multiplying both sides by $\|x\|_p \|y\|_q$ gives the result.
+\end{proof}
+
+\begin{proposition}[Minkowski's Inequality]
+\label{prop:minkowski}
+For $1 \le p < \infty$ and $x, y \in \R^n$ (or $\ell^p$):
+$\|x + y\|_p \le \|x\|_p + \|y\|_p$.
+\end{proposition}
+
+\begin{proof}
+The case $p = 1$ is the ordinary triangle inequality for absolute values. For
+$p > 1$, let $q = p/(p-1)$. We have:
+\begin{align*}
+\|x + y\|_p^p &= \sum_i |x_i + y_i|^p = \sum_i |x_i + y_i|^{p-1} |x_i + y_i| \\
+&\le \sum_i |x_i + y_i|^{p-1} |x_i| + \sum_i |x_i + y_i|^{p-1} |y_i|.
+\end{align*}
+Apply H\"{o}lder's inequality to each sum with exponents $q$ and $p$. Note that
+$(p-1)q = p$, so $\bigl(\sum_i |x_i + y_i|^{(p-1)q}\bigr)^{1/q} =
+\|x + y\|_p^{p/q}$. Therefore:
+\[
+\|x + y\|_p^p \le \|x + y\|_p^{p/q} \bigl(\|x\|_p + \|y\|_p\bigr).
+\]
+Dividing both sides by $\|x + y\|_p^{p/q}$ (if nonzero) and using $p - p/q = 1$
+gives $\|x + y\|_p \le \|x\|_p + \|y\|_p$.
+\end{proof}
+
+\subsection{Important Examples of Normed Spaces}
+\label{subsec:norm_examples}
+
+\begin{example}[$\R^n$ with $p$-norms]
+\label{ex:Rn_norms}
+For $1 \le p \le \infty$, $(\R^n, \|\cdot\|_p)$ is a normed space.
+Positive definiteness and homogeneity are immediate; the triangle inequality
+for $1 \le p < \infty$ is Minkowski's inequality. For $p = \infty$,
+$\|x + y\|_\infty = \max_i |x_i + y_i| \le \max_i (|x_i| + |y_i|) \le
+\max_i |x_i| + \max_i |y_i| = \|x\|_\infty + \|y\|_\infty$.
+\end{example}
+
+\begin{example}[$C[a,b]$ with Supremum Norm]
+\label{ex:Cab_sup}
+$C[a,b]$ with $\|f\|_\infty = \max_{t \in [a,b]} |f(t)|$ is a normed space. The
+maximum exists because $f$ is continuous on the compact set $[a,b]$.
+\end{example}
+
+\begin{example}[$C[a,b]$ with $L^1$ Norm]
+\label{ex:Cab_L1}
+$C[a,b]$ with $\|f\|_1 = \int_a^b |f(t)|\, dt$ is a normed space. This norm
+captures ``average'' rather than ``worst-case'' behavior.
+\end{example}
+
+\begin{example}[Sequence Spaces $\ell^p$]
+\label{ex:ell_p_norm}
+For $1 \le p \le \infty$, $(\ell^p, \|\cdot\|_p)$ is a normed space by
+Minkowski's inequality (extended to infinite sums).
+\end{example}
+
+\subsection{Equivalence of Norms in Finite Dimensions}
+\label{subsec:norm_equiv}
+
+\begin{definition}[Equivalent Norms]
+\label{def:norm_equiv}
+Two norms $\|\cdot\|_a$ and $\|\cdot\|_b$ on a vector space $X$ are
+\emph{equivalent} if there exist constants $c, C > 0$ such that
+\[
+c \|x\|_a \le \|x\|_b \le C \|x\|_a \quad \text{for all } x \in X.
+\]
+\end{definition}
+
+\begin{remark}
+Equivalent norms define the same topology: they determine the same open sets,
+convergent sequences, Cauchy sequences, and continuous functions. In particular,
+a space is complete under one norm if and only if it is complete under any
+equivalent norm.
+\end{remark}
+
+\begin{theorem}[All Norms on $\R^n$ Are Equivalent]
+\label{thm:norm_equiv}
+On $\R^n$, every two norms are equivalent.
+\end{theorem}
+
+\begin{proof}
+It suffices to show that any norm $\|\cdot\|$ on $\R^n$ is equivalent to
+$\|\cdot\|_\infty$, since equivalence is transitive.
+
+\textbf{Step 1: $\|\cdot\|$ is bounded above by a multiple of $\|\cdot\|_\infty$.}
+Let $e_1, \ldots, e_n$ be the standard basis. For $x = \sum_{i=1}^n x_i e_i$:
+\[
+\|x\| = \Bigl\|\sum_{i=1}^n x_i e_i\Bigr\| \le \sum_{i=1}^n |x_i| \, \|e_i\|
+\le \|x\|_\infty \sum_{i=1}^n \|e_i\| = C \|x\|_\infty,
+\]
+where $C = \sum_{i=1}^n \|e_i\|$.
+
+\textbf{Step 2: $\|\cdot\|$ is continuous with respect to $\|\cdot\|_\infty$.}
+By Step 1, $|\|x\| - \|y\|| \le \|x - y\| \le C \|x - y\|_\infty$, so
+$x \mapsto \|x\|$ is Lipschitz (hence continuous) on $(\R^n, \|\cdot\|_\infty)$.
+
+\textbf{Step 3: $\|\cdot\|$ is bounded below by a multiple of $\|\cdot\|_\infty$.}
+The unit sphere $S = \{x \in \R^n : \|x\|_\infty = 1\}$ is closed and bounded in
+$(\R^n, \|\cdot\|_\infty)$, hence compact (by the Heine--Borel theorem). The
+continuous function $x \mapsto \|x\|$ attains its minimum on $S$: let
+$c = \min_{x \in S} \|x\|$. Since $0 \notin S$ (because $\|x\|_\infty = 1$ implies
+$x \ne 0$, so $\|x\| > 0$ by \ref{N1}), we have $c > 0$. For any $x \ne 0$,
+$x/\|x\|_\infty \in S$, so $\|x/\|x\|_\infty\| \ge c$, giving
+$\|x\| \ge c \|x\|_\infty$.
+
+Combining Steps 1 and 3: $c \|x\|_\infty \le \|x\| \le C \|x\|_\infty$.
+\end{proof}
+
+\begin{keyresult}[Finite-Dimensional Norm Equivalence]
+On a finite-dimensional vector space, all norms are equivalent. This means
+convergence, completeness, compactness, and continuity are norm-independent in
+$\R^n$. This fails dramatically in infinite dimensions (see
+Warning~\ref{warn:inf_dim_norms}).
+\end{keyresult}
+
+\begin{corollary}
+\label{cor:finite_dim_complete}
+Every finite-dimensional normed space is complete (i.e., is a Banach space).
+\end{corollary}
+
+\begin{proof}
+Any norm on $\R^n$ is equivalent to $\|\cdot\|_\infty$, and $(\R^n, \|\cdot\|_\infty)$
+is complete by Theorem~\ref{thm:Rn_complete}. Since equivalent norms have the
+same Cauchy sequences and convergent sequences, completeness is preserved.
+\end{proof}
+
+\begin{warning}[Infinite-Dimensional Spaces Are Different]
+\label{warn:inf_dim_norms}
+On $C[0,1]$, the norms $\|f\|_\infty = \max |f|$ and $\|f\|_1 = \int_0^1 |f|$
+are \emph{not} equivalent. Consider $f_n(t) = t^n$: then $\|f_n\|_\infty = 1$ but
+$\|f_n\|_1 = 1/(n+1) \to 0$. If the norms were equivalent, $\|f_n\|_1 \to 0$
+would imply $\|f_n\|_\infty \to 0$, a contradiction. This has profound consequences:
+$C[0,1]$ is complete under $\|\cdot\|_\infty$ but \emph{not} under $\|\cdot\|_1$.
+\end{warning}
+
+\begin{rlconnection}[Norm Choice in RL]
+The choice of norm matters for the convergence properties of RL algorithms.
+Value iteration contracts in the $\|\cdot\|_\infty$ norm with factor $\gamma$,
+but the same operator need not contract in the $\|\cdot\|_2$ norm. For finite
+state spaces all norms are equivalent (Theorem~\ref{thm:norm_equiv}), so
+convergence in one norm implies convergence in all. For infinite state spaces
+with function approximation, the norm matters critically, and
+non-equivalence of norms (Warning~\ref{warn:inf_dim_norms}) is the root of
+many difficulties in approximate dynamic programming.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 4: BANACH SPACES
+%% ============================================================
+\section{Banach Spaces}
+\label{sec:banach}
+
+\begin{definition}[Banach Space]
+\label{def:banach}
+A \emph{Banach space} is a complete normed space, i.e., a normed space $(X, \|\cdot\|)$
+that is complete as a metric space under the induced metric $d(x,y) = \|x - y\|$.
+\end{definition}
+
+\subsection{Examples and Non-Examples}
+
+\begin{theorem}[$\ell^p$ is a Banach Space]
+\label{thm:ell_p_banach}
+For $1 \le p \le \infty$, $(\ell^p, \|\cdot\|_p)$ is a Banach space.
+\end{theorem}
+
+\begin{proof}
+We prove the case $1 \le p < \infty$; the case $p = \infty$ is analogous.
+Let $(x^{(k)})_{k=1}^\infty$ be a Cauchy sequence in $\ell^p$, where
+$x^{(k)} = (x_1^{(k)}, x_2^{(k)}, \ldots)$.
+
+\textbf{Step 1: Identify the candidate limit.}
+For each fixed $i$, $|x_i^{(k)} - x_i^{(m)}| \le \|x^{(k)} - x^{(m)}\|_p \to 0$,
+so $(x_i^{(k)})_k$ is Cauchy in $\R$, hence convergent. Define
+$x_i = \lim_{k \to \infty} x_i^{(k)}$ and $x = (x_1, x_2, \ldots)$.
+
+\textbf{Step 2: Show $x \in \ell^p$.}
+Fix $\varepsilon > 0$ and choose $K$ such that $\|x^{(k)} - x^{(m)}\|_p < \varepsilon$
+for $k, m \ge K$. For any finite $N$:
+\[
+\Bigl(\sum_{i=1}^N |x_i^{(k)} - x_i^{(m)}|^p\Bigr)^{1/p} \le
+\|x^{(k)} - x^{(m)}\|_p < \varepsilon.
+\]
+Taking $m \to \infty$ (with $N$ fixed): $\bigl(\sum_{i=1}^N |x_i^{(k)} - x_i|^p\bigr)^{1/p}
+\le \varepsilon$. Since this holds for all $N$,
+$\|x^{(k)} - x\|_p \le \varepsilon < \infty$. By the triangle inequality,
+$\|x\|_p \le \|x - x^{(k)}\|_p + \|x^{(k)}\|_p < \infty$, so $x \in \ell^p$.
+
+\textbf{Step 3: Show $x^{(k)} \to x$ in $\ell^p$.}
+From Step 2, $\|x^{(k)} - x\|_p \le \varepsilon$ for all $k \ge K$, so
+$x^{(k)} \to x$ in $\ell^p$.
+\end{proof}
+
+\begin{theorem}[$C[a,b]$ is Banach Under the Sup Norm]
+\label{thm:Cab_banach}
+$(C[a,b], \|\cdot\|_\infty)$ is a Banach space.
+\end{theorem}
+
+\begin{proof}
+Let $(f_n)$ be Cauchy in $(C[a,b], \|\cdot\|_\infty)$. For each fixed $t \in [a,b]$,
+$|f_n(t) - f_m(t)| \le \|f_n - f_m\|_\infty \to 0$, so $(f_n(t))$ is Cauchy in
+$\R$, hence convergent. Define $f(t) = \lim_{n \to \infty} f_n(t)$.
+
+\textbf{Uniform convergence.}
+Given $\varepsilon > 0$, choose $N$ such that $\|f_n - f_m\|_\infty < \varepsilon$
+for $n, m \ge N$. For each $t$, $|f_n(t) - f_m(t)| < \varepsilon$. Letting
+$m \to \infty$: $|f_n(t) - f(t)| \le \varepsilon$ for all $t$ and $n \ge N$.
+Hence $\|f_n - f\|_\infty \le \varepsilon$, so $f_n \to f$ uniformly.
+
+\textbf{Continuity of $f$.}
+The uniform limit of continuous functions is continuous: for any $t_0 \in [a,b]$ and
+$\varepsilon > 0$, choose $n$ with $\|f_n - f\|_\infty < \varepsilon/3$, then
+$\delta > 0$ with $|f_n(t) - f_n(t_0)| < \varepsilon/3$ for $|t - t_0| < \delta$.
+Then $|f(t) - f(t_0)| \le |f(t) - f_n(t)| + |f_n(t) - f_n(t_0)| +
+|f_n(t_0) - f(t_0)| < \varepsilon$.
+
+So $f \in C[a,b]$ and $f_n \to f$ in $\|\cdot\|_\infty$.
+\end{proof}
+
+\begin{example}[$C[a,b]$ Is Not Banach Under $\|\cdot\|_1$]
+\label{ex:Cab_not_banach}
+The space $(C[0,1], \|\cdot\|_1)$ is \emph{not} complete. Define
+$f_n \colon [0,1] \to \R$ by
+\[
+f_n(t) = \begin{cases}
+0 & \text{if } 0 \le t \le 1/2,\\
+n(t - 1/2) & \text{if } 1/2 < t \le 1/2 + 1/n,\\
+1 & \text{if } 1/2 + 1/n < t \le 1.
+\end{cases}
+\]
+Each $f_n$ is continuous, and $(f_n)$ is Cauchy under $\|\cdot\|_1$ (since
+$\|f_n - f_m\|_1 \le 1/\min(m,n) \to 0$). But the pointwise limit is the
+discontinuous step function $\indicator_{(1/2, 1]}$, which is not in $C[0,1]$.
+No continuous function can be the $\|\cdot\|_1$-limit either, since $\|f_n - g\|_1
+\to 0$ and $\|f_n - \indicator_{(1/2,1]}\|_1 \to 0$ would give
+$g = \indicator_{(1/2,1]}$ a.e., contradicting continuity of $g$.
+\end{example}
+
+\subsection{Series in Banach Spaces}
+
+\begin{definition}[Absolute Convergence]
+\label{def:abs_conv}
+A series $\sum_{n=1}^\infty x_n$ in a normed space is \emph{absolutely convergent}
+if $\sum_{n=1}^\infty \|x_n\| < \infty$. It is \emph{(unconditionally) convergent}
+if the partial sums $S_N = \sum_{n=1}^N x_n$ converge in norm.
+\end{definition}
+
+\begin{theorem}[Characterization of Banach Spaces via Series]
+\label{thm:banach_series}
+A normed space $X$ is a Banach space if and only if every absolutely convergent
+series in $X$ converges.
+\end{theorem}
+
+\begin{proof}
+($\Rightarrow$) Suppose $X$ is Banach and $\sum \|x_n\| < \infty$. The partial
+sums $S_N = \sum_{n=1}^N x_n$ form a Cauchy sequence: for $M > N$,
+\[
+\|S_M - S_N\| = \Bigl\|\sum_{n=N+1}^M x_n\Bigr\| \le \sum_{n=N+1}^M \|x_n\| \to 0
+\]
+as $N, M \to \infty$ (tail of a convergent series). Since $X$ is complete, $(S_N)$
+converges.
+
+($\Leftarrow$) Suppose every absolutely convergent series converges. Let $(y_n)$
+be a Cauchy sequence. Choose a subsequence $(y_{n_k})$ with
+$\|y_{n_{k+1}} - y_{n_k}\| < 2^{-k}$ (possible since $(y_n)$ is Cauchy). Define
+$x_1 = y_{n_1}$ and $x_k = y_{n_k} - y_{n_{k-1}}$ for $k \ge 2$. Then the partial
+sums satisfy $\sum_{k=1}^K x_k = y_{n_K}$, and
+$\sum_{k=2}^\infty \|x_k\| \le \sum_{k=1}^\infty 2^{-k} = 1 < \infty$. So
+$\sum x_k$ converges absolutely, hence converges by hypothesis: $y_{n_K} \to y$ for
+some $y \in X$. Since $(y_n)$ is Cauchy and has a convergent subsequence, the full
+sequence converges to $y$ (by the argument: $\|y_n - y\| \le
+\|y_n - y_{n_K}\| + \|y_{n_K} - y\| \to 0$ for suitable $K$).
+\end{proof}
+
+\begin{keyresult}[Banach Space Characterization]
+A normed space is Banach if and only if every absolutely convergent series
+converges. This characterization is often the most convenient way to verify
+completeness: one constructs a convergent series rather than chasing arbitrary
+Cauchy sequences.
+\end{keyresult}
+
+\begin{rlconnection}[Why Completeness Matters for RL]
+The Banach fixed-point theorem (proved in the next lesson) states: if $T$ is a
+contraction on a \emph{complete} metric space, then $T$ has a unique fixed point
+and $T^n x \to x^*$ for any starting point $x$. The Bellman operator is a
+$\gamma$-contraction on the Banach space of bounded functions with the sup norm.
+Without completeness, we cannot guarantee that the sequence of value iterates
+converges to anything in our space. This is the mathematical reason we work in
+Banach spaces, not just normed spaces.
+\end{rlconnection}
+
+\subsection{Schauder Basis}
+\label{subsec:schauder}
+
+\begin{definition}[Schauder Basis]
+\label{def:schauder}
+A sequence $(e_n)_{n=1}^\infty$ in a Banach space $X$ is a \emph{Schauder basis}
+if every $x \in X$ has a unique representation $x = \sum_{n=1}^\infty \alpha_n e_n$
+(convergent in norm).
+\end{definition}
+
+\begin{example}
+The standard unit vectors $(e_n)$ form a Schauder basis for $\ell^p$ ($1 \le p < \infty$):
+every $x = (x_1, x_2, \ldots) \in \ell^p$ satisfies
+$x = \sum_{n=1}^\infty x_n e_n$ in $\|\cdot\|_p$.
+Note that $(e_n)$ is \emph{not} a Schauder basis for $\ell^\infty$, because the
+partial sums $\sum_{n=1}^N x_n e_n$ need not converge to $x$ in $\|\cdot\|_\infty$.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: BOUNDED LINEAR OPERATORS
+%% ============================================================
+\section{Bounded Linear Operators}
+\label{sec:operators}
+
+\subsection{Definitions and Basic Properties}
+
+\begin{definition}[Linear Operator]
+\label{def:linear_op}
+Let $X$ and $Y$ be normed spaces. A map $T \colon X \to Y$ is a \emph{linear
+operator} if $T(\alpha x + \beta y) = \alpha T(x) + \beta T(y)$ for all
+$x, y \in X$ and scalars $\alpha, \beta$.
+\end{definition}
+
+\begin{definition}[Bounded Linear Operator]
+\label{def:bounded_op}
+A linear operator $T \colon X \to Y$ is \emph{bounded} if there exists $c \ge 0$
+such that $\|Tx\|_Y \le c \|x\|_X$ for all $x \in X$. The \emph{operator norm} is
+\[
+\|T\| = \sup_{x \ne 0} \frac{\|Tx\|_Y}{\|x\|_X} = \sup_{\|x\|_X = 1} \|Tx\|_Y
+= \sup_{\|x\|_X \le 1} \|Tx\|_Y.
+\]
+\end{definition}
+
+\begin{proposition}[Equivalent Formulations of the Operator Norm]
+\label{prop:op_norm_equiv}
+The three suprema in Definition~\ref{def:bounded_op} are equal.
+\end{proposition}
+
+\begin{proof}
+Let $\alpha = \sup_{x \ne 0} \|Tx\|/\|x\|$, $\beta = \sup_{\|x\|=1} \|Tx\|$,
+$\gamma = \sup_{\|x\| \le 1} \|Tx\|$.
+
+$\alpha = \beta$: For $x \ne 0$, set $u = x/\|x\|$, so $\|u\| = 1$ and
+$\|Tx\|/\|x\| = \|Tu\|$. Thus $\sup_{x \ne 0} \|Tx\|/\|x\| =
+\sup_{\|u\|=1} \|Tu\|$.
+
+$\beta \le \gamma$: The set $\{\|x\| = 1\}$ is contained in $\{\|x\| \le 1\}$.
+
+$\gamma \le \alpha$: For $\|x\| \le 1$ with $x \ne 0$,
+$\|Tx\| = \|x\| \cdot \|Tx\|/\|x\| \le 1 \cdot \alpha = \alpha$. Also $\|T(0)\| = 0 \le \alpha$.
+So $\gamma \le \alpha = \beta \le \gamma$, giving equality.
+\end{proof}
+
+\begin{theorem}[Bounded $\Leftrightarrow$ Continuous]
+\label{thm:bounded_iff_cts}
+A linear operator $T \colon X \to Y$ between normed spaces is bounded if and only
+if it is continuous.
+\end{theorem}
+
+\begin{proof}
+($\Rightarrow$) If $T$ is bounded, then $\|Tx - Ty\| = \|T(x-y)\| \le \|T\| \|x - y\|$,
+so $T$ is Lipschitz, hence continuous.
+
+($\Leftarrow$) Suppose $T$ is continuous but not bounded. Then for each $n$, there
+exists $x_n$ with $\|x_n\| = 1$ and $\|Tx_n\| > n$. Set $y_n = x_n/n$. Then
+$\|y_n\| = 1/n \to 0$, so $y_n \to 0$, but $\|Ty_n\| = \|Tx_n\|/n > 1$. This
+contradicts the continuity of $T$ at $0$ (since $y_n \to 0$ should imply
+$Ty_n \to T(0) = 0$).
+\end{proof}
+
+\begin{remark}
+For linear operators, continuity at a single point (say $0$) implies continuity
+everywhere, because $T(x_n) - T(x) = T(x_n - x)$ and $x_n - x \to 0$.
+\end{remark}
+
+\begin{warning}[Unbounded Operators Exist]
+Not every linear operator is bounded. On the space of polynomials $P[0,1]$ (with
+the sup norm), the differentiation operator $D(f) = f'$ is linear but unbounded:
+$\|x^n\|_\infty = 1$ but $\|D(x^n)\|_\infty = \|n x^{n-1}\|_\infty = n \to \infty$.
+\end{warning}
+
+\subsection{The Space $B(X,Y)$}
+
+\begin{definition}[Space of Bounded Operators]
+\label{def:BXY}
+For normed spaces $X, Y$, we write $B(X,Y)$ for the set of all bounded linear
+operators $T \colon X \to Y$, equipped with the operator norm. When $Y = X$, we
+write $B(X) = B(X,X)$.
+\end{definition}
+
+\begin{theorem}[$B(X,Y)$ is a Normed Space]
+\label{thm:BXY_normed}
+$B(X,Y)$ is a normed space under the operator norm.
+\end{theorem}
+
+\begin{proof}
+$B(X,Y)$ is a vector space: for $T, S \in B(X,Y)$ and scalar $\alpha$,
+$(T + S)(x) = Tx + Sx$ and $(\alpha T)(x) = \alpha Tx$ are bounded linear operators
+(with $\|T + S\| \le \|T\| + \|S\|$ and $\|\alpha T\| = |\alpha| \|T\|$).
+
+The operator norm satisfies the norm axioms:
+\begin{itemize}[nosep]
+\item \ref{N1}: $\|T\| = 0 \iff \|Tx\| = 0$ for all $\|x\| \le 1 \iff Tx = 0$
+for all $x \iff T = 0$.
+\item \ref{N2}: $\|\alpha T\| = \sup_{\|x\| \le 1} \|\alpha Tx\| =
+|\alpha| \sup_{\|x\| \le 1} \|Tx\| = |\alpha| \|T\|$.
+\item \ref{N3}: $\|T + S\| = \sup_{\|x\| \le 1} \|(T+S)x\| \le
+\sup_{\|x\| \le 1} (\|Tx\| + \|Sx\|) \le \|T\| + \|S\|$.
+\end{itemize}
+\end{proof}
+
+\begin{theorem}[$B(X,Y)$ is Banach When $Y$ is Banach]
+\label{thm:BXY_banach}
+If $Y$ is a Banach space, then $B(X,Y)$ is a Banach space.
+\end{theorem}
+
+\begin{proof}
+Let $(T_n)$ be a Cauchy sequence in $B(X,Y)$. For each $x \in X$,
+$\|T_n x - T_m x\| \le \|T_n - T_m\| \|x\| \to 0$, so $(T_n x)$ is Cauchy in $Y$.
+Since $Y$ is Banach, the limit exists: define $Tx = \lim_{n \to \infty} T_n x$.
+
+\textbf{$T$ is linear.} $T(\alpha x + \beta y) = \lim T_n(\alpha x + \beta y) =
+\lim (\alpha T_n x + \beta T_n y) = \alpha Tx + \beta Ty$.
+
+\textbf{$T$ is bounded.} Since $(T_n)$ is Cauchy, it is bounded: $\|T_n\| \le M$
+for some $M$. For each $x$, $\|Tx\| = \lim \|T_n x\| \le M \|x\|$, so
+$\|T\| \le M$.
+
+\textbf{$T_n \to T$ in operator norm.} Given $\varepsilon > 0$, choose $N$ such
+that $\|T_n - T_m\| < \varepsilon$ for $n, m \ge N$. For any $x$ with $\|x\| \le 1$
+and $n \ge N$:
+$\|T_n x - T_m x\| \le \varepsilon$ for all $m \ge N$. Letting $m \to \infty$:
+$\|T_n x - Tx\| \le \varepsilon$. Taking the sup over $\|x\| \le 1$:
+$\|T_n - T\| \le \varepsilon$ for $n \ge N$.
+\end{proof}
+
+\subsection{Important Examples}
+
+\begin{example}[Matrix Operators]
+\label{ex:matrix_op}
+Every $m \times n$ real matrix $A$ defines a bounded linear operator
+$T_A \colon (\R^n, \|\cdot\|_p) \to (\R^m, \|\cdot\|_p)$ by $T_A(x) = Ax$.
+Boundedness follows from finite-dimensionality (all linear operators on
+finite-dimensional spaces are bounded, as we prove below).
+\end{example}
+
+\begin{proposition}[All Linear Operators on Finite-Dimensional Spaces are Bounded]
+\label{prop:finite_dim_bounded}
+If $X$ is a finite-dimensional normed space and $Y$ is any normed space, then
+every linear operator $T \colon X \to Y$ is bounded.
+\end{proposition}
+
+\begin{proof}
+Let $\{e_1, \ldots, e_n\}$ be a basis for $X$. For $x = \sum_{i=1}^n \alpha_i e_i$,
+by the equivalence of norms (Theorem~\ref{thm:norm_equiv}), there exists $c > 0$
+with $\sum |\alpha_i| \le c \|x\|_X$ (since $x \mapsto \sum |\alpha_i|$ is a norm
+on $X$, equivalent to $\|\cdot\|_X$). Then:
+\[
+\|Tx\| = \Bigl\|\sum_{i=1}^n \alpha_i Te_i\Bigr\| \le \sum_{i=1}^n |\alpha_i| \|Te_i\|
+\le c \|x\|_X \cdot \max_i \|Te_i\|.
+\]
+So $T$ is bounded with $\|T\| \le c \cdot \max_i \|Te_i\|$.
+\end{proof}
+
+\begin{example}[Integral Operator]
+\label{ex:integral_op}
+Let $k \in C([a,b] \times [a,b])$ and define $T \colon C[a,b] \to C[a,b]$ by
+\[
+(Tf)(s) = \int_a^b k(s,t)\, f(t)\, dt.
+\]
+This is a bounded linear operator with
+$\|T\| \le \max_{s \in [a,b]} \int_a^b |k(s,t)|\, dt$.
+Indeed, $|(Tf)(s)| \le \int_a^b |k(s,t)| |f(t)|\, dt \le \|f\|_\infty \int_a^b |k(s,t)|\, dt$.
+\end{example}
+
+\begin{example}[Right Shift Operator]
+\label{ex:shift}
+On $\ell^p$ ($1 \le p \le \infty$), the right shift $R(x_1, x_2, \ldots) =
+(0, x_1, x_2, \ldots)$ is a bounded linear operator with $\|R\| = 1$: clearly
+$\|Rx\|_p = \|x\|_p$ for all $x$.
+\end{example}
+
+\begin{rlconnection}[The Bellman Operator is Bounded]
+The Bellman expectation operator $T^\pi \colon b(\mathcal{S}) \to b(\mathcal{S})$
+defined by $(T^\pi V)(s) = r^\pi(s) + \gamma \sum_{s'} P^\pi(s'|s) V(s')$ is a
+bounded (in fact, affine) operator on the Banach space of bounded functions. Its
+``linear part'' $V \mapsto \gamma \sum_{s'} P^\pi(s'|s) V(s')$ has operator norm
+at most $\gamma < 1$ (under $\|\cdot\|_\infty$), which is why $T^\pi$ is a
+contraction. The framework of $B(X,Y)$ and operator norms gives us the precise
+language to state and prove this.
+\end{rlconnection}
+
+\subsection{Dual Spaces}
+
+\begin{definition}[Dual Space]
+\label{def:dual}
+The \emph{(continuous) dual space} of a normed space $X$ is
+$X^* = B(X, \R)$ (or $B(X, \C)$ if $X$ is a complex space): the space of all
+bounded linear functionals on $X$, equipped with the operator norm
+$\|f\|_{X^*} = \sup_{\|x\| \le 1} |f(x)|$.
+\end{definition}
+
+\begin{corollary}
+\label{cor:dual_banach}
+For any normed space $X$, the dual space $X^*$ is a Banach space.
+\end{corollary}
+
+\begin{proof}
+$\R$ (or $\C$) is a Banach space, so $X^* = B(X, \R)$ is Banach by
+Theorem~\ref{thm:BXY_banach}.
+\end{proof}
+
+\begin{remark}
+The dual space is always complete, even if $X$ itself is not.
+\end{remark}
+
+\begin{example}[Dual of $\ell^p$]
+\label{ex:dual_lp}
+For $1 \le p < \infty$ with $1/p + 1/q = 1$ (where $q = \infty$ when $p = 1$),
+$(\ell^p)^* \cong \ell^q$ isometrically: every bounded linear functional on
+$\ell^p$ has the form $f(x) = \sum_{n=1}^\infty y_n x_n$ for a unique
+$y = (y_n) \in \ell^q$, with $\|f\| = \|y\|_q$. This is the Riesz representation
+theorem for $\ell^p$ spaces.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: COMPACTNESS
+%% ============================================================
+\section{Compactness}
+\label{sec:compactness}
+
+Compactness is the key tool for passing from local to global properties and for
+establishing existence results. In infinite-dimensional spaces, compactness
+behaves very differently from the finite-dimensional case.
+
+\subsection{Definitions and Basic Theory}
+
+\begin{definition}[Compact Set]
+\label{def:compact}
+A subset $K$ of a metric space $(X,d)$ is \emph{compact} if every open cover of
+$K$ has a finite subcover: whenever $K \subseteq \bigcup_{\alpha \in I} G_\alpha$
+with each $G_\alpha$ open, there exist finitely many $\alpha_1, \ldots, \alpha_n$
+with $K \subseteq G_{\alpha_1} \cup \cdots \cup G_{\alpha_n}$.
+\end{definition}
+
+\begin{definition}[Sequential Compactness]
+\label{def:seq_compact}
+A subset $K$ of a metric space is \emph{sequentially compact} if every sequence in
+$K$ has a subsequence that converges to a point in $K$.
+\end{definition}
+
+\begin{definition}[Totally Bounded]
+\label{def:totally_bounded}
+A subset $A$ of a metric space $(X,d)$ is \emph{totally bounded} if for every
+$\varepsilon > 0$, $A$ can be covered by finitely many open balls of radius
+$\varepsilon$: there exist $x_1, \ldots, x_n \in X$ with
+$A \subseteq \bigcup_{i=1}^n B(x_i, \varepsilon)$.
+\end{definition}
+
+\begin{proposition}[Totally Bounded Implies Bounded]
+\label{prop:tb_bounded}
+Every totally bounded set is bounded. The converse fails in general.
+\end{proposition}
+
+\begin{proof}
+If $A \subseteq \bigcup_{i=1}^n B(x_i, 1)$, then for any $a, b \in A$, $a \in B(x_i, 1)$
+and $b \in B(x_j, 1)$ for some $i, j$, so $d(a,b) \le d(a, x_i) + d(x_i, x_j) +
+d(x_j, b) < 1 + \max_{i,j} d(x_i, x_j) + 1$. Hence $\diam(A) < \infty$.
+
+For the failure of the converse: the closed unit ball in $\ell^2$ is bounded but not
+totally bounded (the standard basis vectors $e_n$ satisfy $\|e_n - e_m\| = \sqrt{2}$
+for $n \ne m$, so no finite collection of balls of radius $\sqrt{2}/2$ can cover them all).
+\end{proof}
+
+\begin{theorem}[Characterization of Compactness in Metric Spaces]
+\label{thm:compact_equiv}
+For a subset $K$ of a metric space $(X,d)$, the following are equivalent:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $K$ is compact.
+    \item $K$ is sequentially compact.
+    \item $K$ is complete and totally bounded.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(i) $\Rightarrow$ (ii):}
+Let $(x_n)$ be a sequence in $K$. Suppose for contradiction that $(x_n)$ has no
+convergent subsequence in $K$. Then every point $y \in K$ has a neighborhood
+$B(y, r_y)$ containing only finitely many terms of $(x_n)$ (otherwise, we could
+extract a subsequence converging to $y$). The collection $\{B(y, r_y) : y \in K\}$
+covers $K$, so by compactness there is a finite subcover. But a finite union of
+sets, each containing finitely many terms, contains only finitely many terms total,
+contradicting the fact that $(x_n)$ has infinitely many terms in $K$.
+
+\textbf{(ii) $\Rightarrow$ (iii):}
+\emph{Completeness:} Let $(x_n)$ be Cauchy in $K$. By sequential compactness,
+$(x_n)$ has a subsequence converging to some $x \in K$. A Cauchy sequence with a
+convergent subsequence converges (Theorem~\ref{thm:R_complete} proof argument), so
+$x_n \to x \in K$.
+
+\emph{Total boundedness:} Suppose $K$ is not totally bounded. Then there exists
+$\varepsilon > 0$ such that $K$ cannot be covered by finitely many
+$\varepsilon$-balls. Pick $x_1 \in K$ arbitrarily. Having chosen $x_1, \ldots, x_n$,
+since $K \not\subseteq \bigcup_{i=1}^n B(x_i, \varepsilon)$, choose
+$x_{n+1} \in K \setminus \bigcup_{i=1}^n B(x_i, \varepsilon)$. Then
+$d(x_{n+1}, x_i) \ge \varepsilon$ for all $i \le n$. The sequence $(x_n)$ has no
+convergent subsequence (any two terms are at least $\varepsilon$ apart),
+contradicting sequential compactness.
+
+\textbf{(iii) $\Rightarrow$ (i):}
+Suppose $K$ is complete and totally bounded. We use the \emph{Lebesgue covering
+lemma} approach.
+
+\emph{Claim (Lebesgue number):} For every open cover $\{G_\alpha\}$ of $K$, there
+exists $\delta > 0$ (the \emph{Lebesgue number}) such that for every $x \in K$,
+$B(x, \delta) \subseteq G_\alpha$ for some $\alpha$.
+
+\emph{Proof of claim:} Suppose not. Then for each $n$, there exists $x_n \in K$
+with $B(x_n, 1/n) \not\subseteq G_\alpha$ for any $\alpha$. By (iii) $\Rightarrow$
+(ii) (which we now verify: complete + totally bounded $\Rightarrow$ sequentially
+compact, see below), $(x_n)$ has a subsequence $x_{n_k} \to x \in K$. Since
+$x \in K \subseteq \bigcup_\alpha G_\alpha$, we have $x \in G_\beta$ for some
+$\beta$. Since $G_\beta$ is open, $B(x, r) \subseteq G_\beta$ for some $r > 0$.
+For large $k$, $d(x_{n_k}, x) < r/2$ and $1/n_k < r/2$, so
+$B(x_{n_k}, 1/n_k) \subseteq B(x, r) \subseteq G_\beta$, contradicting the choice
+of $x_{n_k}$.
+
+To complete the argument, we need: complete + totally bounded implies sequentially
+compact. Let $(x_n)$ be a sequence in $K$. Cover $K$ by finitely many balls of
+radius $1$; one ball contains infinitely many terms, giving a subsequence
+$(x_n^{(1)})$ with $\diam \le 2$. Cover $K$ by balls of radius $1/2$; one contains
+infinitely many terms of $(x_n^{(1)})$, giving $(x_n^{(2)})$ with $\diam \le 1$.
+Continue: at stage $k$, get $(x_n^{(k)})$ contained in a ball of radius $1/k$.
+The diagonal subsequence $y_k = x_k^{(k)}$ is Cauchy (for $k, m \ge N$,
+$d(y_k, y_m) \le 2/N$), hence converges by completeness.
+
+Now: given the Lebesgue number $\delta > 0$, cover $K$ by finitely many balls
+of radius $\delta/2$ (by total boundedness). Each ball has diameter $\le \delta$,
+so is contained in some $G_\alpha$. Taking the corresponding finitely many
+$G_\alpha$'s gives a finite subcover.
+\end{proof}
+
+\begin{corollary}[Heine--Borel for $\R^n$]
+\label{cor:heine_borel}
+A subset of $\R^n$ is compact if and only if it is closed and bounded.
+\end{corollary}
+
+\begin{proof}
+($\Rightarrow$) Compact subsets of metric spaces are closed and bounded.
+(\emph{Closed:} If $x_n \in K$ and $x_n \to x$, then by sequential compactness
+there is a subsequence converging in $K$; by uniqueness of limits, $x \in K$.
+\emph{Bounded:} Compact implies totally bounded implies bounded.)
+
+($\Leftarrow$) Let $K \subseteq \R^n$ be closed and bounded. Bounded in $\R^n$
+implies totally bounded (cover $K$ by a grid of cubes of side $\varepsilon/\sqrt{n}$).
+Closed subset of a complete space is complete. By Theorem~\ref{thm:compact_equiv},
+$K$ is compact.
+\end{proof}
+
+\subsection{Riesz's Lemma and Compactness in Infinite Dimensions}
+
+\begin{lemma}[Riesz's Lemma]
+\label{lem:riesz}
+Let $Y$ be a proper closed subspace of a normed space $X$ (i.e., $Y \ne X$). For
+every $\theta \in (0,1)$, there exists $x_\theta \in X$ with $\|x_\theta\| = 1$
+and $d(x_\theta, Y) = \inf_{y \in Y} \|x_\theta - y\| \ge \theta$.
+\end{lemma}
+
+\begin{proof}
+Since $Y \ne X$, there exists $z \in X \setminus Y$. Since $Y$ is closed,
+$d = d(z, Y) = \inf_{y \in Y} \|z - y\| > 0$. Choose $y_0 \in Y$ with
+$\|z - y_0\| < d/\theta$ (possible since $d/\theta > d = \inf$). Define
+\[
+x_\theta = \frac{z - y_0}{\|z - y_0\|}.
+\]
+Then $\|x_\theta\| = 1$. For any $y \in Y$:
+\[
+\|x_\theta - y\| = \frac{\|z - y_0 - \|z - y_0\| y\|}{\|z - y_0\|}
+= \frac{\|z - \underbrace{(y_0 + \|z - y_0\| y)}_{\in Y}\|}{\|z - y_0\|}
+\ge \frac{d}{\|z - y_0\|} > \frac{d}{d/\theta} = \theta.
+\]
+Taking the infimum over $y \in Y$: $d(x_\theta, Y) \ge \theta$.
+\end{proof}
+
+\begin{remark}
+We cannot always achieve $\theta = 1$ (i.e., exact distance $1$ from $Y$). This is
+possible in reflexive spaces but not in general.
+\end{remark}
+
+\begin{theorem}[Riesz's Theorem: Compactness Characterizes Finite Dimension]
+\label{thm:riesz_compact}
+The closed unit ball $\overline{B}(0,1) = \{x \in X : \|x\| \le 1\}$ in a normed
+space $X$ is compact if and only if $X$ is finite-dimensional.
+\end{theorem}
+
+\begin{proof}
+($\Leftarrow$) If $\dim X = n < \infty$, then $X$ is isomorphic to $\R^n$
+(Theorem~\ref{thm:norm_equiv}), and the closed unit ball is closed and bounded,
+hence compact by Heine--Borel (Corollary~\ref{cor:heine_borel}).
+
+($\Rightarrow$) We prove the contrapositive: if $X$ is infinite-dimensional, then
+$\overline{B}(0,1)$ is not compact (not sequentially compact). We construct a
+sequence in $\overline{B}(0,1)$ with no convergent subsequence.
+
+Pick $x_1 \in X$ with $\|x_1\| = 1$. Let $Y_1 = \Span\{x_1\}$, which is a proper
+closed subspace (finite-dimensional subspaces are closed). By Riesz's lemma with
+$\theta = 1/2$, there exists $x_2$ with $\|x_2\| = 1$ and $\|x_2 - y\| \ge 1/2$
+for all $y \in Y_1$; in particular $\|x_2 - x_1\| \ge 1/2$.
+
+Let $Y_2 = \Span\{x_1, x_2\}$, another proper closed subspace. By Riesz's lemma,
+there exists $x_3$ with $\|x_3\| = 1$ and $d(x_3, Y_2) \ge 1/2$. Continuing
+inductively, we obtain a sequence $(x_n)$ in $\overline{B}(0,1)$ with
+$\|x_n - x_m\| \ge 1/2$ for all $n \ne m$.
+
+No subsequence of $(x_n)$ can be Cauchy (hence none can converge), so
+$\overline{B}(0,1)$ is not sequentially compact, hence not compact.
+\end{proof}
+
+\begin{keyresult}[Riesz's Theorem]
+The closed unit ball in a normed space is compact if and only if the space is
+finite-dimensional. This is one of the most important structural results in
+functional analysis: it says that in infinite-dimensional spaces, bounded sets are
+never compact (in the norm topology). This forces us to use weaker topologies or
+stronger conditions (like equicontinuity) to obtain compactness.
+\end{keyresult}
+
+\begin{rlconnection}[Compactness and Function Approximation]
+Riesz's theorem explains a fundamental challenge in RL: the space of all value
+functions on an infinite state space is infinite-dimensional, so the unit ball is
+not compact. This means that a bounded sequence of value function approximations
+need not have a convergent subsequence. In practice, this is why we restrict to
+finite-dimensional parameterizations (linear function approximation, neural
+networks) or use compactness criteria like Arzel\`{a}--Ascoli
+(Theorem~\ref{thm:arzela_ascoli}) to guarantee that approximation sequences converge.
+\end{rlconnection}
+
+\subsection{The Arzel\`{a}--Ascoli Theorem}
+
+\begin{definition}[Equicontinuity]
+\label{def:equicontinuous}
+A family $\mathcal{F} \subseteq C[a,b]$ is \emph{equicontinuous} if for every
+$\varepsilon > 0$ there exists $\delta > 0$ such that
+$|f(s) - f(t)| < \varepsilon$ for all $f \in \mathcal{F}$ and all $s, t \in [a,b]$
+with $|s - t| < \delta$. The family is \emph{uniformly bounded} if
+$\sup_{f \in \mathcal{F}} \|f\|_\infty < \infty$.
+\end{definition}
+
+\begin{theorem}[Arzel\`{a}--Ascoli]
+\label{thm:arzela_ascoli}
+A subset $\mathcal{F} \subseteq C[a,b]$ (with the sup norm) is relatively compact
+(i.e., $\cl(\mathcal{F})$ is compact) if and only if $\mathcal{F}$ is uniformly
+bounded and equicontinuous.
+\end{theorem}
+
+\begin{proof}
+($\Leftarrow$) \textbf{Uniformly bounded + equicontinuous implies relatively compact.}
+By Theorem~\ref{thm:compact_equiv}, it suffices to show that every sequence $(f_n)$
+in $\mathcal{F}$ has a uniformly convergent subsequence (the closure inherits
+completeness from $C[a,b]$).
+
+\textbf{Step 1: Pointwise convergence on a dense set.}
+Let $D = \{r_1, r_2, \ldots\}$ be a countable dense subset of $[a,b]$ (e.g., the
+rationals in $[a,b]$). The sequence $(f_n(r_1))$ is bounded (by uniform
+boundedness), so by Bolzano--Weierstrass it has a convergent subsequence
+$(f_{n_k^{(1)}}(r_1))$. From this subsequence, extract a further subsequence
+convergent at $r_2$: $(f_{n_k^{(2)}})$. Continue for each $r_j$. The diagonal
+subsequence $g_k = f_{n_k^{(k)}}$ converges at every $r_j \in D$.
+
+\textbf{Step 2: Uniform convergence.}
+Given $\varepsilon > 0$, choose $\delta > 0$ from equicontinuity for
+$\varepsilon/3$. Cover $[a,b]$ by finitely many intervals of length $< \delta$, and
+pick a point $r_{j_i} \in D$ in each interval, giving $r_{j_1}, \ldots, r_{j_m}$.
+Since $(g_k)$ converges at each $r_{j_i}$, choose $K$ such that
+$|g_k(r_{j_i}) - g_l(r_{j_i})| < \varepsilon/3$ for all $k, l \ge K$ and all $i$.
+
+For any $t \in [a,b]$, choose $r_{j_i}$ with $|t - r_{j_i}| < \delta$. Then for
+$k, l \ge K$:
+\begin{align*}
+|g_k(t) - g_l(t)| &\le |g_k(t) - g_k(r_{j_i})| + |g_k(r_{j_i}) - g_l(r_{j_i})|
++ |g_l(r_{j_i}) - g_l(t)| \\
+&< \varepsilon/3 + \varepsilon/3 + \varepsilon/3 = \varepsilon.
+\end{align*}
+So $\|g_k - g_l\|_\infty < \varepsilon$ for $k, l \ge K$, showing $(g_k)$ is Cauchy
+in $(C[a,b], \|\cdot\|_\infty)$, hence convergent.
+
+($\Rightarrow$) \textbf{Relatively compact implies uniformly bounded and equicontinuous.}
+
+\emph{Uniformly bounded:} If $\cl(\mathcal{F})$ is compact, it is bounded, so
+$\sup_{f \in \mathcal{F}} \|f\|_\infty \le \sup_{g \in \cl(\mathcal{F})} \|g\|_\infty
+< \infty$.
+
+\emph{Equicontinuous:} Given $\varepsilon > 0$, cover $\cl(\mathcal{F})$ by finitely
+many balls $B(g_i, \varepsilon/3)$, $i = 1, \ldots, N$. Each $g_i \in C[a,b]$ is
+uniformly continuous on $[a,b]$, so choose $\delta_i > 0$ with
+$|g_i(s) - g_i(t)| < \varepsilon/3$ when $|s-t| < \delta_i$. Set
+$\delta = \min(\delta_1, \ldots, \delta_N) > 0$. For any $f \in \mathcal{F}$,
+choose $g_i$ with $\|f - g_i\|_\infty < \varepsilon/3$. For $|s-t| < \delta$:
+$|f(s) - f(t)| \le |f(s) - g_i(s)| + |g_i(s) - g_i(t)| + |g_i(t) - f(t)| <
+\varepsilon/3 + \varepsilon/3 + \varepsilon/3 = \varepsilon$.
+\end{proof}
+
+\begin{rlconnection}[Arzel\`{a}--Ascoli in Policy Optimization]
+In continuous-state RL, when we optimize over a class of value functions or
+policies, we need compactness to guarantee that maximizing sequences have
+convergent subsequences. The Arzel\`{a}--Ascoli theorem provides the criterion:
+if value function approximations are uniformly bounded and equicontinuous (e.g.,
+Lipschitz with a common Lipschitz constant), then any sequence has a uniformly
+convergent subsequence. This is used in the analysis of fitted value iteration
+and actor-critic methods on continuous state spaces.
+\end{rlconnection}
+
+\subsection{Compact Operators}
+
+\begin{definition}[Compact Operator]
+\label{def:compact_op}
+A linear operator $T \colon X \to Y$ between normed spaces is \emph{compact} if
+$T$ maps bounded sets to relatively compact sets, i.e., for every bounded
+$B \subseteq X$, the closure $\cl(T(B))$ is compact in $Y$.
+Equivalently, $T$ is compact if every bounded sequence $(x_n)$ in $X$ has a
+subsequence $(x_{n_k})$ such that $(Tx_{n_k})$ converges in $Y$.
+\end{definition}
+
+\begin{proposition}[Compact Operators are Bounded]
+\label{prop:compact_bounded}
+Every compact operator is bounded.
+\end{proposition}
+
+\begin{proof}
+Suppose $T$ is compact but not bounded. Then there exist $(x_n)$ with $\|x_n\| = 1$
+and $\|Tx_n\| \to \infty$. Since $(x_n)$ is bounded, compactness gives a
+subsequence with $(Tx_{n_k})$ convergent, hence bounded. But $\|Tx_{n_k}\| \to
+\infty$, a contradiction.
+\end{proof}
+
+\begin{example}[Integral Operators are Often Compact]
+\label{ex:compact_integral}
+The integral operator from Example~\ref{ex:integral_op} with continuous kernel
+$k$ on $[a,b] \times [a,b]$ is compact as an operator $C[a,b] \to C[a,b]$. This
+follows from Arzel\`{a}--Ascoli: if $(f_n)$ is bounded in $C[a,b]$, then
+$(Tf_n)$ is uniformly bounded (since $T$ is bounded) and equicontinuous (since $k$
+is uniformly continuous on the compact set $[a,b]^2$, and
+$|(Tf_n)(s_1) - (Tf_n)(s_2)| \le \|f_n\|_\infty \int_a^b |k(s_1,t) - k(s_2,t)|\, dt$
+is small uniformly in $n$ when $|s_1 - s_2|$ is small).
+\end{example}
+
+%% ============================================================
+%% SECTION 7: BAIRE CATEGORY THEOREM
+%% ============================================================
+\section{The Baire Category Theorem}
+\label{sec:baire}
+
+The Baire category theorem is one of the most powerful existence results in
+analysis. It underpins the three fundamental theorems of Banach space theory:
+the Uniform Boundedness Principle, the Open Mapping Theorem, and the Closed Graph
+Theorem (all treated in the next lesson).
+
+\subsection{Nowhere Dense Sets and Category}
+
+\begin{definition}[Nowhere Dense]
+\label{def:nowhere_dense}
+A subset $A$ of a metric space $X$ is \emph{nowhere dense} if $\Int(\cl(A)) =
+\emptyset$, i.e., the closure of $A$ has empty interior. Equivalently, $A$ is
+nowhere dense if and only if for every non-empty open set $U$, there is a
+non-empty open set $V \subseteq U$ with $V \cap A = \emptyset$.
+\end{definition}
+
+\begin{example}
+In $\R$: $\Z$ is nowhere dense, $\{1/n : n \in \N\}$ is nowhere dense, $\Q$ is
+\emph{not} nowhere dense (its closure is $\R$, which has non-empty interior).
+The Cantor set is a closed, uncountable, nowhere dense subset of $[0,1]$.
+\end{example}
+
+\begin{definition}[First and Second Category]
+\label{def:category}
+A subset of a metric space is of \emph{first category} (or \emph{meager}) if it is
+a countable union of nowhere dense sets. A set is of \emph{second category} (or
+\emph{non-meager}) if it is not of first category.
+\end{definition}
+
+\begin{remark}
+``First category'' means ``small'' in the topological sense, and ``second category''
+means ``large.'' This is a different notion of smallness from measure zero.
+\end{remark}
+
+\subsection{Statement and Proof}
+
+\begin{theorem}[Baire Category Theorem]
+\label{thm:baire}
+Every complete metric space is of second category in itself. Equivalently, if
+$(X,d)$ is a complete metric space and $X = \bigcup_{n=1}^\infty F_n$ with each
+$F_n$ closed, then at least one $F_n$ has non-empty interior.
+\end{theorem}
+
+\begin{proof}
+We prove the equivalent contrapositive: if $A_1, A_2, \ldots$ are nowhere dense
+subsets of a complete metric space $X$, then $\bigcup_{n=1}^\infty A_n \ne X$.
+
+Since $A_1$ is nowhere dense, $X \setminus \cl(A_1)$ is a non-empty open set (if
+$\cl(A_1) = X$, then $\Int(\cl(A_1)) = X \ne \emptyset$, contradicting nowhere
+density). Choose $x_1 \in X \setminus \cl(A_1)$ and $r_1 > 0$ with
+$\overline{B}(x_1, r_1) \subseteq X \setminus \cl(A_1)$ and $r_1 < 1$. In
+particular, $\overline{B}(x_1, r_1) \cap A_1 = \emptyset$.
+
+Since $A_2$ is nowhere dense and $B(x_1, r_1)$ is a non-empty open set, there
+exists a non-empty open ball $B(x_2, r_2) \subseteq B(x_1, r_1)$ with
+$\overline{B}(x_2, r_2) \cap \cl(A_2) = \emptyset$ and $r_2 < 1/2$.
+
+Continuing inductively, at step $n$ we find $x_n$ and $0 < r_n < 1/n$ with
+\[
+\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1}) \quad \text{and} \quad
+\overline{B}(x_n, r_n) \cap A_n = \emptyset.
+\]
+
+The sequence $(x_n)$ is Cauchy: for $m > n$, $x_m \in B(x_n, r_n)$, so
+$d(x_m, x_n) < r_n < 1/n \to 0$. Since $X$ is complete, $x_n \to x$ for some
+$x \in X$.
+
+For each $n$, $x_m \in \overline{B}(x_n, r_n)$ for all $m \ge n$ (by nesting), so
+$x = \lim x_m \in \overline{B}(x_n, r_n)$ (closed balls are closed). Therefore
+$x \notin A_n$ for any $n$, so $x \notin \bigcup_{n=1}^\infty A_n$. Hence
+$\bigcup_{n=1}^\infty A_n \ne X$.
+\end{proof}
+
+\begin{corollary}
+\label{cor:baire_dense}
+In a complete metric space, the intersection of countably many dense open sets is
+dense (in fact, it is a dense $G_\delta$ set).
+\end{corollary}
+
+\begin{proof}
+Let $G_1, G_2, \ldots$ be dense open sets in a complete metric space $X$. Their
+complements $F_n = X \setminus G_n$ are closed and nowhere dense (since $G_n$ is
+dense, $\cl(F_n) = F_n$ has empty interior: any ball $B(x,r)$ contains a point of
+$G_n$, hence a point outside $F_n$).
+
+By the Baire category theorem, $\bigcup F_n \ne X$, so
+$\bigcap G_n = X \setminus \bigcup F_n \ne \emptyset$.
+
+To show density: let $U$ be any non-empty open set. Then $U$ is a complete metric
+space (as an open subset of $X$... actually we need a slight modification). Instead,
+apply the construction in the proof of Theorem~\ref{thm:baire} starting from any
+non-empty open ball $B(x_0, r_0) \subseteq U$: since each $G_n$ is dense,
+$B(x_0, r_0) \cap G_n$ is a non-empty open set. Choose nested closed balls
+$\overline{B}(x_n, r_n) \subseteq B(x_{n-1}, r_{n-1}) \cap G_n$ with $r_n \to 0$.
+The limit $x = \lim x_n$ lies in $\overline{B}(x_0, r_0) \subseteq U$ and in each
+$G_n$, so $x \in U \cap \bigcap G_n$.
+\end{proof}
+
+\begin{corollary}[$\Q$ is Not a $G_\delta$ in $\R$]
+\label{cor:Q_not_Gdelta}
+The rationals $\Q$ cannot be written as a countable intersection of open sets.
+\end{corollary}
+
+\begin{proof}
+Suppose $\Q = \bigcap_{n=1}^\infty G_n$ with each $G_n$ open. Since $\Q$ is dense,
+each $G_n$ is dense. Also, for each $q \in \Q$, $\R \setminus \{q\}$ is open and
+dense. By Corollary~\ref{cor:baire_dense}, $\bigcap_{n} G_n \cap
+\bigcap_{q \in \Q} (\R \setminus \{q\}) = \Q \cap (\R \setminus \Q) = \emptyset$
+is dense, which is a contradiction (the empty set is not dense in $\R$).
+\end{proof}
+
+\subsection{Application Preview}
+
+\begin{remark}[Preview: The Uniform Boundedness Principle]
+\label{rem:ubp_preview}
+The Baire category theorem has the following powerful consequence (proved in the
+next lesson): if $\{T_\alpha\}_{\alpha \in I}$ is a family of bounded linear
+operators from a Banach space $X$ to a normed space $Y$ such that
+$\sup_\alpha \|T_\alpha x\| < \infty$ for every $x \in X$ (pointwise boundedness),
+then $\sup_\alpha \|T_\alpha\| < \infty$ (uniform boundedness). The proof works by
+writing $X = \bigcup_{n=1}^\infty \{x : \sup_\alpha \|T_\alpha x\| \le n\}$ and
+applying Baire to conclude that one of these closed sets has non-empty interior.
+\end{remark}
+
+\begin{rlconnection}[Baire Category and Genericity in RL]
+The Baire category theorem is used in RL theory to prove ``genericity'' results:
+that certain properties hold for ``most'' value functions or policies in a
+topological sense. For instance, one can show that for a generic MDP, the optimal
+policy is unique (the set of MDPs with multiple optimal policies is meager). The
+Uniform Boundedness Principle, which follows from Baire, is used in the analysis
+of temporal-difference learning to conclude that pointwise convergence of TD
+estimates implies uniform bounds on approximation error.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Metrics from Bounded Metrics]
+\label{ex:bounded_metric}
+Let $(X,d)$ be a metric space. Show that $\tilde{d}(x,y) = \min(d(x,y), 1)$ and
+$\hat{d}(x,y) = d(x,y)/(1 + d(x,y))$ are both metrics on $X$ that generate the
+same topology as $d$. Show that both $\tilde{d}$ and $\hat{d}$ are bounded metrics,
+and that $(X,d)$ is complete if and only if $(X,\hat{d})$ is complete.
+\end{exercise}
+
+\begin{exercise}[Non-Completeness of $C[0,1]$ Under $L^1$]
+\label{ex:C01_L1}
+Give a detailed proof that $(C[0,1], \|\cdot\|_1)$ is not complete by
+constructing an explicit Cauchy sequence that does not converge. (You may modify
+the construction in Example~\ref{ex:Cab_not_banach}, but provide full details.)
+\end{exercise}
+
+\begin{exercise}[Closed Subspace of a Banach Space]
+\label{ex:closed_subspace}
+Let $X$ be a Banach space and $Y \subseteq X$ a subspace (i.e., a vector subspace).
+Show that $Y$ is a Banach space (under the restricted norm) if and only if $Y$ is
+a closed subset of $X$.
+\end{exercise}
+
+\begin{exercise}[Operator Norm Computation]
+\label{ex:op_norm}
+Let $T \colon (\R^2, \|\cdot\|_1) \to (\R^2, \|\cdot\|_\infty)$ be defined by
+$T(x_1, x_2) = (x_1 + x_2, x_1 - x_2)$. Compute $\|T\|$ exactly.
+
+\noindent\textit{Hint:} Use the definition $\|T\| = \sup_{\|x\|_1 \le 1} \|Tx\|_\infty$
+and parametrize the unit ball in $\|\cdot\|_1$.
+\end{exercise}
+
+\begin{exercise}[Completeness of $\ell^\infty$]
+\label{ex:ell_infty}
+Prove directly (without appealing to Theorem~\ref{thm:ell_p_banach}) that
+$(\ell^\infty, \|\cdot\|_\infty)$ is a Banach space.
+\end{exercise}
+
+\begin{exercise}[The Bellman Operator Norm]
+\label{ex:bellman_norm}
+Let $\mathcal{S} = \{1, \ldots, n\}$ be a finite state space and
+$P \in \R^{n \times n}$ a stochastic matrix (non-negative entries, rows sum to $1$).
+Define the linear operator $L \colon (\R^n, \|\cdot\|_\infty) \to
+(\R^n, \|\cdot\|_\infty)$ by $(LV)(s) = \gamma \sum_{s'} P(s'|s) V(s')$ for
+$\gamma \in (0,1)$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that $\|L\| = \gamma$.
+    \item Conclude that $T = r + L$ (the Bellman operator for a fixed policy) is a
+    contraction with factor $\gamma$ under $\|\cdot\|_\infty$.
+    \item Verify the contraction property directly by computing
+    $\|TV - TW\|_\infty$ for arbitrary $V, W \in \R^n$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Riesz's Lemma is Sharp]
+\label{ex:riesz_sharp}
+Show that in $\ell^2$, Riesz's lemma can be strengthened to $\theta = 1$: for any
+proper closed subspace $Y$, there exists $x$ with $\|x\| = 1$ and $d(x, Y) = 1$.
+
+\noindent\textit{Hint:} Use the orthogonal projection onto $Y$.
+\end{exercise}
+
+\begin{exercise}[Equicontinuity and Compactness]
+\label{ex:equicont}
+Let $K > 0$ and $\mathcal{F}_K = \{f \in C[0,1] : |f(s) - f(t)| \le K|s-t|
+\text{ for all } s, t, \text{ and } |f(0)| \le 1\}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that $\mathcal{F}_K$ is equicontinuous and uniformly bounded.
+    \item Conclude by Arzel\`{a}--Ascoli that $\mathcal{F}_K$ is relatively compact
+    in $(C[0,1], \|\cdot\|_\infty)$.
+    \item Show that $\mathcal{F}_K$ is in fact closed, hence compact.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Baire Category Application]
+\label{ex:baire_app}
+Use the Baire category theorem to show that $\R$ cannot be written as a countable
+union of sets, each of which is closed and has empty interior.
+
+\noindent Give an example showing that $\R$ \emph{can} be written as a countable
+union of closed sets (some of which necessarily have non-empty interior).
+\end{exercise}
+
+\begin{exercise}[Nowhere Differentiable Functions are Generic]
+\label{ex:nowhere_diff}
+This exercise outlines the classical Baire category proof that ``most'' continuous
+functions are nowhere differentiable.
+
+Let $A_n = \{f \in C[0,1] : \text{there exists } x \in [0,1] \text{ with }
+|f(x+h) - f(x)| \le n|h| \text{ for all sufficiently small } |h|\}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that $A_n$ is a closed subset of $(C[0,1], \|\cdot\|_\infty)$.
+    \item Show that $A_n$ has empty interior.
+    \textit{Hint:} Approximate any $f \in A_n$ by a piecewise-linear function with
+    slopes exceeding $n$ in magnitude.
+    \item Conclude that $\bigcup_{n=1}^\infty A_n$ is meager, so the set of
+    functions that are somewhere differentiable is meager. The ``typical''
+    continuous function is nowhere differentiable.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+\section{Summary of Key Results}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{4.2cm}p{5.5cm}p{4.5cm}@{}}
+\toprule
+\textbf{Result} & \textbf{Statement (Informal)} & \textbf{RL/ML Relevance} \\
+\midrule
+Metric space axioms (Def.~\ref{def:metric})
+  & Distance function with positivity, symmetry, triangle inequality
+  & Foundation for convergence analysis \\
+Completeness of $\R^n$ (Thm.~\ref{thm:Rn_complete})
+  & Every Cauchy sequence in $\R^n$ converges
+  & Finite-state value iteration converges \\
+Completion theorem (Thm.~\ref{thm:completion})
+  & Every metric space embeds densely in a complete space
+  & Justifies function approximation in incomplete spaces \\
+Norm equivalence in $\R^n$ (Thm.~\ref{thm:norm_equiv})
+  & All norms on $\R^n$ are equivalent
+  & Convergence in finite-state RL is norm-independent \\
+Banach = complete normed (Def.~\ref{def:banach})
+  & Banach spaces are the natural setting for fixed-point theorems
+  & Value function spaces must be Banach for contraction arguments \\
+Series characterization (Thm.~\ref{thm:banach_series})
+  & Absolute convergence $\Rightarrow$ convergence iff Banach
+  & Practical completeness test \\
+$C[a,b]$ is Banach under $\|\cdot\|_\infty$ (Thm.~\ref{thm:Cab_banach})
+  & Uniform limit of continuous functions is continuous
+  & Value functions on compact state spaces form a Banach space \\
+Bounded $\Leftrightarrow$ continuous (Thm.~\ref{thm:bounded_iff_cts})
+  & A linear operator is bounded iff continuous
+  & Bellman operator continuity \\
+$B(X,Y)$ Banach when $Y$ Banach (Thm.~\ref{thm:BXY_banach})
+  & Operator space inherits completeness
+  & Space of operators on value functions is complete \\
+Dual is always Banach (Cor.~\ref{cor:dual_banach})
+  & $X^*$ is Banach even if $X$ is not
+  & Policy gradient as element of dual space \\
+Compactness equivalence (Thm.~\ref{thm:compact_equiv})
+  & Compact $\Leftrightarrow$ seq.\ compact $\Leftrightarrow$ complete + totally bounded
+  & Existence of optimal policies on compact spaces \\
+Riesz's theorem (Thm.~\ref{thm:riesz_compact})
+  & Closed unit ball compact $\Leftrightarrow$ finite-dimensional
+  & Explains challenges in infinite-dim.\ function approximation \\
+Arzel\`{a}--Ascoli (Thm.~\ref{thm:arzela_ascoli})
+  & Equicontinuous + bounded $\Leftrightarrow$ relatively compact
+  & Convergence of Lipschitz value function sequences \\
+Baire category (Thm.~\ref{thm:baire})
+  & Complete metric space $\ne$ countable union of nowhere dense sets
+  & Underpins Uniform Boundedness Principle \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\bigskip
+
+\begin{rlconnection}[Looking Ahead]
+With metric spaces, norms, completeness, operators, and compactness in hand, we are
+ready for the next lesson, which covers:
+\begin{itemize}[nosep]
+    \item The \textbf{Banach Fixed-Point Theorem} (contraction mapping theorem) ---
+    the core tool for proving convergence of value iteration, policy iteration, and
+    TD-learning.
+    \item The \textbf{Uniform Boundedness Principle} --- used to establish uniform
+    error bounds in function approximation.
+    \item The \textbf{Open Mapping Theorem} and \textbf{Closed Graph Theorem} ---
+    structural results for bounded operators between Banach spaces.
+    \item \textbf{Hilbert spaces} --- inner product spaces where the Projection
+    Theorem enables least-squares value function approximation.
+\end{itemize}
+\end{rlconnection}
+
+\end{document}

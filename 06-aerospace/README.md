@@ -4,21 +4,21 @@ Applies deep RL and multi-agent methods to aerospace domains: continuous control
 
 ## Reference Textbooks
 
-- **Continuous Control:** Lillicrap et al. (DDPG), Lie group methods literature
-- **Safety:** Altman (constrained MDPs), Chow et al. (Lyapunov-based methods)
-- **Partial Observability:** Kaelbling et al. (POMDPs), belief-space planning literature
-- **Sim-to-Real:** Tobin et al. (domain randomization), system identification literature
-- **Multi-Vehicle:** formation control and task allocation literature
+- **Continuous Control:** Lillicrap et al. (DDPG), hierarchical RL and MPC+RL literature
+- **Safety:** Altman 1999 (constrained MDPs), Achiam 2017 (CPO), Chow et al. 2018 (Lyapunov)
+- **Partial Observability:** Krishnamurthy Ch.1-5, 7-8; Kaelbling et al. (POMDPs)
+- **Sim-to-Real:** Tobin et al. 2017, Peng et al. 2018, Akkaya et al. 2019
+- **Multi-Vehicle:** Sartoretti et al. 2019, Khan et al. 2020, Riviere et al. 2020
 
 ## Documents
 
 | File | Directory | Topic | Status |
 |------|-----------|-------|--------|
-| -- | `01-continuous-control/` | Continuous action spaces, Lie group methods | planned |
-| -- | `02-safety/` | Constrained MDPs, Lyapunov-based methods | planned |
-| -- | `03-partial-observability/` | POMDPs, belief-space planning | planned |
-| -- | `04-sim-to-real/` | Domain randomization, system identification | planned |
-| -- | `05-multi-vehicle/` | Formation control, task allocation | planned |
+| `01-continuous-control` | `01-continuous-control/` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
+| `01-safety-and-constraints` | `02-safety/` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
+| `01-pomdps` | `03-partial-observability/` | POMDP formulation, belief states, structural results, approximate methods | planned |
+| `01-sim-to-real-transfer` | `04-sim-to-real/` | Domain randomization, system identification, progressive nets | planned |
+| `01-multi-vehicle-coordination` | `05-multi-vehicle/` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ Applies deep RL and multi-agent methods to aerospace domains: continuous control
 ## Internal Reading Order
 
 ```
-continuous-control -> safety -> partial-observability -> sim-to-real -> multi-vehicle
+{continuous-control, safety, partial-observability, sim-to-real, multi-vehicle}
 ```
 
-Continuous control establishes the action-space framework; safety adds constraints; partial observability and sim-to-real address deployment challenges; multi-vehicle brings in multi-agent coordination.
+These topics are largely independent and can be read in any order, though continuous control provides useful context for all others.

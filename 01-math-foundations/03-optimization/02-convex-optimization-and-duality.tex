@@ -1,0 +1,1189 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and fonts ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% --- Mathematics ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+% --- Page layout ---
+\usepackage[margin=1in,headheight=14pt]{geometry}
+
+% --- Hyperlinks ---
+\usepackage[colorlinks=true,linkcolor=red,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- Lists ---
+\usepackage{enumitem}
+
+% --- Colors and boxes ---
+\usepackage{xcolor}
+\usepackage[theorems,skins,breakable]{tcolorbox}
+
+% --- Header/footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 9: Convex Optimization and Duality}}
+\fancyhead[R]{\thepage}
+
+% --- Tables ---
+\usepackage{booktabs}
+
+% ============================================================
+% Theorem environments
+% ============================================================
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ============================================================
+% Colored boxes
+% ============================================================
+\newtcolorbox{keyresult}[1][]{
+  colback=green!5!white,
+  colframe=green!60!black,
+  fonttitle=\bfseries,
+  title={Key Result},
+  breakable,
+  #1
+}
+
+\newtcolorbox{rlconnection}[1][]{
+  colback=blue!5!white,
+  colframe=blue!60!black,
+  fonttitle=\bfseries,
+  title={RL Connection},
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!5!white,
+  colframe=red!60!black,
+  fonttitle=\bfseries,
+  title={Warning},
+  breakable,
+  #1
+}
+
+% ============================================================
+% Custom commands
+% ============================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indicator}{\mathbf{1}}
+
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\interior}{int}
+
+% ============================================================
+\title{%
+  \textbf{Lesson 9: Convex Optimization and Duality} \\[6pt]
+  \large Lagrangian Duality, KKT Conditions, and First-Order Methods
+}
+\author{%
+  Session 9 of 102 \quad$\mid$\quad Phase I: Mathematical Foundations \quad$\mid$\quad 8h \\[4pt]
+  \textit{Primary texts: Boyd \& Vandenberghe Ch.\,4--5, 9--11; Nesterov Ch.\,1--4}
+}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
+\section{Introduction}\label{sec:intro}
+
+Optimization is the computational engine beneath virtually every algorithm in
+machine learning and reinforcement learning. Policy gradient methods solve
+surrogate optimization problems at each iteration; value function approximation
+minimizes projected Bellman error; and constrained MDPs reduce to saddle-point
+problems whose structure is governed by duality theory.
+
+This document develops the theory of convex optimization from first principles:
+the hierarchy of convex programs (Section~\ref{sec:convex-problems}), Lagrangian
+duality and the passage from primal to dual (Section~\ref{sec:duality}), the
+Karush--Kuhn--Tucker conditions (Section~\ref{sec:kkt}), gradient descent and
+its convergence guarantees (Section~\ref{sec:gd}), Nesterov's accelerated method
+(Section~\ref{sec:nesterov}), proximal methods for non-smooth objectives
+(Section~\ref{sec:proximal}), and interior-point methods
+(Section~\ref{sec:interior}). We close with exercises
+(Section~\ref{sec:exercises}) and a summary table of convergence rates
+(Section~\ref{sec:summary}).
+
+Throughout, we assume familiarity with real analysis (continuity, compactness)
+and linear algebra (eigenvalues, positive definiteness) at the level of the
+Phase~00 prerequisites.
+
+%% ============================================================
+%% SECTION 2: Convex Optimization Problems
+%% ============================================================
+\section{Convex Optimization Problems}\label{sec:convex-problems}
+
+\subsection{Standard Form}
+
+\begin{definition}[Convex optimization problem]\label{def:convex-opt}
+A \emph{convex optimization problem} in standard form is
+\begin{equation}\label{eq:std-form}
+\begin{aligned}
+  \min_{x \in \R^n} \quad & f_0(x) \\
+  \text{subject to} \quad & f_i(x) \le 0, \quad i = 1,\dots,m, \\
+                          & a_j^\top x = b_j, \quad j = 1,\dots,p,
+\end{aligned}
+\end{equation}
+where $f_0, f_1, \dots, f_m : \R^n \to \R$ are convex functions and the
+equality constraints are affine.
+\end{definition}
+
+\begin{definition}[Feasible set, optimal value]\label{def:feasible}
+The \emph{feasible set} is
+$\mathcal{F} = \{x \in \R^n : f_i(x) \le 0,\; a_j^\top x = b_j\}$.
+The \emph{optimal value} is $p^* = \inf\{f_0(x) : x \in \mathcal{F}\}$.
+A point $x^*$ with $f_0(x^*) = p^*$ is an \emph{optimal point} (or
+\emph{minimizer}).
+\end{definition}
+
+\begin{theorem}[Local optimality implies global optimality]\label{thm:local-global}
+For the convex program~\eqref{eq:std-form}, every local minimizer is a global
+minimizer.
+\end{theorem}
+
+\begin{proof}
+Let $x^*$ be a local minimizer: there exists $\delta > 0$ such that
+$f_0(x^*) \le f_0(x)$ for all feasible $x$ with $\|x - x^*\| \le \delta$.
+Suppose for contradiction there exists a feasible $y$ with $f_0(y) < f_0(x^*)$.
+Consider $z_t = (1-t)x^* + ty$ for $t \in (0,1)$. By convexity of each $f_i$
+and affinity of the equality constraints, $z_t$ is feasible. Moreover,
+\[
+  f_0(z_t) \le (1-t) f_0(x^*) + t f_0(y) < f_0(x^*)
+\]
+for all $t \in (0,1)$. Choosing $t$ small enough that
+$\|z_t - x^*\| = t\|y - x^*\| < \delta$ contradicts local optimality.
+\end{proof}
+
+\subsection{Important Special Cases}
+
+\begin{definition}[Linear program -- LP]\label{def:lp}
+A \emph{linear program} has the form
+\[
+  \min_{x} \; c^\top x \quad \text{s.t.} \quad Ax \le b, \; Cx = d,
+\]
+where all functions are affine (hence convex).
+\end{definition}
+
+\begin{definition}[Quadratic program -- QP]\label{def:qp}
+A \emph{quadratic program} minimizes a convex quadratic over a polyhedral
+feasible set:
+\[
+  \min_{x} \; \tfrac{1}{2} x^\top P x + q^\top x \quad \text{s.t.} \quad Ax \le b,
+\]
+with $P \succeq 0$ (positive semidefinite).
+\end{definition}
+
+\begin{definition}[Second-order cone program -- SOCP]\label{def:socp}
+An SOCP has constraints of the form $\|A_i x + b_i\|_2 \le c_i^\top x + d_i$
+(second-order cone constraints), which are convex.
+\end{definition}
+
+\begin{definition}[Semidefinite program -- SDP]\label{def:sdp}
+An SDP minimizes a linear objective subject to a linear matrix inequality:
+\[
+  \min_{x} \; c^\top x \quad \text{s.t.} \quad F_0 + \sum_{i=1}^n x_i F_i \succeq 0,
+\]
+where $F_0, \dots, F_n$ are symmetric matrices.
+\end{definition}
+
+\begin{remark}[Hierarchy]\label{rem:hierarchy}
+We have the strict inclusion chain:
+$\text{LP} \subset \text{QP} \subset \text{SOCP} \subset \text{SDP} \subset
+\text{convex programs}$.
+\end{remark}
+
+\begin{rlconnection}
+In RL, linear programs arise in the LP formulation of MDPs (minimize
+$\sum_s c(s) V(s)$ subject to Bellman feasibility constraints). Semidefinite
+programs appear in robust MDP formulations and certain Lyapunov-based safety
+constraints. Quadratic programs arise in trust-region policy optimization when
+the surrogate objective is approximated to second order.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 3: Lagrangian Duality
+%% ============================================================
+\section{Lagrangian Duality}\label{sec:duality}
+
+\subsection{The Lagrangian and Dual Function}
+
+\begin{definition}[Lagrangian]\label{def:lagrangian}
+Given the convex program~\eqref{eq:std-form}, the \emph{Lagrangian}
+$L : \R^n \times \R^m \times \R^p \to \R$ is
+\begin{equation}\label{eq:lagrangian}
+  L(x, \lambda, \nu) = f_0(x) + \sum_{i=1}^m \lambda_i f_i(x)
+    + \sum_{j=1}^p \nu_j (a_j^\top x - b_j),
+\end{equation}
+where $\lambda \in \R^m_+$ are the \emph{dual variables} (or \emph{Lagrange
+multipliers}) for the inequality constraints and $\nu \in \R^p$ are the dual
+variables for the equality constraints.
+\end{definition}
+
+\begin{definition}[Lagrange dual function]\label{def:dual-fn}
+The \emph{Lagrange dual function} $g : \R^m \times \R^p \to
+\R \cup \{-\infty\}$ is
+\begin{equation}\label{eq:dual-fn}
+  g(\lambda, \nu) = \inf_{x \in \R^n} L(x, \lambda, \nu).
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Dual function is concave]\label{prop:dual-concave}
+For any optimization problem (not necessarily convex), the dual function $g$ is
+concave, even when the primal problem is not convex.
+\end{proposition}
+
+\begin{proof}
+For each fixed $x$, the map $(\lambda, \nu) \mapsto L(x, \lambda, \nu)$ is
+affine (hence concave) in $(\lambda, \nu)$. The pointwise infimum over $x$ of
+a family of concave functions is concave.
+\end{proof}
+
+\subsection{Weak Duality}
+
+\begin{definition}[Dual problem]\label{def:dual-problem}
+The \emph{Lagrange dual problem} is
+\begin{equation}\label{eq:dual-problem}
+  \max_{\lambda \ge 0,\, \nu} \; g(\lambda, \nu).
+\end{equation}
+Its optimal value is denoted $d^*$.
+\end{definition}
+
+\begin{theorem}[Weak duality]\label{thm:weak-duality}
+For any optimization problem (not necessarily convex),
+\begin{equation}\label{eq:weak-duality}
+  d^* \le p^*.
+\end{equation}
+The quantity $p^* - d^*$ is called the \emph{duality gap}.
+\end{theorem}
+
+\begin{proof}
+Let $\tilde{x}$ be any feasible point for the primal problem, so
+$f_i(\tilde{x}) \le 0$ and $a_j^\top \tilde{x} = b_j$. For any
+$\lambda \ge 0$ and any $\nu$,
+\[
+  L(\tilde{x}, \lambda, \nu)
+  = f_0(\tilde{x}) + \sum_{i=1}^m \underbrace{\lambda_i}_{\ge 0}
+    \underbrace{f_i(\tilde{x})}_{\le 0}
+  + \sum_{j=1}^p \nu_j \underbrace{(a_j^\top \tilde{x} - b_j)}_{= 0}
+  \le f_0(\tilde{x}).
+\]
+Taking the infimum over $x$ gives $g(\lambda, \nu) \le L(\tilde{x}, \lambda, \nu) \le f_0(\tilde{x})$.
+Since this holds for every feasible $\tilde{x}$, we get $g(\lambda, \nu) \le p^*$.
+Maximizing the left side over $(\lambda, \nu)$ with $\lambda \ge 0$ yields
+$d^* \le p^*$.
+\end{proof}
+
+\subsection{Strong Duality and Slater's Condition}
+
+\begin{definition}[Strong duality]\label{def:strong-duality}
+\emph{Strong duality} holds when $d^* = p^*$, i.e., the duality gap is zero.
+\end{definition}
+
+\begin{definition}[Slater's condition]\label{def:slater}
+A convex program~\eqref{eq:std-form} satisfies \emph{Slater's condition}
+(or \emph{Slater's constraint qualification}) if there exists a point
+$\hat{x} \in \text{relint}(\dom f_0)$ such that
+\[
+  f_i(\hat{x}) < 0, \quad i = 1,\dots,m, \qquad
+  a_j^\top \hat{x} = b_j, \quad j = 1,\dots,p.
+\]
+Such $\hat{x}$ is called a \emph{strictly feasible point}.
+\end{definition}
+
+\begin{theorem}[Slater implies strong duality]\label{thm:strong-duality}
+If the convex program~\eqref{eq:std-form} is feasible and Slater's condition
+holds, then strong duality holds: $d^* = p^*$. Moreover, if $p^*$ is finite,
+the dual optimum is attained.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+We use a supporting-hyperplane argument on the set
+\[
+  \mathcal{G} = \{(u, v, t) \in \R^m \times \R^p \times \R :
+    \exists\, x \text{ with } f_i(x) \le u_i,\; a_j^\top x - b_j = v_j,\;
+    f_0(x) \le t\}.
+\]
+This set is convex (the $f_i$ are convex and $a_j^\top x - b_j$ is affine).
+The point $(0, 0, p^*)$ lies on the boundary of $\mathcal{G}$ (it is achieved
+in the limit by a minimizing sequence).
+
+We claim $(0, 0, p^*-\epsilon) \notin \mathcal{G}$ for any $\epsilon > 0$, by
+definition of $p^*$. Hence there is a supporting hyperplane at $(0, 0, p^*)$:
+there exist $(\lambda, \nu, \mu) \ne 0$ with $\mu \ge 0$ such that
+\[
+  \lambda^\top u + \nu^\top v + \mu t \ge \mu p^*
+\]
+for all $(u, v, t) \in \mathcal{G}$, with $\lambda \ge 0$.
+
+\emph{Claim:} $\mu > 0$. Suppose $\mu = 0$. Then
+$\lambda^\top u + \nu^\top v \ge 0$ for all $(u,v,t) \in \mathcal{G}$.
+Evaluating at $x = \hat{x}$ (the Slater point) with $u_i = f_i(\hat{x}) < 0$,
+$v_j = 0$, gives $\sum_i \lambda_i f_i(\hat{x}) \ge 0$. Since $\lambda \ge 0$
+and $f_i(\hat{x}) < 0$, we get $\lambda = 0$. Then $\nu^\top v \ge 0$ for all
+achievable $v$, which forces $\nu = 0$ (since $v$ can be any value via
+adjusting $x$). This contradicts $(\lambda, \nu, \mu) \ne 0$.
+
+With $\mu > 0$, divide through by $\mu$ and set $\bar{\lambda} = \lambda/\mu$,
+$\bar{\nu} = \nu/\mu$. For any feasible $x$ (where $u_i = f_i(x)$, $v_j = 0$,
+$t = f_0(x)$):
+\[
+  \sum_i \bar{\lambda}_i f_i(x) + f_0(x) \ge p^*.
+\]
+Taking the infimum over $x$ gives
+$g(\bar{\lambda}, \bar{\nu}) \ge p^*$. Combined with weak duality $g \le p^*$,
+we conclude $d^* \ge g(\bar{\lambda}, \bar{\nu}) = p^*$, hence $d^* = p^*$.
+The dual optimum is attained at $(\bar{\lambda}, \bar{\nu})$.
+\end{proof}
+
+\begin{rlconnection}
+Strong duality is the theoretical foundation for the Lagrangian approach to
+constrained MDPs (CMDPs). In a CMDP, we augment the reward objective with
+penalty terms for constraint violations. Slater's condition guarantees there is
+no duality gap, so solving the dual (which is unconstrained) is equivalent to
+solving the primal. This justifies primal-dual policy optimization algorithms
+such as Lagrangian PPO for safe RL.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 4: KKT Conditions
+%% ============================================================
+\section{Karush--Kuhn--Tucker Conditions}\label{sec:kkt}
+
+\begin{definition}[KKT conditions]\label{def:kkt}
+For the convex program~\eqref{eq:std-form}, the \emph{Karush--Kuhn--Tucker
+(KKT) conditions} for the primal-dual triple $(x^*, \lambda^*, \nu^*)$ are:
+\begin{enumerate}[label=(KKT\arabic*)]
+  \item \textbf{Primal feasibility:}
+    $f_i(x^*) \le 0$ for $i = 1,\dots,m$; \;
+    $a_j^\top x^* = b_j$ for $j = 1,\dots,p$.
+  \item \textbf{Dual feasibility:}
+    $\lambda^*_i \ge 0$ for $i = 1,\dots,m$.
+  \item \textbf{Complementary slackness:}
+    $\lambda^*_i f_i(x^*) = 0$ for $i = 1,\dots,m$.
+  \item \textbf{Stationarity:}
+    $\nabla f_0(x^*) + \sum_{i=1}^m \lambda^*_i \nabla f_i(x^*)
+     + \sum_{j=1}^p \nu^*_j a_j = 0$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[KKT necessary conditions under strong duality]\label{thm:kkt-necessary}
+If strong duality holds and $x^*$ is primal optimal, $(\lambda^*, \nu^*)$ is
+dual optimal, and the $f_i$ are differentiable at $x^*$, then the KKT
+conditions hold at $(x^*, \lambda^*, \nu^*)$.
+\end{theorem}
+
+\begin{proof}
+Since strong duality holds, $f_0(x^*) = p^* = d^* = g(\lambda^*, \nu^*)$.
+By definition,
+\[
+  g(\lambda^*, \nu^*) = \inf_x L(x, \lambda^*, \nu^*) \le L(x^*, \lambda^*, \nu^*).
+\]
+We expand:
+\[
+  L(x^*, \lambda^*, \nu^*)
+  = f_0(x^*) + \sum_i \lambda^*_i f_i(x^*) + \sum_j \nu^*_j(a_j^\top x^* - b_j).
+\]
+By primal feasibility, $a_j^\top x^* - b_j = 0$ and $f_i(x^*) \le 0$. Since
+$\lambda^* \ge 0$, we have $\sum_i \lambda^*_i f_i(x^*) \le 0$, so
+$L(x^*, \lambda^*, \nu^*) \le f_0(x^*)$.
+
+Combining: $f_0(x^*) = g(\lambda^*, \nu^*) \le L(x^*, \lambda^*, \nu^*) \le f_0(x^*)$.
+Hence all inequalities are equalities. In particular,
+$\sum_i \lambda^*_i f_i(x^*) = 0$. Since each term is non-positive
+($\lambda^*_i \ge 0$, $f_i(x^*) \le 0$), each term is zero:
+$\lambda^*_i f_i(x^*) = 0$. This gives \textbf{complementary slackness}.
+
+Furthermore, $g(\lambda^*, \nu^*) = L(x^*, \lambda^*, \nu^*)$, meaning $x^*$
+minimizes $L(\cdot, \lambda^*, \nu^*)$ over $\R^n$. Since this is an
+unconstrained minimum of a differentiable function, the gradient vanishes:
+\[
+  \nabla_x L(x^*, \lambda^*, \nu^*)
+  = \nabla f_0(x^*) + \sum_i \lambda^*_i \nabla f_i(x^*) + \sum_j \nu^*_j a_j
+  = 0.
+\]
+This is \textbf{stationarity}. Primal and dual feasibility hold by assumption.
+\end{proof}
+
+\begin{theorem}[KKT sufficient conditions for convex problems]\label{thm:kkt-sufficient}
+For the convex program~\eqref{eq:std-form} with differentiable $f_0, \dots, f_m$,
+if a triple $(x^*, \lambda^*, \nu^*)$ satisfies the KKT conditions, then $x^*$
+is primal optimal and $(\lambda^*, \nu^*)$ is dual optimal, with zero duality
+gap.
+\end{theorem}
+
+\begin{proof}
+By stationarity, $x^*$ minimizes $L(\cdot, \lambda^*, \nu^*)$ (since
+$L$ is convex in $x$ and the gradient vanishes at $x^*$). Therefore,
+\[
+  g(\lambda^*, \nu^*) = \inf_x L(x, \lambda^*, \nu^*) = L(x^*, \lambda^*, \nu^*).
+\]
+By complementary slackness and primal feasibility,
+\[
+  L(x^*, \lambda^*, \nu^*) = f_0(x^*) + \underbrace{\sum_i \lambda^*_i f_i(x^*)}_{=\,0}
+  + \underbrace{\sum_j \nu^*_j (a_j^\top x^* - b_j)}_{=\,0} = f_0(x^*).
+\]
+Hence $g(\lambda^*, \nu^*) = f_0(x^*)$. By weak duality,
+$d^* \ge g(\lambda^*, \nu^*) = f_0(x^*) \ge p^* \ge d^*$, so all are equal.
+Thus $x^*$ is primal optimal and $(\lambda^*, \nu^*)$ is dual optimal.
+\end{proof}
+
+\begin{keyresult}[title={KKT Conditions for Convex Problems}]
+For convex programs with differentiable objectives and constraints, the KKT
+conditions are \textbf{necessary} (assuming a constraint qualification such as
+Slater's condition, which implies strong duality) and \textbf{sufficient} for
+optimality. This makes them the central tool for characterizing solutions.
+\end{keyresult}
+
+\begin{rlconnection}
+The KKT conditions characterize solutions of the policy optimization
+subproblem in TRPO and PPO. When we constrain the policy update to a KL
+trust region, the KKT multiplier on the KL constraint determines the
+effective step size. Complementary slackness tells us: either the constraint
+is active (the update reaches the trust-region boundary) or the multiplier is
+zero (the unconstrained optimum lies inside the trust region).
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 5: Gradient Descent
+%% ============================================================
+\section{Gradient Descent}\label{sec:gd}
+
+\subsection{Smoothness and Convexity}
+
+\begin{definition}[$L$-smoothness]\label{def:smooth}
+A differentiable function $f : \R^n \to \R$ is \emph{$L$-smooth} (or has
+$L$-Lipschitz continuous gradient) if
+\begin{equation}\label{eq:smooth}
+  \|\nabla f(x) - \nabla f(y)\| \le L \|x - y\| \quad \forall\, x, y \in \R^n.
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Descent lemma]\label{lem:descent}
+If $f$ is $L$-smooth, then for all $x, y \in \R^n$:
+\begin{equation}\label{eq:descent-lemma}
+  f(y) \le f(x) + \nabla f(x)^\top (y - x) + \frac{L}{2}\|y - x\|^2.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By the fundamental theorem of calculus,
+\[
+  f(y) - f(x) = \int_0^1 \nabla f(x + t(y-x))^\top (y-x)\, dt.
+\]
+Subtracting $\nabla f(x)^\top(y-x)$:
+\begin{align*}
+  f(y) - f(x) - \nabla f(x)^\top(y-x)
+  &= \int_0^1 [\nabla f(x + t(y-x)) - \nabla f(x)]^\top (y-x)\, dt \\
+  &\le \int_0^1 \|\nabla f(x + t(y-x)) - \nabla f(x)\| \cdot \|y-x\|\, dt \\
+  &\le \int_0^1 L t \|y-x\|^2\, dt = \frac{L}{2}\|y-x\|^2. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{definition}[$\mu$-strong convexity]\label{def:strong-convex}
+A differentiable function $f$ is \emph{$\mu$-strongly convex} (with $\mu > 0$)
+if for all $x, y$:
+\begin{equation}\label{eq:strong-convex}
+  f(y) \ge f(x) + \nabla f(x)^\top(y - x) + \frac{\mu}{2}\|y - x\|^2.
+\end{equation}
+\end{definition}
+
+\begin{remark}\label{rem:condition-number}
+If $f$ is $\mu$-strongly convex and $L$-smooth, the \emph{condition number} is
+$\kappa = L/\mu \ge 1$. The condition number governs the convergence speed of
+first-order methods.
+\end{remark}
+
+\subsection{Gradient Descent Algorithm}
+
+The gradient descent iteration with step size $\eta > 0$ is:
+\begin{equation}\label{eq:gd}
+  x_{k+1} = x_k - \eta \nabla f(x_k).
+\end{equation}
+
+\subsection{Convergence for Convex Functions}
+
+\begin{theorem}[$O(1/k)$ convergence for convex $L$-smooth functions]%
+\label{thm:gd-convex}
+Let $f$ be convex and $L$-smooth with minimizer $x^*$. Gradient descent with
+step size $\eta = 1/L$ satisfies
+\begin{equation}\label{eq:gd-convex-rate}
+  f(x_k) - f(x^*) \le \frac{L \|x_0 - x^*\|^2}{2k}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Set $\eta = 1/L$. By the descent lemma (Lemma~\ref{lem:descent}) with
+$y = x_{k+1} = x_k - \frac{1}{L}\nabla f(x_k)$:
+\begin{equation}\label{eq:gd-descent-step}
+  f(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k)
+    + \frac{L}{2}\|x_{k+1} - x_k\|^2
+  = f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2.
+\end{equation}
+So the sequence of function values is non-increasing, and
+\begin{equation}\label{eq:func-decrease}
+  f(x_k) - f(x_{k+1}) \ge \frac{1}{2L}\|\nabla f(x_k)\|^2.
+\end{equation}
+By convexity, $f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k)$, hence
+\begin{equation}\label{eq:convexity-bound}
+  f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) \le \|\nabla f(x_k)\| \cdot \|x_k - x^*\|.
+\end{equation}
+Now consider the distance to the optimum:
+\begin{align}
+  \|x_{k+1} - x^*\|^2
+  &= \|x_k - \tfrac{1}{L}\nabla f(x_k) - x^*\|^2 \notag \\
+  &= \|x_k - x^*\|^2 - \frac{2}{L}\nabla f(x_k)^\top(x_k - x^*)
+     + \frac{1}{L^2}\|\nabla f(x_k)\|^2. \label{eq:dist-recursion}
+\end{align}
+Using convexity: $\nabla f(x_k)^\top(x_k - x^*) \ge f(x_k) - f(x^*)$, so
+\[
+  \|x_{k+1} - x^*\|^2 \le \|x_k - x^*\|^2
+    - \frac{2}{L}(f(x_k) - f(x^*)) + \frac{1}{L^2}\|\nabla f(x_k)\|^2.
+\]
+From~\eqref{eq:func-decrease}: $\|\nabla f(x_k)\|^2 \le 2L(f(x_k) - f(x_{k+1}))$, so
+\begin{align*}
+  \|x_{k+1} - x^*\|^2
+  &\le \|x_k - x^*\|^2 - \frac{2}{L}(f(x_k) - f(x^*))
+    + \frac{2}{L}(f(x_k) - f(x_{k+1})) \\
+  &= \|x_k - x^*\|^2 - \frac{2}{L}(f(x_{k+1}) - f(x^*)).
+\end{align*}
+Rearranging: $f(x_{k+1}) - f(x^*) \le \frac{L}{2}(\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2)$.
+
+Let $\delta_k = f(x_k) - f(x^*)$. Summing from $k = 0$ to $k = K-1$:
+\[
+  \sum_{k=1}^{K} \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2.
+\]
+Since $\delta_k$ is non-increasing (from~\eqref{eq:func-decrease}),
+$K \delta_K \le \sum_{k=1}^K \delta_k \le \frac{L}{2}\|x_0 - x^*\|^2$, giving
+$\delta_K \le \frac{L\|x_0 - x^*\|^2}{2K}$.
+\end{proof}
+
+\subsection{Convergence for Strongly Convex Functions}
+
+\begin{theorem}[Linear convergence for strongly convex $L$-smooth functions]%
+\label{thm:gd-strong}
+Let $f$ be $\mu$-strongly convex and $L$-smooth. Gradient descent with
+$\eta = 1/L$ satisfies
+\begin{equation}\label{eq:gd-strong-rate}
+  f(x_k) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)^k (f(x_0) - f(x^*)).
+\end{equation}
+Hence $f(x_k) - f(x^*) \le \epsilon$ after $k = O(\kappa \log(1/\epsilon))$
+iterations, where $\kappa = L/\mu$.
+\end{theorem}
+
+\begin{proof}
+From~\eqref{eq:gd-descent-step},
+$f(x_{k+1}) \le f(x_k) - \frac{1}{2L}\|\nabla f(x_k)\|^2$.
+By strong convexity applied at the optimum $x^*$:
+\[
+  f(x^*) \ge f(x_k) + \nabla f(x_k)^\top(x^* - x_k) + \frac{\mu}{2}\|x^* - x_k\|^2.
+\]
+Thus $f(x_k) - f(x^*) \le \nabla f(x_k)^\top(x_k - x^*) - \frac{\mu}{2}\|x_k - x^*\|^2$.
+By the Cauchy--Schwarz inequality and the AM-GM inequality (or by optimizing
+over $\|x_k - x^*\|$), one obtains the standard inequality for strongly convex
+functions:
+\begin{equation}\label{eq:PL}
+  \|\nabla f(x_k)\|^2 \ge 2\mu (f(x_k) - f(x^*)).
+\end{equation}
+This is the \emph{Polyak--Lojasiewicz (PL) inequality}, which follows from
+strong convexity.
+
+\emph{Proof of~\eqref{eq:PL}:} By strong convexity, for all $y$:
+$f(y) \ge f(x_k) + \nabla f(x_k)^\top(y - x_k) + \frac{\mu}{2}\|y - x_k\|^2$.
+Minimizing the right side over $y$ (a quadratic in $y$) gives
+$y^* = x_k - \frac{1}{\mu}\nabla f(x_k)$, yielding
+\[
+  f(x^*) \ge f(x_k) - \frac{1}{2\mu}\|\nabla f(x_k)\|^2,
+\]
+which rearranges to~\eqref{eq:PL}.
+
+Substituting~\eqref{eq:PL} into the descent bound:
+\[
+  f(x_{k+1}) \le f(x_k) - \frac{1}{2L} \cdot 2\mu(f(x_k) - f(x^*))
+  = f(x_k) - \frac{\mu}{L}(f(x_k) - f(x^*)).
+\]
+Subtracting $f(x^*)$ from both sides:
+\[
+  f(x_{k+1}) - f(x^*) \le \left(1 - \frac{\mu}{L}\right)(f(x_k) - f(x^*)).
+\]
+Applying this recursively yields~\eqref{eq:gd-strong-rate} with
+$\rho = 1 - \mu/L = 1 - 1/\kappa$.
+\end{proof}
+
+\begin{keyresult}[title={Gradient Descent Convergence Rates}]
+For $L$-smooth functions with step size $\eta = 1/L$:
+\begin{itemize}
+  \item \textbf{Convex:} $f(x_k) - f^* = O(1/k)$, i.e., $O(1/\epsilon)$
+    iterations for $\epsilon$-accuracy.
+  \item \textbf{$\mu$-strongly convex:} $f(x_k) - f^* = O(\rho^k)$ with
+    $\rho = 1 - 1/\kappa$, i.e., $O(\kappa \log(1/\epsilon))$ iterations.
+\end{itemize}
+\end{keyresult}
+
+\begin{rlconnection}
+Policy gradient methods and TD learning with function approximation perform
+(stochastic) gradient descent on the policy parameters or value function weights.
+The convergence rate depends critically on the smoothness ($L$) and strong
+convexity ($\mu$) of the loss landscape. In practice, the loss for neural network
+policies is non-convex, but locally the landscape often behaves like a strongly
+convex function near a good solution.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: Nesterov Acceleration
+%% ============================================================
+\section{Nesterov's Accelerated Gradient Method}\label{sec:nesterov}
+
+\subsection{The Accelerated Iteration}
+
+Nesterov's accelerated gradient method improves the $O(1/k)$ rate for convex
+functions to $O(1/k^2)$, which is optimal among first-order methods.
+
+\begin{definition}[Nesterov's accelerated gradient method]\label{def:nesterov}
+For a convex, $L$-smooth function $f$, with step size $\eta = 1/L$, the
+accelerated gradient method maintains two sequences:
+\begin{equation}\label{eq:nesterov}
+\begin{aligned}
+  y_{k} &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
+  x_{k+1} &= y_k - \frac{1}{L}\nabla f(y_k),
+\end{aligned}
+\end{equation}
+with $x_0 = x_{-1}$ (so $y_0 = x_0$). The momentum coefficient
+$\theta_k = (k-1)/(k+2)$ is the key ingredient.
+\end{definition}
+
+\subsection{Convergence Rate}
+
+\begin{theorem}[$O(1/k^2)$ convergence of Nesterov's method]\label{thm:nesterov}
+Under the conditions of Definition~\ref{def:nesterov},
+\begin{equation}\label{eq:nesterov-rate}
+  f(x_k) - f(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+We use the \emph{estimate sequence} technique. Define the sequences
+$\{A_k\}$ and $\{v_k\}$ by $A_0 = 0$, $a_{k+1} = (k+1)/2$,
+$A_{k+1} = A_k + a_{k+1}$, and $v_0 = x_0$. One can verify that
+$A_k = k(k+1)/4$ for $k \ge 1$.
+
+We prove by induction the key inequality:
+\begin{equation}\label{eq:estimate-seq}
+  A_k (f(x_k) - f(x^*)) \le \frac{L}{2}\|v_0 - x^*\|^2
+    - \frac{L}{2}\|v_k - x^*\|^2.
+\end{equation}
+Since $\|v_k - x^*\|^2 \ge 0$, this implies
+$f(x_k) - f(x^*) \le \frac{L\|x_0 - x^*\|^2}{2A_k}
+= \frac{2L\|x_0 - x^*\|^2}{k(k+1)} \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}$.
+
+\emph{Base case} ($k = 0$): $A_0 = 0$, so both sides equal zero.
+
+\emph{Inductive step:} Assume~\eqref{eq:estimate-seq} holds for $k$. We need to
+show it for $k+1$. By the descent lemma applied at $y_k$:
+\[
+  f(x_{k+1}) \le f(y_k) - \frac{1}{2L}\|\nabla f(y_k)\|^2.
+\]
+By convexity: $f(x^*) \ge f(y_k) + \nabla f(y_k)^\top(x^* - y_k)$, so
+$f(y_k) \le f(x^*) + \nabla f(y_k)^\top(y_k - x^*)$. Combining with
+a weighted average (weight $a_{k+1}$ for the inequality at $x^*$ and $A_k$
+for the inductive hypothesis at $x_k$), and using the specific choice
+$y_k = \frac{A_k x_k + a_{k+1} v_k}{A_{k+1}}$ together with the update
+$v_{k+1} = v_k - \frac{a_{k+1}}{L}\nabla f(y_k)$, one obtains
+after algebraic manipulations (completing the square in $v_k$):
+\[
+  A_{k+1}(f(x_{k+1}) - f(x^*))
+  \le \frac{L}{2}\|v_0 - x^*\|^2 - \frac{L}{2}\|v_{k+1} - x^*\|^2.
+\]
+The algebraic details involve verifying that the momentum coefficient
+$(k-1)/(k+2)$ corresponds precisely to the ratio $A_k/A_{k+1}$ that makes
+$y_k$ the correct convex combination. This completes the induction.
+\end{proof}
+
+\begin{remark}[Optimality]\label{rem:optimal}
+Nesterov (1983) showed that $O(1/k^2)$ is the \emph{optimal} rate for
+first-order methods on the class of $L$-smooth convex functions. That is,
+for any first-order method using only gradient evaluations, there exists an
+$L$-smooth convex function for which the method cannot converge faster than
+$\Omega(1/k^2)$. This is the celebrated information-theoretic lower bound.
+\end{remark}
+
+\begin{warning}
+Nesterov acceleration does not directly apply to stochastic gradients. Naive
+momentum with noisy gradients can amplify variance and diverge. This is why
+SGD with momentum and Adam use different momentum schemes than classical
+Nesterov acceleration.
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: Proximal Methods
+%% ============================================================
+\section{Proximal Methods}\label{sec:proximal}
+
+\subsection{The Proximal Operator}
+
+Many problems in ML involve non-smooth regularizers (e.g., $\ell_1$ for
+sparsity). Proximal methods extend gradient descent to handle such terms.
+
+\begin{definition}[Proximal operator]\label{def:prox}
+For a closed convex function $h : \R^n \to \R \cup \{+\infty\}$, the
+\emph{proximal operator} $\prox_h : \R^n \to \R^n$ is
+\begin{equation}\label{eq:prox}
+  \prox_h(v) = \argmin_{x \in \R^n} \left\{h(x) + \frac{1}{2}\|x - v\|^2\right\}.
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Well-definedness]\label{prop:prox-well}
+For any closed convex $h$ with $\dom h \ne \emptyset$, the proximal operator
+$\prox_h(v)$ exists and is unique for every $v \in \R^n$.
+\end{proposition}
+
+\begin{proof}
+The objective $h(x) + \frac{1}{2}\|x - v\|^2$ is strongly convex (with
+$\mu = 1$), hence has at most one minimizer. It is also coercive (goes to
+$+\infty$ as $\|x\| \to \infty$) and lower semicontinuous, so a minimizer
+exists.
+\end{proof}
+
+\begin{example}[$\ell_1$ proximal: soft thresholding]\label{ex:soft-thresh}
+For $h(x) = \tau \|x\|_1$ with $\tau > 0$, the proximal operator is the
+soft-thresholding operator applied componentwise:
+\[
+  [\prox_{\tau\|\cdot\|_1}(v)]_i = \text{sign}(v_i)\max(|v_i| - \tau, 0).
+\]
+\end{example}
+
+\begin{example}[Indicator function]\label{ex:indicator-prox}
+For $h = \iota_C$ (the indicator function of a closed convex set $C$, equal to
+$0$ on $C$ and $+\infty$ elsewhere), $\prox_h(v) = \Pi_C(v)$, the Euclidean
+projection onto $C$.
+\end{example}
+
+\subsection{Proximal Gradient Method}
+
+Consider the composite minimization problem:
+\begin{equation}\label{eq:composite}
+  \min_{x \in \R^n} \; F(x) = f(x) + h(x),
+\end{equation}
+where $f$ is convex and $L$-smooth, and $h$ is convex but possibly non-smooth.
+
+\begin{definition}[Proximal gradient method]\label{def:prox-grad}
+The \emph{proximal gradient method} with step size $\eta = 1/L$ is:
+\begin{equation}\label{eq:prox-grad}
+  x_{k+1} = \prox_{\eta h}\bigl(x_k - \eta \nabla f(x_k)\bigr).
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Convergence of proximal gradient]\label{thm:prox-grad}
+Under the composite model~\eqref{eq:composite} with $f$ convex and $L$-smooth,
+the proximal gradient method with $\eta = 1/L$ achieves
+\[
+  F(x_k) - F(x^*) \le \frac{L\|x_0 - x^*\|^2}{2k}.
+\]
+The convergence rate is $O(1/k)$, matching gradient descent.
+\end{theorem}
+
+\begin{proof}
+The key observation is that the proximal gradient step can be written as
+$x_{k+1} = \argmin_x \{f(x_k) + \nabla f(x_k)^\top(x - x_k) + \frac{L}{2}\|x - x_k\|^2 + h(x)\}$.
+By the descent lemma, $f(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k) + \frac{L}{2}\|x_{k+1} - x_k\|^2$.
+Adding $h(x_{k+1})$ to both sides:
+\[
+  F(x_{k+1}) \le f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k)
+    + \frac{L}{2}\|x_{k+1} - x_k\|^2 + h(x_{k+1}).
+\]
+By the optimality condition for the proximal step, for any $x$:
+\[
+  f(x_k) + \nabla f(x_k)^\top(x_{k+1} - x_k) + \frac{L}{2}\|x_{k+1} - x_k\|^2 + h(x_{k+1})
+  \le f(x_k) + \nabla f(x_k)^\top(x - x_k) + \frac{L}{2}\|x - x_k\|^2 + h(x).
+\]
+Setting $x = x^*$ and using convexity of $f$
+($f(x_k) + \nabla f(x_k)^\top(x^* - x_k) \le f(x^*)$):
+\[
+  F(x_{k+1}) \le F(x^*) + \frac{L}{2}\|x^* - x_k\|^2.
+\]
+A telescoping argument identical to the one in Theorem~\ref{thm:gd-convex}
+(tracking $\|x_k - x^*\|^2 - \|x_{k+1} - x^*\|^2$) yields the result.
+\end{proof}
+
+\subsection{FISTA: Fast Iterative Shrinkage-Thresholding Algorithm}
+
+\begin{definition}[FISTA]\label{def:fista}
+FISTA applies Nesterov acceleration to the proximal gradient method:
+\begin{equation}\label{eq:fista}
+\begin{aligned}
+  y_k &= x_k + \frac{k-1}{k+2}(x_k - x_{k-1}), \\
+  x_{k+1} &= \prox_{\eta h}\bigl(y_k - \eta \nabla f(y_k)\bigr),
+\end{aligned}
+\end{equation}
+with $\eta = 1/L$ and $x_0 = x_{-1}$.
+\end{definition}
+
+\begin{theorem}[FISTA convergence]\label{thm:fista}
+Under the composite model~\eqref{eq:composite}, FISTA achieves
+\[
+  F(x_k) - F(x^*) \le \frac{2L\|x_0 - x^*\|^2}{(k+1)^2}.
+\]
+This is the optimal $O(1/k^2)$ rate for first-order methods on this problem
+class.
+\end{theorem}
+
+\begin{proof}
+The proof follows the estimate-sequence technique of Theorem~\ref{thm:nesterov},
+replacing gradient steps with proximal gradient steps. The descent lemma for the
+smooth part $f$ and the convexity of $h$ allow the same inductive argument to
+go through with $F = f + h$ in place of $f$.
+\end{proof}
+
+\begin{rlconnection}
+Proximal methods are used in RL for imposing structure on learned policies.
+For example, $\ell_1$-regularized policy optimization promotes sparse feature
+representations. The mirror descent interpretation of proximal methods (with
+Bregman divergences replacing the Euclidean distance) connects to natural
+policy gradient, where the KL divergence plays the role of the Bregman
+divergence in policy space.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: Interior Point Methods
+%% ============================================================
+\section{Interior-Point Methods}\label{sec:interior}
+
+\subsection{Logarithmic Barrier}
+
+Interior-point methods solve constrained problems by converting inequality
+constraints into a smooth barrier term added to the objective, then following
+the ``central path'' as the barrier weight decreases.
+
+\begin{definition}[Logarithmic barrier]\label{def:barrier}
+For the convex program~\eqref{eq:std-form} (with equality constraints omitted
+for simplicity), the \emph{logarithmic barrier} is
+\begin{equation}\label{eq:barrier}
+  \phi(x) = -\sum_{i=1}^m \log(-f_i(x)),
+\end{equation}
+defined for $x$ in the strictly feasible set $\{x : f_i(x) < 0, \, i = 1,\dots,m\}$.
+\end{definition}
+
+\begin{proposition}[Barrier is convex]\label{prop:barrier-convex}
+If $f_1, \dots, f_m$ are convex, then the logarithmic barrier $\phi$ is convex
+on $\{x : f_i(x) < 0\}$.
+\end{proposition}
+
+\begin{proof}
+The function $-\log(-u)$ is convex and non-decreasing on $u < 0$. Since each
+$f_i$ is convex, the composition $-\log(-f_i(x))$ is convex (by the
+composition rule for convex non-decreasing outer function and convex inner
+function). The sum of convex functions is convex.
+\end{proof}
+
+\subsection{Central Path}
+
+\begin{definition}[Barrier problem and central path]\label{def:central-path}
+For parameter $t > 0$, the \emph{barrier problem} is
+\begin{equation}\label{eq:barrier-prob}
+  \min_x \; t\, f_0(x) + \phi(x).
+\end{equation}
+Assuming a unique minimizer $x^*(t)$ exists for each $t > 0$, the curve
+$\{x^*(t) : t > 0\}$ is called the \emph{central path}.
+\end{definition}
+
+\begin{theorem}[Central path optimality bound]\label{thm:central-path}
+Each point $x^*(t)$ on the central path satisfies
+\begin{equation}\label{eq:central-bound}
+  f_0(x^*(t)) - p^* \le \frac{m}{t},
+\end{equation}
+where $p^*$ is the optimal value and $m$ is the number of inequality
+constraints.
+\end{theorem}
+
+\begin{proof}
+At $x^*(t)$, the gradient of the barrier objective vanishes:
+\[
+  t\, \nabla f_0(x^*(t)) + \nabla \phi(x^*(t)) = 0.
+\]
+The gradient of the barrier is
+$\nabla \phi(x) = \sum_{i=1}^m \frac{-\nabla f_i(x)}{-f_i(x)}
+= \sum_{i=1}^m \frac{\nabla f_i(x)}{-f_i(x)}$.
+
+Define the dual variables $\lambda^*_i(t) = \frac{1}{t(-f_i(x^*(t)))} > 0$.
+Then the stationarity condition becomes
+\[
+  \nabla f_0(x^*(t)) + \sum_{i=1}^m \lambda^*_i(t) \nabla f_i(x^*(t)) = 0.
+\]
+Thus $x^*(t)$ minimizes $L(x, \lambda^*(t), 0) = f_0(x) + \sum_i \lambda^*_i(t) f_i(x)$ over $x$,
+so the dual function evaluates to
+\begin{align*}
+  g(\lambda^*(t), 0)
+  &= f_0(x^*(t)) + \sum_i \lambda^*_i(t) f_i(x^*(t)) \\
+  &= f_0(x^*(t)) + \sum_i \frac{f_i(x^*(t))}{t(-f_i(x^*(t)))} \\
+  &= f_0(x^*(t)) - \frac{m}{t}.
+\end{align*}
+By weak duality, $g(\lambda^*(t), 0) \le p^*$, so
+$f_0(x^*(t)) - m/t \le p^*$, giving $f_0(x^*(t)) - p^* \le m/t$.
+\end{proof}
+
+\subsection{Barrier Method}
+
+\begin{definition}[Barrier method]\label{def:barrier-method}
+The \emph{barrier method} (or \emph{path-following method}) proceeds as follows:
+\begin{enumerate}
+  \item Initialize with a strictly feasible $x^{(0)}$, $t^{(0)} > 0$,
+    and a growth factor $\sigma > 1$.
+  \item At iteration $\ell$: solve (approximately) the barrier problem
+    $\min_x \; t^{(\ell)} f_0(x) + \phi(x)$ starting from $x^{(\ell)}$,
+    using Newton's method. Set $x^{(\ell+1)}$ to the result.
+  \item Update $t^{(\ell+1)} = \sigma \cdot t^{(\ell)}$.
+  \item Stop when $m/t^{(\ell)} \le \epsilon$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Complexity of the barrier method]\label{thm:barrier-complexity}
+To achieve $f_0(x) - p^* \le \epsilon$, the barrier method requires
+$O(\sqrt{m}\log(m/\epsilon))$ Newton steps (outer iterations), each involving
+the solution of a linear system of size $n \times n$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+By Theorem~\ref{thm:central-path}, we need $t \ge m/\epsilon$, so
+$\lceil \log_\sigma(m/(t^{(0)}\epsilon))\rceil$ outer iterations suffice.
+The key result from the theory of self-concordant barriers (Nesterov and
+Nemirovskii) is that with the optimal choice $\sigma = 1 + 1/\sqrt{m}$,
+each centering step (finding $x^*(t)$ to sufficient accuracy) requires
+$O(1)$ Newton steps (specifically, a constant number independent of $m$ and
+$n$). The total number of outer iterations is then
+$\log_\sigma(m/\epsilon) = O(\sqrt{m}\log(m/\epsilon))$,
+using $\log(1 + 1/\sqrt{m}) \approx 1/\sqrt{m}$.
+\end{proof}
+
+\begin{keyresult}[title={Interior-Point Complexity}]
+Interior-point methods solve convex programs with $m$ inequality constraints
+to $\epsilon$-accuracy in $O(\sqrt{m}\log(m/\epsilon))$ Newton iterations.
+Each Newton iteration costs $O(n^3)$ for a dense $n$-dimensional problem
+(or less with structure). This polynomial complexity in $m$, $n$, and
+$\log(1/\epsilon)$ makes interior-point methods highly efficient for
+moderate-dimensional problems.
+\end{keyresult}
+
+\begin{rlconnection}
+Interior-point methods are used to solve the linear programs that arise in the
+LP formulation of finite MDPs. For large-scale problems, they complement
+value iteration and policy iteration. In constrained RL (safe RL), solving
+the inner constrained optimization at each policy update step can be handled
+by interior-point methods when the constraint set has moderate dimension.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: Exercises
+%% ============================================================
+\section{Exercises}\label{sec:exercises}
+
+\begin{exercise}[Dual of a linear program]\label{ex:lp-dual}
+Consider the LP $\min_x \; c^\top x$ subject to $Ax = b$, $x \ge 0$.
+\begin{enumerate}[label=(\alph*)]
+  \item Write the Lagrangian and derive the dual problem. Show it is
+    $\max_\nu \; b^\top \nu$ subject to $A^\top \nu \le c$.
+  \item Prove that strong duality always holds for feasible LPs (Hint: LP
+    feasible sets are polyhedral, so Slater's condition can be replaced by
+    the weaker condition of feasibility).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[KKT for least-squares with non-negativity]\label{ex:nnls}
+Consider the non-negative least-squares problem:
+$\min_{x \ge 0} \; \frac{1}{2}\|Ax - b\|^2$.
+Write the KKT conditions explicitly and show they reduce to:
+$x \ge 0$, $A^\top(Ax - b) \ge 0$, $x_i [A^\top(Ax - b)]_i = 0$ for all $i$.
+\end{exercise}
+
+\begin{exercise}[Convergence rate verification]\label{ex:gd-verify}
+Let $f(x) = \frac{1}{2}x^\top Q x$ where $Q$ is symmetric positive definite
+with eigenvalues $\mu = \lambda_{\min}(Q)$ and $L = \lambda_{\max}(Q)$.
+\begin{enumerate}[label=(\alph*)]
+  \item Verify that $f$ is $\mu$-strongly convex and $L$-smooth.
+  \item Run gradient descent with $\eta = 1/L$ and verify that
+    $f(x_k) \le (1 - \mu/L)^k f(x_0)$.
+  \item For $Q = \diag(1, 100)$, compute the condition number and determine
+    how many iterations are needed for $f(x_k)/f(x_0) \le 10^{-6}$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Soft-thresholding derivation]\label{ex:soft-thresh}
+Derive the soft-thresholding operator: show that
+$\prox_{\tau|\cdot|}(v) = \text{sign}(v)\max(|v| - \tau, 0)$ for a scalar $v$.
+(Hint: consider the three cases $v > \tau$, $|v| \le \tau$, and $v < -\tau$
+separately.)
+\end{exercise}
+
+\begin{exercise}[Dual of SDP relaxation]\label{ex:sdp-dual}
+Consider the boolean optimization problem $\min_{x \in \{-1,+1\}^n} x^\top W x$.
+The standard SDP relaxation replaces $x x^\top$ with a matrix variable
+$X \succeq 0$, $X_{ii} = 1$.
+\begin{enumerate}[label=(\alph*)]
+  \item Write this relaxation as a standard SDP.
+  \item Derive its Lagrange dual.
+  \item Show that weak duality provides a lower bound on the original
+    combinatorial problem.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Proving the PL inequality]\label{ex:pl}
+Let $f$ be $\mu$-strongly convex and differentiable.
+\begin{enumerate}[label=(\alph*)]
+  \item Prove that $\|\nabla f(x)\|^2 \ge 2\mu(f(x) - f(x^*))$ for all $x$.
+  \item Show by example that the PL inequality can hold for non-convex
+    functions (consider $f(x) = x^2 + 3\sin^2(x)$ near the origin; verify
+    numerically).
+  \item Prove that gradient descent converges linearly under the PL inequality
+    alone (without assuming convexity).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[FISTA for LASSO]\label{ex:fista-lasso}
+The LASSO problem is $\min_x \frac{1}{2}\|Ax - b\|^2 + \tau\|x\|_1$.
+\begin{enumerate}[label=(\alph*)]
+  \item Identify $f(x)$ and $h(x)$ in the composite formulation.
+  \item Write out the FISTA iteration explicitly (including the
+    soft-thresholding step).
+  \item What is the Lipschitz constant $L$ of $\nabla f$? Express it in terms
+    of $A$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Central path for LP]\label{ex:lp-barrier}
+For the LP $\min\; c^\top x$ subject to $x \ge 0$ (i.e., $f_i(x) = -x_i$):
+\begin{enumerate}[label=(\alph*)]
+  \item Write the barrier function $\phi(x) = -\sum_i \log(x_i)$.
+  \item Show that the central path satisfies $x^*_i(t) = 1/(tc_i)$ when $c > 0$.
+  \item Verify that $c^\top x^*(t) - p^* = n/t$ where $n$ is the dimension
+    and $p^* = 0$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Duality gap in constrained MDP]\label{ex:cmdp}
+Consider a constrained MDP with one constraint: $\max_\pi J(\pi)$ subject to
+$C(\pi) \le \alpha$, where $J$ and $C$ are the expected return and expected
+cost under policy $\pi$ over a finite MDP.
+\begin{enumerate}[label=(\alph*)]
+  \item Write the Lagrangian $L(\pi, \lambda)$ for this problem.
+  \item Show that the dual function $g(\lambda) = \max_\pi L(\pi, \lambda)$
+    corresponds to solving an unconstrained MDP with modified reward
+    $r(s,a) - \lambda c(s,a)$.
+  \item Under what condition does strong duality hold? (Hint: relate to
+    Slater's condition in the occupancy-measure LP formulation.)
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Moreau envelope and gradient]\label{ex:moreau}
+The \emph{Moreau envelope} of a convex function $h$ with parameter $\gamma > 0$ is
+$M_\gamma h(v) = \min_x \{h(x) + \frac{1}{2\gamma}\|x - v\|^2\}$.
+\begin{enumerate}[label=(\alph*)]
+  \item Show that $M_\gamma h$ is differentiable even when $h$ is not, with
+    gradient $\nabla M_\gamma h(v) = \frac{1}{\gamma}(v - \prox_{\gamma h}(v))$.
+  \item Prove that $M_\gamma h$ is $(1/\gamma)$-smooth.
+  \item Explain how this connects to the proximal point algorithm:
+    $x_{k+1} = \prox_{\gamma h}(x_k)$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: Summary
+%% ============================================================
+\section{Summary}\label{sec:summary}
+
+\subsection{Key Theorems Recap}
+
+The central results of this document are:
+\begin{enumerate}
+  \item \textbf{Weak duality} (Theorem~\ref{thm:weak-duality}): Always
+    $d^* \le p^*$.
+  \item \textbf{Strong duality} (Theorem~\ref{thm:strong-duality}): Under
+    Slater's condition, $d^* = p^*$.
+  \item \textbf{KKT conditions} (Theorems~\ref{thm:kkt-necessary}
+    and~\ref{thm:kkt-sufficient}): Necessary under strong duality, sufficient
+    for convex problems.
+  \item \textbf{Gradient descent} (Theorems~\ref{thm:gd-convex}
+    and~\ref{thm:gd-strong}): $O(1/k)$ for convex, $O(\rho^k)$ for strongly convex.
+  \item \textbf{Nesterov acceleration} (Theorem~\ref{thm:nesterov}): Optimal
+    $O(1/k^2)$ for smooth convex.
+  \item \textbf{Interior-point methods} (Theorem~\ref{thm:barrier-complexity}):
+    $O(\sqrt{m}\log(m/\epsilon))$ Newton steps.
+\end{enumerate}
+
+\subsection{Convergence Rate Summary}
+
+\begin{table}[h]
+\centering
+\caption{Convergence rates for first-order and interior-point methods.}
+\label{tab:rates}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Method} & \textbf{Assumption} & \textbf{Rate} & \textbf{Iterations for $\epsilon$} \\
+\midrule
+Gradient descent & Convex, $L$-smooth &
+  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
+Gradient descent & $\mu$-s.c., $L$-smooth &
+  $O((1-\mu/L)^k)$ & $O(\kappa\log(1/\epsilon))$ \\
+Nesterov accel. & Convex, $L$-smooth &
+  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
+Nesterov accel. & $\mu$-s.c., $L$-smooth &
+  $O((1-1/\sqrt{\kappa})^k)$ & $O(\sqrt{\kappa}\log(1/\epsilon))$ \\
+Prox.\ gradient & Convex, $L$-smooth $+$ $h$ &
+  $O(L\|x_0-x^*\|^2/k)$ & $O(1/\epsilon)$ \\
+FISTA & Convex, $L$-smooth $+$ $h$ &
+  $O(L\|x_0-x^*\|^2/k^2)$ & $O(1/\sqrt{\epsilon})$ \\
+Interior point & $m$ ineq.\ constraints &
+  $O(\sqrt{m}\log(m/\epsilon))$ & $O(\sqrt{m}\log(1/\epsilon))$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{remark}[Lower bounds]\label{rem:lower}
+The $O(1/k^2)$ rate for smooth convex functions and $O((1-1/\sqrt{\kappa})^k)$
+for smooth strongly convex functions match the information-theoretic lower bounds
+for first-order methods (Nesterov, 1983). These are not improvable by any
+method that accesses $f$ only through gradient evaluations.
+\end{remark}
+
+\begin{remark}[Stochastic extensions]\label{rem:stochastic}
+In ML and RL, we typically have access only to stochastic gradients. SGD with
+step size $\eta_k = O(1/k)$ achieves $O(1/\sqrt{k})$ for convex and $O(1/k)$
+for strongly convex problems (in expectation). Variance reduction techniques
+(SVRG, SARAH) recover the deterministic rates up to logarithmic factors. These
+stochastic methods are covered in a subsequent document.
+\end{remark}
+
+\end{document}

@@ -14,19 +14,26 @@ Rigorous treatment of the mathematical tools underpinning all subsequent phases:
 | File | Directory | Topic | Status |
 |------|-----------|-------|--------|
 | `01-measure-spaces` | `01-measure-theory/` | sigma-algebras, measures, Caratheodory extension, measurable functions, pi-lambda theorem | **exists** |
-| `probability-foundations` | `01-measure-theory/` | Expectation, conditional expectation, tower property, variance, MDS, Jensen, convergence modes, inequalities, Borel-Cantelli, LLN, Markov chains, martingales | **exists** |
-| -- | `02-functional-analysis/` | Normed spaces, Banach spaces, Hilbert spaces, bounded operators, spectral theory | planned |
-| -- | `03-optimization/` | Convex optimization, duality, gradient methods, stochastic approximation | planned |
-| -- | `04-game-theory/` | Normal-form games, Nash equilibrium, extensive-form games, repeated games | planned |
+| `probability-foundations` | `01-measure-theory/` | Expectation, conditional expectation, tower property, variance, convergence modes, inequalities, Borel-Cantelli, LLN, CLT, Markov chains, martingales | **exists** |
+| `01-metric-and-normed-spaces` | `02-functional-analysis/` | Metric spaces, normed spaces, Banach spaces, completeness, compactness in normed spaces | **exists** |
+| `02-hilbert-spaces-and-operators` | `02-functional-analysis/` | Inner product spaces, Hilbert spaces, orthogonal projections, Riesz representation, Hahn-Banach, uniform boundedness, fixed point theorems (Banach, Brouwer, Schauder, Kakutani) | **exists** |
+| `01-convex-analysis` | `03-optimization/` | Convex sets, convex functions, operations preserving convexity, conjugate functions, separation theorems | **exists** |
+| `02-convex-optimization-and-duality` | `03-optimization/` | Convex optimization problems, Lagrangian duality, KKT conditions, gradient descent, accelerated methods, proximal methods, interior point methods | **exists** |
+| `03-stochastic-approximation` | `03-optimization/` | Robbins-Monro, ODE method, Borkar-Meyn stability, convergence rates, Polyak-Ruppert averaging, two-timescale SA, linear SA | **exists** |
+| `01-static-and-extensive-form-games` | `04-game-theory/` | Normal-form games, Nash equilibrium, minimax theorem, correlated equilibrium, extensive-form games, subgame perfection | **exists** |
+| `02-repeated-games-and-incomplete-info` | `04-game-theory/` | Repeated games, folk theorems, fictitious play, no-regret learning, Bayesian games, PBE, signaling games, potential games | **exists** |
 
 ## Prerequisites
 
-None -- this is the foundational phase.
+- **Phase 00** (or equivalent background in real analysis, linear algebra, probability)
 
 ## Internal Reading Order
 
 ```
 01-measure-spaces -> probability-foundations
+01-metric-and-normed-spaces -> 02-hilbert-spaces-and-operators
+01-convex-analysis -> 02-convex-optimization-and-duality -> 03-stochastic-approximation
+01-static-and-extensive-form-games -> 02-repeated-games-and-incomplete-info
 ```
 
-The remaining topics (functional analysis, optimization, game theory) can be read in any order after measure theory, though optimization benefits from functional analysis background.
+Measure theory and probability should be read first. The remaining tracks (functional analysis, optimization, game theory) can be read in any order after measure theory, though optimization benefits from functional analysis background. Stochastic approximation requires probability foundations (martingales, convergence modes, LLN).

@@ -1,0 +1,1834 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[margin=1in,headheight=14pt]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+
+% ---- Hyperref ----
+\hypersetup{
+    colorlinks=true,
+    linkcolor=red,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ---- Header ----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Lesson 12: Repeated Games and Incomplete Information}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Theorem Environments ----
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+% ---- Colored Boxes ----
+\tcbuselibrary{theorems,skins,breakable}
+
+\newtcolorbox{keyresult}[1][]{
+    colback=green!5!white,
+    colframe=green!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{rlconnection}[1][]{
+    colback=blue!5!white,
+    colframe=blue!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+\newtcolorbox{warning}[1][]{
+    colback=red!5!white,
+    colframe=red!50!black,
+    fonttitle=\bfseries,
+    title=#1,
+    breakable
+}
+
+% ---- Operators ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\indicator}{\mathbf{1}}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\argmax}{argmax}
+\DeclareMathOperator{\argmin}{argmin}
+\DeclareMathOperator{\BR}{BR}
+
+% ---- Title ----
+\title{\textbf{Lesson 12: Repeated Games and Incomplete Information}\\[10pt]
+\large Folk Theorems, Bayesian Games, and Potential Games\\[5pt]
+\normalsize Session 12 of 102 $\mid$ Phase I: Mathematical Foundations $\mid$ 8\,h\\
+\normalsize Primary text: Fudenberg \& Tirole, \emph{Game Theory}, Chapters 5--6, 8, 12}
+\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document develops the theory of repeated games, games of incomplete information,
+and potential games, with complete proofs of all major results. We establish the folk
+theorems---characterizing the equilibrium payoff sets of infinitely repeated games---prove
+convergence of fictitious play and no-regret dynamics in zero-sum games, develop the
+Bayesian game framework and perfect Bayesian equilibrium for signaling games, and
+prove that potential games admit pure Nash equilibria with convergent best-response
+dynamics. Throughout, we connect these classical results to multi-agent reinforcement
+learning: independent learners in repeated games, opponent modeling via Bayesian reasoning,
+self-play algorithms, and convergence guarantees in potential games.
+
+\medskip\noindent
+\textbf{Prerequisites:} Normal-form games, Nash equilibrium, mixed strategies, minimax
+theorem (Lesson 11).
+
+\medskip\noindent
+\textbf{Notation:} We write $[n] = \{1, \ldots, n\}$ for player sets. For a strategy
+profile $a = (a_1, \ldots, a_n)$, we write $a_{-i} = (a_1, \ldots, a_{i-1}, a_{i+1},
+\ldots, a_n)$ and $(a_i', a_{-i})$ for the profile where player $i$ deviates to $a_i'$.
+Stage-game payoffs are $g_i(a)$; repeated-game payoffs are $u_i$.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: Introduction
+%% ============================================================
+\section{Introduction}
+\label{sec:introduction}
+
+In Lesson 11 we studied one-shot (normal-form) games: simultaneous moves, Nash
+equilibrium, and the minimax theorem. However, most real strategic interactions---and
+virtually all multi-agent reinforcement learning (MARL) scenarios---involve \emph{repeated
+interaction}. Agents meet the same opponents across many episodes, observe each other's
+past behavior, and adapt their strategies over time. Three fundamental phenomena emerge:
+
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Cooperation through repetition.} Even when one-shot incentives favor
+    defection (as in the Prisoner's Dilemma), the threat of future punishment can sustain
+    cooperative outcomes. The \emph{folk theorems} characterize exactly which payoff
+    vectors are achievable.
+
+    \item \textbf{Incomplete information.} In practice, agents rarely know each other's
+    payoff functions. A robot negotiating with a human does not know the human's utility;
+    competing firms do not know rivals' costs. \emph{Bayesian games} model this uncertainty,
+    and \emph{perfect Bayesian equilibrium} handles sequential decision-making under such
+    uncertainty.
+
+    \item \textbf{Structured interactions.} Many multi-agent problems possess special
+    structure---such as \emph{potential games}, where a single global function captures all
+    players' incentives. In these settings, simple learning rules (best-response dynamics,
+    log-linear learning) are guaranteed to converge.
+\end{enumerate}
+
+This document covers all three themes with complete proofs. The roadmap is as follows.
+\begin{itemize}
+    \item \textbf{Section~\ref{sec:finitely-repeated}}: Finitely repeated games and the
+    unraveling argument.
+    \item \textbf{Section~\ref{sec:infinitely-repeated}}: Infinitely repeated games, trigger
+    strategies, and feasible/individually rational payoffs.
+    \item \textbf{Section~\ref{sec:folk-theorems}}: The Nash folk theorem and the subgame
+    perfect folk theorem.
+    \item \textbf{Section~\ref{sec:zero-sum}}: Fictitious play, no-regret learning, and
+    convergence in zero-sum games.
+    \item \textbf{Section~\ref{sec:bayesian-games}}: Bayesian games and Bayesian Nash
+    equilibrium.
+    \item \textbf{Section~\ref{sec:pbe}}: Perfect Bayesian equilibrium and signaling games.
+    \item \textbf{Section~\ref{sec:potential-games}}: Potential games, congestion games, and
+    convergence of best-response dynamics.
+    \item \textbf{Section~\ref{sec:marl-connections}}: Connections to multi-agent RL.
+    \item \textbf{Section~\ref{sec:exercises}}: Exercises.
+    \item \textbf{Section~\ref{sec:summary}}: Summary of key results.
+\end{itemize}
+
+\begin{rlconnection}[Why This Matters for MARL]
+In multi-agent RL, agents interact repeatedly and update their policies based on
+observed outcomes. The folk theorems explain why independent Q-learners can converge to
+cooperative (or adversarial) outcomes that do not arise in single-episode analysis.
+Bayesian games formalize the partial observability inherent in opponent modeling.
+Potential games identify problem classes where independent learning is guaranteed to
+converge---a rare and valuable property in general-sum MARL.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 2: Finitely Repeated Games
+%% ============================================================
+\section{Finitely Repeated Games}
+\label{sec:finitely-repeated}
+
+\subsection{Model}
+
+We begin with a \emph{stage game} $G = (N, (A_i)_{i \in N}, (g_i)_{i \in N})$ where
+$N = [n]$ is the player set, $A_i$ is the finite action set of player $i$, and
+$g_i : A \to \R$ is the stage-game payoff function, with $A = \prod_{i \in N} A_i$.
+
+\begin{definition}[Finitely Repeated Game]
+\label{def:finitely-repeated}
+The \emph{$T$-fold repetition} of $G$, denoted $G^T$, is defined as follows:
+\begin{enumerate}[label=(\alph*)]
+    \item In each period $t \in \{1, 2, \ldots, T\}$, all players simultaneously choose
+    actions $a_i^t \in A_i$.
+    \item At the end of period $t$, all players observe the realized action profile
+    $a^t = (a_1^t, \ldots, a_n^t)$.
+    \item The \emph{history} at period $t$ is $h^t = (a^1, a^2, \ldots, a^{t-1}) \in A^{t-1}$.
+    The initial history is $h^1 = \emptyset$.
+    \item A \emph{(pure) strategy} for player $i$ is a sequence of functions
+    $s_i = (s_i^1, s_i^2, \ldots, s_i^T)$ where $s_i^t : A^{t-1} \to A_i$ maps
+    histories to actions.
+    \item The payoff to player $i$ under strategy profile $s = (s_1, \ldots, s_n)$ is
+    \[
+        u_i(s) = \frac{1}{T} \sum_{t=1}^T g_i\bigl(a^t(s, h^t)\bigr),
+    \]
+    where $a^t(s, h^t) = \bigl(s_1^t(h^t), \ldots, s_n^t(h^t)\bigr)$ and histories are
+    generated by the strategy profile.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+We use average payoffs $\frac{1}{T}\sum_t g_i(a^t)$ rather than total payoffs to keep
+the repeated-game payoffs on the same scale as stage-game payoffs, facilitating comparison
+with the infinite-horizon discounted case.
+\end{remark}
+
+\subsection{Subgame Perfect Equilibrium}
+
+The repeated game $G^T$ is an extensive-form game of perfect information (after each period,
+all actions are observed). Thus the natural solution concept is \emph{subgame perfect
+equilibrium} (SPE): a strategy profile that constitutes a Nash equilibrium in every subgame.
+
+\begin{definition}[Subgame Perfect Equilibrium]
+\label{def:spe}
+A strategy profile $s^*$ in $G^T$ is a \emph{subgame perfect equilibrium} (SPE) if, for
+every period $t \in \{1, \ldots, T\}$ and every history $h^t \in A^{t-1}$, the
+continuation strategy profile $(s_i^{*,\tau}(h^t, \cdot))_{\tau \geq t}$ is a Nash
+equilibrium of the subgame starting from $h^t$.
+\end{definition}
+
+\subsection{The Unraveling Argument}
+
+The fundamental result for finitely repeated games with a unique stage-game equilibrium is
+that repetition adds nothing: the unique SPE plays the stage-game NE in every period.
+
+\begin{theorem}[Unique NE Implies Unique SPE]
+\label{thm:unraveling}
+If the stage game $G$ has a unique Nash equilibrium $a^* = (a_1^*, \ldots, a_n^*)$, then
+the $T$-fold repeated game $G^T$ has a unique subgame perfect equilibrium in which
+$a^t = a^*$ for all $t \in \{1, \ldots, T\}$.
+\end{theorem}
+
+\begin{proof}
+We proceed by backward induction on $t$.
+
+\textbf{Base case ($t = T$):} In the final period, regardless of history $h^T$, the
+subgame is identical to the one-shot stage game $G$. Since $a^*$ is the unique NE of $G$,
+every SPE must play $a^*$ in period $T$.
+
+\textbf{Inductive step:} Suppose that in every SPE, $a^{\tau} = a^*$ for all $\tau \in
+\{t+1, \ldots, T\}$, regardless of the history at period $t+1$. Consider the subgame
+beginning at an arbitrary history $h^t$. The continuation payoffs from period $t+1$ onward
+are fixed at $\frac{1}{T}\sum_{\tau=t+1}^{T} g_i(a^*) = \frac{T-t}{T} g_i(a^*)$,
+independent of the action chosen at period $t$ (since all future play is $a^*$ regardless
+of history). Therefore, player $i$'s effective payoff at period $t$ is
+\[
+    \frac{1}{T} g_i(a^t) + \frac{T-t}{T} g_i(a^*),
+\]
+and maximizing this over $a_i^t$ is equivalent to maximizing $g_i(a_i^t, a_{-i}^t)$ in the
+stage game. Since $a^*$ is the unique NE, $a^t = a^*$ in every SPE.
+
+By induction, $a^t = a^*$ for all $t$, proving that the unique SPE is to play $a^*$ in
+every period.
+\end{proof}
+
+\begin{warning}[The Unraveling Trap]
+Theorem~\ref{thm:unraveling} shows that finite repetition of the Prisoner's Dilemma (which
+has a unique NE at mutual defection) cannot sustain cooperation under subgame perfection.
+This is counterintuitive and motivates the study of infinitely repeated games, where the
+``last period'' argument cannot be applied.
+\end{warning}
+
+\subsection{Multiple Stage-Game Equilibria}
+
+When the stage game has multiple Nash equilibria, repetition \emph{can} create new
+equilibrium outcomes.
+
+\begin{proposition}[New Equilibria Through Repetition]
+\label{prop:multiple-ne-repetition}
+If the stage game $G$ has at least two Nash equilibria yielding different payoffs for some
+player, then the two-fold repeated game $G^2$ may have SPE outcomes in which first-period
+play is not a stage-game NE.
+\end{proposition}
+
+\begin{proof}
+We give a constructive proof. Let $G$ have two Nash equilibria $a^*$ and $\hat{a}$ with
+$g_i(a^*) > g_i(\hat{a})$ for all $i$ (i.e., $a^*$ Pareto-dominates $\hat{a}$). Suppose
+there exists an action profile $\tilde{a}$ (not necessarily a NE) with
+$g_i(\tilde{a}) > g_i(a^*)$ for all $i$, and suppose the gain from deviating unilaterally
+in the stage game satisfies
+\[
+    \max_{a_i' \in A_i} g_i(a_i', \tilde{a}_{-i}) - g_i(\tilde{a})
+    < g_i(a^*) - g_i(\hat{a}).
+\]
+Consider the following strategy for each player $i$ in $G^2$:
+\begin{itemize}
+    \item Period 1: Play $\tilde{a}_i$.
+    \item Period 2: If $a^1 = \tilde{a}$, play $a_i^*$. Otherwise, play $\hat{a}_i$.
+\end{itemize}
+
+In period 2, players play a stage-game NE ($a^*$ or $\hat{a}$) depending on period-1
+history, so the strategy is sequentially rational in period 2.
+
+In period 1, if player $i$ deviates to $a_i'$ while others play $\tilde{a}_{-i}$, the
+payoff change is:
+\begin{align*}
+    &\frac{1}{2}\bigl[g_i(a_i', \tilde{a}_{-i}) + g_i(\hat{a})\bigr]
+    - \frac{1}{2}\bigl[g_i(\tilde{a}) + g_i(a^*)\bigr] \\
+    &= \frac{1}{2}\bigl[g_i(a_i', \tilde{a}_{-i}) - g_i(\tilde{a})\bigr]
+    - \frac{1}{2}\bigl[g_i(a^*) - g_i(\hat{a})\bigr] < 0,
+\end{align*}
+by the assumed inequality. Thus no player wants to deviate, and the profile is an SPE
+in which first-period play $\tilde{a}$ is \emph{not} a stage-game NE.
+\end{proof}
+
+\begin{example}[Coordination Game]
+\label{ex:coordination-repeated}
+Consider the two-player coordination game with payoffs:
+\[
+\begin{array}{c|cc}
+  & L & R \\ \hline
+T & 3,3 & 0,0 \\
+B & 0,0 & 1,1
+\end{array}
+\]
+This has two pure NE: $(T,L)$ with payoffs $(3,3)$ and $(B,R)$ with payoffs $(1,1)$.
+In the two-fold repetition, the ``punishment'' equilibrium $(B,R)$ can incentivize
+cooperation on outcomes that are not stage-game NE, provided the incentive condition is
+satisfied.
+\end{example}
+
+
+%% ============================================================
+%% SECTION 3: Infinitely Repeated Games
+%% ============================================================
+\section{Infinitely Repeated Games}
+\label{sec:infinitely-repeated}
+
+\subsection{Model}
+
+To circumvent the unraveling argument, we consider infinite repetition with discounting.
+
+\begin{definition}[Infinitely Repeated Game]
+\label{def:infinitely-repeated}
+Given a stage game $G$ and a discount factor $\delta \in (0,1)$, the \emph{infinitely
+repeated game} $G^\infty(\delta)$ is defined by:
+\begin{enumerate}[label=(\alph*)]
+    \item In each period $t \in \{1, 2, 3, \ldots\}$, players simultaneously choose
+    actions $a^t \in A$.
+    \item Histories, strategies are defined as in the finite case, but with $t$ ranging
+    over $\N$.
+    \item Player $i$'s payoff under strategy profile $s$ is the \emph{normalized discounted
+    sum}:
+    \[
+        u_i(s) = (1 - \delta) \sum_{t=1}^{\infty} \delta^{t-1} g_i(a^t).
+    \]
+\end{enumerate}
+The normalization factor $(1-\delta)$ ensures that payoffs lie in the same range as
+stage-game payoffs: if $a^t = a$ for all $t$, then $u_i = g_i(a)$.
+\end{definition}
+
+\subsection{Feasible and Individually Rational Payoffs}
+
+\begin{definition}[Feasible Payoff Set]
+\label{def:feasible-payoffs}
+The \emph{feasible payoff set} of the stage game $G$ is
+\[
+    V = \conv\{g(a) : a \in A\} = \conv\{(g_1(a), \ldots, g_n(a)) : a \in A\} \subset \R^n,
+\]
+the convex hull of all achievable stage-game payoff vectors.
+\end{definition}
+
+\begin{remark}
+In the infinitely repeated game, any payoff vector $v \in V$ is achievable by cycling
+through action profiles with appropriate frequencies. For instance, if $v = \lambda g(a) +
+(1-\lambda) g(a')$ for some $\lambda \in [0,1]$, then playing $a$ for a fraction $\lambda$
+of periods and $a'$ for the remaining fraction achieves payoff $v$ in the limit as
+$\delta \to 1$.
+\end{remark}
+
+\begin{definition}[Minimax Value and Individually Rational Payoffs]
+\label{def:minimax-ir}
+The \emph{minimax value} (or \emph{minmax value}) of player $i$ in pure strategies is
+\[
+    \underline{v}_i = \min_{a_{-i} \in A_{-i}} \max_{a_i \in A_i} g_i(a_i, a_{-i}).
+\]
+The \emph{mixed-strategy minimax value} is
+\[
+    \underline{v}_i^{\text{mix}} = \min_{\alpha_{-i} \in \Delta(A_{-i})} \max_{a_i \in A_i}
+    \E_{\alpha_{-i}}[g_i(a_i, a_{-i})],
+\]
+where $\Delta(A_{-i}) = \prod_{j \neq i} \Delta(A_j)$ is the set of independent mixed
+strategy profiles for $i$'s opponents. A payoff vector $v \in \R^n$ is
+\emph{individually rational} if $v_i \geq \underline{v}_i^{\text{mix}}$ for all $i$.
+\end{definition}
+
+\begin{proposition}
+\label{prop:ne-payoff-lower-bound}
+In any Nash equilibrium of $G^\infty(\delta)$, each player $i$ receives payoff
+$u_i \geq \underline{v}_i^{\text{mix}}$.
+\end{proposition}
+
+\begin{proof}
+In any NE, player $i$ can deviate to the strategy of playing
+$\argmax_{a_i} \E_{\alpha_{-i}^t}[g_i(a_i, a_{-i}^t)]$ in every period $t$ (where
+$\alpha_{-i}^t$ is the marginal distribution of opponents' play at time $t$ induced by the
+equilibrium). This guarantees a stage payoff of at least $\underline{v}_i^{\text{mix}}$ in
+every period, hence a total payoff of at least $\underline{v}_i^{\text{mix}}$.
+Since the NE strategy must yield payoff at least as high as any deviation, we get
+$u_i \geq \underline{v}_i^{\text{mix}}$.
+\end{proof}
+
+\subsection{Trigger Strategies}
+
+\begin{definition}[Grim Trigger Strategy]
+\label{def:grim-trigger}
+Given a target action profile $a^* \in A$, the \emph{grim trigger strategy} for player $i$
+is:
+\[
+    s_i^t(h^t) = \begin{cases}
+        a_i^* & \text{if } a^\tau = a^* \text{ for all } \tau < t, \\
+        m_i   & \text{otherwise},
+    \end{cases}
+\]
+where $m_i \in \argmin_{\alpha_i} \max_{a_j} g_j(a_j, \alpha_{-j})$ is player $i$'s
+component of a minimax punishment profile against any deviator.
+\end{definition}
+
+\begin{example}[Cooperation in the Repeated Prisoner's Dilemma]
+\label{ex:repeated-pd}
+Consider the Prisoner's Dilemma with payoffs:
+\[
+\begin{array}{c|cc}
+  & C & D \\ \hline
+C & 3,3 & 0,4 \\
+D & 4,0 & 1,1
+\end{array}
+\]
+The unique stage-game NE is $(D,D)$ with payoffs $(1,1)$. The minimax value for each
+player is $\underline{v}_i = 1$. Consider the grim trigger strategy profile that plays
+$(C,C)$ and punishes with $(D,D)$ forever.
+
+\textbf{Cooperation payoff:} If both cooperate forever, each gets $u_i = 3$.
+
+\textbf{Deviation payoff:} If player $i$ defects in period $t$ (while the opponent
+cooperates), she gets $4$ in that period and $1$ thereafter:
+\[
+    u_i^{\text{dev}} = (1-\delta)\bigl[\delta^{t-1} \cdot 4 + \sum_{\tau=t+1}^{\infty}
+    \delta^{\tau-1} \cdot 1\bigr]
+    + (1-\delta) \sum_{\tau=1}^{t-1} \delta^{\tau-1} \cdot 3.
+\]
+The best deviation is at $t=1$:
+\[
+    u_i^{\text{dev}} = (1-\delta) \cdot 4 + \delta \cdot 1 = 4 - 3\delta.
+\]
+Cooperation is sustained iff $3 \geq 4 - 3\delta$, i.e., $\delta \geq \frac{1}{3}$.
+\end{example}
+
+\begin{rlconnection}[Discount Factors and Episode Length in RL]
+The discount factor $\delta$ in repeated games is analogous to the discount factor $\gamma$
+in MDPs. In MARL, if $\gamma$ is too small (agents are too myopic), cooperative equilibria
+may not be sustainable. This directly parallels the threshold $\delta \geq 1/3$ in the
+repeated Prisoner's Dilemma: myopic agents (small $\gamma$) cannot learn to cooperate.
+\end{rlconnection}
+
+\begin{definition}[Tit-for-Tat]
+\label{def:tit-for-tat}
+In a two-player game, the \emph{tit-for-tat} strategy for player $i$ is:
+\[
+    s_i^1 = C, \qquad s_i^t(h^t) = a_j^{t-1} \quad \text{for } t \geq 2,
+\]
+where $j \neq i$. That is, start by cooperating, then mimic the opponent's previous action.
+\end{definition}
+
+\begin{remark}
+Tit-for-tat is a ``forgiving'' strategy: unlike grim trigger, punishment is temporary.
+Axelrod's famous tournaments showed that tit-for-tat performs well in evolutionary settings,
+which connects to the multi-agent RL idea that simple, interpretable strategies can be
+surprisingly effective.
+\end{remark}
+
+
+%% ============================================================
+%% SECTION 4: Folk Theorems
+%% ============================================================
+\section{Folk Theorems}
+\label{sec:folk-theorems}
+
+The folk theorems characterize the equilibrium payoff set of infinitely repeated games.
+Informally, ``almost anything'' can be sustained as an equilibrium if players are patient
+enough.
+
+\subsection{Nash Folk Theorem}
+
+\begin{theorem}[Nash Folk Theorem]
+\label{thm:nash-folk}
+Let $G$ be a finite normal-form game and $V = \conv\{g(a) : a \in A\}$ the feasible payoff
+set. For any payoff vector $v \in V$ satisfying $v_i > \underline{v}_i^{\text{mix}}$ for
+all $i$ (strictly individually rational), there exists $\underline{\delta} \in (0,1)$ such
+that for all $\delta \in (\underline{\delta}, 1)$, there is a Nash equilibrium of
+$G^\infty(\delta)$ with payoff vector $v$.
+\end{theorem}
+
+\begin{proof}
+We construct a Nash equilibrium yielding payoff $v$.
+
+\textbf{Step 1: Achieving $v$ through action sequences.}
+Since $v \in V = \conv\{g(a) : a \in A\}$, there exist action profiles
+$a(1), a(2), \ldots, a(K) \in A$ and weights $\lambda_1, \ldots, \lambda_K \geq 0$ with
+$\sum_k \lambda_k = 1$ such that $v = \sum_k \lambda_k g(a(k))$. We can approximate $v$
+by cycling through these action profiles. Specifically, for any $\varepsilon > 0$ and
+$\delta$ close enough to 1, we can construct a deterministic sequence of action profiles
+$(a^t)_{t=1}^\infty$ such that the discounted average payoff
+$(1-\delta)\sum_{t=1}^\infty \delta^{t-1} g(a^t)$ is within $\varepsilon$ of $v$.
+
+More precisely, define a cycle of length $L$ where action profile $a(k)$ is played for
+$\lceil \lambda_k L \rceil$ periods (adjusting the last to make the total exactly $L$).
+As $\delta \to 1$, the discounted average of any periodic sequence converges to the
+time-average, which converges to $v$ as $L \to \infty$. Fix $\varepsilon > 0$ small enough
+that $v_i - \varepsilon > \underline{v}_i^{\text{mix}}$ for all $i$, and choose $L$ and
+$\underline{\delta}_1$ accordingly.
+
+\textbf{Step 2: Punishment strategies.}
+For each player $i$, let $\alpha_{-i}^{m,i} \in \Delta(A_{-i})$ be a mixed minimax
+punishment profile:
+$\max_{a_i} \E_{\alpha_{-i}^{m,i}}[g_i(a_i, a_{-i})] = \underline{v}_i^{\text{mix}}$.
+In the punishment phase, players $j \neq i$ play according to $\alpha_{-i}^{m,i}$
+independently.
+
+\textbf{Step 3: Strategy construction.}
+Define the following strategy for each player $j$:
+\begin{itemize}
+    \item \emph{Cooperation phase:} Play the sequence $(a^t)_{t=1}^\infty$ from Step 1.
+    \item \emph{Punishment phase:} If some player $i$ is the first to deviate from the
+    prescribed sequence in some period $\hat{t}$, then for all $t > \hat{t}$, all players
+    $j \neq i$ play according to $\alpha_{-i}^{m,i}$ (punishing $i$ forever).
+\end{itemize}
+
+\textbf{Step 4: Verifying the Nash equilibrium condition.}
+Consider whether player $i$ wants to deviate. If player $i$ follows the prescribed strategy,
+she receives payoff within $\varepsilon$ of $v_i$ (for $\delta > \underline{\delta}_1$).
+
+If player $i$ deviates at any period $\hat{t}$, she receives at most
+$\max_a g_i(a) \cdot (1-\delta)\delta^{\hat{t}-1}$ in that period, plus the punishment
+continuation payoff. In the punishment phase, the opponents play the mixed minimax strategy,
+so player $i$'s best response yields at most $\underline{v}_i^{\text{mix}}$ per period.
+Thus the deviation payoff is at most:
+\[
+    u_i^{\text{dev}} \leq (1-\delta) \sum_{\tau=1}^{\hat{t}} \delta^{\tau-1} M
+    + \delta^{\hat{t}} \underline{v}_i^{\text{mix}}
+\]
+where $M = \max_a |g_i(a)|$.
+
+As $\delta \to 1$, the first term (a finite number of periods) vanishes and
+$u_i^{\text{dev}} \to \underline{v}_i^{\text{mix}} < v_i - \varepsilon$. Therefore,
+for $\delta$ large enough (say $\delta > \underline{\delta}_2$), deviation is unprofitable.
+
+Taking $\underline{\delta} = \max(\underline{\delta}_1, \underline{\delta}_2)$ completes
+the proof.
+
+\textbf{Note on Nash vs.\ SPE:} This equilibrium is Nash but not necessarily subgame
+perfect: punishing players have no incentive to carry out the punishment (they are
+indifferent or may prefer not to punish). The subgame perfect folk theorem below addresses
+this.
+\end{proof}
+
+\begin{keyresult}[Nash Folk Theorem -- Interpretation]
+Any feasible, strictly individually rational payoff vector is achievable as a Nash
+equilibrium payoff for sufficiently patient players. This means the set of NE payoffs
+of the repeated game ``fills up'' the feasible individually rational region as
+$\delta \to 1$.
+\end{keyresult}
+
+\subsection{Subgame Perfect Folk Theorem}
+
+The Nash folk theorem has a weakness: punishment threats may not be credible. The punishers
+might prefer to deviate from punishment. The subgame perfect folk theorem (Fudenberg and
+Maskin, 1986) resolves this by constructing self-enforcing punishment schemes.
+
+\begin{definition}[Full Dimensionality Condition]
+\label{def:full-dim}
+The stage game $G$ satisfies the \emph{full dimensionality condition} if the feasible payoff
+set $V = \conv\{g(a) : a \in A\}$ has dimension $n$ (the number of players), i.e.,
+$V$ has nonempty interior in $\R^n$.
+\end{definition}
+
+\begin{theorem}[Subgame Perfect Folk Theorem (Fudenberg--Maskin)]
+\label{thm:spe-folk}
+Let $G$ be a finite $n$-player game satisfying the full dimensionality condition. For any
+feasible payoff vector $v \in V$ with $v_i > \underline{v}_i^{\text{mix}}$ for all $i$,
+there exists $\underline{\delta} \in (0,1)$ such that for all
+$\delta \in (\underline{\delta}, 1)$, there is a subgame perfect equilibrium of
+$G^\infty(\delta)$ with payoff vector $v$.
+\end{theorem}
+
+\begin{proof}
+The proof is constructive. We build a strategy profile with multiple phases: a cooperation
+phase and player-specific punishment phases, arranged so that each phase is self-enforcing.
+
+\textbf{Step 1: Setup.}
+Fix $v \in V$ with $v_i > \underline{v}_i^{\text{mix}}$ for all $i$. Since $V$ has full
+dimension, for each player $i$ there exists a feasible payoff vector $w^i \in V$ with:
+\begin{enumerate}[label=(\roman*)]
+    \item $w^i_j > \underline{v}_j^{\text{mix}}$ for all $j \neq i$ (the punishers receive
+    strictly above their minimax values during the punishment of $i$),
+    \item $w^i_i < v_i$ (player $i$'s payoff during her own punishment phase is below her
+    cooperative payoff; we can choose $w^i_i$ close to $\underline{v}_i^{\text{mix}}$).
+\end{enumerate}
+The full dimensionality condition ensures such $w^i$ exist: since $V$ has nonempty interior,
+we can find vectors that independently adjust each player's payoff.
+
+Let $m^i_{-i} \in \Delta(A_{-i})$ be a mixed minimax strategy profile against player $i$.
+
+\textbf{Step 2: Strategy construction (three-phase strategy).}
+
+\emph{Phase 0 (Cooperation):} Play the action sequence that yields payoff $v$ (as in the
+Nash folk theorem proof).
+
+\emph{Phase I$_i$ (Punishment of player $i$):} Lasts for $L$ periods. During this phase,
+the opponents of $i$ play the minimax strategy $m^i_{-i}$ in each period, and player $i$
+plays any best response (which yields at most $\underline{v}_i^{\text{mix}}$ per period).
+
+\emph{Phase II$_i$ (Reward after punishment):} After the $L$-period punishment phase, play
+switches to the action sequence yielding payoff $w^i$ forever. This rewards the punishers
+(who received above their minimax during punishment) and keeps $i$'s continuation payoff
+below $v_i$ if $L$ is large enough.
+
+\emph{Transitions:}
+\begin{itemize}
+    \item If player $j$ is the first to deviate in Phase 0, switch to Phase I$_j$.
+    \item If player $j$ deviates during Phase I$_i$ (and $j \neq i$), restart Phase I$_j$
+    (punish the deviating punisher).
+    \item If player $i$ deviates during her own punishment Phase I$_i$, restart Phase I$_i$.
+\end{itemize}
+
+\textbf{Step 3: Choosing $L$.}
+We need $L$ large enough that deviation is unprofitable. Let $M = \max_{a,i} |g_i(a)|$.
+During Phase I$_i$, player $i$ gets at most $\underline{v}_i^{\text{mix}}$ per period.
+After Phase I$_i$, player $i$ gets $w^i_i$ per period. Thus player $i$'s continuation payoff
+from Phase I$_i$ is:
+\[
+    (1-\delta) \sum_{t=1}^{L} \delta^{t-1} \underline{v}_i^{\text{mix}}
+    + \delta^L w^i_i
+    = (1 - \delta^L) \underline{v}_i^{\text{mix}} + \delta^L w^i_i.
+\]
+We need this to be less than $v_i$ (so punishment deters deviation from Phase 0) and for
+the punishers' payoffs to make Phase I self-enforcing.
+
+\textbf{Step 4: Verifying sequential rationality.}
+
+\emph{Phase 0 -- Player $i$ considers deviating:}
+Deviation yields at most $M$ in one period, then Phase I$_i$ begins. Compliance yields
+$v_i$ forever. The deviation is unprofitable when:
+\[
+    v_i \geq (1-\delta) M + \delta \bigl[(1 - \delta^L)
+    \underline{v}_i^{\text{mix}} + \delta^L w^i_i\bigr].
+\]
+As $\delta \to 1$, the right side approaches $(1-\delta)M + \delta[(1-\delta^L)
+\underline{v}_i^{\text{mix}} + \delta^L w^i_i]$. For $\delta$ close to 1 and $L$ large,
+$(1-\delta)M \to 0$ and the continuation approaches a weighted average of
+$\underline{v}_i^{\text{mix}}$ and $w^i_i$, both strictly below $v_i$ (since $w^i_i < v_i$
+and $\underline{v}_i^{\text{mix}} < v_i$). So the inequality holds for $\delta$ large
+enough.
+
+\emph{Phase I$_i$ -- Punisher $j \neq i$ considers deviating:}
+If $j$ deviates during Phase I$_i$, Phase I$_j$ begins (punishing $j$). Compliance with
+Phase I$_i$ yields: the minimax strategy payoff for $L-t$ remaining periods (at worst
+$-M$ per period but bounded), followed by $w^i_j > \underline{v}_j^{\text{mix}}$ forever.
+Deviation yields at most $M$ for one period, then Phase I$_j$ punishment.
+
+For $\delta$ close to 1, the continuation payoff from compliance converges to $w^i_j >
+\underline{v}_j^{\text{mix}}$, while deviation leads eventually to $w^j_j$ which can be
+chosen close to $\underline{v}_j^{\text{mix}}$. So compliance dominates for large $\delta$.
+
+\emph{Phase I$_i$ -- Player $i$ considers deviating:}
+Deviating restarts Phase I$_i$, gaining at most $M$ in one period but adding $L$ more
+punishment periods. Compliance ends the punishment sooner and leads to $w^i_i$ forever.
+For large $\delta$, the cost of extending punishment exceeds any one-period gain.
+
+Since all deviations are unprofitable for $\delta > \underline{\delta}$ (where
+$\underline{\delta}$ depends on the game parameters $M, v, w^i,
+\underline{v}_i^{\text{mix}}, L$), the constructed strategy profile is a subgame perfect
+equilibrium.
+\end{proof}
+
+\begin{remark}
+The full dimensionality condition is needed only for $n \geq 3$ players: it allows
+constructing punishment payoffs $w^i$ that reward the punishers while punishing the
+deviator. For two-player games, Fudenberg and Maskin (1986) showed the folk theorem holds
+without this condition, since minmaxing the opponent is the only thing the punisher can do.
+\end{remark}
+
+\begin{keyresult}[Subgame Perfect Folk Theorem -- Interpretation]
+For patient enough players (large $\delta$), the set of SPE payoffs of the infinitely
+repeated game is exactly the set of feasible, strictly individually rational payoff
+vectors (under the full dimensionality condition). This is a much stronger result than the
+Nash folk theorem because SPE requires credible (self-enforcing) punishments.
+\end{keyresult}
+
+\begin{rlconnection}[Folk Theorems and Multi-Agent RL]
+The folk theorems have profound implications for MARL:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Multiplicity of equilibria:} In repeated general-sum games, there are
+    typically \emph{many} equilibria. This means that independent learners may converge to
+    vastly different outcomes depending on initial conditions, learning rates, and
+    exploration schedules.
+    \item \textbf{Emergent cooperation:} The folk theorems show that cooperation can be
+    sustained by punishment threats, explaining why self-play agents sometimes learn
+    cooperative strategies in iterated social dilemmas.
+    \item \textbf{Reward shaping:} The discount factor $\delta$ (analogous to $\gamma$ in
+    RL) determines the set of achievable equilibria. Curriculum designers can influence
+    emergent behavior by adjusting $\gamma$.
+\end{enumerate}
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 5: Zero-Sum Games -- Deeper Treatment
+%% ============================================================
+\section{Zero-Sum Games: Fictitious Play and No-Regret Learning}
+\label{sec:zero-sum}
+
+We return to two-player zero-sum games $G = (\{1,2\}, A_1, A_2, g)$ where
+$g_1(a) = -g_2(a) = g(a)$. Recall from Lesson 11 the minimax theorem:
+$\max_{\alpha_1} \min_{\alpha_2} \E[g(\alpha_1, \alpha_2)]
+= \min_{\alpha_2} \max_{\alpha_1} \E[g(\alpha_1, \alpha_2)] = v^*$ (the value of the game).
+
+\subsection{Fictitious Play}
+
+\begin{definition}[Fictitious Play]
+\label{def:fictitious-play}
+\emph{Fictitious play} is a learning dynamic where each player best-responds to the
+empirical frequency of the opponent's past actions. Formally, let $a_j^1, a_j^2, \ldots$
+be the actions played by player $j$. The empirical frequency after $T$ rounds is
+\[
+    \hat{\alpha}_j^T(a_j) = \frac{1}{T} \sum_{t=1}^T \indicator\{a_j^t = a_j\}
+    \qquad \text{for each } a_j \in A_j.
+\]
+At round $T+1$, player $i$ plays $a_i^{T+1} \in \BR_i(\hat{\alpha}_j^T)$, a best response
+to the empirical distribution of the opponent.
+\end{definition}
+
+\begin{theorem}[Convergence of Fictitious Play in $2 \times 2$ Zero-Sum Games]
+\label{thm:fp-2x2}
+In any $2 \times 2$ zero-sum game, the empirical frequencies
+$(\hat{\alpha}_1^T, \hat{\alpha}_2^T)$ under fictitious play converge to a Nash equilibrium
+as $T \to \infty$.
+\end{theorem}
+
+\begin{proof}
+Let the payoff matrix be
+\[
+    G = \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+\]
+with player 1 choosing rows and player 2 choosing columns, so $g_1 = G$, $g_2 = -G$.
+
+Consider the function $\Phi^T = \max_{a_1} \sum_{t=1}^T g(a_1, a_2^t)$. This is player 1's
+``fictitious play payoff''---the best she could have done against the sequence of player 2's
+actions if constrained to a fixed action.
+
+We analyze how $\Phi^T$ evolves. Note that $\Phi^T = \max\{R_1^T, R_2^T\}$ where
+$R_k^T = \sum_{t=1}^T g(k, a_2^t)$ is the cumulative payoff of row $k$.
+
+In a $2 \times 2$ game, the best response of player 1 to $\hat{\alpha}_2^T$ is row 1 if
+$R_1^T > R_2^T$ and row 2 if $R_1^T < R_2^T$ (with either at ties). Define
+$D^T = R_1^T - R_2^T$.
+
+\emph{Claim:} $|D^T|$ is bounded. To see this, note that when $D^T > 0$, player 1 plays
+row 1, and player 2 best-responds to the empirical frequency $\hat{\alpha}_1^T$ which puts
+more weight on row 1. Player 2's best response tends to be the column that makes row 1
+less attractive, which decreases $D^{T+1}$. Similarly when $D^T < 0$. The key observation
+in the $2 \times 2$ case is that $D^T$ oscillates around 0 with bounded amplitude
+(bounded by $\max |g(a)|$), because each step changes $D^T$ by at most
+$\max_{a_2} |g(1,a_2) - g(2,a_2)|$.
+
+More precisely, define $V_1^T = \frac{1}{T}\Phi^T$ (player 1's ``best fixed action''
+average payoff). We have
+\[
+    V_1^T = \frac{1}{T} \max_{a_1} \sum_{t=1}^T g(a_1, a_2^t)
+    \geq \frac{1}{T} \sum_{t=1}^T g(a_1^t, a_2^t),
+\]
+since the best fixed action does at least as well as the actual sequence.
+
+Similarly, define $V_2^T = \frac{1}{T} \max_{a_2} \sum_{t=1}^T (-g(a_1^t, a_2))$ for
+player 2. By the minimax theorem for the stage game:
+\[
+    V_1^T \geq v^* \geq -V_2^T.
+\]
+Furthermore, $V_1^T - v^* \to 0$ and $V_2^T + v^* \to 0$ because the ``regret''
+$V_1^T - \frac{1}{T}\sum_t g(a_1^t, a_2^t)$ can be bounded by the bounded oscillation of
+$D^T/T \to 0$.
+
+Since $|D^T|$ is bounded, $\frac{D^T}{T} \to 0$, which means $\frac{R_1^T}{T}$ and
+$\frac{R_2^T}{T}$ converge to the same limit. This implies that $\hat{\alpha}_2^T$
+converges to making player 1 indifferent between rows, which is exactly the NE condition
+in a $2 \times 2$ game with a completely mixed equilibrium. If the game has a pure
+equilibrium, fictitious play converges to it in finitely many steps.
+
+Thus $(\hat{\alpha}_1^T, \hat{\alpha}_2^T) \to (\alpha_1^*, \alpha_2^*)$, a Nash
+equilibrium.
+\end{proof}
+
+\begin{theorem}[Robinson's Theorem: Fictitious Play in General Zero-Sum Games]
+\label{thm:robinson}
+In any finite two-player zero-sum game, the empirical frequencies under fictitious play
+converge to the set of Nash equilibria.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The full proof (Robinson, 1951) uses a potential function argument. Define
+\[
+    \Phi_1^T = \max_{a_1 \in A_1} \sum_{t=1}^T g(a_1, a_2^t), \qquad
+    \Phi_2^T = \max_{a_2 \in A_2} \sum_{t=1}^T (-g(a_1^t, a_2)).
+\]
+Then $\frac{1}{T}\Phi_1^T \geq v^*$ and $\frac{1}{T}\Phi_2^T \geq -v^*$ (each player's
+best fixed action does at least as well as the game value against the empirical opponent
+distribution).
+
+The key step is showing that $\frac{1}{T}(\Phi_1^T + \Phi_2^T) \to 0$. This follows
+because $\Phi_1^T + \Phi_2^T$ grows sublinearly: when player 1 plays a best response to
+$\hat{\alpha}_2^T$, the increase in $\Phi_1^{T+1} - \Phi_1^T$ is exactly
+$g(a_1^{T+1}, a_2^{T+1})$, while the increase $\Phi_2^{T+1} - \Phi_2^T \leq
+-g(a_1^{T+1}, a_2^{T+1}) + C$ for a constant $C$ related to the number of actions.
+Carefully tracking these increments shows $\Phi_1^T + \Phi_2^T = O(\sqrt{T})$.
+
+Since $\frac{1}{T}\Phi_1^T \to v^*$ and $\frac{1}{T}\Phi_2^T \to -v^*$, any limit point
+$(\alpha_1^*, \alpha_2^*)$ of $(\hat{\alpha}_1^T, \hat{\alpha}_2^T)$ satisfies the NE
+conditions: $\alpha_1^*$ is a best response to $\alpha_2^*$ and vice versa.
+\end{proof}
+
+\begin{rlconnection}[Fictitious Play and Policy-Space Response Oracles (PSRO)]
+Fictitious play is a precursor to the \emph{PSRO} framework in modern MARL. In PSRO,
+each player maintains a population of policies (analogous to the empirical frequency in FP),
+and computes a best response to the current mixture---exactly as in fictitious play, but
+with neural-network policies instead of tabular strategies. The convergence guarantees of
+FP in zero-sum games provide theoretical backing for PSRO's effectiveness in competitive
+MARL.
+\end{rlconnection}
+
+\subsection{No-Regret Learning}
+
+\begin{definition}[External Regret]
+\label{def:external-regret}
+Player $i$'s \emph{external regret} after $T$ rounds is
+\[
+    R_i^T = \max_{a_i \in A_i} \sum_{t=1}^T g_i(a_i, a_{-i}^t)
+    - \sum_{t=1}^T g_i(a_i^t, a_{-i}^t).
+\]
+A learning algorithm has \emph{no external regret} (or is \emph{Hannan consistent}) if
+$R_i^T / T \to 0$ as $T \to \infty$.
+\end{definition}
+
+\begin{definition}[Multiplicative Weights Update (MWU)]
+\label{def:mwu}
+Let $\eta > 0$ be a learning rate. Player $i$ maintains weights $w_i^t(a_i)$ for each
+action $a_i \in A_i$:
+\begin{align*}
+    w_i^1(a_i) &= 1 \quad \text{for all } a_i, \\
+    w_i^{t+1}(a_i) &= w_i^t(a_i) \cdot \exp\bigl(\eta \cdot g_i(a_i, a_{-i}^t)\bigr).
+\end{align*}
+The mixed strategy at time $t$ is $\alpha_i^t(a_i) = w_i^t(a_i) / \sum_{a_i'} w_i^t(a_i')$.
+\end{definition}
+
+\begin{theorem}[MWU Regret Bound]
+\label{thm:mwu-regret}
+If $|g_i(a)| \leq 1$ for all $a$, then with $\eta = \sqrt{\frac{\ln |A_i|}{T}}$, the
+multiplicative weights update achieves
+\[
+    R_i^T \leq 2\sqrt{T \ln |A_i|}.
+\]
+In particular, $R_i^T / T \to 0$, so MWU is a no-regret algorithm.
+\end{theorem}
+
+\begin{proof}
+Define the potential $W^t = \sum_{a_i \in A_i} w_i^t(a_i)$, so $W^1 = |A_i|$.
+
+\textbf{Upper bound on $\ln(W^{T+1}/W^1)$:}
+\begin{align*}
+    \frac{W^{t+1}}{W^t}
+    &= \frac{\sum_{a_i} w_i^t(a_i) \exp(\eta \cdot g_i(a_i, a_{-i}^t))}{W^t} \\
+    &= \sum_{a_i} \alpha_i^t(a_i) \exp(\eta \cdot g_i(a_i, a_{-i}^t)) \\
+    &\leq \sum_{a_i} \alpha_i^t(a_i) \bigl(1 + \eta g_i(a_i, a_{-i}^t)
+    + \eta^2 g_i(a_i, a_{-i}^t)^2\bigr),
+\end{align*}
+using $e^x \leq 1 + x + x^2$ for $|x| \leq 1$ (valid when $\eta \leq 1$ and
+$|g_i| \leq 1$). Therefore:
+\begin{align*}
+    \frac{W^{t+1}}{W^t}
+    &\leq 1 + \eta \sum_{a_i} \alpha_i^t(a_i) g_i(a_i, a_{-i}^t)
+    + \eta^2 \\
+    &\leq \exp\bigl(\eta \cdot g_i(\alpha_i^t, a_{-i}^t) + \eta^2\bigr),
+\end{align*}
+where $g_i(\alpha_i^t, a_{-i}^t) = \E_{a_i \sim \alpha_i^t}[g_i(a_i, a_{-i}^t)]$ and
+we used $1 + x \leq e^x$. Telescoping:
+\[
+    \ln \frac{W^{T+1}}{W^1} \leq \eta \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t) + \eta^2 T.
+\]
+
+\textbf{Lower bound on $\ln(W^{T+1}/W^1)$:}
+For any fixed action $a_i^*$:
+\[
+    W^{T+1} \geq w_i^{T+1}(a_i^*) = \exp\Bigl(\eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t)\Bigr).
+\]
+Therefore:
+\[
+    \ln \frac{W^{T+1}}{W^1} \geq \eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \ln |A_i|.
+\]
+
+\textbf{Combining:}
+\[
+    \eta \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \ln |A_i|
+    \leq \eta \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t) + \eta^2 T.
+\]
+Rearranging:
+\[
+    \sum_{t=1}^T g_i(a_i^*, a_{-i}^t) - \sum_{t=1}^T g_i(\alpha_i^t, a_{-i}^t)
+    \leq \frac{\ln |A_i|}{\eta} + \eta T.
+\]
+Since this holds for all $a_i^*$, taking the max and substituting
+$\eta = \sqrt{\frac{\ln |A_i|}{T}}$:
+\[
+    R_i^T \leq \sqrt{T \ln |A_i|} + \sqrt{T \ln |A_i|} = 2\sqrt{T \ln |A_i|}.
+    \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[No-Regret Implies NE in Zero-Sum Games]
+\label{thm:no-regret-ne}
+In a two-player zero-sum game, if both players use no-regret learning algorithms, then
+the time-averaged strategy profile $(\bar{\alpha}_1^T, \bar{\alpha}_2^T)$ converges to the
+set of Nash equilibria as $T \to \infty$, where
+$\bar{\alpha}_i^T = \frac{1}{T}\sum_{t=1}^T \alpha_i^t$.
+\end{theorem}
+
+\begin{proof}
+Let $g = g_1 = -g_2$. The no-regret condition for player 1 gives:
+\[
+    \max_{a_1} \frac{1}{T} \sum_{t=1}^T g(a_1, \alpha_2^t)
+    \leq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) + \frac{R_1^T}{T}.
+\]
+By linearity of $g$ in the first argument and Jensen's inequality (or directly by linearity):
+\[
+    \max_{a_1} g(a_1, \bar{\alpha}_2^T)
+    = \max_{a_1} \frac{1}{T} \sum_{t=1}^T g(a_1, \alpha_2^t)
+    \leq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) + \varepsilon_1^T,
+\]
+where $\varepsilon_1^T = R_1^T / T \to 0$.
+
+Similarly, the no-regret condition for player 2 (who minimizes $g$) gives:
+\[
+    \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    = \min_{a_2} \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, a_2)
+    \geq \frac{1}{T} \sum_{t=1}^T g(\alpha_1^t, \alpha_2^t) - \varepsilon_2^T,
+\]
+where $\varepsilon_2^T \to 0$.
+
+Combining:
+\[
+    \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    \geq \frac{1}{T}\sum_t g(\alpha_1^t, \alpha_2^t) - \varepsilon_2^T
+    \geq \max_{a_1} g(a_1, \bar{\alpha}_2^T) - \varepsilon_1^T - \varepsilon_2^T.
+\]
+
+But by the minimax inequality (which always holds):
+\[
+    \max_{a_1} g(a_1, \bar{\alpha}_2^T)
+    \geq \min_{a_2} g(\bar{\alpha}_1^T, a_2).
+\]
+
+Therefore:
+\[
+    0 \leq \max_{a_1} g(a_1, \bar{\alpha}_2^T) - \min_{a_2} g(\bar{\alpha}_1^T, a_2)
+    \leq \varepsilon_1^T + \varepsilon_2^T \to 0.
+\]
+
+This means the ``duality gap'' converges to zero. Since
+$\max_{a_1} g(a_1, \bar{\alpha}_2^T) \to v^*$ and
+$\min_{a_2} g(\bar{\alpha}_1^T, a_2) \to v^*$, any limit point
+$(\alpha_1^*, \alpha_2^*)$ of $(\bar{\alpha}_1^T, \bar{\alpha}_2^T)$ satisfies
+$\max_{a_1} g(a_1, \alpha_2^*) = \min_{a_2} g(\alpha_1^*, a_2) = v^*$, which is the
+Nash equilibrium condition.
+\end{proof}
+
+\begin{rlconnection}[No-Regret Learning in Multi-Agent RL]
+No-regret algorithms are fundamental to competitive MARL. The convergence guarantee of
+Theorem~\ref{thm:no-regret-ne} underpins algorithms like:
+\begin{itemize}
+    \item \textbf{Counterfactual Regret Minimization (CFR)} for extensive-form games
+    (poker AI).
+    \item \textbf{Online mirror descent} in policy space for continuous games.
+    \item \textbf{V-learning} and other model-free algorithms that achieve sublinear regret
+    against adversarial opponents.
+\end{itemize}
+The $O(\sqrt{T})$ regret rate of MWU translates to $O(1/\sqrt{T})$ convergence to NE in
+zero-sum games, which can be accelerated by optimistic variants.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 6: Bayesian Games
+%% ============================================================
+\section{Bayesian Games (Incomplete Information)}
+\label{sec:bayesian-games}
+
+\subsection{Motivation and Model}
+
+In many strategic settings, players are uncertain about others' payoff functions. A firm
+does not know a competitor's cost structure; an agent does not know an opponent's reward
+function. Harsanyi's (1967--68) framework models this via \emph{types}.
+
+\begin{definition}[Bayesian Game]
+\label{def:bayesian-game}
+A \emph{Bayesian game} (or game of incomplete information) is a tuple
+$\Gamma = (N, (A_i)_{i \in N}, (\Theta_i)_{i \in N}, p, (u_i)_{i \in N})$ where:
+\begin{enumerate}[label=(\alph*)]
+    \item $N = [n]$ is the player set.
+    \item $A_i$ is the finite action set of player $i$.
+    \item $\Theta_i$ is the finite \emph{type space} of player $i$. A type
+    $\theta_i \in \Theta_i$ encodes player $i$'s private information.
+    \item $p \in \Delta(\Theta)$ is the \emph{common prior} distribution over the type
+    profile $\theta = (\theta_1, \ldots, \theta_n) \in \Theta = \prod_i \Theta_i$.
+    \item $u_i : A \times \Theta \to \R$ is player $i$'s payoff function, depending on both
+    the action profile and the type profile.
+\end{enumerate}
+The timing is: Nature draws $\theta \sim p$; each player $i$ observes only her own type
+$\theta_i$; players simultaneously choose actions.
+\end{definition}
+
+\begin{definition}[Bayesian Nash Equilibrium]
+\label{def:bne}
+A \emph{(pure) strategy} in a Bayesian game is a function $s_i : \Theta_i \to A_i$ mapping
+types to actions. A strategy profile $s^* = (s_1^*, \ldots, s_n^*)$ is a \emph{Bayesian
+Nash equilibrium} (BNE) if, for every player $i$ and every type $\theta_i \in \Theta_i$:
+\[
+    s_i^*(\theta_i) \in \argmax_{a_i \in A_i}
+    \E_{\theta_{-i} \sim p(\cdot | \theta_i)}\bigl[
+    u_i\bigl(a_i, s_{-i}^*(\theta_{-i}), \theta_i, \theta_{-i}\bigr)\bigr],
+\]
+where $p(\theta_{-i} | \theta_i) = p(\theta_i, \theta_{-i}) / p(\theta_i)$ is the
+conditional distribution of others' types given $\theta_i$.
+\end{definition}
+
+\begin{remark}
+The BNE condition says: each type of each player best-responds to the expected play of
+opponents, where the expectation is over opponents' types (which determine their actions
+through the strategy profile).
+\end{remark}
+
+\subsection{Existence of BNE}
+
+\begin{theorem}[Existence of BNE]
+\label{thm:bne-existence}
+Every finite Bayesian game (finite player set, finite action sets, finite type spaces) has
+a Bayesian Nash equilibrium in mixed strategies.
+\end{theorem}
+
+\begin{proof}
+Transform the Bayesian game into the ``agent normal form.'' For each player-type pair
+$(i, \theta_i)$, create an ``agent'' who chooses action $a_i \in A_i$. This yields a
+finite normal-form game with $\sum_i |\Theta_i|$ agents, each with action set $A_i$.
+The payoff to agent $(i, \theta_i)$ when the action profile is
+$(a_{j,\theta_j})_{j,\theta_j}$ is:
+\[
+    \sum_{\theta_{-i}} p(\theta_{-i} | \theta_i) \cdot
+    u_i(a_{i,\theta_i}, (a_{j,\theta_j})_{j \neq i}, \theta_i, \theta_{-i}).
+\]
+
+This is a finite normal-form game, so by Nash's theorem (from Lesson 11), it has a Nash
+equilibrium in mixed strategies. Any NE of the agent normal form corresponds to a BNE of
+the original Bayesian game: the mixed strategy of agent $(i, \theta_i)$ specifies
+$s_i(\theta_i) \in \Delta(A_i)$, and the NE condition for each agent is exactly the BNE
+condition for type $\theta_i$ of player $i$.
+\end{proof}
+
+\subsection{Examples}
+
+\begin{example}[Cournot Duopoly with Unknown Costs]
+\label{ex:cournot-bayesian}
+Two firms produce a homogeneous good with inverse demand $P(Q) = a - Q$ where
+$Q = q_1 + q_2$. Firm $i$'s cost is $c_i q_i$. Suppose $c_1$ is known to both firms, but
+$c_2$ is private information of firm 2: $c_2 \in \{c_L, c_H\}$ with
+$\Prob(c_2 = c_L) = \pi$.
+
+This is a Bayesian game with $\Theta_2 = \{c_L, c_H\}$, $\Theta_1 = \{c_1\}$ (trivial
+type space for firm 1). Actions are quantities $q_i \geq 0$.
+
+Firm 2's profit when type is $\theta_2 = c$: $u_2 = (a - q_1 - q_2 - c)q_2$.
+
+In a BNE, firm 2 uses strategy $s_2 : \{c_L, c_H\} \to \R_+$ and firm 1 chooses $q_1$.
+The first-order conditions give:
+\begin{align*}
+    q_1 &= \frac{a - c_1 - \pi s_2(c_L) - (1-\pi)s_2(c_H)}{2}, \\
+    s_2(c_L) &= \frac{a - c_L - q_1}{2}, \\
+    s_2(c_H) &= \frac{a - c_H - q_1}{2}.
+\end{align*}
+Solving this system of three equations yields the unique BNE. The key insight is that
+firm 1's optimal quantity depends on the \emph{expected} cost of firm 2, and firm 2's
+strategy conditions on its private type.
+\end{example}
+
+\begin{example}[First-Price Sealed-Bid Auction]
+\label{ex:first-price-auction}
+Two bidders have private values $v_i \sim \text{Uniform}[0,1]$ independently. Each bidder
+submits a sealed bid $b_i$; the highest bidder wins and pays her bid. Payoff:
+$u_i = (v_i - b_i)\indicator\{b_i > b_j\}$.
+
+This is a Bayesian game with $\Theta_i = [0,1]$ (continuous types). We seek a symmetric
+BNE where $b_i = \beta(v_i)$ for some increasing function $\beta$.
+
+Given opponent's strategy $\beta$, bidder $i$ with value $v_i$ solves:
+\[
+    \max_{b} (v_i - b) \cdot \Prob(\beta(v_j) < b)
+    = (v_i - b) \cdot \beta^{-1}(b).
+\]
+The first-order condition (substituting $b = \beta(v_i)$) and the boundary condition
+$\beta(0) = 0$ yield $\beta(v_i) = v_i / 2$: each bidder bids half her value.
+
+\textbf{Verification:} If bidder $j$ bids $v_j/2$, then bidder $i$'s problem is
+$\max_b (v_i - b) \cdot 2b = \max_b 2bv_i - 2b^2$. The FOC gives $2v_i - 4b = 0$, so
+$b = v_i/2$, confirming the BNE.
+\end{example}
+
+\begin{rlconnection}[Bayesian Games and Opponent Modeling in MARL]
+In MARL, agents typically do not know each other's reward functions---precisely the
+setting of Bayesian games. The Bayesian framework formalizes \emph{opponent modeling}:
+\begin{itemize}
+    \item The type $\theta_j$ can encode opponent $j$'s policy parameters or reward weights.
+    \item The prior $p(\theta_{-i})$ represents agent $i$'s beliefs about opponents.
+    \item Bayesian updating (observing opponents' actions and updating beliefs via Bayes'
+    rule) is the principled approach to learning about opponents.
+\end{itemize}
+Algorithms like LOLA (Learning with Opponent-Learning Awareness) and Bayesian policy
+reuse implement variants of this Bayesian framework.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 7: Perfect Bayesian Equilibrium
+%% ============================================================
+\section{Perfect Bayesian Equilibrium}
+\label{sec:pbe}
+
+\subsection{Motivation}
+
+In dynamic games of incomplete information, the BNE concept is too weak: it does not
+constrain behavior at off-equilibrium information sets. We need a refinement that combines
+sequential rationality with belief consistency.
+
+\begin{definition}[System of Beliefs]
+\label{def:beliefs}
+In an extensive-form game with incomplete information, a \emph{system of beliefs}
+$\mu$ assigns to each information set $h$ a probability distribution $\mu(\cdot | h)$
+over the nodes in that information set.
+\end{definition}
+
+\begin{definition}[Perfect Bayesian Equilibrium]
+\label{def:pbe}
+A \emph{perfect Bayesian equilibrium} (PBE) is a pair $(\sigma, \mu)$ of a behavioral
+strategy profile $\sigma$ and a belief system $\mu$ such that:
+\begin{enumerate}[label=(\alph*)]
+    \item \textbf{Sequential rationality:} At every information set $h$ of every player $i$,
+    the strategy $\sigma_i$ is optimal given beliefs $\mu(\cdot | h)$ and the continuation
+    strategies $\sigma_{-i}$.
+    \item \textbf{Belief consistency:} At every information set $h$ that is reached with
+    positive probability under $\sigma$, the beliefs $\mu(\cdot | h)$ are derived from
+    $\sigma$ using Bayes' rule:
+    \[
+        \mu(x | h) = \frac{\Prob(x \text{ is reached} | \sigma)}
+        {\sum_{x' \in h} \Prob(x' \text{ is reached} | \sigma)}
+        \quad \text{for all } x \in h.
+    \]
+    \item At information sets reached with zero probability (off the equilibrium path),
+    beliefs are unrestricted (any distribution over nodes in the information set is allowed).
+\end{enumerate}
+\end{definition}
+
+\subsection{Signaling Games}
+
+A particularly important class of dynamic Bayesian games is \emph{signaling games}.
+
+\begin{definition}[Signaling Game]
+\label{def:signaling-game}
+A \emph{signaling game} has two players:
+\begin{itemize}
+    \item \textbf{Sender (S):} Has private type $\theta \in \Theta$, drawn from prior
+    $p(\theta)$. Observes $\theta$, then sends a message $m \in M$.
+    \item \textbf{Receiver (R):} Observes $m$ (but not $\theta$), then takes action
+    $a \in A$.
+\end{itemize}
+Payoffs $u_S(\theta, m, a)$ and $u_R(\theta, m, a)$ depend on all three: type, message,
+and action.
+\end{definition}
+
+\begin{definition}[Equilibrium Types in Signaling Games]
+\label{def:equilibrium-types}
+\begin{enumerate}[label=(\alph*)]
+    \item A PBE is \emph{separating} if different types send different messages:
+    $\sigma_S(\theta) \neq \sigma_S(\theta')$ for $\theta \neq \theta'$.
+    \item A PBE is \emph{pooling} if all types send the same message:
+    $\sigma_S(\theta) = m^*$ for all $\theta$.
+    \item A PBE is \emph{semi-separating} (or partially pooling) if some types pool and
+    others separate.
+\end{enumerate}
+\end{definition}
+
+\begin{example}[Spence's Job Market Signaling]
+\label{ex:spence}
+A worker has ability $\theta \in \{L, H\}$ with $\Prob(\theta = H) = \pi$. The worker
+chooses education level $e \geq 0$ (the ``signal''). An employer observes $e$ and offers
+wage $w(e)$. Payoffs:
+\begin{align*}
+    u_S(\theta, e, w) &= w - c(\theta, e), \quad \text{with } c(H, e) < c(L, e)
+    \text{ for } e > 0, \\
+    u_R(\theta, e, w) &= \theta - w,
+\end{align*}
+where $c(\theta, e)$ is the cost of education (cheaper for high-ability workers:
+\emph{single-crossing property}).
+
+\textbf{Separating equilibrium.}
+In a separating PBE, $e_H \neq e_L$ and the receiver's beliefs at $e_H$ are
+$\mu(H | e_H) = 1$, at $e_L$ are $\mu(H | e_L) = 0$ (by Bayes' rule). The receiver offers
+$w(e_H) = H$ and $w(e_L) = L$.
+
+For this to be an equilibrium, each type must prefer its own signal:
+\begin{align*}
+    H - c(H, e_H) &\geq L - c(H, e_L) \quad \text{(type $H$ prefers $e_H$)}, \\
+    L - c(L, e_L) &\geq H - c(L, e_H) \quad \text{(type $L$ prefers $e_L$)}.
+\end{align*}
+The single-crossing property ensures that such $e_H, e_L$ exist (typically $e_L = 0$ and
+$e_H$ above a threshold).
+
+\textbf{Pooling equilibrium.}
+Both types choose $e^* = 0$. The receiver's belief at $e^*$ is the prior:
+$\mu(H | e^*) = \pi$, so $w(e^*) = \pi H + (1-\pi) L$. Off-equilibrium beliefs at
+$e \neq e^*$ can be chosen to deter deviation, e.g., $\mu(H | e) = 0$ for all $e \neq e^*$,
+giving $w(e) = L$. Then no type wants to deviate if
+$\pi H + (1-\pi)L - c(\theta, 0) \geq L - c(\theta, e)$ for all $e > 0$, which holds
+when the pooling wage is sufficiently attractive.
+\end{example}
+
+\begin{proposition}[PBE Existence in Finite Signaling Games]
+\label{prop:pbe-signaling-existence}
+Every finite signaling game (finite $\Theta$, $M$, $A$) has a perfect Bayesian equilibrium.
+\end{proposition}
+
+\begin{proof}
+A finite signaling game is a finite extensive-form game. The sequential equilibrium
+existence theorem of Kreps and Wilson (1982) guarantees existence of a sequential
+equilibrium, which is a refinement of PBE. In particular, every sequential equilibrium
+is a PBE, so PBE exists.
+
+Alternatively, one can construct a PBE directly: consider all possible sender strategies
+$\sigma_S : \Theta \to \Delta(M)$. For each such strategy, compute the receiver's
+beliefs via Bayes' rule at information sets reached with positive probability, and assign
+arbitrary beliefs at unreached information sets. The receiver's optimal response defines
+a best-response map. The sender's optimal message choice, given the receiver's response
+function, defines another best-response map. By Kakutani's fixed point theorem (or Nash's
+theorem applied to the agent normal form), a fixed point---hence a PBE---exists.
+\end{proof}
+
+
+%% ============================================================
+%% SECTION 8: Potential Games
+%% ============================================================
+\section{Potential Games}
+\label{sec:potential-games}
+
+\subsection{Definitions}
+
+Potential games form a special class of games where all players' incentives can be captured
+by a single ``potential function.'' This structure has powerful implications for existence
+of pure equilibria and convergence of learning dynamics.
+
+\begin{definition}[Exact Potential Game]
+\label{def:exact-potential}
+A finite game $G = (N, (A_i)_{i \in N}, (u_i)_{i \in N})$ is an \emph{exact potential
+game} if there exists a function $\Phi : A \to \R$ (the \emph{potential function}) such
+that for every player $i$, every $a_{-i} \in A_{-i}$, and every $a_i, a_i' \in A_i$:
+\[
+    u_i(a_i, a_{-i}) - u_i(a_i', a_{-i}) = \Phi(a_i, a_{-i}) - \Phi(a_i', a_{-i}).
+\]
+\end{definition}
+
+\begin{definition}[Ordinal Potential Game]
+\label{def:ordinal-potential}
+A finite game $G$ is an \emph{ordinal potential game} if there exists $\Phi : A \to \R$
+such that for every player $i$, every $a_{-i}$, and every $a_i, a_i'$:
+\[
+    u_i(a_i, a_{-i}) > u_i(a_i', a_{-i}) \iff \Phi(a_i, a_{-i}) > \Phi(a_i', a_{-i}).
+\]
+\end{definition}
+
+\begin{remark}
+Every exact potential game is an ordinal potential game. The converse is false: ordinal
+potentials only preserve the \emph{sign} of payoff differences, not their magnitude.
+\end{remark}
+
+\subsection{Existence of Pure Nash Equilibria}
+
+\begin{theorem}[Potential Games Have Pure NE]
+\label{thm:potential-pure-ne}
+Every finite exact potential game (and every finite ordinal potential game) has at least one
+pure Nash equilibrium.
+\end{theorem}
+
+\begin{proof}
+Let $\Phi : A \to \R$ be the potential function. Since $A$ is finite, $\Phi$ attains its
+maximum at some $a^* \in A$:
+\[
+    a^* \in \argmax_{a \in A} \Phi(a).
+\]
+We claim $a^*$ is a pure Nash equilibrium.
+
+For any player $i$ and any deviation $a_i' \in A_i$:
+\[
+    \Phi(a_i^*, a_{-i}^*) \geq \Phi(a_i', a_{-i}^*)
+\]
+by the maximality of $a^*$. By the potential property:
+\[
+    u_i(a_i^*, a_{-i}^*) - u_i(a_i', a_{-i}^*)
+    = \Phi(a_i^*, a_{-i}^*) - \Phi(a_i', a_{-i}^*) \geq 0.
+\]
+Thus $a_i^*$ is a best response to $a_{-i}^*$ for every player $i$, so $a^*$ is a NE.
+
+For ordinal potential games, the same argument works: $\Phi(a_i^*, a_{-i}^*) \geq
+\Phi(a_i', a_{-i}^*)$ implies $u_i(a_i^*, a_{-i}^*) \geq u_i(a_i', a_{-i}^*)$ by the
+ordinal potential property (since if the strict inequality failed, i.e.,
+$u_i(a_i', a_{-i}^*) > u_i(a_i^*, a_{-i}^*)$, then
+$\Phi(a_i', a_{-i}^*) > \Phi(a_i^*, a_{-i}^*)$, contradicting maximality).
+\end{proof}
+
+\subsection{Convergence of Best-Response Dynamics}
+
+\begin{definition}[Best-Response Dynamics]
+\label{def:br-dynamics}
+In \emph{(asynchronous) best-response dynamics}, players take turns updating their actions.
+At each step, one player $i$ is selected (deterministically or randomly) and switches to a
+best response to the current actions of all other players:
+\[
+    a_i^{t+1} \in \argmax_{a_i \in A_i} u_i(a_i, a_{-i}^t),
+    \qquad a_j^{t+1} = a_j^t \text{ for } j \neq i.
+\]
+\end{definition}
+
+\begin{theorem}[Finite Improvement Property]
+\label{thm:fip}
+In every finite exact potential game, best-response dynamics converge to a pure Nash
+equilibrium in a finite number of steps.
+\end{theorem}
+
+\begin{proof}
+We show that $\Phi$ strictly increases at each step where a player's action changes, hence
+the dynamics must terminate (since $A$ is finite and $\Phi$ cannot increase indefinitely).
+
+Suppose at step $t$, player $i$ switches from $a_i^t$ to $a_i^{t+1} \neq a_i^t$ with
+$a_i^{t+1} \in \argmax_{a_i} u_i(a_i, a_{-i}^t)$. Since $a_i^{t+1}$ is a strictly
+improving move (otherwise the player would not switch), we have:
+\[
+    u_i(a_i^{t+1}, a_{-i}^t) > u_i(a_i^t, a_{-i}^t).
+\]
+By the exact potential property:
+\[
+    \Phi(a_i^{t+1}, a_{-i}^t) - \Phi(a_i^t, a_{-i}^t)
+    = u_i(a_i^{t+1}, a_{-i}^t) - u_i(a_i^t, a_{-i}^t) > 0.
+\]
+
+Thus $\Phi(a^{t+1}) > \Phi(a^t)$ whenever an action changes. Since $A$ is finite, the
+sequence $\Phi(a^1), \Phi(a^2), \ldots$ is strictly increasing and takes values in the
+finite set $\{\Phi(a) : a \in A\}$, so it must terminate. Termination occurs when no player
+wants to change, i.e., at a pure Nash equilibrium.
+
+\emph{Remark on step count:} The number of steps is bounded by $|A| = \prod_i |A_i|$
+(since each action profile can appear at most once in the improvement path), but this
+worst-case bound is typically very loose.
+\end{proof}
+
+\begin{corollary}
+\label{cor:better-response}
+The finite improvement property also holds for \emph{better-response dynamics} (where
+player $i$ switches to any action that improves her payoff, not necessarily the best
+response), since $\Phi$ still strictly increases.
+\end{corollary}
+
+\begin{proof}
+If $u_i(a_i', a_{-i}^t) > u_i(a_i^t, a_{-i}^t)$, then
+$\Phi(a_i', a_{-i}^t) > \Phi(a_i^t, a_{-i}^t)$ by the potential property. The same
+termination argument applies.
+\end{proof}
+
+\subsection{Congestion Games}
+
+The most important class of potential games in applications is congestion games.
+
+\begin{definition}[Congestion Game]
+\label{def:congestion-game}
+A \emph{congestion game} is defined by $(N, E, (A_i)_{i \in N}, (d_e)_{e \in E})$ where:
+\begin{itemize}
+    \item $N = [n]$ is the player set.
+    \item $E$ is a finite set of \emph{resources} (or \emph{facilities}).
+    \item $A_i \subseteq 2^E$ is a collection of subsets of resources available to player
+    $i$. Each action $a_i \in A_i$ is a set of resources that player $i$ uses.
+    \item $d_e : \{1, \ldots, n\} \to \R$ is the \emph{delay function} (or cost function)
+    for resource $e$, depending on the number of users.
+\end{itemize}
+The payoff (negative cost) to player $i$ under action profile $a = (a_1, \ldots, a_n)$ is:
+\[
+    u_i(a) = -\sum_{e \in a_i} d_e\bigl(n_e(a)\bigr),
+\]
+where $n_e(a) = |\{j \in N : e \in a_j\}|$ is the congestion (number of users) of
+resource $e$.
+\end{definition}
+
+\begin{theorem}[Congestion Games are Exact Potential Games (Rosenthal)]
+\label{thm:rosenthal}
+Every congestion game is an exact potential game with potential function
+\[
+    \Phi(a) = -\sum_{e \in E} \sum_{k=1}^{n_e(a)} d_e(k).
+\]
+\end{theorem}
+
+\begin{proof}
+We must verify that for any player $i$, any $a_{-i}$, and any $a_i, a_i' \in A_i$:
+\[
+    u_i(a_i, a_{-i}) - u_i(a_i', a_{-i}) = \Phi(a_i, a_{-i}) - \Phi(a_i', a_{-i}).
+\]
+
+Consider the left side. Let $n_e = n_e(a_i, a_{-i})$ denote the congestion when player $i$
+uses $a_i$, and $n_e' = n_e(a_i', a_{-i})$ when player $i$ uses $a_i'$. We partition the
+resources into three groups:
+\begin{enumerate}[label=(\roman*)]
+    \item $e \in a_i \cap a_i'$: used by $i$ under both actions. Then $n_e = n_e'$, so
+    $d_e(n_e)$ cancels in both $u_i$ and $\Phi$ differences.
+    \item $e \in a_i \setminus a_i'$: used by $i$ under $a_i$ but not $a_i'$. Then
+    $n_e = n_e' + 1$ (one more user under $a_i$). The contribution to $u_i(a_i, a_{-i})
+    - u_i(a_i', a_{-i})$ is $-d_e(n_e) = -d_e(n_e' + 1)$. The contribution to
+    $\Phi(a_i, a_{-i}) - \Phi(a_i', a_{-i})$ is $-\sum_{k=1}^{n_e'+1} d_e(k)
+    + \sum_{k=1}^{n_e'} d_e(k) = -d_e(n_e'+1)$. These are equal.
+    \item $e \in a_i' \setminus a_i$: used by $i$ under $a_i'$ but not $a_i$. Then
+    $n_e' = n_e + 1$. The contribution to $u_i(a_i, a_{-i}) - u_i(a_i', a_{-i})$ is
+    $0 - (-d_e(n_e')) = d_e(n_e + 1)$. The contribution to
+    $\Phi(a_i, a_{-i}) - \Phi(a_i', a_{-i})$ is $-\sum_{k=1}^{n_e} d_e(k)
+    + \sum_{k=1}^{n_e+1} d_e(k) = d_e(n_e+1)$. These are equal.
+\end{enumerate}
+Summing over all resources, $u_i(a_i, a_{-i}) - u_i(a_i', a_{-i})
+= \Phi(a_i, a_{-i}) - \Phi(a_i', a_{-i})$.
+\end{proof}
+
+\begin{corollary}
+\label{cor:congestion-ne}
+Every finite congestion game has a pure Nash equilibrium, and best-response dynamics
+converge to one in finitely many steps.
+\end{corollary}
+
+\begin{proof}
+Immediate from Theorems~\ref{thm:rosenthal}, \ref{thm:potential-pure-ne},
+and~\ref{thm:fip}.
+\end{proof}
+
+\begin{example}[Network Routing Game]
+\label{ex:routing}
+Consider a network with source $s$ and destination $d$, and $n$ users each choosing a path
+from $s$ to $d$. Each edge $e$ has delay $d_e(k)$ depending on congestion $k$. This is a
+congestion game: resources are edges, each player's action set is the set of $s$-$d$ paths,
+and the total delay on a path is $\sum_{e \in \text{path}} d_e(n_e)$. By
+Corollary~\ref{cor:congestion-ne}, a pure NE exists and can be found by best-response
+dynamics.
+\end{example}
+
+\begin{example}[Resource Allocation]
+\label{ex:resource-allocation}
+Consider $n$ agents each choosing one of $m$ machines to process a job. Machine $e$ has
+processing time $d_e(k) = k \cdot \ell_e$ (linear congestion) where $\ell_e$ is the base
+load. Each agent's cost is the processing time on her chosen machine. This is a congestion
+game with $A_i = E = \{1, \ldots, m\}$ (each action uses a single resource). The potential
+function is $\Phi(a) = -\sum_{e=1}^m \ell_e \cdot \frac{n_e(n_e+1)}{2}$, and pure NE exist
+with convergent best-response dynamics.
+\end{example}
+
+\begin{rlconnection}[Potential Games and Independent Learning in MARL]
+Potential games are among the few game classes where independent learners (agents running
+separate RL algorithms without coordination) are guaranteed to converge:
+\begin{itemize}
+    \item \textbf{Best-response dynamics} correspond to each agent independently computing
+    optimal policies given fixed opponent policies. The finite improvement property ensures
+    convergence.
+    \item \textbf{Log-linear learning:} If each agent plays action $a_i$ with probability
+    proportional to $\exp(\beta \cdot u_i(a_i, a_{-i}))$ (Boltzmann exploration), the
+    joint process is a Markov chain that converges to the potential maximizer as
+    $\beta \to \infty$.
+    \item \textbf{Multi-agent reward shaping:} If a team reward function $\Phi$ can serve
+    as a potential for individual reward functions $u_i$, then shaping individual rewards
+    via $\Phi$ makes the game a potential game, guaranteeing convergence.
+\end{itemize}
+This is the theoretical basis for \emph{difference rewards} and \emph{Wonderful Life
+Utility} in cooperative MARL.
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 9: Connections to Multi-Agent RL
+%% ============================================================
+\section{Connections to Multi-Agent RL}
+\label{sec:marl-connections}
+
+We consolidate the connections between the game-theoretic results of this lesson and
+modern multi-agent reinforcement learning.
+
+\begin{rlconnection}[Independent Learners in Repeated Games]
+When $n$ agents independently run Q-learning or policy gradient in a repeated game, each
+agent treats the others as part of the environment. The folk theorems
+(Theorems~\ref{thm:nash-folk} and~\ref{thm:spe-folk}) imply that the set of stable
+outcomes is vast---any feasible, individually rational payoff can be a fixed point. This
+explains the well-known instability and sensitivity to hyperparameters of independent
+learners in general-sum games. Convergence guarantees for independent Q-learning exist
+only in restrictive settings: two-player zero-sum games (minimax-Q), potential games, and
+certain classes of team games.
+\end{rlconnection}
+
+\begin{rlconnection}[Self-Play and Fictitious Play]
+Self-play---where an agent trains against copies of itself---is a form of fictitious play.
+In zero-sum games, Robinson's theorem (Theorem~\ref{thm:robinson}) guarantees that the
+empirical strategy profile converges to NE. Modern algorithms extend this:
+\begin{itemize}
+    \item \textbf{Neural Fictitious Self-Play (NFSP):} Uses neural networks to approximate
+    best responses and average strategies, converging to approximate NE in large zero-sum
+    games.
+    \item \textbf{PSRO (Policy-Space Response Oracles):} Maintains a population of
+    policies and computes a best response to the meta-mixture, directly implementing
+    fictitious play in policy space.
+    \item \textbf{Double Oracle:} Iteratively adds best responses to a restricted game,
+    converging to the NE of the full game.
+\end{itemize}
+The regret bound of MWU (Theorem~\ref{thm:mwu-regret}) provides the convergence rate:
+$O(1/\sqrt{T})$ for last-iterate convergence in zero-sum games with optimistic updates.
+\end{rlconnection}
+
+\begin{rlconnection}[Opponent Modeling as Bayesian Inference]
+The Bayesian game framework (Section~\ref{sec:bayesian-games}) provides the foundation for
+opponent modeling in MARL:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Type inference:} An agent maintains a belief $p(\theta_{-i} | h^t)$ over
+    opponent types, updated via Bayes' rule as actions are observed.
+    \item \textbf{Bayesian policy optimization:} The agent's policy maximizes expected
+    return under the current belief: $\max_{\pi_i} \E_{\theta_{-i} \sim p(\cdot | h^t)}
+    [R_i(\pi_i, \pi_{-i}(\theta_{-i}))]$.
+    \item \textbf{Exploration-exploitation:} The agent may take actions to learn about
+    opponents' types (information-gathering exploration), connecting to the theory of
+    Bayesian exploration in MDPs.
+\end{enumerate}
+\end{rlconnection}
+
+\begin{rlconnection}[Potential-Based Reward Shaping in Multi-Agent Settings]
+Ng, Harada, and Russell's (1999) potential-based reward shaping theorem states that
+adding a shaping reward $F(s, s') = \gamma \phi(s') - \phi(s)$ preserves the optimal
+policy in single-agent MDPs. In multi-agent settings, this connects to potential games:
+\begin{itemize}
+    \item If the joint reward function serves as a potential for individual rewards,
+    the multi-agent system is a potential game and independent learning converges.
+    \item The \emph{difference reward} $D_i(a) = R(a) - R(a_{-i}, c_i)$ (where $c_i$ is a
+    default action for agent $i$) is designed so that $D_i(a_i, a_{-i}) - D_i(a_i', a_{-i})
+    = R(a_i, a_{-i}) - R(a_i', a_{-i})$, making $R$ an exact potential for the game with
+    payoffs $D_i$.
+    \item This theoretical property ensures that maximizing individual difference rewards
+    aligns with maximizing the global objective, providing a principled approach to
+    cooperative MARL.
+\end{itemize}
+\end{rlconnection}
+
+
+%% ============================================================
+%% SECTION 10: Exercises
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Finitely Repeated Prisoner's Dilemma]
+\label{ex:finite-pd}
+Consider the Prisoner's Dilemma from Example~\ref{ex:repeated-pd}, repeated $T = 100$
+times. Show that the unique SPE is mutual defection in every period, regardless of $T$.
+Explain why this result is ``paradoxical'' and how it motivates infinitely repeated games.
+\end{exercise}
+
+\begin{exercise}[Grim Trigger in a Different Game]
+\label{ex:grim-trigger-general}
+Consider the stage game:
+\[
+\begin{array}{c|ccc}
+  & L & C & R \\ \hline
+T & 6,6 & 0,8 & 0,0 \\
+M & 8,0 & 4,4 & 0,0 \\
+B & 0,0 & 0,0 & 2,2
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Find all pure Nash equilibria of the stage game.
+    \item Compute the minimax values $\underline{v}_1$ and $\underline{v}_2$.
+    \item Show that the payoff $(6,6)$ (from $(T,L)$) can be sustained as an SPE of the
+    infinitely repeated game using grim trigger with punishment $(B,R)$. Find the minimum
+    discount factor.
+    \item Can the payoff $(7,7)$ be sustained? If so, construct a strategy profile.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Tit-for-Tat Is Not SPE]
+\label{ex:tft-not-spe}
+Show that in the infinitely repeated Prisoner's Dilemma (Example~\ref{ex:repeated-pd}),
+the tit-for-tat strategy profile is a Nash equilibrium for $\delta \geq 1/3$ but is
+\emph{not} a subgame perfect equilibrium. (Hint: Consider the subgame after $(D, C)$.)
+\end{exercise}
+
+\begin{exercise}[Computing BNE]
+\label{ex:compute-bne}
+Consider a two-player Bayesian game where player 1 has type $\theta_1 \in \{H, L\}$ with
+$\Prob(\theta_1 = H) = 1/2$, and player 2 has no private information. Actions:
+$A_1 = A_2 = \{U, D\}$. Payoffs (for each type of player 1):
+\[
+\text{Type } H: \quad
+\begin{array}{c|cc}
+  & L & R \\ \hline
+U & 2,1 & 0,0 \\
+D & 0,0 & 1,2
+\end{array}
+\qquad \text{Type } L: \quad
+\begin{array}{c|cc}
+  & L & R \\ \hline
+U & 0,0 & 1,2 \\
+D & 2,1 & 0,0
+\end{array}
+\]
+Find all Bayesian Nash equilibria (pure and mixed).
+\end{exercise}
+
+\begin{exercise}[Second-Price Auction as Bayesian Game]
+\label{ex:second-price}
+In a second-price sealed-bid auction with $n$ bidders having independent private values
+$v_i \sim F$ (where $F$ is a continuous CDF on $[0, \bar{v}]$), show that bidding
+$b_i = v_i$ (truthful bidding) is a dominant strategy, hence a BNE. Compare with the
+first-price auction BNE from Example~\ref{ex:first-price-auction}.
+\end{exercise}
+
+\begin{exercise}[Verifying a Potential Function]
+\label{ex:verify-potential}
+Consider the two-player game with $A_1 = A_2 = \{X, Y\}$ and payoffs:
+\[
+\begin{array}{c|cc}
+  & X & Y \\ \hline
+X & 3,2 & 1,1 \\
+Y & 2,1 & 4,3
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Show this is an exact potential game by constructing the potential function $\Phi$.
+    \item Find all pure Nash equilibria using $\Phi$.
+    \item Verify that best-response dynamics converge from any initial profile.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[MWU Convergence Rate]
+\label{ex:mwu-rate}
+Consider the zero-sum game Rock-Paper-Scissors:
+\[
+\begin{array}{c|ccc}
+  & R & P & S \\ \hline
+R & 0 & -1 & 1 \\
+P & 1 & 0 & -1 \\
+S & -1 & 1 & 0
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item What is the unique NE and the value of the game?
+    \item If both players use MWU with $\eta = \sqrt{\ln 3 / T}$, bound the duality gap
+    $\max_{a_1} g(a_1, \bar{\alpha}_2^T) - \min_{a_2} g(\bar{\alpha}_1^T, a_2)$ after
+    $T = 1000$ rounds.
+    \item How many rounds are needed for the duality gap to be below $0.01$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Folk Theorem Application]
+\label{ex:folk-application}
+Consider the two-player stage game:
+\[
+\begin{array}{c|cc}
+  & C & D \\ \hline
+C & 5,5 & 0,7 \\
+D & 7,0 & 2,2
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the feasible payoff set $V$ and the minimax values.
+    \item Apply the Nash folk theorem to determine which payoff vectors are achievable as
+    NE payoffs for large $\delta$.
+    \item For the payoff $(5,5)$, find the minimum discount factor under grim trigger.
+    \item For the payoff $(4,4)$, describe a strategy profile achieving it as an SPE and
+    find the minimum $\delta$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Congestion Game with Three Players]
+\label{ex:congestion-three}
+Three players share two resources $\{A, B\}$. Each player chooses exactly one resource.
+Delay functions: $d_A(k) = k$ and $d_B(k) = 2k - 1$.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the Rosenthal potential function $\Phi$.
+    \item Enumerate all action profiles and compute $\Phi$ for each.
+    \item Find all pure NE by maximizing $\Phi$ (equivalently, minimizing $-\Phi$).
+    \item Verify that your NE are indeed equilibria by checking no player wants to deviate.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Separating vs.\ Pooling Equilibria]
+\label{ex:signaling}
+Consider a signaling game with two sender types $\theta \in \{G, B\}$ (good, bad),
+$\Prob(\theta = G) = 1/3$, two messages $m \in \{H, L\}$ (high, low effort), and two
+receiver actions $a \in \{A, R\}$ (accept, reject). Payoffs:
+\begin{align*}
+    u_S(G, H, A) &= 3, \quad u_S(G, H, R) = -1, \quad u_S(G, L, A) = 4, \quad
+    u_S(G, L, R) = 0, \\
+    u_S(B, H, A) &= 3, \quad u_S(B, H, R) = -2, \quad u_S(B, L, A) = 4, \quad
+    u_S(B, L, R) = 1, \\
+    u_R(\theta, m, A) &= \begin{cases} 1 & \text{if } \theta = G, \\
+    -1 & \text{if } \theta = B, \end{cases} \quad
+    u_R(\theta, m, R) = 0.
+\end{align*}
+\begin{enumerate}[label=(\alph*)]
+    \item Does a separating PBE exist where type $G$ sends $H$ and type $B$ sends $L$?
+    \item Does a pooling PBE exist where both types send $L$?
+    \item Does a pooling PBE exist where both types send $H$?
+\end{enumerate}
+\end{exercise}
+
+
+%% ============================================================
+%% SECTION 11: Summary of Key Results
+%% ============================================================
+\section{Summary of Key Results}
+\label{sec:summary}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{4.2cm}p{8cm}l@{}}
+\toprule
+\textbf{Result} & \textbf{Statement} & \textbf{Ref.} \\
+\midrule
+
+Unraveling Theorem &
+Unique stage-game NE $\Rightarrow$ unique SPE of $G^T$: play NE every period &
+Thm~\ref{thm:unraveling} \\
+
+Nash Folk Theorem &
+Any feasible, strictly individually rational payoff is a NE payoff for $\delta$ near 1 &
+Thm~\ref{thm:nash-folk} \\
+
+SPE Folk Theorem &
+Same as Nash folk theorem but for SPE (under full dimensionality condition) &
+Thm~\ref{thm:spe-folk} \\
+
+Fictitious Play ($2 \times 2$) &
+Empirical frequencies converge to NE in $2 \times 2$ zero-sum games &
+Thm~\ref{thm:fp-2x2} \\
+
+Robinson's Theorem &
+Fictitious play converges to NE in all finite two-player zero-sum games &
+Thm~\ref{thm:robinson} \\
+
+MWU Regret Bound &
+External regret $\leq 2\sqrt{T \ln |A_i|}$; hence MWU is no-regret &
+Thm~\ref{thm:mwu-regret} \\
+
+No-Regret $\Rightarrow$ NE &
+If both players use no-regret, time-avg.\ play converges to NE in zero-sum &
+Thm~\ref{thm:no-regret-ne} \\
+
+BNE Existence &
+Every finite Bayesian game has a BNE in mixed strategies &
+Thm~\ref{thm:bne-existence} \\
+
+PBE in Signaling Games &
+Every finite signaling game has a PBE &
+Prop~\ref{prop:pbe-signaling-existence} \\
+
+Potential $\Rightarrow$ Pure NE &
+Every finite potential game has a pure Nash equilibrium &
+Thm~\ref{thm:potential-pure-ne} \\
+
+Finite Improvement &
+Best-response dynamics converge in finite steps in potential games &
+Thm~\ref{thm:fip} \\
+
+Rosenthal's Theorem &
+Every congestion game is an exact potential game &
+Thm~\ref{thm:rosenthal} \\
+
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{3.5cm}p{8.5cm}@{}}
+\toprule
+\textbf{Game Class} & \textbf{MARL Implication} \\
+\midrule
+
+Repeated games (general-sum) &
+Folk theorems $\Rightarrow$ many equilibria; independent learners may converge to any of them; sensitive to initialization and hyperparameters \\
+
+Zero-sum games &
+Minimax + no-regret $\Rightarrow$ convergent self-play (NFSP, PSRO, CFR) \\
+
+Bayesian games &
+Opponent modeling as Bayesian inference over types; principled exploration \\
+
+Potential games &
+Independent best-response / Q-learning converges; difference rewards make cooperative MARL a potential game \\
+
+Congestion games &
+Routing, resource allocation: pure NE exist, local search works \\
+
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
