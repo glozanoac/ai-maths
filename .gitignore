@@ -1,5 +1,7 @@
 # LaTeX build artifacts
 *.aux
+*.blg
+*.bbl
 *.log
 *.out
 *.toc

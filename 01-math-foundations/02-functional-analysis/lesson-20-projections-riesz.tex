@@ -1,112 +1,101 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Lesson 7: Hilbert Spaces and Operators}}
+\fancyhead[L]{\textsc{Lesson 20: Projections, Orthonormal Bases, and Riesz Representation}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{example}{Example}[section]
-\newtheorem{exercise}{Exercise}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{warning}[1][]{
-    colback=red!5!white,
-    colframe=red!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Q}{\mathbb{Q}}
-\newcommand{\Z}{\mathbb{Z}}
-\newcommand{\C}{\mathbb{C}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\indicator}{\mathbf{1}}
-\DeclareMathOperator{\interior}{int}
-\DeclareMathOperator{\cl}{cl}
-\DeclareMathOperator{\spn}{span}
-\DeclareMathOperator{\conv}{conv}
-\DeclareMathOperator{\dom}{dom}
-\DeclareMathOperator{\range}{range}
-\DeclareMathOperator{\nullspace}{null}
-\DeclareMathOperator{\diam}{diam}
-
-% ---- Title ----
 \title{Lesson 20: Projections, Orthonormal Bases, and Riesz Representation}
-\author{Curriculum: A Rigorous Learning Path to Multi-Agent Deep RL}
+\author{AI/ML Mathematics}
 \date{}
-
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{3}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
 
-\section{The Projection Theorem}\label{sec:projection}
+\section{Motivation and Overview}
+\label{sec:motivation}
 
-\begin{theorem}[Best Approximation in Closed Convex Sets]\label{thm:best-approx}
-Let $H$ be a Hilbert space and $C \subset H$ a nonempty, closed, convex set.
-For every $x \in H$, there exists a unique $y_0 \in C$ such that
+In Lesson 19 we equipped vector spaces with inner products, establishing
+the geometry of angles and orthogonality. We now develop the three main
+consequences of this geometry in the Hilbert space setting: orthogonal
+projections, Fourier expansions in orthonormal bases, and the Riesz
+Representation Theorem. Together, these results provide the theoretical
+machinery for least-squares approximation, spectral decomposition, and
+the identification of a Hilbert space with its dual---all of which are
+fundamental to function approximation in reinforcement learning.
+
+\begin{rlconnection}[title={Projections and Representation in RL}]
+\begin{enumerate}[leftmargin=2em,nosep]
+    \item \textbf{Projected Bellman equation:} In LSTD (Least-Squares
+          Temporal Difference), the value function is approximated by
+          solving $\hat{V} = \Pi_\mu T \hat{V}$, where $\Pi_\mu$ is the
+          orthogonal projection onto a feature subspace in the $L^2(\mu)$
+          inner product. The projection theorem guarantees existence and
+          uniqueness of $\Pi_\mu T \hat{V}$.
+    \item \textbf{Fourier features:} Random Fourier features approximate
+          kernel functions via truncated Fourier expansions. Parseval's
+          identity provides the theoretical justification: the truncation
+          error equals the tail of the Fourier coefficient series.
+    \item \textbf{Riesz representation and gradients:} The Riesz theorem
+          identifies bounded linear functionals with inner product
+          representatives. This underpins the definition of the gradient:
+          $Df(x)[h] = \langle \nabla f(x), h \rangle$, and more generally
+          the natural gradient via the Fisher information inner product.
+\end{enumerate}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.} Inner product spaces, Hilbert spaces,
+orthogonality, orthogonal complements (Lesson 19). Completeness and
+Banach spaces (Lessons 15--16).
+
+\medskip
+\noindent\textbf{Outline.}
+Section~\ref{sec:references} lists references.
+Section~\ref{sec:projection} proves the projection theorem and develops
+orthogonal projections.
+Section~\ref{sec:orthonormal} introduces orthonormal systems, the
+Gram--Schmidt process, and Bessel's inequality.
+Section~\ref{sec:parseval} establishes Parseval's identity and Fourier
+expansions.
+Section~\ref{sec:separability} connects separability to countable
+orthonormal bases.
+Section~\ref{sec:riesz} proves the Riesz Representation Theorem.
+Section~\ref{sec:exercises} provides exercises.
+Section~\ref{sec:summary} summarizes the key results.
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+The projection theorem and Riesz representation are covered in
+\citet{kreyszig1989}, Chapters 3.3--3.6;
+\citet{conway1990}, Chapter I.2--I.5;
+\citet{brezis2011}, Chapter 5;
+and \citet{rudin1991}, Chapter 4.
+The treatment of orthonormal bases and Parseval's identity follows
+\citet{lax2002}, Chapter 6, and \citet{kreyszig1989}, Chapter 3.5.
+
+%% ============================================================
+%% SECTION 3: THE PROJECTION THEOREM
+%% ============================================================
+
+\section{The Projection Theorem}
+\label{sec:projection}
+
+\begin{theorem}[Best Approximation in Closed Convex Sets]
+\label{thm:best-approx}
+Let $H$ be a Hilbert space and $C \subset H$ a nonempty, closed, convex
+set. For every $x \in H$, there exists a unique $y_0 \in C$ such that
 \[
-    \|x - y_0\| = \inf_{y \in C} \|x - y\| =: d(x, C).
+    \|x - y_0\| = \inf_{y \in C} \|x - y\| =: \dist(x, C).
 \]
 \end{theorem}
 
@@ -120,260 +109,383 @@ $a = x - y_n$ and $b = x - y_m$:
     \|a + b\|^2 + \|a - b\|^2 = 2(\|a\|^2 + \|b\|^2).
 \]
 Here $a - b = y_m - y_n$ and
-$a + b = 2x - y_n - y_m = 2\bigl(x - \frac{y_n + y_m}{2}\bigr)$.
-Since $C$ is convex, $\frac{y_n + y_m}{2} \in C$, so
-$\|a + b\| = 2\bigl\|x - \frac{y_n + y_m}{2}\bigr\| \geq 2d$.
+$a + b = 2x - y_n - y_m = 2\bigl(x - \tfrac{y_n + y_m}{2}\bigr)$.
+Since $C$ is convex, $\tfrac{y_n + y_m}{2} \in C$, so
+$\|a + b\| = 2\bigl\|x - \tfrac{y_n + y_m}{2}\bigr\| \geq 2d$.
 Therefore
 \[
     \|y_n - y_m\|^2
-    = 2(\|x - y_n\|^2 + \|x - y_m\|^2) - 4\Bigl\|x - \frac{y_n + y_m}{2}\Bigr\|^2
+    = 2(\|x - y_n\|^2 + \|x - y_m\|^2)
+      - 4\Bigl\|x - \frac{y_n + y_m}{2}\Bigr\|^2
     \leq 2(\|x - y_n\|^2 + \|x - y_m\|^2) - 4d^2.
 \]
-As $n, m \to \infty$, $\|x - y_n\|^2 \to d^2$ and $\|x - y_m\|^2 \to d^2$,
-so $\|y_n - y_m\|^2 \to 2d^2 + 2d^2 - 4d^2 = 0$. Thus $(y_n)$ is Cauchy.
+As $n, m \to \infty$, $\|x - y_n\|^2 \to d^2$ and
+$\|x - y_m\|^2 \to d^2$, so $\|y_n - y_m\|^2 \to 0$. Thus $(y_n)$ is
+Cauchy.
 
 Since $H$ is complete and $C$ is closed, $y_n \to y_0 \in C$, and
 $\|x - y_0\| = \lim \|x - y_n\| = d$.
 
 \textbf{Uniqueness:} If $y_0, y_0'$ both achieve the infimum, apply the
-parallelogram law to $a = x - y_0, b = x - y_0'$:
-$\|y_0 - y_0'\|^2 = 2d^2 + 2d^2 - 4\|x - \frac{y_0 + y_0'}{2}\|^2
+parallelogram law to $a = x - y_0$, $b = x - y_0'$:
+$\|y_0 - y_0'\|^2 = 2d^2 + 2d^2
+- 4\|x - \tfrac{y_0 + y_0'}{2}\|^2
 \leq 4d^2 - 4d^2 = 0$, so $y_0 = y_0'$.
 \end{proof}
 
-\begin{theorem}[Projection Theorem]\label{thm:projection}
-Let $H$ be a Hilbert space and $M \subset H$ a closed subspace. For every
-$x \in H$, there exist unique elements $m \in M$ and $z \in M^\perp$ such that
+\begin{theorem}[Projection Theorem]
+\label{thm:projection}
+Let $H$ be a Hilbert space and $M \subset H$ a closed subspace. For
+every $x \in H$, there exist unique elements $m \in M$ and
+$z \in M^\perp$ such that
 \[
     x = m + z.
 \]
 The element $m$ is the unique best approximation of $x$ in $M$, and is
-characterized by the condition $x - m \in M^\perp$.
+characterized by the orthogonality condition $x - m \in M^\perp$.
 \end{theorem}
 
 \begin{proof}
-By Theorem~\ref{thm:best-approx}, there exists a unique $m \in M$ minimizing
-$\|x - m\|$. Set $z = x - m$.
+Since $M$ is a closed convex set, Theorem~\ref{thm:best-approx}
+provides a unique $m \in M$ minimizing $\|x - m\|$. Set $z = x - m$.
 
-\textbf{Claim:} $z \in M^\perp$. For any $v \in M$ and $\alpha \in \mathbb{F}$,
-$m + \alpha v \in M$ (since $M$ is a subspace), so
+\textbf{Claim:} $z \in M^\perp$. For any $v \in M$ and
+$\alpha \in \mathbb{F}$, $m + \alpha v \in M$ (since $M$ is a
+subspace), so
 \[
     \|z\|^2 \leq \|x - (m + \alpha v)\|^2 = \|z - \alpha v\|^2
     = \|z\|^2 - 2\,\mathrm{Re}\,(\alpha \langle v, z \rangle)
       + |\alpha|^2 \|v\|^2.
 \]
 For $v \neq 0$, choose $\alpha = \langle z, v \rangle / \|v\|^2$.
-Then $\overline{\alpha} = \langle v, z \rangle / \|v\|^2$ and
-$\alpha \langle v, z \rangle = |\langle z, v \rangle|^2 / \|v\|^2$, giving
+Then $\bar{\alpha} = \langle v, z \rangle / \|v\|^2$ and
+$\alpha \langle v, z \rangle = |\langle z, v \rangle|^2 / \|v\|^2$,
+giving
 \[
     0 \leq -\frac{|\langle z, v \rangle|^2}{\|v\|^2},
 \]
-hence $\langle z, v \rangle = 0$ for all $v \in M$, i.e., $z \in M^\perp$.
+hence $\langle z, v \rangle = 0$ for all $v \in M$, i.e.,
+$z \in M^\perp$.
 
-\textbf{Uniqueness:} If $x = m_1 + z_1 = m_2 + z_2$ with $m_i \in M$ and
-$z_i \in M^\perp$, then $m_1 - m_2 = z_2 - z_1 \in M \cap M^\perp$.
-But $\langle w, w \rangle = 0$ for any $w \in M \cap M^\perp$, so $w = 0$.
+\textbf{Uniqueness:} If $x = m_1 + z_1 = m_2 + z_2$ with $m_i \in M$
+and $z_i \in M^\perp$, then
+$m_1 - m_2 = z_2 - z_1 \in M \cap M^\perp$. But
+$\langle w, w \rangle = 0$ for any $w \in M \cap M^\perp$, so $w = 0$.
 \end{proof}
 
-\begin{keyresult}[Orthogonal Decomposition]
+\begin{keyresult}[title={Orthogonal Decomposition}]
 If $M$ is a closed subspace of a Hilbert space $H$, then
-$H = M \oplus M^\perp$ (internal direct sum), meaning every $x \in H$ has
-a unique decomposition $x = m + z$ with $m \in M$, $z \in M^\perp$.
-Moreover, $(M^\perp)^\perp = M$.
+$H = M \oplus M^\perp$ (internal direct sum), meaning every $x \in H$
+has a unique decomposition $x = m + z$ with $m \in M$,
+$z \in M^\perp$. Moreover, $(M^\perp)^\perp = M$.
 \end{keyresult}
 
-\begin{definition}[Orthogonal Projection]\label{def:projection-operator}
+\begin{definition}[Orthogonal Projection]
+\label{def:projection-operator}
 The \emph{orthogonal projection} onto a closed subspace $M$ of a Hilbert
-space $H$ is the map $P_M \colon H \to H$ defined by $P_M(x) = m$, where
-$x = m + z$ is the unique decomposition from Theorem~\ref{thm:projection}.
+space $H$ is the map $P_M \colon H \to H$ defined by $P_M(x) = m$,
+where $x = m + z$ is the unique decomposition from
+Theorem~\ref{thm:projection}.
 \end{definition}
 
-\begin{proposition}[Properties of Orthogonal Projections]\label{prop:projection-props}
-Let $P = P_M$ be the orthogonal projection onto a closed subspace $M$. Then:
+\begin{proposition}[Properties of Orthogonal Projections]
+\label{prop:projection-props}
+Let $P = P_M$ be the orthogonal projection onto a closed subspace $M$.
+Then:
 \begin{enumerate}[label=(\roman*)]
     \item $P$ is linear.
     \item $P^2 = P$ (idempotent).
-    \item $\range(P) = M$ and $\nullspace(P) = M^\perp$.
-    \item $\langle Px, y \rangle = \langle x, Py \rangle$ for all $x, y \in H$
-          (self-adjoint).
+    \item $\operatorname{range}(P) = M$ and $\ker(P) = M^\perp$.
+    \item $\langle Px, y \rangle = \langle x, Py \rangle$ for all
+          $x, y \in H$ (self-adjoint).
     \item $\|P\| = 1$ if $M \neq \{0\}$ (bounded with operator norm 1).
-    \item $\|x - Px\| \leq \|x - m\|$ for all $m \in M$, with equality iff
-          $m = Px$.
+    \item $\|x - Px\| \leq \|x - m\|$ for all $m \in M$, with equality
+          if and only if $m = Px$.
 \end{enumerate}
 \end{proposition}
 
 \begin{proof}
 \begin{enumerate}[label=(\roman*)]
-    \item If $x = m_1 + z_1$ and $y = m_2 + z_2$, then
-          $\alpha x + \beta y = (\alpha m_1 + \beta m_2) + (\alpha z_1 + \beta z_2)$,
-          which is the decomposition since $M$ and $M^\perp$ are subspaces.
-          Thus $P(\alpha x + \beta y) = \alpha m_1 + \beta m_2 = \alpha Px + \beta Py$.
+    \item If $x = m_1 + z_1$ and $y = m_2 + z_2$ are the decompositions,
+          then
+          $\alpha x + \beta y = (\alpha m_1 + \beta m_2)
+          + (\alpha z_1 + \beta z_2)$, which is the decomposition since
+          $M$ and $M^\perp$ are subspaces. Thus
+          $P(\alpha x + \beta y) = \alpha m_1 + \beta m_2
+          = \alpha Px + \beta Py$.
+
     \item $Px \in M$, so $Px = Px + 0$ is the decomposition of $Px$,
           giving $P(Px) = Px$.
+
     \item Immediate from the decomposition.
-    \item $\langle Px, y \rangle = \langle Px, Py + (I - P)y \rangle
+
+    \item $\langle Px, y \rangle
+          = \langle Px, Py + (I - P)y \rangle
           = \langle Px, Py \rangle + \langle Px, (I-P)y \rangle$.
-          Since $Px \in M$ and $(I-P)y \in M^\perp$, the second term vanishes.
-          Similarly $\langle x, Py \rangle = \langle Px, Py \rangle$.
+          Since $Px \in M$ and $(I-P)y \in M^\perp$, the second term
+          vanishes. Similarly
+          $\langle x, Py \rangle = \langle Px, Py \rangle$.
+
     \item $\|Px\|^2 = \langle Px, Px \rangle = \langle Px, x \rangle
-          \leq \|Px\| \|x\|$ by Cauchy--Schwarz, so $\|Px\| \leq \|x\|$,
-          hence $\|P\| \leq 1$. For $0 \neq m \in M$, $Pm = m$, so $\|P\| = 1$.
-    \item This is the best approximation property from Theorem~\ref{thm:best-approx}. \qedhere
+          \leq \|Px\| \|x\|$ by Cauchy--Schwarz, so
+          $\|Px\| \leq \|x\|$, hence $\|P\| \leq 1$. For
+          $0 \neq m \in M$, $Pm = m$, so $\|P\| = 1$.
+
+    \item This is the best approximation property from
+          Theorem~\ref{thm:best-approx}. \qedhere
 \end{enumerate}
 \end{proof}
 
-\begin{rlconnection}[Projections in Temporal-Difference Learning]
-In linear function approximation for RL, the value function is approximated
-in a subspace $M = \{X w : w \in \R^d\}$ where $X$ is a feature matrix.
-The LSTD (Least-Squares TD) algorithm computes an approximation
+\begin{rlconnection}[title={Projection Operators in TD Learning}]
+In linear function approximation for RL, the value function is
+approximated in a subspace $M = \{\Phi w : w \in \R^d\}$ where
+$\Phi$ is a feature matrix. The LSTD algorithm computes an approximation
 $\hat{V} = P_M T V$ where $T$ is the Bellman operator and $P_M$ is the
-orthogonal projection onto $M$ (in a weighted $L^2$ norm). Understanding
-that $P_M$ is a bounded, idempotent, self-adjoint operator with
-$\|P_M\| = 1$ is essential for proving that the projected Bellman equation
-$V = P_M T V$ has a unique fixed point and that LSTD converges to it.
+orthogonal projection onto $M$ in a weighted $L^2$ norm. The properties
+above---boundedness ($\|P_M\| = 1$), idempotence, and
+self-adjointness---are essential for proving that the projected Bellman
+equation $V = P_M T V$ has a unique fixed point and that LSTD converges.
+The contraction factor of $P_M T$ is $\gamma \|P_M\| = \gamma < 1$.
 \end{rlconnection}
 
+%% ============================================================
+%% SECTION 4: ORTHONORMAL SYSTEMS
+%% ============================================================
 
-%% ============================================================================
-%% SECTION 5: ORTHONORMAL SYSTEMS
-%% ============================================================================
+\section{Orthonormal Systems}
+\label{sec:orthonormal}
 
-\section{Orthonormal Systems}\label{sec:orthonormal}
-
-\begin{definition}[Orthonormal Set]\label{def:orthonormal}
+\begin{definition}[Orthonormal Set]
+\label{def:orthonormal}
 A set $\{e_\alpha\}_{\alpha \in A}$ in an inner product space is
 \emph{orthonormal} if
 \[
     \langle e_\alpha, e_\beta \rangle = \delta_{\alpha\beta}
-    = \begin{cases} 1 & \text{if } \alpha = \beta, \\ 0 & \text{if } \alpha \neq \beta. \end{cases}
+    = \begin{cases}
+        1 & \text{if } \alpha = \beta, \\
+        0 & \text{if } \alpha \neq \beta.
+      \end{cases}
 \]
 \end{definition}
 
-\begin{theorem}[Gram--Schmidt Process]\label{thm:gram-schmidt}
+\begin{definition}[Fourier Coefficients]
+\label{def:fourier}
+Given an orthonormal set $\{e_\alpha\}_{\alpha \in A}$ and $x \in X$,
+the \emph{Fourier coefficients} of $x$ with respect to
+$\{e_\alpha\}$ are
+$\hat{x}_\alpha = \langle x, e_\alpha \rangle$.
+\end{definition}
+
+\begin{theorem}[Gram--Schmidt Process]
+\label{thm:gram-schmidt}
 Let $(x_n)_{n=1}^\infty$ be a linearly independent sequence in an inner
 product space $X$. Define
 \begin{align*}
     e_1 &= \frac{x_1}{\|x_1\|}, \\
-    \tilde{e}_n &= x_n - \sum_{k=1}^{n-1} \langle x_n, e_k \rangle e_k,
+    \tilde{e}_n &= x_n - \sum_{k=1}^{n-1}
+                   \langle x_n, e_k \rangle\, e_k,
     \qquad e_n = \frac{\tilde{e}_n}{\|\tilde{e}_n\|}
     \quad (n \geq 2).
 \end{align*}
 Then $(e_n)$ is an orthonormal sequence with
-$\spn\{e_1, \ldots, e_n\} = \spn\{x_1, \ldots, x_n\}$ for every $n$.
+$\Span\{e_1, \ldots, e_n\} = \Span\{x_1, \ldots, x_n\}$ for every $n$.
 \end{theorem}
 
 \begin{proof}
-By induction. The base case $n = 1$ is clear. Suppose $e_1, \ldots, e_{n-1}$
-are orthonormal with $\spn\{e_1, \ldots, e_{n-1}\} = \spn\{x_1, \ldots, x_{n-1}\}$.
-Then $\tilde{e}_n = x_n - \sum_{k=1}^{n-1} \langle x_n, e_k \rangle e_k$
-satisfies $\langle \tilde{e}_n, e_j \rangle = \langle x_n, e_j \rangle
-- \langle x_n, e_j \rangle = 0$ for $j = 1, \ldots, n-1$.
-Since $(x_k)$ is linearly independent, $x_n \notin \spn\{x_1, \ldots, x_{n-1}\}$,
-so $\tilde{e}_n \neq 0$. Setting $e_n = \tilde{e}_n / \|\tilde{e}_n\|$ gives
-$\|e_n\| = 1$ and $\langle e_n, e_j \rangle = 0$ for $j < n$.
-The span equality follows since $x_n = \tilde{e}_n + \sum_{k=1}^{n-1}
-\langle x_n, e_k \rangle e_k$ expresses $x_n$ in terms of $e_1, \ldots, e_n$,
-and conversely $e_n$ is a linear combination of $x_1, \ldots, x_n$.
+By induction. The base case $n = 1$ is clear: $\|e_1\| = 1$.
+
+Suppose $e_1, \ldots, e_{n-1}$ are orthonormal with
+$\Span\{e_1, \ldots, e_{n-1}\} = \Span\{x_1, \ldots, x_{n-1}\}$.
+Then
+$\tilde{e}_n = x_n - \sum_{k=1}^{n-1} \langle x_n, e_k \rangle\, e_k$
+satisfies, for $j = 1, \ldots, n-1$:
+\[
+    \langle \tilde{e}_n, e_j \rangle
+    = \langle x_n, e_j \rangle - \langle x_n, e_j \rangle = 0.
+\]
+Since $(x_k)$ is linearly independent,
+$x_n \notin \Span\{x_1, \ldots, x_{n-1}\}$, so $\tilde{e}_n \neq 0$.
+Setting $e_n = \tilde{e}_n / \|\tilde{e}_n\|$ gives $\|e_n\| = 1$ and
+$\langle e_n, e_j \rangle = 0$ for $j < n$.
+
+The span equality follows since
+$x_n = \tilde{e}_n + \sum_{k=1}^{n-1} \langle x_n, e_k \rangle\, e_k$
+expresses $x_n$ in terms of $e_1, \ldots, e_n$, and conversely $e_n$ is
+a linear combination of $x_1, \ldots, x_n$.
 \end{proof}
 
-\begin{definition}[Fourier Coefficients]\label{def:fourier}
-Given an orthonormal set $\{e_\alpha\}_{\alpha \in A}$ and $x \in X$, the
-\emph{Fourier coefficients} of $x$ are $\hat{x}_\alpha = \langle x, e_\alpha \rangle$.
-\end{definition}
-
-\begin{theorem}[Bessel's Inequality]\label{thm:bessel}
-Let $\{e_n\}_{n=1}^\infty$ be an orthonormal sequence in an inner product
-space $X$. For every $x \in X$,
+\begin{theorem}[Bessel's Inequality]
+\label{thm:bessel}
+Let $\{e_n\}_{n=1}^\infty$ be an orthonormal sequence in an inner
+product space $X$. For every $x \in X$,
 \[
     \sum_{n=1}^\infty |\langle x, e_n \rangle|^2 \leq \|x\|^2.
 \]
 \end{theorem}
 
 \begin{proof}
-For any $N \in \N$, let $s_N = \sum_{n=1}^N \langle x, e_n \rangle e_n$.
+For any $N \in \N$, let $s_N = \sum_{n=1}^N \langle x, e_n \rangle\, e_n$.
 Then
-\[
-    0 \leq \|x - s_N\|^2
-    = \|x\|^2 - 2\,\mathrm{Re}\sum_{n=1}^N \langle x, e_n \rangle
-      \langle e_n, x \rangle + \sum_{n=1}^N |\langle x, e_n \rangle|^2
-    = \|x\|^2 - \sum_{n=1}^N |\langle x, e_n \rangle|^2,
-\]
-where we used orthonormality to compute $\|s_N\|^2 = \sum_{n=1}^N
-|\langle x, e_n \rangle|^2$ (Pythagorean theorem) and expanded the cross term.
-Rearranging gives $\sum_{n=1}^N |\langle x, e_n \rangle|^2 \leq \|x\|^2$.
-Since this holds for all $N$, the series converges and the inequality persists.
+\begin{align*}
+    0 &\leq \|x - s_N\|^2
+    = \|x\|^2 - 2\,\mathrm{Re}\sum_{n=1}^N
+      |\langle x, e_n \rangle|^2 + \sum_{n=1}^N
+      |\langle x, e_n \rangle|^2 \\
+    &= \|x\|^2 - \sum_{n=1}^N |\langle x, e_n \rangle|^2,
+\end{align*}
+where we used orthonormality to compute
+$\|s_N\|^2 = \sum_{n=1}^N |\langle x, e_n \rangle|^2$ (Pythagorean
+theorem) and expanded the cross terms. Rearranging gives
+$\sum_{n=1}^N |\langle x, e_n \rangle|^2 \leq \|x\|^2$. Since this
+holds for all $N$, the series converges and the inequality persists.
 \end{proof}
 
-\begin{definition}[Orthonormal Basis (Hilbert Basis)]\label{def:onb}
-An orthonormal set $\{e_\alpha\}_{\alpha \in A}$ in a Hilbert space $H$ is an
-\emph{orthonormal basis} (or \emph{complete orthonormal system}) if
-$\overline{\spn\{e_\alpha : \alpha \in A\}} = H$.
-Equivalently, $\{e_\alpha\}^\perp = \{0\}$.
+\begin{keyresult}[title={Bessel's Inequality -- Energy Bound}]
+The sum of squared Fourier coefficients is bounded by the squared norm
+of the signal. In the language of signal processing, the ``energy'' in
+the Fourier coefficients cannot exceed the energy of the original
+signal. Equality holds (Parseval's identity) if and only if the
+orthonormal set is complete.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 5: PARSEVAL'S IDENTITY AND FOURIER EXPANSION
+%% ============================================================
+
+\section{Parseval's Identity and Fourier Expansion}
+\label{sec:parseval}
+
+\begin{definition}[Orthonormal Basis (Hilbert Basis)]
+\label{def:onb}
+An orthonormal set $\{e_\alpha\}_{\alpha \in A}$ in a Hilbert space $H$
+is an \emph{orthonormal basis} (or \emph{complete orthonormal system},
+or \emph{Hilbert basis}) if
+$\overline{\Span\{e_\alpha : \alpha \in A\}} = H$. Equivalently,
+$\{e_\alpha\}^\perp = \{0\}$.
 \end{definition}
 
-\begin{theorem}[Parseval's Identity and Fourier Expansion]\label{thm:parseval}
-Let $\{e_n\}_{n=1}^\infty$ be an orthonormal basis of a Hilbert space $H$.
-Then for every $x \in H$:
+\begin{theorem}[Parseval's Identity and Fourier Expansion]
+\label{thm:parseval}
+Let $\{e_n\}_{n=1}^\infty$ be an orthonormal basis of a Hilbert space
+$H$. Then for every $x \in H$:
 \begin{enumerate}[label=(\roman*)]
     \item \textbf{Fourier expansion:}
-          $x = \sum_{n=1}^\infty \langle x, e_n \rangle e_n$
+          $x = \sum_{n=1}^\infty \langle x, e_n \rangle\, e_n$
           (convergence in norm).
     \item \textbf{Parseval's identity:}
           $\|x\|^2 = \sum_{n=1}^\infty |\langle x, e_n \rangle|^2$.
     \item \textbf{Generalized Parseval:}
-          $\langle x, y \rangle = \sum_{n=1}^\infty \langle x, e_n \rangle
-          \overline{\langle y, e_n \rangle}$.
+          $\langle x, y \rangle = \sum_{n=1}^\infty
+          \langle x, e_n \rangle\,
+          \overline{\langle y, e_n \rangle}$
+          for all $x, y \in H$.
 \end{enumerate}
 \end{theorem}
 
 \begin{proof}
-Let $s_N = \sum_{n=1}^N \langle x, e_n \rangle e_n$.
+Let $s_N = \sum_{n=1}^N \langle x, e_n \rangle\, e_n$.
 
-\textbf{(i)} We show $s_N \to x$. Let $M_N = \spn\{e_1, \ldots, e_N\}$.
-By Proposition~\ref{prop:projection-props}, $s_N = P_{M_N} x$ (the projection
-onto $M_N$) since $x - s_N \perp e_n$ for $n = 1, \ldots, N$.
-For any $\varepsilon > 0$, since $\overline{\spn\{e_n\}} = H$, there exist
-$N$ and scalars $c_1, \ldots, c_N$ with $\|x - \sum_{n=1}^N c_n e_n\| < \varepsilon$.
-Then $\|x - s_N\| \leq \|x - \sum c_n e_n\| < \varepsilon$ by best
-approximation. Thus $\|x - s_N\| \to 0$.
+\textbf{(i)} We show $s_N \to x$. Let $M_N = \Span\{e_1, \ldots, e_N\}$.
+By Proposition~\ref{prop:projection-props}, $s_N = P_{M_N} x$ (the
+projection onto $M_N$), since $x - s_N \perp e_n$ for
+$n = 1, \ldots, N$. For any $\varepsilon > 0$, since
+$\overline{\Span\{e_n\}} = H$, there exist $N_0$ and scalars
+$c_1, \ldots, c_{N_0}$ with
+$\|x - \sum_{n=1}^{N_0} c_n e_n\| < \varepsilon$. For $N \geq N_0$,
+the best approximation property gives
+$\|x - s_N\| \leq \|x - \sum_{n=1}^{N_0} c_n e_n\| < \varepsilon$.
+Thus $\|x - s_N\| \to 0$.
 
-\textbf{(ii)} $\|x\|^2 = \lim_N \|s_N\|^2 + \|x - s_N\|^2$... more directly,
-$\|x\|^2 = \lim_N (\|s_N\|^2 + \|x - s_N\|^2)$ by the Pythagorean theorem
-(since $s_N \perp (x - s_N)$). Since $\|x - s_N\| \to 0$,
-$\|x\|^2 = \lim_N \|s_N\|^2 = \sum_{n=1}^\infty |\langle x, e_n \rangle|^2$.
+\textbf{(ii)} By the Pythagorean theorem (since $s_N \perp (x - s_N)$):
+\[
+    \|x\|^2 = \|s_N\|^2 + \|x - s_N\|^2.
+\]
+Since $\|x - s_N\| \to 0$ by part (i), we obtain
+$\|x\|^2 = \lim_{N \to \infty} \|s_N\|^2
+= \sum_{n=1}^\infty |\langle x, e_n \rangle|^2$.
 
-\textbf{(iii)} Expand:
-$\langle x, y \rangle = \langle \sum_n \langle x, e_n \rangle e_n,
-\sum_m \langle y, e_m \rangle e_m \rangle$. By continuity of the inner
-product and orthonormality,
-$= \sum_n \langle x, e_n \rangle \overline{\langle y, e_n \rangle}$.
+\textbf{(iii)} By the continuity of the inner product
+(Lesson 19, Proposition 4.1) and part (i):
+\[
+    \langle x, y \rangle
+    = \Bigl\langle \sum_{n=1}^\infty \langle x, e_n \rangle\, e_n,\,
+      \sum_{m=1}^\infty \langle y, e_m \rangle\, e_m \Bigr\rangle
+    = \sum_{n=1}^\infty \langle x, e_n \rangle\,
+      \overline{\langle y, e_n \rangle},
+\]
+where the last equality uses orthonormality and the continuity of the
+inner product to interchange the inner product with the limit.
 \end{proof}
 
-\begin{proposition}[Separability and Orthonormal Bases]\label{prop:separability}
-A Hilbert space is separable if and only if it admits a countable orthonormal
-basis.
+\begin{keyresult}[title={Parseval's Identity -- Isometry of Coefficient Map}]
+The Fourier coefficient map $x \mapsto (\langle x, e_n \rangle)_{n=1}^\infty$
+is an isometric isomorphism from $H$ onto $\ell^2$. That is, every
+separable Hilbert space is isometrically isomorphic to $\ell^2$: up to
+isomorphism, there is essentially one infinite-dimensional separable
+Hilbert space.
+\end{keyresult}
+
+\begin{rlconnection}[title={Fourier Features in RL Function Approximation}]
+In kernel-based RL, a positive definite kernel
+$k(x,y) = \int e^{i\omega^\top(x-y)} p(\omega)\, d\omega$ (Bochner's
+theorem) can be approximated by truncating the Fourier expansion: sample
+$\omega_1, \ldots, \omega_D \sim p$ and define random features
+$\phi(x) = (\cos(\omega_j^\top x), \sin(\omega_j^\top x))_{j=1}^D / \sqrt{D}$.
+Parseval's identity guarantees that the approximation error
+$|k(x,y) - \phi(x)^\top \phi(y)|$ vanishes as $D \to \infty$, since
+the tail of the Fourier series has vanishing energy.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: SEPARABILITY AND ORTHONORMAL BASES
+%% ============================================================
+
+\section{Separability and Orthonormal Bases}
+\label{sec:separability}
+
+\begin{proposition}[Separability and Countable Orthonormal Bases]
+\label{prop:separability}
+A Hilbert space is separable if and only if it admits a countable
+orthonormal basis.
 \end{proposition}
 
 \begin{proof}
-$(\Leftarrow)$ If $\{e_n\}_{n=1}^\infty$ is a countable orthonormal basis,
-then finite rational linear combinations of the $e_n$ form a countable
-dense subset.
+$(\Leftarrow)$ If $\{e_n\}_{n=1}^\infty$ is a countable orthonormal
+basis, then the set of finite linear combinations of the $e_n$ with
+rational (or rational complex) coefficients is countable and dense in
+$H$ (by the Fourier expansion theorem: approximate any $x$ by a
+truncation of its Fourier series, then approximate the Fourier
+coefficients by rationals).
 
-$(\Rightarrow)$ Let $D = \{d_n\}$ be a countable dense subset. Apply
-Gram--Schmidt to any maximal linearly independent subsequence. The resulting
-orthonormal sequence has the same closed span as $D$, which is $H$.
+$(\Rightarrow)$ Let $D = \{d_n\}$ be a countable dense subset. Extract
+a maximal linearly independent subsequence and apply the Gram--Schmidt
+process (Theorem~\ref{thm:gram-schmidt}). The resulting orthonormal
+sequence $(e_n)$ satisfies
+$\overline{\Span\{e_n\}} \supseteq \overline{\Span\{d_n\}}
+\supseteq \overline{D} = H$, so $(e_n)$ is an orthonormal basis.
 \end{proof}
 
+\begin{example}[Standard Orthonormal Basis of $\ell^2$]
+\label{ex:standard-onb}
+The standard unit vectors $e_n = (0, \ldots, 0, 1, 0, \ldots)$ (with $1$
+in position $n$) form an orthonormal basis of $\ell^2$. The Fourier
+expansion of $x = (x_1, x_2, \ldots) \in \ell^2$ is simply
+$x = \sum_{n=1}^\infty x_n\, e_n$, and Parseval's identity reads
+$\|x\|^2 = \sum_{n=1}^\infty |x_n|^2$.
+\end{example}
 
-%% ============================================================================
-%% SECTION 6: RIESZ REPRESENTATION THEOREM
-%% ============================================================================
+%% ============================================================
+%% SECTION 7: THE RIESZ REPRESENTATION THEOREM
+%% ============================================================
 
-\section{The Riesz Representation Theorem}\label{sec:riesz}
+\section{The Riesz Representation Theorem}
+\label{sec:riesz}
 
-\begin{theorem}[Riesz Representation Theorem]\label{thm:riesz}
-Let $H$ be a Hilbert space and $f \colon H \to \mathbb{F}$ a bounded linear
-functional ($f \in H^*$). Then there exists a unique $y \in H$ such that
+\begin{theorem}[Riesz Representation Theorem]
+\label{thm:riesz}
+Let $H$ be a Hilbert space and $f \colon H \to \mathbb{F}$ a bounded
+linear functional ($f \in H^*$). Then there exists a unique $y \in H$
+such that
 \[
     f(x) = \langle x, y \rangle \quad \text{for all } x \in H.
 \]
@@ -381,60 +493,207 @@ Moreover, $\|f\|_{H^*} = \|y\|_H$.
 \end{theorem}
 
 \begin{proof}
-\textbf{Existence.} If $f = 0$, take $y = 0$.
-Suppose $f \neq 0$. Let $M = \ker f = \{x \in H : f(x) = 0\}$, which is
-a closed subspace (since $f$ is continuous). Since $f \neq 0$, there exists
-$z \in M^\perp$ with $z \neq 0$.
+\textbf{Existence.} If $f = 0$, take $y = 0$. Suppose $f \neq 0$. Let
+$M = \ker f = \{x \in H : f(x) = 0\}$, which is a closed subspace
+(since $f$ is continuous). Since $f \neq 0$, $M \neq H$.
 
-By the Projection Theorem, $H = M \oplus M^\perp$. We claim
-$\dim(M^\perp) = 1$: if $z_1, z_2 \in M^\perp \setminus \{0\}$, then
-$f(z_2) z_1 - f(z_1) z_2 \in M$ (check: $f(f(z_2)z_1 - f(z_1)z_2) = 0$)
-and also in $M^\perp$, so it equals 0. Thus $z_1$ and $z_2$ are linearly
-dependent, confirming $\dim(M^\perp) = 1$.
+By the Projection Theorem (Theorem~\ref{thm:projection}),
+$H = M \oplus M^\perp$. We claim $\dim(M^\perp) = 1$: if
+$z_1, z_2 \in M^\perp \setminus \{0\}$, then
+$f(z_2) z_1 - f(z_1) z_2 \in M$ (check:
+$f(f(z_2) z_1 - f(z_1) z_2) = f(z_2)f(z_1) - f(z_1)f(z_2) = 0$)
+and also in $M^\perp$, so it equals $0$. Thus $z_1$ and $z_2$ are
+linearly dependent, confirming $\dim(M^\perp) = 1$.
 
-Hence $M^\perp = \spn\{z\}$ for some $z \neq 0$ with $f(z) \neq 0$.
+Hence $M^\perp = \Span\{z\}$ for some $z \neq 0$ with $f(z) \neq 0$.
 Every $x \in H$ can be written $x = m + \alpha z$ with $m \in M$, so
 $f(x) = \alpha f(z)$.
 
 Also, $\langle x, z \rangle = \langle m + \alpha z, z \rangle
-= \alpha \|z\|^2$ (since $m \perp z$), giving $\alpha = \langle x, z \rangle / \|z\|^2$.
+= \alpha \|z\|^2$ (since $m \perp z$), giving
+$\alpha = \langle x, z \rangle / \|z\|^2$.
 
 Therefore
 $f(x) = \frac{f(z)}{\|z\|^2} \langle x, z \rangle
-= \langle x, \frac{\overline{f(z)}}{\|z\|^2} z \rangle$.
-Set $y = \frac{\overline{f(z)}}{\|z\|^2} z$.
+= \langle x, \frac{\overline{f(z)}}{\|z\|^2}\, z \rangle$.
+Set $y = \frac{\overline{f(z)}}{\|z\|^2}\, z$.
 
 \textbf{Uniqueness.} If $\langle x, y_1 \rangle = \langle x, y_2 \rangle$
 for all $x$, then $\langle x, y_1 - y_2 \rangle = 0$ for all $x$.
 Taking $x = y_1 - y_2$ gives $\|y_1 - y_2\|^2 = 0$.
 
 \textbf{Norm equality.}
-$|f(x)| = |\langle x, y \rangle| \leq \|x\| \|y\|$ by Cauchy--Schwarz,
-so $\|f\| \leq \|y\|$. Taking $x = y$:
-$f(y) = \langle y, y \rangle = \|y\|^2$, so $\|f\| \geq |f(y/\|y\|)| = \|y\|$.
+$|f(x)| = |\langle x, y \rangle| \leq \|x\| \|y\|$ by
+Cauchy--Schwarz, so $\|f\| \leq \|y\|$. Taking $x = y$:
+$f(y) = \langle y, y \rangle = \|y\|^2$, so
+$\|f\| \geq |f(y/\|y\|)| = \|y\|$.
 \end{proof}
 
-\begin{keyresult}[Riesz Representation -- Dual of a Hilbert Space]
-The map $\Phi \colon H \to H^*$ defined by $\Phi(y)(x) = \langle x, y \rangle$
-is a conjugate-linear isometric isomorphism. Thus $H \cong H^*$: a Hilbert
-space is isometrically isomorphic to its dual. This is a property
-\emph{unique} to Hilbert spaces among Banach spaces.
+\begin{keyresult}[title={Riesz Representation -- A Hilbert Space is Self-Dual}]
+The map $y \mapsto \langle \cdot, y \rangle$ is a conjugate-linear
+isometric isomorphism $H \cong H^*$. A Hilbert space is thus
+``self-dual'' (up to conjugation). This is a property unique to Hilbert
+spaces among Banach spaces: for $L^p$ with $p \neq 2$, the dual
+$(L^p)^* = L^q$ (where $1/p + 1/q = 1$) is a \emph{different} space.
 \end{keyresult}
 
-\begin{rlconnection}[Riesz Representation and Kernel Methods]
-In a reproducing kernel Hilbert space (RKHS) $\mathcal{H}_K$, the evaluation
-functional $f \mapsto f(x)$ is bounded linear. By the Riesz Representation
-Theorem, there exists $K_x \in \mathcal{H}_K$ with $f(x) = \langle f, K_x \rangle$.
-The function $K(x, y) = \langle K_x, K_y \rangle$ is the reproducing kernel.
-This is the foundation of kernel methods in ML: support vector machines,
-Gaussian processes, and kernel-based policy evaluation in RL all rest on
-this identification.
+\begin{rlconnection}[title={Riesz Representation and Kernel Methods}]
+In a reproducing kernel Hilbert space (RKHS) $\mathcal{H}_K$, the
+evaluation functional $\delta_x \colon f \mapsto f(x)$ is bounded and
+linear. By the Riesz Representation Theorem, there exists
+$K_x \in \mathcal{H}_K$ with $f(x) = \langle f, K_x \rangle$. The
+function $K(x, y) = \langle K_x, K_y \rangle$ is the reproducing
+kernel. This is the foundation of kernel methods in ML: support vector
+machines, Gaussian processes, and kernel-based policy evaluation in RL
+all rest on this identification. The representer theorem---that the
+optimal solution to a regularized empirical risk problem lies in the
+span of the kernel evaluations---is a direct consequence.
 \end{rlconnection}
 
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
 
-%% ============================================================================
-%% SECTION 7: FUNDAMENTAL THEOREMS OF FUNCTIONAL ANALYSIS
-%% ============================================================================
+\section{Exercises}
+\label{sec:exercises}
 
+\begin{exercise}[Projection Characterization (*)]
+\label{ex:proj-characterization}
+Let $P \colon H \to H$ be a bounded linear operator on a Hilbert space.
+Show that $P$ is an orthogonal projection onto some closed subspace if
+and only if $P^2 = P$ and $P^* = P$ (i.e., $P$ is idempotent and
+self-adjoint). Identify the subspace.
+
+\noindent\textit{Hint:} Show $H = \operatorname{range}(P) \oplus \ker(P)$ and
+verify orthogonality using $P^* = P$.
+\end{exercise}
+
+\begin{exercise}[Projection onto a Polynomial Subspace (*)]
+\label{ex:proj-polynomial}
+Let $H = L^2([0,1])$ and $M = \Span\{1, t\}$. Compute the orthogonal
+projection of $f(t) = t^2$ onto $M$ by solving the normal equations
+$\langle f - P_M f, g \rangle = 0$ for all $g \in M$. Verify that the
+residual $f - P_M f$ is orthogonal to both $1$ and $t$.
+\end{exercise}
+
+\begin{exercise}[Gram--Schmidt and Legendre Polynomials (**)]
+\label{ex:legendre}
+Apply the Gram--Schmidt process to $\{1, t, t^2, t^3\}$ in
+$L^2([-1,1])$ with inner product
+$\langle f, g \rangle = \int_{-1}^1 f(t)\, g(t)\, dt$. Show that the
+resulting orthogonal polynomials are scalar multiples of the Legendre
+polynomials $P_0(t) = 1$, $P_1(t) = t$,
+$P_2(t) = \frac{1}{2}(3t^2 - 1)$,
+$P_3(t) = \frac{1}{2}(5t^3 - 3t)$.
+\end{exercise}
+
+\begin{exercise}[Bessel's Inequality is Tight (**)]
+\label{ex:bessel-tight}
+Give an example of an inner product space $X$, an orthonormal sequence
+$(e_n)$ in $X$, and an element $x \in X$ such that Bessel's inequality
+is strict:
+$\sum_{n=1}^\infty |\langle x, e_n \rangle|^2 < \|x\|^2$. Explain why
+this cannot happen in a Hilbert space with an orthonormal \emph{basis}.
+
+\noindent\textit{Hint:} Consider the space of finite sequences with the
+$\ell^2$ inner product (which is not complete).
+\end{exercise}
+
+\begin{exercise}[{Riesz Representative of a Trace Functional (**)}]
+\label{ex:riesz-trace}
+Let $H = \R^{n \times n}$ with the Frobenius inner product
+$\langle A, B \rangle_F = \tr(B^\top A)$. The functional
+$f(A) = \tr(A)$ is linear and bounded. Find the Riesz representative
+$Y \in \R^{n \times n}$ such that $f(A) = \langle A, Y \rangle_F$ for
+all $A$, and verify $\|f\| = \|Y\|_F$.
+\end{exercise}
+
+\begin{exercise}[{The Dual of $\ell^2$ via Riesz (**)}]
+\label{ex:dual-ell2}
+Let $f \in (\ell^2)^*$ be defined by $f(x) = \sum_{n=1}^\infty a_n x_n$
+for a fixed sequence $(a_n) \in \ell^2$. Show that $f$ is bounded with
+$\|f\| = \|(a_n)\|_{\ell^2}$, and identify the Riesz representative.
+Use this to give a direct proof that $(\ell^2)^* \cong \ell^2$.
+\end{exercise}
+
+\begin{exercise}[{Projection Error Bound in RL (***)}]
+\label{ex:proj-error-rl}
+Let $\mu$ be a probability distribution on a finite state space
+$\mathcal{S}$, and let $\Phi \in \R^{|\mathcal{S}| \times d}$ be a
+feature matrix with rank $d$. Define the weighted inner product
+$\langle f, g \rangle_\mu = \sum_{s} \mu(s) f(s) g(s)$ and the
+projection $\Pi_\mu$ onto $\operatorname{range}(\Phi)$ in this inner product. Let $T$
+be the Bellman evaluation operator with discount $\gamma \in (0,1)$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $\Pi_\mu T$ is a $\gamma$-contraction in
+          $\|\cdot\|_\mu$ (use $\|\Pi_\mu\| = 1$ and the fact that $T$
+          is a $\gamma$-contraction in $\|\cdot\|_\infty$; you may use
+          the bound $\|T v\|_\mu \leq \|T v\|_\infty$).
+    \item Deduce that the projected Bellman equation
+          $\hat{V} = \Pi_\mu T \hat{V}$ has a unique solution in
+          $\operatorname{range}(\Phi)$.
+    \item Show the approximation error satisfies
+          $\|\hat{V} - V^*\|_\mu
+          \leq \frac{1}{1 - \gamma} \|V^* - \Pi_\mu V^*\|_\mu$,
+          where $V^*$ is the true value function.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}[leftmargin=2em,nosep]
+    \item \textbf{Best approximation:} In a Hilbert space, every
+          nonempty closed convex set has a unique nearest point to any
+          given element.
+    \item \textbf{Projection theorem:} For a closed subspace $M$,
+          $H = M \oplus M^\perp$, and the projection $P_M$ is the unique
+          bounded, linear, idempotent, self-adjoint operator with
+          $\operatorname{range}(P_M) = M$ and $\|P_M\| = 1$.
+    \item \textbf{Gram--Schmidt:} Any linearly independent sequence can
+          be orthonormalized while preserving spans.
+    \item \textbf{Bessel's inequality:}
+          $\sum |\langle x, e_n \rangle|^2 \leq \|x\|^2$ for any
+          orthonormal sequence.
+    \item \textbf{Parseval's identity:} For an orthonormal basis,
+          $\|x\|^2 = \sum |\langle x, e_n \rangle|^2$ and
+          $x = \sum \langle x, e_n \rangle\, e_n$.
+    \item \textbf{Separability:} A Hilbert space is separable if and
+          only if it has a countable orthonormal basis, and all separable
+          infinite-dimensional Hilbert spaces are isomorphic to $\ell^2$.
+    \item \textbf{Riesz Representation:} Every $f \in H^*$ is of the
+          form $f(x) = \langle x, y \rangle$ for a unique $y$ with
+          $\|f\| = \|y\|$. This gives the isometric isomorphism
+          $H \cong H^*$.
+    \item \textbf{RL connections:} The projection theorem underlies LSTD
+          and projected Bellman equations; Parseval's identity justifies
+          Fourier feature approximations; the Riesz theorem is the
+          foundation of RKHS theory and gradient identification.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further}
+
+For a comprehensive treatment of Hilbert space theory, see
+\citet{conway1990}, Chapters I--II, and \citet{kreyszig1989},
+Chapter 3. The connection between projections and approximation theory is
+developed in detail in \citet{brezis2011}, Chapter 5. For applications
+of RKHS theory to machine learning, see the survey by Berlinet and
+Thomas-Agnan (2004).
+
+The next lesson (Lesson 21) develops the fundamental theorems of
+functional analysis---Hahn--Banach, Uniform Boundedness, Open Mapping,
+and Closed Graph---which hold in general Banach spaces rather than
+requiring the inner product structure.
+
+\bibliography{functional-analysis-refs}
 
 \end{document}

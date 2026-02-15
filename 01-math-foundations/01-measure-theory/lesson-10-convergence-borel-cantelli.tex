@@ -1,347 +1,665 @@
 \documentclass[11pt,a4paper]{article}
-
-% ---- Packages ----
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{mathtools}
-\usepackage[margin=1in,headheight=14pt]{geometry}
-\usepackage{hyperref}
-\usepackage{enumitem}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
-\usepackage{fancyhdr}
-\usepackage{booktabs}
-
-% ---- Hyperref ----
-\hypersetup{
-    colorlinks=true,
-    linkcolor=red,
-    citecolor=blue,
-    urlcolor=blue
-}
-
-% ---- Header ----
+\input{../lesson-preamble}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Probability Foundations for Reinforcement Learning}}
+\fancyhead[L]{\textsc{Lesson 10: Modes of Convergence and Borel--Cantelli}}
 \fancyhead[R]{\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
-
-% ---- Theorem Environments ----
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\newtheorem{assumption}{Assumption}[section]
-\newtheorem{example}{Example}[section]
-
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ---- Colored Boxes ----
-\tcbuselibrary{theorems,skins,breakable}
-
-\newtcolorbox{keyresult}[1][]{
-    colback=green!5!white,
-    colframe=green!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{rlconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-\newtcolorbox{tdconnection}[1][]{
-    colback=blue!5!white,
-    colframe=blue!50!black,
-    fonttitle=\bfseries,
-    title=#1,
-    breakable
-}
-
-% ---- Operators ----
-\DeclareMathOperator{\Var}{Var}
-\DeclareMathOperator{\Cov}{Cov}
-\newcommand{\E}{\mathbb{E}}
-\newcommand{\R}{\mathbb{R}}
-\newcommand{\N}{\mathbb{N}}
-\newcommand{\Prob}{\mathbb{P}}
-\newcommand{\indicator}{\mathbf{1}}
-\newcommand{\cas}{\xrightarrow{\text{a.s.}}}
-\newcommand{\cprob}{\xrightarrow{\Prob}}
-\newcommand{\clp}[1]{\xrightarrow{L^{#1}}}
-\newcommand{\cdist}{\xrightarrow{d}}
-
-% ---- Title ----
 \title{Lesson 10: Modes of Convergence and Borel--Cantelli}
-\author{AI/ML Mathematics Series}
-\date{February 2026}
-
+\author{AI/ML Mathematics}
+\date{}
 \begin{document}
 \maketitle
 \tableofcontents
 \newpage
 
-\setcounter{section}{10}
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Every convergence theorem in reinforcement learning---from the basic
+consistency of Monte Carlo estimation to the asymptotic correctness
+of TD($\lambda$) and Q-learning---asserts that a sequence of random
+variables approaches a limit in one of several precisely defined
+senses.  These senses are \emph{not} interchangeable: almost sure
+convergence, convergence in probability, $L^p$ convergence, and
+convergence in distribution each capture a different aspect of how
+random approximations stabilize.
+
+This lesson develops four modes of convergence for sequences of
+random variables, establishes the complete hierarchy of implications
+among them, and then proves the Borel--Cantelli lemmas---the primary
+tool for deducing almost sure convergence from summability of
+probabilities.
+
+\begin{rlconnection}[title={Why This Matters for RL}]
+\begin{itemize}[nosep]
+  \item \textbf{Almost sure convergence} is the gold standard in
+    stochastic approximation: the TD(0) convergence theorem
+    establishes $V_t(s) \cas V^\pi(s)$.
+  \item \textbf{Convergence in probability} is used when
+    intermediate estimates are shown to be close to their targets
+    with high probability (e.g., sample average convergence via
+    Chebyshev).
+  \item \textbf{$L^2$ convergence} (mean square) appears in the
+    linear TD convergence analysis with function approximation.
+  \item \textbf{Borel--Cantelli} is the standard technique for
+    upgrading convergence in probability to almost sure convergence
+    when tail probability sums are finite.
+\end{itemize}
+\end{rlconnection}
+
+\medskip
+\noindent\textbf{Prerequisites.}
+Lesson~5 (random variables, expectation), Lesson~7 (variance,
+independence), Lesson~9 (Markov and Chebyshev inequalities).
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+The following sources complement this lesson:
+\begin{itemize}[nosep]
+  \item \citet{durrett2019}, Chapter~2 (Sections~2.1--2.3):
+    modes of convergence and their relationships.
+  \item \citet{billingsley1995}, Chapter~5 (Sections~25--27):
+    convergence of measurable functions and the Borel--Cantelli
+    lemmas.
+  \item \citet{williams1991}, Chapters~4--5: almost sure
+    convergence, convergence in probability, and the role of
+    Borel--Cantelli in martingale theory.
+  \item \citet{shiryaev2016}, Chapter~II, Sections~6--7:
+    convergence modes with detailed examples.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: MODES OF CONVERGENCE
+%% ============================================================
 
 \section{Modes of Convergence}
 \label{sec:convergence}
 
-This section defines four modes of convergence for sequences of random variables and establishes the relationships between them. Understanding these distinctions is essential for reading convergence theorems in stochastic approximation and TD learning.
+Throughout this section, $(\Omega, \mathcal{F}, \Prob)$ is a
+probability space and $\{X_n\}_{n \geq 1}$, $X$ are real-valued
+random variables defined on it.
 
 \subsection{Definitions}
 \label{subsec:conv_def}
 
 \begin{definition}[Almost Sure Convergence]
 \label{def:as_conv}
-A sequence $\{X_n\}$ \emph{converges almost surely} (a.s.) to $X$, written $X_n \cas X$, if:
+A sequence $\{X_n\}$ \emph{converges almost surely} (a.s.) to $X$,
+written $X_n \cas X$, if
 \begin{equation}
-    \Prob\!\left(\left\{\omega \in \Omega : \lim_{n \to \infty} X_n(\omega) = X(\omega)\right\}\right) = 1.
-    \label{eq:as_conv}
+  \Prob\!\left(\left\{\omega \in \Omega :
+    \lim_{n \to \infty} X_n(\omega) = X(\omega)
+    \right\}\right) = 1.
+  \label{eq:as_conv}
 \end{equation}
-Equivalently, $\Prob\!\left(\lim_{n \to \infty} X_n = X\right) = 1$.
+Equivalently, $\Prob(\lim_{n \to \infty} X_n = X) = 1$.
 \end{definition}
 
 \begin{definition}[Convergence in Probability]
 \label{def:prob_conv}
-$\{X_n\}$ \emph{converges in probability} to $X$, written $X_n \cprob X$, if for every $\varepsilon > 0$:
+$\{X_n\}$ \emph{converges in probability} to $X$, written
+$X_n \cprob X$, if for every $\varepsilon > 0$:
 \begin{equation}
-    \lim_{n \to \infty} \Prob(|X_n - X| > \varepsilon) = 0.
-    \label{eq:prob_conv}
+  \lim_{n \to \infty} \Prob(|X_n - X| > \varepsilon) = 0.
+  \label{eq:prob_conv}
 \end{equation}
 \end{definition}
 
 \begin{definition}[Convergence in $L^p$]
 \label{def:lp_conv}
-For $p \geq 1$, $\{X_n\}$ \emph{converges in $L^p$} to $X$, written $X_n \clp{p} X$, if:
+For $p \geq 1$, $\{X_n\}$ \emph{converges in $L^p$} to $X$,
+written $X_n \clp{p} X$, if
 \begin{equation}
-    \lim_{n \to \infty} \E\!\left[|X_n - X|^p\right] = 0.
-    \label{eq:lp_conv}
+  \lim_{n \to \infty} \E\!\left[|X_n - X|^p\right] = 0.
+  \label{eq:lp_conv}
 \end{equation}
 The case $p = 2$ is called \emph{convergence in mean square}.
 \end{definition}
 
 \begin{definition}[Convergence in Distribution]
 \label{def:dist_conv}
-$\{X_n\}$ \emph{converges in distribution} to $X$, written $X_n \cdist X$, if:
+$\{X_n\}$ \emph{converges in distribution} to $X$, written
+$X_n \cdist X$, if
 \begin{equation}
-    \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
-    \label{eq:dist_conv}
+  \lim_{n \to \infty} F_{X_n}(x) = F_X(x)
+  \label{eq:dist_conv}
 \end{equation}
 at every point $x$ where $F_X$ is continuous.
 \end{definition}
 
-\begin{rlconnection}[Connection to RL]
-Almost sure convergence is the gold standard in stochastic approximation: all major TD convergence theorems (Theorem 4.2, 5.1, 5.2 in the TD article) establish $V_t(s) \cas V^\pi(s)$ or $Q_t(s,a) \cas Q^*(s,a)$. Convergence in mean square ($L^2$) appears in the linear function approximation setting (Theorem 6.2). Convergence in distribution is used in the central limit theorem to characterize the rate of convergence.
-\end{rlconnection}
+\begin{remark}[Convergence in Distribution is Weaker]
+\label{rem:dist_weaker}
+Convergence in distribution concerns only the distributions (CDFs)
+of $X_n$ and $X$, not the joint behavior of $X_n$ and $X$ on the
+same probability space.  In particular, $X_n \cdist X$ does not
+require $X_n - X$ to be small in any pointwise sense.
+\end{remark}
 
-\subsection{Relationships Between Modes}
-\label{subsec:conv_relations}
+\begin{definition}[Limit Superior of Events]
+\label{def:limsup_events}
+For a sequence of events $\{A_n\}$, the \emph{limit superior}
+(events occurring \emph{infinitely often}) is
+\begin{equation}
+  \limsup_{n \to \infty} A_n
+  = \bigcap_{N=1}^\infty \bigcup_{n=N}^\infty A_n
+  = \{\omega : \omega \in A_n \text{ for infinitely many } n\}.
+  \label{eq:limsup_events}
+\end{equation}
+We write $\{A_n \text{ i.o.}\}$ for this event.
+\end{definition}
 
-\begin{keyresult}[Convergence Implications]
+%% ============================================================
+%% SECTION 4: HIERARCHY OF CONVERGENCE MODES
+%% ============================================================
+
+\section{Hierarchy of Convergence Modes}
+\label{sec:hierarchy}
+
+\begin{keyresult}[title={Convergence Implications}]
 \begin{theorem}[Hierarchy of Convergence Modes]
 \label{thm:conv_hierarchy}
 The following implications hold:
 \begin{equation}
-    X_n \cas X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
-    \label{eq:hierarchy_1}
+  X_n \cas X \;\Longrightarrow\;
+  X_n \cprob X \;\Longrightarrow\;
+  X_n \cdist X,
+  \label{eq:hierarchy_1}
 \end{equation}
 \begin{equation}
-    X_n \clp{p} X \;\Longrightarrow\; X_n \cprob X \;\Longrightarrow\; X_n \cdist X
-    \label{eq:hierarchy_2}
+  X_n \clp{p} X \;\Longrightarrow\;
+  X_n \cprob X \;\Longrightarrow\;
+  X_n \cdist X.
+  \label{eq:hierarchy_2}
 \end{equation}
 No other implications hold in general between these four modes.
+In particular, almost sure convergence and $L^p$ convergence are
+incomparable.
 \end{theorem}
 \end{keyresult}
 
-We prove each implication separately.
+We prove each implication and each failure separately.
 
-\begin{theorem}[$L^p$ Convergence Implies Convergence in Probability]
+\subsection{$L^p$ Convergence Implies Convergence in Probability}
+\label{subsec:lp_to_prob}
+
+\begin{theorem}[$L^p \Rightarrow$ Probability]
 \label{thm:lp_to_prob}
 If $X_n \clp{p} X$ for some $p \geq 1$, then $X_n \cprob X$.
 \end{theorem}
 
 \begin{proof}
-This follows from Markov's inequality (Theorem~\ref{thm:markov}). For any $\varepsilon > 0$:
+By Markov's inequality (Lesson~9, Theorem~2.1), for any
+$\varepsilon > 0$:
 \begin{equation}
-    \Prob(|X_n - X| > \varepsilon) = \Prob(|X_n - X|^p > \varepsilon^p) \leq \frac{\E[|X_n - X|^p]}{\varepsilon^p} \to 0
-    \label{eq:lp_to_prob_proof}
+  \Prob(|X_n - X| > \varepsilon)
+  = \Prob(|X_n - X|^p > \varepsilon^p)
+  \leq \frac{\E[|X_n - X|^p]}{\varepsilon^p} \to 0
+  \label{eq:lp_to_prob_proof}
 \end{equation}
-as $n \to \infty$.
+as $n \to \infty$, since $\E[|X_n - X|^p] \to 0$ by hypothesis.
 \end{proof}
 
-\begin{theorem}[Almost Sure Convergence Implies Convergence in Probability]
+\subsection{Almost Sure Convergence Implies Convergence in Probability}
+\label{subsec:as_to_prob}
+
+\begin{theorem}[a.s.\ $\Rightarrow$ Probability]
 \label{thm:as_to_prob}
 If $X_n \cas X$, then $X_n \cprob X$.
 \end{theorem}
 
 \begin{proof}
-Fix $\varepsilon > 0$. Define $A_n = \{|X_n - X| > \varepsilon\}$ and $B_N = \bigcup_{n=N}^\infty A_n = \{|X_n - X| > \varepsilon \text{ for some } n \geq N\}$.
-
-The sets $B_N$ are decreasing: $B_1 \supseteq B_2 \supseteq \cdots$, and
+Fix $\varepsilon > 0$.  Define
+$A_n = \{|X_n - X| > \varepsilon\}$ and
+$B_N = \bigcup_{n=N}^\infty A_n$.  The sets $B_N$ are decreasing:
+$B_1 \supseteq B_2 \supseteq \cdots$, and
 \begin{equation}
-    \bigcap_{N=1}^\infty B_N = \{\omega : |X_n(\omega) - X(\omega)| > \varepsilon \text{ for infinitely many } n\}.
+  \bigcap_{N=1}^\infty B_N
+  = \{\omega : |X_n(\omega) - X(\omega)| > \varepsilon
+      \text{ for infinitely many } n\}.
 \end{equation}
-If $X_n(\omega) \to X(\omega)$, then for large enough $n$, $|X_n(\omega) - X(\omega)| \leq \varepsilon$, so $\omega \notin \bigcap B_N$. Since a.s.\ convergence means the set of $\omega$ where $X_n(\omega) \to X(\omega)$ has probability $1$, we get $\Prob(\bigcap B_N) = 0$.
+If $X_n(\omega) \to X(\omega)$, then eventually
+$|X_n(\omega) - X(\omega)| \leq \varepsilon$, so
+$\omega \notin \bigcap_N B_N$.  Since almost sure convergence
+means $\Prob(\lim X_n = X) = 1$, we get
+$\Prob(\bigcap_N B_N) = 0$.
 
-By continuity from above (Theorem~\ref{thm:continuity}):
+By the continuity of probability from above
+(Lesson~4, Theorem~3.1):
 \begin{equation}
-    0 = \Prob\!\left(\bigcap_{N=1}^\infty B_N\right) = \lim_{N \to \infty} \Prob(B_N) \geq \lim_{N \to \infty} \Prob(A_N).
+  0 = \Prob\!\left(\bigcap_{N=1}^\infty B_N\right)
+  = \lim_{N \to \infty} \Prob(B_N)
+  \geq \lim_{N \to \infty} \Prob(A_N).
 \end{equation}
-Since $\Prob(A_N) \geq 0$, we conclude $\Prob(A_N) \to 0$, which is $X_n \cprob X$.
+Since $\Prob(A_N) \geq 0$, we conclude $\Prob(A_N) \to 0$,
+which is $X_n \cprob X$.
 \end{proof}
 
-\begin{remark}[Important: Converse Fails]
-\label{rem:conv_counterexample}
-Convergence in probability does \emph{not} imply almost sure convergence. The standard counterexample is the ``typewriter sequence'': on $\Omega = [0,1]$ with Lebesgue measure, define $X_n = \indicator_{[j/k,\, (j+1)/k]}$ where $n$ is the unique integer with $n = k(k-1)/2 + j$ for $0 \leq j < k$. Then $\Prob(X_n = 1) = 1/k \to 0$, so $X_n \cprob 0$, but for every $\omega \in [0,1]$, $X_n(\omega) = 1$ infinitely often, so $X_n$ does not converge to $0$ for any $\omega$.
-\end{remark}
+\subsection{Convergence in Probability Implies Convergence in Distribution}
+\label{subsec:prob_to_dist}
 
-\begin{theorem}[Convergence in Probability Implies Convergence in Distribution]
+\begin{theorem}[Probability $\Rightarrow$ Distribution]
 \label{thm:prob_to_dist}
 If $X_n \cprob X$, then $X_n \cdist X$.
 \end{theorem}
 
 \begin{proof}
-Fix $x$ where $F_X$ is continuous. For any $\varepsilon > 0$:
+Fix $x$ where $F_X$ is continuous.  For any $\varepsilon > 0$:
 \begin{align}
-    F_{X_n}(x) &= \Prob(X_n \leq x) \nonumber\\
-    &= \Prob(X_n \leq x,\, X \leq x + \varepsilon) + \Prob(X_n \leq x,\, X > x + \varepsilon) \nonumber\\
-    &\leq \Prob(X \leq x + \varepsilon) + \Prob(|X_n - X| > \varepsilon) \nonumber\\
-    &= F_X(x + \varepsilon) + \Prob(|X_n - X| > \varepsilon).
+  F_{X_n}(x) &= \Prob(X_n \leq x) \nonumber\\
+  &= \Prob(X_n \leq x,\, X \leq x + \varepsilon)
+    + \Prob(X_n \leq x,\, X > x + \varepsilon) \nonumber\\
+  &\leq \Prob(X \leq x + \varepsilon)
+    + \Prob(|X_n - X| > \varepsilon) \nonumber\\
+  &= F_X(x + \varepsilon) + \Prob(|X_n - X| > \varepsilon).
+  \label{eq:prob_to_dist_upper}
 \end{align}
-Similarly, $F_{X_n}(x) \geq F_X(x - \varepsilon) - \Prob(|X_n - X| > \varepsilon)$. Taking $n \to \infty$:
+For the lower bound, note that $\{X \leq x - \varepsilon\}
+\subseteq \{X_n \leq x\} \cup \{|X_n - X| > \varepsilon\}$, so
 \begin{equation}
-    F_X(x - \varepsilon) \leq \liminf_n F_{X_n}(x) \leq \limsup_n F_{X_n}(x) \leq F_X(x + \varepsilon).
+  F_{X_n}(x) \geq F_X(x - \varepsilon)
+    - \Prob(|X_n - X| > \varepsilon).
+  \label{eq:prob_to_dist_lower}
 \end{equation}
-Since $F_X$ is continuous at $x$, letting $\varepsilon \to 0$ gives $\lim_n F_{X_n}(x) = F_X(x)$.
+Taking $n \to \infty$ and using $X_n \cprob X$:
+\begin{equation}
+  F_X(x - \varepsilon)
+  \leq \liminf_n F_{X_n}(x)
+  \leq \limsup_n F_{X_n}(x)
+  \leq F_X(x + \varepsilon).
+\end{equation}
+Since $F_X$ is continuous at $x$, letting $\varepsilon \to 0$
+gives $\lim_n F_{X_n}(x) = F_X(x)$.
 \end{proof}
 
-\begin{theorem}[Almost Sure Convergence Does Not Imply $L^p$ and Vice Versa]
+\subsection{Almost Sure and $L^p$ Convergence Are Incomparable}
+\label{subsec:as_lp_incomparable}
+
+\begin{theorem}[a.s.\ and $L^p$ Are Incomparable]
 \label{thm:as_lp_no_implication}
-Neither almost sure convergence implies $L^p$ convergence, nor vice versa (for any $p \geq 1$).
+Neither almost sure convergence implies $L^p$ convergence, nor
+$L^p$ convergence implies almost sure convergence (for any
+$p \geq 1$).
 \end{theorem}
 
 \begin{proof}
-\textbf{a.s.\ $\not\Rightarrow$ $L^p$:} Let $X_n = n \cdot \indicator_{(0, 1/n)}$ on $[0,1]$ with Lebesgue measure. For any $\omega > 0$, eventually $1/n < \omega$, so $X_n(\omega) = 0$. Thus $X_n \cas 0$. But $\E[|X_n|] = n \cdot (1/n) = 1 \not\to 0$.
+\textbf{a.s.\ $\not\Rightarrow$ $L^p$:}
+Let $\Omega = [0,1]$ with Lebesgue measure, and define
+$X_n = n \cdot \indicator_{(0, 1/n)}$.  For any $\omega > 0$,
+eventually $1/n < \omega$, so $X_n(\omega) = 0$.  Thus
+$X_n \cas 0$.  But $\E[|X_n|^p] = n^p \cdot (1/n) = n^{p-1}$,
+which diverges for $p \geq 1$.  In particular,
+$\E[|X_n|] = 1 \not\to 0$, so $X_n \not\clp{1} 0$.
 
-\textbf{$L^p$ $\not\Rightarrow$ a.s.:} The typewriter sequence from Remark~\ref{rem:conv_counterexample} satisfies $\E[|X_n|^p] = 1/k \to 0$, so $X_n \clp{p} 0$, but $X_n \not\cas 0$.
+\textbf{$L^p$ $\not\Rightarrow$ a.s.:}
+On $\Omega = [0,1]$ with Lebesgue measure, define the
+``typewriter sequence'': enumerate the intervals $[j/k, (j+1)/k]$
+for $k = 1, 2, \ldots$ and $j = 0, 1, \ldots, k-1$, and set
+$X_n = \indicator_{[j/k, (j+1)/k]}$ where $n$ corresponds to the
+pair $(k, j)$ via $n = k(k-1)/2 + j + 1$.  Then
+$\E[|X_n|^p] = 1/k \to 0$, so $X_n \clp{p} 0$.  But for every
+$\omega \in [0,1]$, $X_n(\omega) = 1$ for infinitely many $n$
+(every subinterval of length $1/k$ eventually covers $\omega$),
+so $X_n \not\cas 0$.
 \end{proof}
 
+\begin{remark}[Converse of Probability $\Rightarrow$ a.s.\ Fails]
+\label{rem:prob_not_as}
+The typewriter sequence also shows that convergence in probability
+does not imply almost sure convergence, since $L^p$ convergence
+implies convergence in probability
+(Theorem~\ref{thm:lp_to_prob}), yet $X_n \not\cas 0$.
+\end{remark}
+
+\begin{rlconnection}[title={Convergence Modes in TD Learning}]
+The TD(0) convergence theorem (as proved via the Robbins--Siegmund
+theorem) yields $V_t(s) \cas V^\pi(s)$.  This is strictly stronger
+than the convergence in mean square ($L^2$) that appears in the
+linear function approximation setting.  Understanding that a.s.\
+and $L^2$ are incomparable explains why separate proof strategies
+are needed for the tabular and linear-approximation cases.
+\end{rlconnection}
+
 %% ============================================================
-%% SECTION 12: BOREL-CANTELLI LEMMAS
+%% SECTION 5: BOREL--CANTELLI LEMMAS
 %% ============================================================
 
 \section{Borel--Cantelli Lemmas}
 \label{sec:borel_cantelli}
 
-The Borel--Cantelli lemmas connect the summability of event probabilities to almost sure occurrence, forming the primary tool for proving almost sure convergence.
+The Borel--Cantelli lemmas connect the summability of event
+probabilities to almost sure occurrence, forming the primary tool
+for proving or disproving almost sure convergence.
 
-\begin{definition}[Limit Superior of Events]
-\label{def:limsup_events}
-For a sequence of events $\{A_n\}$, the \emph{limit superior} (or \emph{events occurring infinitely often}) is:
-\begin{equation}
-    \limsup_{n \to \infty} A_n = \bigcap_{N=1}^\infty \bigcup_{n=N}^\infty A_n = \{\omega : \omega \in A_n \text{ for infinitely many } n\}.
-    \label{eq:limsup_events}
-\end{equation}
-We write $\{A_n \text{ i.o.}\}$ for this event.
-\end{definition}
+\subsection{First Borel--Cantelli Lemma}
+\label{subsec:bc1}
 
-\begin{remark}
-The event $\{\omega : \omega \in A_n \text{ i.o.}\}$ consists of all outcomes that belong to infinitely many of the $A_n$. Its complement $\{\omega \notin A_n \text{ eventually}\}$ means that $\omega$ is in at most finitely many $A_n$, i.e., there exists $N$ such that $\omega \notin A_n$ for all $n \geq N$.
-\end{remark}
-
-\begin{keyresult}[First Borel--Cantelli Lemma]
+\begin{keyresult}[title={First Borel--Cantelli Lemma}]
 \begin{theorem}[First Borel--Cantelli Lemma]
 \label{thm:bc1}
-If $\sum_{n=1}^\infty \Prob(A_n) < \infty$, then $\Prob(A_n \text{ i.o.}) = 0$.
+If $\sum_{n=1}^\infty \Prob(A_n) < \infty$, then
+$\Prob(A_n \text{ i.o.}) = 0$.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-Let $B_N = \bigcup_{n=N}^\infty A_n$. By the union bound (Theorem~\ref{thm:prob_props}(6)):
+Let $B_N = \bigcup_{n=N}^\infty A_n$.  By the union bound
+(Lesson~4, Proposition~3.4):
 \begin{equation}
-    \Prob(B_N) \leq \sum_{n=N}^\infty \Prob(A_n).
-    \label{eq:bc1_step1}
+  \Prob(B_N) \leq \sum_{n=N}^\infty \Prob(A_n).
+  \label{eq:bc1_step1}
 \end{equation}
-Since $\sum_{n=1}^\infty \Prob(A_n) < \infty$, the tail sum $\sum_{n=N}^\infty \Prob(A_n) \to 0$ as $N \to \infty$.
+Since $\sum_{n=1}^\infty \Prob(A_n) < \infty$, the tail sum
+$\sum_{n=N}^\infty \Prob(A_n) \to 0$ as $N \to \infty$.
 
-Now $B_1 \supseteq B_2 \supseteq \cdots$ and $\{A_n \text{ i.o.}\} = \bigcap_N B_N$. By continuity from above (Theorem~\ref{thm:continuity}):
+The sets $B_N$ are decreasing: $B_1 \supseteq B_2 \supseteq
+\cdots$, and $\{A_n \text{ i.o.}\} = \bigcap_N B_N$.  By
+continuity of probability from above:
 \begin{equation}
-    \Prob(A_n \text{ i.o.}) = \lim_{N \to \infty} \Prob(B_N) \leq \lim_{N \to \infty} \sum_{n=N}^\infty \Prob(A_n) = 0.
+  \Prob(A_n \text{ i.o.})
+  = \lim_{N \to \infty} \Prob(B_N)
+  \leq \lim_{N \to \infty} \sum_{n=N}^\infty \Prob(A_n) = 0.
+  \qedhere
 \end{equation}
 \end{proof}
 
-\begin{keyresult}[Second Borel--Cantelli Lemma]
+\begin{remark}[No Independence Required]
+\label{rem:bc1_no_indep}
+The first Borel--Cantelli lemma makes no assumption about
+independence.  It is a purely measure-theoretic result: summable
+probabilities imply that only finitely many of the events $A_n$
+occur almost surely.
+\end{remark}
+
+\subsection{Second Borel--Cantelli Lemma}
+\label{subsec:bc2}
+
+\begin{keyresult}[title={Second Borel--Cantelli Lemma}]
 \begin{theorem}[Second Borel--Cantelli Lemma]
 \label{thm:bc2}
-If $\sum_{n=1}^\infty \Prob(A_n) = \infty$ and $A_1, A_2, \ldots$ are mutually independent, then $\Prob(A_n \text{ i.o.}) = 1$.
+If $\sum_{n=1}^\infty \Prob(A_n) = \infty$ and
+$A_1, A_2, \ldots$ are mutually independent, then
+$\Prob(A_n \text{ i.o.}) = 1$.
 \end{theorem}
 \end{keyresult}
 
 \begin{proof}
-It suffices to show $\Prob(\bigcup_{n=N}^\infty A_n) = 1$ for every $N$, since $\{A_n \text{ i.o.}\} = \bigcap_N \bigcup_{n \geq N} A_n$.
+It suffices to show $\Prob(\bigcup_{n=N}^\infty A_n) = 1$ for
+every $N$, since
+$\{A_n \text{ i.o.}\} = \bigcap_N \bigcup_{n \geq N} A_n$.
 
-Fix $N$ and any $M > N$. By independence, the complements $A_N^c, A_{N+1}^c, \ldots$ are also independent. Therefore:
+Fix $N$ and any $M > N$.  By mutual independence, the complements
+$A_N^c, A_{N+1}^c, \ldots$ are also independent:
 \begin{equation}
-    \Prob\!\left(\bigcap_{n=N}^M A_n^c\right) = \prod_{n=N}^M \Prob(A_n^c) = \prod_{n=N}^M (1 - \Prob(A_n)).
+  \Prob\!\left(\bigcap_{n=N}^M A_n^c\right)
+  = \prod_{n=N}^M \Prob(A_n^c)
+  = \prod_{n=N}^M (1 - \Prob(A_n)).
 \end{equation}
-Using the inequality $1 - x \leq e^{-x}$ for $x \geq 0$:
+Using the elementary inequality $1 - x \leq e^{-x}$ for
+$x \geq 0$:
 \begin{equation}
-    \prod_{n=N}^M (1 - \Prob(A_n)) \leq \exp\!\left(-\sum_{n=N}^M \Prob(A_n)\right).
+  \prod_{n=N}^M (1 - \Prob(A_n))
+  \leq \exp\!\left(-\sum_{n=N}^M \Prob(A_n)\right).
 \end{equation}
-Since $\sum_{n=1}^\infty \Prob(A_n) = \infty$, the partial sums $\sum_{n=N}^M \Prob(A_n) \to \infty$ as $M \to \infty$. Therefore:
+Since $\sum_{n=1}^\infty \Prob(A_n) = \infty$, the partial sums
+$\sum_{n=N}^M \Prob(A_n) \to \infty$ as $M \to \infty$.
+Therefore
 \begin{equation}
-    \Prob\!\left(\bigcap_{n=N}^\infty A_n^c\right) = \lim_{M \to \infty} \Prob\!\left(\bigcap_{n=N}^M A_n^c\right) = 0,
+  \Prob\!\left(\bigcap_{n=N}^\infty A_n^c\right)
+  = \lim_{M \to \infty}
+    \Prob\!\left(\bigcap_{n=N}^M A_n^c\right) = 0,
 \end{equation}
-where the limit exchange uses continuity from above. Taking complements: $\Prob(\bigcup_{n=N}^\infty A_n) = 1$.
+where the limit exchange uses continuity from above applied to
+the decreasing sequence $\bigcap_{n=N}^M A_n^c$.  Taking
+complements: $\Prob(\bigcup_{n=N}^\infty A_n) = 1$.
 \end{proof}
 
-\begin{theorem}[Borel--Cantelli Characterization of Almost Sure Convergence]
+\begin{example}[Monkey Typing Shakespeare]
+\label{ex:monkey}
+A monkey types random letters uniformly on a 26-letter alphabet.
+Let $A_n$ be the event that the $n$-th through $(n+5)$-th letters
+spell ``HAMLET.''  Then $\Prob(A_n) = (1/26)^6 > 0$ for each
+$n$.  Since $\sum_n \Prob(A_n) = \infty$ and the events
+corresponding to non-overlapping blocks are independent, a
+modification of the second Borel--Cantelli lemma (applied to the
+non-overlapping subsequence) shows that
+$\Prob(\text{``HAMLET'' appears i.o.}) = 1$.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: BOREL--CANTELLI AND ALMOST SURE CONVERGENCE
+%% ============================================================
+
+\section{Borel--Cantelli Characterization of Almost Sure
+  Convergence}
+\label{sec:bc_characterization}
+
+\begin{theorem}[Borel--Cantelli Characterization]
 \label{thm:bc_as}
-A sequence $\{X_n\}$ converges almost surely to $X$ if and only if for every $\varepsilon > 0$:
+A sequence $\{X_n\}$ converges almost surely to $X$ if and only
+if for every $\varepsilon > 0$:
 \begin{equation}
-    \Prob\!\left(|X_n - X| > \varepsilon \text{ i.o.}\right) = 0.
-    \label{eq:bc_as_char}
+  \Prob\!\left(|X_n - X| > \varepsilon \text{ i.o.}\right) = 0.
+  \label{eq:bc_as_char}
 \end{equation}
 \end{theorem}
 
 \begin{proof}
-\textbf{($\Rightarrow$)} If $X_n \cas X$, then for each $\varepsilon > 0$, the set of $\omega$ where $|X_n(\omega) - X(\omega)| > \varepsilon$ infinitely often has probability $0$ (since convergence means eventual closeness).
+\textbf{($\Rightarrow$)} Suppose $X_n \cas X$.  For each fixed
+$\varepsilon > 0$, the set of $\omega$ where
+$|X_n(\omega) - X(\omega)| > \varepsilon$ for infinitely many
+$n$ is contained in the set where $X_n(\omega) \not\to X(\omega)$.
+The latter has probability $0$, so
+$\Prob(|X_n - X| > \varepsilon \text{ i.o.}) = 0$.
 
-\textbf{($\Leftarrow$)} Suppose~\eqref{eq:bc_as_char} holds for every $\varepsilon > 0$. Take $\varepsilon = 1/k$ for $k = 1, 2, \ldots$ The event ``$X_n \not\to X$'' is
+\textbf{($\Leftarrow$)} Suppose~\eqref{eq:bc_as_char} holds for
+every $\varepsilon > 0$.  The event ``$X_n \not\to X$'' equals
 \begin{equation}
-    \{\omega : X_n(\omega) \not\to X(\omega)\} = \bigcup_{k=1}^\infty \{|X_n - X| > 1/k \text{ i.o.}\}.
+  \{\omega : X_n(\omega) \not\to X(\omega)\}
+  = \bigcup_{k=1}^\infty
+    \{|X_n - X| > 1/k \text{ i.o.}\}.
 \end{equation}
-By the union bound, $\Prob(X_n \not\to X) \leq \sum_{k=1}^\infty \Prob(|X_n - X| > 1/k \text{ i.o.}) = 0$.
+By the union bound:
+\begin{equation}
+  \Prob(X_n \not\to X)
+  \leq \sum_{k=1}^\infty
+    \Prob(|X_n - X| > 1/k \text{ i.o.}) = 0.
+\end{equation}
+Therefore $\Prob(X_n \to X) = 1$, i.e., $X_n \cas X$.
 \end{proof}
 
 \begin{corollary}[Sufficient Condition for Almost Sure Convergence]
 \label{cor:bc_sufficient}
-If $X_n \to X$ in probability and for every $\varepsilon > 0$, $\sum_{n=1}^\infty \Prob(|X_n - X| > \varepsilon) < \infty$, then $X_n \cas X$.
+If for every $\varepsilon > 0$,
+$\sum_{n=1}^\infty \Prob(|X_n - X| > \varepsilon) < \infty$,
+then $X_n \cas X$.
 \end{corollary}
 
 \begin{proof}
-By the first Borel--Cantelli lemma (Theorem~\ref{thm:bc1}), the summability condition gives $\Prob(|X_n - X| > \varepsilon \text{ i.o.}) = 0$ for every $\varepsilon > 0$. By Theorem~\ref{thm:bc_as}, $X_n \cas X$.
+By the first Borel--Cantelli lemma (Theorem~\ref{thm:bc1}), the
+summability condition gives
+$\Prob(|X_n - X| > \varepsilon \text{ i.o.}) = 0$ for every
+$\varepsilon > 0$.  By Theorem~\ref{thm:bc_as},
+$X_n \cas X$.
 \end{proof}
 
-\begin{rlconnection}[Connection to RL]
-The Borel--Cantelli characterization is the standard technique for upgrading convergence in probability (or $L^2$) to almost sure convergence in stochastic approximation proofs. In the TD(0) convergence proof (Theorem 4.2 of the TD article), the supermartingale convergence theorem provides a.s.\ convergence directly. In alternative proof strategies, one shows $\sum_n \Prob(|V_n(s) - V^\pi(s)| > \varepsilon) < \infty$ using concentration bounds, then applies Borel--Cantelli.
+\begin{remark}
+\label{rem:bc_sufficient_usage}
+Corollary~\ref{cor:bc_sufficient} is the most common method for
+establishing almost sure convergence in practice.  The typical
+strategy is:
+\begin{enumerate}[nosep]
+  \item Bound $\Prob(|X_n - X| > \varepsilon)$ using a
+    concentration inequality (Chebyshev, Hoeffding, etc.).
+  \item Verify that the resulting bound is summable over $n$.
+  \item Apply the corollary.
+\end{enumerate}
+\end{remark}
+
+\begin{rlconnection}[title={Borel--Cantelli in Stochastic Approximation}]
+In the convergence proof of stochastic approximation algorithms
+(Robbins--Monro), one often shows that
+$\Prob(|\theta_n - \theta^*| > \varepsilon) \leq C/n^{1+\delta}$
+for some $\delta > 0$, where $\theta_n$ is the iterate and
+$\theta^*$ is the fixed point.  Since
+$\sum_n n^{-(1+\delta)} < \infty$,
+Corollary~\ref{cor:bc_sufficient} upgrades this to
+$\theta_n \cas \theta^*$.  The same technique applies to
+TD learning iterates $V_t(s)$ when convergence rates are
+available from Lyapunov analysis.
 \end{rlconnection}
 
 %% ============================================================
-%% SECTION 8: LIMIT THEOREMS
+%% SECTION 7: EXERCISES
 %% ============================================================
 
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[(*)]
+\label{ex:conv_constant}
+Let $X_n \cdist c$ where $c$ is a constant (i.e., $F_{X_n}(x) \to
+\indicator_{\{x \geq c\}}$ at continuity points).  Prove that
+$X_n \cprob c$.  (Thus, for convergence to a constant, convergence
+in distribution and convergence in probability are equivalent.)
+\end{exercise}
+
+\begin{exercise}[(*)]
+\label{ex:lp_bounded}
+Let $X_n \cas X$ and suppose $|X_n| \leq M$ a.s.\ for all $n$
+and some constant $M > 0$.  Prove that $X_n \clp{p} X$ for every
+$p \geq 1$.
+
+\noindent\textit{Hint:} Apply the Dominated Convergence Theorem
+(Lesson~11, Theorem~4.5) to $|X_n - X|^p$.
+\end{exercise}
+
+\begin{exercise}[(**)]
+\label{ex:subsequence}
+Prove that if $X_n \cprob X$, then there exists a subsequence
+$\{X_{n_k}\}$ such that $X_{n_k} \cas X$.
+
+\noindent\textit{Hint:} Choose $n_k$ so that
+$\Prob(|X_{n_k} - X| > 1/k) < 2^{-k}$, then apply the first
+Borel--Cantelli lemma.
+\end{exercise}
+
+\begin{exercise}[(**)]
+\label{ex:bc_dependent}
+Let $A_n$ be events (not necessarily independent) with
+$\sum_{n=1}^\infty \Prob(A_n) = \infty$.  Construct an explicit
+example where $\Prob(A_n \text{ i.o.}) = 0$, showing that
+independence is essential in the second Borel--Cantelli lemma.
+
+\noindent\textit{Hint:} Consider $A_n = A$ for all $n$, with
+$\Prob(A) = 0$.  Find a less trivial example where each
+$\Prob(A_n) > 0$.
+\end{exercise}
+
+\begin{exercise}[(**)]
+\label{ex:convergence_diagram}
+Let $X_n = n^{1/2} \indicator_{(0, 1/n)}$ on $(\Omega, \mathcal{F},
+\Prob) = ([0,1], \Borel([0,1]), \lambda)$, where $\lambda$ is the
+Lebesgue measure.  Determine which of the four modes of convergence
+hold for $X_n \to 0$.  Justify each answer.
+\end{exercise}
+
+\begin{exercise}[(***)]
+\label{ex:bc_converse}
+\textbf{(Converse Borel--Cantelli for pairwise independent events.)}
+Let $A_1, A_2, \ldots$ be pairwise independent events with
+$\sum_{n=1}^\infty \Prob(A_n) = \infty$.  Prove that
+$\Prob(A_n \text{ i.o.}) = 1$.
+
+\noindent\textit{Hint:} Compute $\Var(S_N)$ where
+$S_N = \sum_{n=1}^N \indicator_{A_n}$, using pairwise independence
+to bound the variance.  Then apply Chebyshev's inequality to show
+$\Prob(S_N > 0) \to 1$.
+\end{exercise}
+
+\begin{exercise}[(***)]
+\label{ex:sample_avg_as}
+Let $X_1, X_2, \ldots$ be i.i.d.\ with $\E[X_1] = \mu$ and
+$\E[X_1^4] < \infty$.  Using Markov's inequality with the fourth
+moment and Corollary~\ref{cor:bc_sufficient}, prove that
+$\bar{X}_n = \frac{1}{n}\sum_{i=1}^n X_i \cas \mu$.
+
+\noindent\textit{Hint:} Show $\E[(\bar{X}_n - \mu)^4] = O(1/n^2)$,
+then conclude $\sum_n \Prob(|\bar{X}_n - \mu| > \varepsilon)
+< \infty$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}[nosep]
+  \item \textbf{Four modes of convergence:}
+    almost sure ($X_n \cas X$),
+    in probability ($X_n \cprob X$),
+    in $L^p$ ($X_n \clp{p} X$),
+    and in distribution ($X_n \cdist X$).
+  \item \textbf{Hierarchy:}
+    $\text{a.s.} \Rightarrow \text{prob} \Rightarrow \text{dist}$
+    and
+    $L^p \Rightarrow \text{prob} \Rightarrow \text{dist}$.
+    No other general implications hold; a.s.\ and $L^p$ are
+    incomparable.
+  \item \textbf{First Borel--Cantelli:}
+    $\sum \Prob(A_n) < \infty \Rightarrow
+    \Prob(A_n \text{ i.o.}) = 0$.
+    No independence needed.
+  \item \textbf{Second Borel--Cantelli:}
+    $\sum \Prob(A_n) = \infty$ plus independence $\Rightarrow
+    \Prob(A_n \text{ i.o.}) = 1$.
+  \item \textbf{Characterization:}
+    $X_n \cas X$ iff $\Prob(|X_n - X| > \varepsilon \text{ i.o.})
+    = 0$ for all $\varepsilon > 0$.
+  \item \textbf{Sufficient condition:}
+    $\sum_n \Prob(|X_n - X| > \varepsilon) < \infty$ for all
+    $\varepsilon > 0$ implies $X_n \cas X$.
+  \item \textbf{Strategy:} bound tail probabilities via
+    concentration inequalities, verify summability, apply
+    Borel--Cantelli.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}[nosep]
+  \item \textbf{Lesson~9} develops the probability inequalities
+    (Markov, Chebyshev, Hoeffding) used to bound tail
+    probabilities in the Borel--Cantelli strategy.
+  \item \textbf{Lesson~11} proves the limit theorems (WLLN, SLLN,
+    CLT) that rely on the convergence modes and Borel--Cantelli
+    lemmas established here.
+  \item \textbf{Lesson~13} on martingale convergence provides the
+    supermartingale convergence theorem, which gives almost sure
+    convergence directly without Borel--Cantelli.
+  \item \citet{durrett2019}, Chapter~2 gives complete proofs of all
+    convergence implications with additional counterexamples.
+  \item \citet{billingsley1995}, Section~27 provides the definitive
+    treatment of convergence in distribution, including the
+    portmanteau theorem characterizing equivalent conditions.
+  \item \citet{grimmett2001}, Chapter~7 covers convergence of
+    random variables with many worked examples.
+\end{itemize}
+
+\bibliography{measure-theory-refs}
 
 \end{document}
