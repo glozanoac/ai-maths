@@ -1,0 +1,862 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 42: Contraction and Value Iteration}}
+\fancyhead[R]{\thepage}
+\title{Lesson 42: Contraction and Value Iteration}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lesson~41 established that the optimal value function $\Vstar$ is the
+unique fixed point of the Bellman optimality operator $\Bellman^*$, and
+that the Bellman expectation operator $\Bellman^\policy$ is a
+$\discount$-contraction with fixed point $\Vpi$. These results are
+existential: they tell us that unique solutions exist, but they do not
+yet provide a concrete, iterative algorithm for computing them.
+
+Suppose we have a large warehouse MDP with thousands of states and
+want to find the optimal policy. We cannot enumerate all $A^S$
+deterministic policies and evaluate each one. Instead, we need an
+algorithm that starts from an arbitrary initial guess $v^{(0)}$ and
+iteratively improves it toward $\Vstar$. How fast does this process
+converge? How do we know when to stop? And can we extract a
+near-optimal policy from an approximate value function?
+
+The tools developed in this lesson -- value iteration as a direct
+application of the Banach fixed-point theorem, its geometric
+convergence rate, and the connection between approximate fixed points
+and approximate optimality -- answer these questions and form the
+computational backbone of model-based reinforcement learning.
+
+\begin{rlconnection}[title={Why Value Iteration Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Classical planning}: Value iteration is the primary
+    algorithm for solving known MDPs; it is the standard benchmark for
+    model-based planning and appears in every RL textbook.
+    \item \textbf{Q-learning}: The Q-learning update
+    $Q(s,a) \leftarrow (1-\alpha)Q(s,a) + \alpha[r + \discount
+    \max_{a'} Q(s',a')]$ is a stochastic, asynchronous version of
+    value iteration applied to the action-value Bellman operator.
+    \item \textbf{Fitted value iteration}: Deep RL methods such as DQN
+    perform approximate value iteration by fitting a neural network to
+    the target $r + \discount \max_{a'} Q(s',a';\theta^-)$, directly
+    implementing the Bellman backup with function approximation.
+    \item \textbf{Convergence analysis}: The contraction rate
+    $\discount$ derived here provides the template for convergence
+    proofs across RL, from tabular methods to linear function
+    approximation.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Bellman expectation operator $\Bellman^\policy$, Bellman optimality
+operator $\Bellman^*$, their contraction properties, the policy
+improvement theorem, greedy policies (Lesson~41). The Banach
+fixed-point theorem on complete metric spaces (Lesson~4, Lesson~15).
+Supremum norm on $\R^S$ (Lesson~5). Geometric series convergence
+(Lesson~1).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{State} the value iteration algorithm for both
+    $V$-values and $Q$-values.
+    \item \emph{Prove} that value iteration converges geometrically to
+    $\Vstar$ at rate $\discount$ using the Banach fixed-point theorem.
+    \item \emph{Derive} the a priori and a posteriori error bounds for
+    value iteration.
+    \item \emph{Compute} the number of iterations required to achieve
+    $\varepsilon$-optimality.
+    \item \emph{Prove} that a policy greedy with respect to an
+    $\varepsilon$-approximate value function is
+    $\frac{2\discount\varepsilon}{1-\discount}$-optimal.
+    \item \emph{Apply} value iteration to small MDPs and verify
+    convergence.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 6, Sections 6.1--6.3]{puterman2014} --
+    Definitive treatment of value iteration, convergence analysis, and
+    error bounds for discounted MDPs.
+    \item \citet[Chapter 1, Sections 1.2--1.3]{bertsekas2012} --
+    Value iteration as contraction iteration, convergence rates, and
+    approximate dynamic programming.
+    \item \citet{denardo1967} -- Unified contraction framework placing
+    value iteration in the broader context of monotone operator theory.
+    \item \citet[Chapter 4]{suttonbarto2018} -- Accessible presentation
+    of value iteration with algorithmic pseudocode and examples.
+    \item \citet{blackwell1962} -- Original proof of the contraction
+    property and existence of optimal policies via iterative methods.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE VALUE ITERATION ALGORITHM
+%% ============================================================
+
+\section{The Value Iteration Algorithm}
+\label{sec:vi-algorithm}
+
+We work throughout with a finite MDP
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ with
+$|\States| = S$, $|\Actions| = A$,
+$R_{\max} = \max_{s,a} |R(s,a)|$, and $\discount \in [0,1)$.
+Value functions are elements of $\R^S$ equipped with the supremum
+norm $\|v\|_\infty = \max_{s \in \States} |v(s)|$.
+
+Recall from Lesson~41 that the Bellman optimality operator
+$\Bellman^* : \R^S \to \R^S$ is defined by
+\[
+    (\Bellman^* v)(s) = \max_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a)\, v(s') \right],
+\]
+and is a $\discount$-contraction on $(\R^S, \|\cdot\|_\infty)$ with
+unique fixed point $\Vstar$ (Lesson~41, Theorems~5.2 and~5.3).
+
+\begin{definition}[Value Iteration]
+\label{def:vi}
+The \emph{value iteration} (VI) algorithm generates a sequence of
+value functions $\{v^{(n)}\}_{n \geq 0}$ by:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Choose any $v^{(0)} \in \R^S$
+    (commonly $v^{(0)} = 0$).
+    \item \textbf{Iterate:} For $n = 0, 1, 2, \ldots$, compute
+    \[
+        v^{(n+1)} = \Bellman^* v^{(n)},
+    \]
+    i.e., for each $s \in \States$:
+    \[
+        v^{(n+1)}(s) = \max_{a \in \Actions}
+        \left[ R(s,a) + \discount \sum_{s' \in \States}
+        P(s' \mid s,a)\, v^{(n)}(s') \right].
+    \]
+    \item \textbf{Extract policy:} After termination, return the
+    greedy policy $d^{(n)}(s) = \argmax_{a \in \Actions}
+    [R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, v^{(n)}(s')]$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:vi-complexity}
+Each iteration of value iteration requires $O(S^2 A)$ arithmetic
+operations: for each of the $S$ states and $A$ actions, computing the
+one-step backup $R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+v^{(n)}(s')$ costs $O(S)$ operations. Storage is $O(S)$ for the
+current iterate.
+\end{remark}
+
+%% ============================================================
+%% SECTION 4: CONVERGENCE OF VALUE ITERATION
+%% ============================================================
+
+\section{Convergence of Value Iteration}
+\label{sec:vi-convergence}
+
+The convergence of value iteration follows directly from the Banach
+fixed-point theorem applied to the contraction $\Bellman^*$.
+
+\begin{theorem}[Value Iteration Converges Geometrically]
+\label{thm:vi-convergence}
+For any initial $v^{(0)} \in \R^S$, the value iteration sequence
+$v^{(n+1)} = \Bellman^* v^{(n)}$ satisfies:
+\begin{enumerate}[nosep]
+    \item $\|v^{(n)} - \Vstar\|_\infty \leq
+    \discount^n \|v^{(0)} - \Vstar\|_\infty$ for all $n \geq 0$.
+    \item $v^{(n)} \to \Vstar$ in the supremum norm as
+    $n \to \infty$.
+    \item The convergence rate is geometric with ratio $\discount$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+Since $\Bellman^*$ is a $\discount$-contraction on the complete
+metric space $(\R^S, \|\cdot\|_\infty)$ (Lesson~41,
+Theorem~5.2) with fixed point $\Vstar$:
+\[
+    \|v^{(n)} - \Vstar\|_\infty
+    = \|(\Bellman^*)^n v^{(0)} - (\Bellman^*)^n \Vstar\|_\infty
+    \leq \discount^n \|v^{(0)} - \Vstar\|_\infty,
+\]
+where we used the contraction property inductively:
+$\|\Bellman^* u - \Bellman^* w\|_\infty \leq
+\discount \|u - w\|_\infty$ implies
+$\|(\Bellman^*)^n u - (\Bellman^*)^n w\|_\infty \leq
+\discount^n \|u - w\|_\infty$.
+
+Since $\discount \in [0,1)$, $\discount^n \to 0$, giving
+$v^{(n)} \to \Vstar$.
+\end{proof}
+
+\begin{keyresult}[title={A Priori Error Bound for Value Iteration}]
+\label{kr:apriori}
+Starting from $v^{(0)} = 0$, the value iteration error satisfies
+\[
+    \|v^{(n)} - \Vstar\|_\infty
+    \leq \discount^n \|\Vstar\|_\infty
+    \leq \frac{\discount^n R_{\max}}{1 - \discount}.
+\]
+The second inequality uses $\|\Vstar\|_\infty \leq
+R_{\max}/(1-\discount)$, which follows from $|G_t| \leq
+R_{\max}/(1-\discount)$ (Lesson~39, Proposition~5.1).
+
+To achieve $\|v^{(n)} - \Vstar\|_\infty \leq \varepsilon$, it
+suffices to take
+\[
+    n \geq \frac{1}{1-\discount}
+    \log\!\left(\frac{R_{\max}}{\varepsilon(1-\discount)}\right)
+    = \frac{1}{\log(1/\discount)}
+    \log\!\left(\frac{R_{\max}}{\varepsilon(1-\discount)}\right).
+\]
+\end{keyresult}
+
+\begin{example}[Iteration Count for Common Parameters]
+\label{ex:iteration-count}
+For an MDP with $R_{\max} = 1$, $\discount = 0.99$, and desired
+accuracy $\varepsilon = 0.01$:
+\[
+    n \geq \frac{1}{\log(1/0.99)}
+    \log\!\left(\frac{1}{0.01 \cdot 0.01}\right)
+    = \frac{\log(10000)}{\log(1/0.99)}
+    \approx \frac{9.21}{0.01005}
+    \approx 917.
+\]
+With $\discount = 0.9$ instead:
+$n \geq \log(1000)/\log(1/0.9) \approx 6.91/0.1054 \approx 66$.
+The iteration count is highly sensitive to $\discount$: closer to 1
+means much slower convergence.
+\end{example}
+
+\begin{warning}[title={Dependence on $1/(1-\discount)$}]
+The iteration complexity of value iteration scales as
+$O(\frac{1}{1-\discount} \log \frac{1}{\varepsilon(1-\discount)})$.
+For $\discount$ close to 1, the factor $1/(1-\discount)$ can be
+very large (e.g., $1/(1-0.999) = 1000$). This makes value
+iteration impractical for near-undiscounted problems. Policy
+iteration, which converges in at most $A^S$ steps independent of
+$\discount$, can be preferable in such cases.
+\end{warning}
+
+We now establish a more practical error bound that uses only
+quantities computable during the algorithm, rather than the unknown
+$\Vstar$.
+
+\begin{theorem}[A Posteriori Error Bound]
+\label{thm:aposteriori}
+For the value iteration sequence $\{v^{(n)}\}$,
+\[
+    \|v^{(n)} - \Vstar\|_\infty
+    \leq \frac{\discount}{1 - \discount}
+    \|v^{(n)} - v^{(n-1)}\|_\infty
+\]
+for all $n \geq 1$.
+\end{theorem}
+
+\begin{proof}
+By the triangle inequality and the contraction property:
+\begin{align*}
+    \|v^{(n)} - \Vstar\|_\infty
+    &= \|\Bellman^* v^{(n-1)} - \Bellman^* \Vstar\|_\infty
+    \leq \discount \|v^{(n-1)} - \Vstar\|_\infty.
+\end{align*}
+Also, by the triangle inequality:
+\begin{align*}
+    \|v^{(n-1)} - \Vstar\|_\infty
+    &\leq \|v^{(n-1)} - v^{(n)}\|_\infty
+    + \|v^{(n)} - \Vstar\|_\infty.
+\end{align*}
+Combining: $\|v^{(n)} - \Vstar\|_\infty \leq
+\discount(\|v^{(n-1)} - v^{(n)}\|_\infty +
+\|v^{(n)} - \Vstar\|_\infty)$, so
+$(1 - \discount)\|v^{(n)} - \Vstar\|_\infty \leq
+\discount \|v^{(n)} - v^{(n-1)}\|_\infty$, giving the result.
+\end{proof}
+
+\begin{remark}
+\label{rem:stopping}
+The a posteriori bound provides a computable stopping criterion:
+terminate when $\|v^{(n)} - v^{(n-1)}\|_\infty <
+\varepsilon(1-\discount)/\discount$, which guarantees
+$\|v^{(n)} - \Vstar\|_\infty < \varepsilon$. This is the standard
+stopping rule used in practice.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: APPROXIMATE OPTIMALITY
+%% ============================================================
+
+\section{Approximate Optimality of Greedy Policies}
+\label{sec:approximate-optimality}
+
+In practice, we terminate value iteration after finitely many steps,
+obtaining an approximate value function $\tilde{v} \approx \Vstar$.
+The greedy policy $d_{\tilde{v}}$ with respect to $\tilde{v}$ is then
+used as the agent's policy. How close is $V^{d_{\tilde{v}}}$ to
+$\Vstar$?
+
+\begin{theorem}[Approximate Policy Extraction]
+\label{thm:approx-policy}
+Let $\tilde{v} \in \R^S$ satisfy
+$\|\tilde{v} - \Vstar\|_\infty \leq \varepsilon$, and let
+$d_{\tilde{v}}$ be the greedy policy with respect to $\tilde{v}$.
+Then
+\[
+    \|V^{d_{\tilde{v}}} - \Vstar\|_\infty
+    \leq \frac{2\discount\varepsilon}{1-\discount}.
+\]
+\end{theorem}
+
+\begin{proof}
+Since $d_{\tilde{v}}$ is greedy with respect to $\tilde{v}$, for
+every $s$,
+$(\Bellman^{d_{\tilde{v}}} \tilde{v})(s) = (\Bellman^* \tilde{v})(s)$.
+
+\textbf{Step 1:} Show $\|\Bellman^{d_{\tilde{v}}} \tilde{v} -
+V^{d_{\tilde{v}}}\|_\infty \leq
+\frac{\discount \varepsilon}{1-\discount}$.
+
+Since $V^{d_{\tilde{v}}}$ is the fixed point of
+$\Bellman^{d_{\tilde{v}}}$:
+\begin{align*}
+    \|\Bellman^{d_{\tilde{v}}} \tilde{v} - V^{d_{\tilde{v}}}\|_\infty
+    &= \|\Bellman^{d_{\tilde{v}}} \tilde{v}
+    - \Bellman^{d_{\tilde{v}}} V^{d_{\tilde{v}}}\|_\infty \\
+    &\leq \discount \|\tilde{v} - V^{d_{\tilde{v}}}\|_\infty.
+\end{align*}
+By the triangle inequality:
+$\|\tilde{v} - V^{d_{\tilde{v}}}\|_\infty \leq
+\|\tilde{v} - \Vstar\|_\infty +
+\|\Vstar - V^{d_{\tilde{v}}}\|_\infty \leq
+\varepsilon + \|\Vstar - V^{d_{\tilde{v}}}\|_\infty$.
+
+\textbf{Step 2:} Bound $\|\Vstar - V^{d_{\tilde{v}}}\|_\infty$.
+
+Since $V^{d_{\tilde{v}}} \leq \Vstar$ componentwise (no policy beats
+the optimal), we have
+$\|\Vstar - V^{d_{\tilde{v}}}\|_\infty
+= \max_s [\Vstar(s) - V^{d_{\tilde{v}}}(s)]$.
+
+For any state $s$:
+\begin{align*}
+    \Vstar(s) - V^{d_{\tilde{v}}}(s)
+    &= (\Bellman^* \Vstar)(s) - V^{d_{\tilde{v}}}(s) \\
+    &\leq (\Bellman^* \tilde{v})(s) + \discount\varepsilon
+    - V^{d_{\tilde{v}}}(s) \\
+    &= (\Bellman^{d_{\tilde{v}}} \tilde{v})(s) + \discount\varepsilon
+    - V^{d_{\tilde{v}}}(s) \\
+    &= (\Bellman^{d_{\tilde{v}}} \tilde{v})(s)
+    - (\Bellman^{d_{\tilde{v}}} V^{d_{\tilde{v}}})(s)
+    + \discount\varepsilon \\
+    &\leq \discount \|\tilde{v} - V^{d_{\tilde{v}}}\|_\infty
+    + \discount\varepsilon.
+\end{align*}
+The first inequality uses
+$|(\Bellman^* \Vstar)(s) - (\Bellman^* \tilde{v})(s)| \leq
+\discount\varepsilon$. The last inequality uses the contraction
+property.
+
+Taking the maximum over $s$:
+$\|\Vstar - V^{d_{\tilde{v}}}\|_\infty \leq
+\discount \|\tilde{v} - V^{d_{\tilde{v}}}\|_\infty +
+\discount\varepsilon$.
+
+Now $\|\tilde{v} - V^{d_{\tilde{v}}}\|_\infty \leq
+\varepsilon + \|\Vstar - V^{d_{\tilde{v}}}\|_\infty$, so
+\[
+    \|\Vstar - V^{d_{\tilde{v}}}\|_\infty \leq
+    \discount(\varepsilon + \|\Vstar - V^{d_{\tilde{v}}}\|_\infty)
+    + \discount\varepsilon
+    = 2\discount\varepsilon +
+    \discount \|\Vstar - V^{d_{\tilde{v}}}\|_\infty.
+\]
+Rearranging: $(1-\discount)\|\Vstar - V^{d_{\tilde{v}}}\|_\infty
+\leq 2\discount\varepsilon$, giving the result.
+\end{proof}
+
+\begin{keyresult}[title={Near-Optimal Policy from Approximate VI}]
+\label{kr:near-optimal}
+If value iteration produces $v^{(n)}$ with
+$\|v^{(n)} - \Vstar\|_\infty \leq \varepsilon$, then the greedy
+policy $d^{(n)}$ satisfies
+\[
+    \Vstar(s) - V^{d^{(n)}}(s) \leq
+    \frac{2\discount\varepsilon}{1-\discount}
+    \quad \text{for all } s \in \States.
+\]
+Note the ``error amplification'' factor $2\discount/(1-\discount)$:
+an $\varepsilon$-accurate value function yields only an
+$O(\varepsilon/(1-\discount))$-optimal policy. For
+$\discount = 0.99$, this factor is approximately 198.
+\end{keyresult}
+
+\begin{rlconnection}[title={Error Amplification in Deep RL}]
+The factor $2\discount/(1-\discount)$ in
+Theorem~\ref{thm:approx-policy} explains a fundamental challenge
+in deep RL: function approximation error $\varepsilon$ in the
+value network translates to policy suboptimality amplified by
+$1/(1-\discount)$. This is why DQN and its variants are sensitive
+to the quality of the value function approximation, and why
+techniques like target networks and experience replay (which reduce
+$\varepsilon$) lead to significant practical improvements.
+\end{rlconnection}
+
+\begin{example}[Value Iteration on a Two-State MDP]
+\label{ex:vi-two-state}
+Consider the two-state MDP from Lesson~39 with
+$\States = \{s_1, s_2\}$, $\Actions = \{a_1, a_2\}$,
+$\discount = 0.5$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(s_1 \mid s,a)$ & $P(s_2 \mid s,a)$ \\
+\midrule
+$s_1$ & $a_1$ & 5 & 0.5 & 0.5 \\
+$s_1$ & $a_2$ & 10 & 0 & 1 \\
+$s_2$ & $a_1$ & $-1$ & 0.8 & 0.2 \\
+$s_2$ & $a_2$ & 2 & 0.3 & 0.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+We know from Lesson~41 that $\Vstar(s_1) \approx 13.04$ and
+$\Vstar(s_2) \approx 6.09$, achieved by $\optpolicy(s_1) = a_2$,
+$\optpolicy(s_2) = a_2$.
+
+Starting from $v^{(0)} = (0, 0)^\top$:
+
+\textbf{Iteration 1}: $v^{(1)}(s_1) = \max\{5, 10\} = 10$,
+$v^{(1)}(s_2) = \max\{-1, 2\} = 2$. So $v^{(1)} = (10, 2)^\top$.
+
+\textbf{Iteration 2}:
+$v^{(2)}(s_1) = \max\{5 + 0.5(0.5 \cdot 10 + 0.5 \cdot 2),\;
+10 + 0.5(0 \cdot 10 + 1 \cdot 2)\} = \max\{8, 11\} = 11$.
+$v^{(2)}(s_2) = \max\{-1 + 0.5(0.8 \cdot 10 + 0.2 \cdot 2),\;
+2 + 0.5(0.3 \cdot 10 + 0.7 \cdot 2)\} = \max\{3.2, 4.2\} = 4.2$.
+So $v^{(2)} = (11, 4.2)^\top$.
+
+\textbf{Iteration 3}:
+$v^{(3)}(s_1) = \max\{5 + 0.5(0.5 \cdot 11 + 0.5 \cdot 4.2),\;
+10 + 0.5 \cdot 4.2\} = \max\{8.80, 12.10\} = 12.10$.
+$v^{(3)}(s_2) = \max\{-1 + 0.5(0.8 \cdot 11 + 0.2 \cdot 4.2),\;
+2 + 0.5(0.3 \cdot 11 + 0.7 \cdot 4.2)\} = \max\{3.82, 4.12\}
+= 5.12$.
+
+Correcting: $v^{(3)}(s_2) = \max\{-1 + 0.5(8.8 + 0.84),\;
+2 + 0.5(3.3 + 2.94)\} = \max\{3.82, 5.12\} = 5.12$.
+
+So $v^{(3)} = (12.10, 5.12)^\top$.
+
+The errors are $\|v^{(n)} - \Vstar\|_\infty$: after 1 iteration
+$\approx 4.09$, after 2 $\approx 2.04$, after 3 $\approx 0.97$.
+The ratio is approximately $0.5 = \discount$, confirming geometric
+convergence.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: VALUE ITERATION FOR ACTION VALUES
+%% ============================================================
+
+\section{Value Iteration for Action Values}
+\label{sec:vi-q}
+
+Value iteration can be stated directly for the action-value function,
+which is the version most relevant to model-free RL.
+
+\begin{definition}[Q-Value Iteration]
+\label{def:q-vi}
+\emph{Q-value iteration} generates a sequence
+$\{q^{(n)}\}_{n \geq 0}$ in $\R^{S \times A}$ by:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} $q^{(0)} \in \R^{S \times A}$
+    (commonly $q^{(0)} = 0$).
+    \item \textbf{Iterate:} For $n = 0, 1, 2, \ldots$,
+    \[
+        q^{(n+1)}(s,a) = R(s,a) + \discount \sum_{s' \in \States}
+        P(s' \mid s,a) \max_{a' \in \Actions} q^{(n)}(s', a').
+    \]
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Convergence of Q-Value Iteration]
+\label{prop:q-vi-convergence}
+The Q-value iteration sequence satisfies
+$\|q^{(n)} - \Qstar\|_\infty \leq
+\discount^n \|q^{(0)} - \Qstar\|_\infty$, and
+$q^{(n)} \to \Qstar$ as $n \to \infty$.
+\end{proposition}
+
+\begin{proof}
+The operator $\Bellman^*_Q$ defined by
+$(\Bellman^*_Q q)(s,a) = R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+\max_{a'} q(s',a')$ is a $\discount$-contraction on
+$(\R^{S \times A}, \|\cdot\|_\infty)$ with fixed point $\Qstar$
+(Lesson~41, Proposition~8.1). The Banach fixed-point theorem gives
+the geometric convergence bound.
+\end{proof}
+
+\begin{rlconnection}[title={From Q-Value Iteration to Q-Learning}]
+Q-value iteration requires the model $(P, R)$ to compute the backup.
+Q-learning replaces the expected backup
+$\sum_{s'} P(s' \mid s,a) \max_{a'} q(s',a')$ with a single
+sampled transition: $q(s,a) \leftarrow (1-\alpha_t) q(s,a) +
+\alpha_t [r + \discount \max_{a'} q(s',a')]$. Under appropriate
+step-size conditions ($\sum_t \alpha_t = \infty$,
+$\sum_t \alpha_t^2 < \infty$) and sufficient exploration,
+Q-learning converges to $\Qstar$ with probability 1 -- a result
+proved via stochastic approximation theory (Lesson~19).
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: POLICY ITERATION
+%% ============================================================
+
+\section{Policy Iteration}
+\label{sec:policy-iteration}
+
+We now present policy iteration, which alternates between exactly
+solving for the value of a policy and improving it.
+
+\begin{definition}[Policy Iteration]
+\label{def:pi}
+The \emph{policy iteration} (PI) algorithm generates a sequence of
+deterministic stationary policies $\{d^{(k)}\}_{k \geq 0}$ by:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Choose any deterministic stationary
+    policy $d^{(0)}$.
+    \item \textbf{Policy evaluation:} Compute $V^{d^{(k)}}$ by
+    solving the linear system
+    $v = r^{d^{(k)}} + \discount P^{d^{(k)}} v$, i.e.,
+    $V^{d^{(k)}} = (I - \discount P^{d^{(k)}})^{-1} r^{d^{(k)}}$.
+    \item \textbf{Policy improvement:} Set $d^{(k+1)}$ to be the
+    greedy policy with respect to $V^{d^{(k)}}$:
+    \[
+        d^{(k+1)}(s) = \argmax_{a \in \Actions}
+        \left[ R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\,
+        V^{d^{(k)}}(s') \right].
+    \]
+    \item \textbf{Stopping:} If $d^{(k+1)} = d^{(k)}$, stop and
+    output $d^{(k)}$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Finite Convergence of Policy Iteration]
+\label{thm:pi-convergence}
+Policy iteration converges to an optimal policy $\optpolicy$ in at
+most $|\Pi^{\mathrm{SD}}| = A^S$ iterations. Moreover, the sequence
+of values is monotonically non-decreasing:
+$V^{d^{(k+1)}}(s) \geq V^{d^{(k)}}(s)$ for all $s$ and $k$.
+\end{theorem}
+
+\begin{proof}
+By the policy improvement theorem (Lesson~41,
+Theorem~\ref{thm:pi-convergence}), $V^{d^{(k+1)}} \geq V^{d^{(k)}}$
+with equality if and only if $V^{d^{(k)}} = \Vstar$. Since:
+\begin{enumerate}[nosep]
+    \item The value sequence is non-decreasing.
+    \item There are finitely many deterministic stationary policies
+    ($A^S$), each with a distinct value function (if a value function
+    repeats, the greedy policy must be the same, triggering the
+    stopping condition).
+\end{enumerate}
+The algorithm must terminate after at most $A^S$ iterations.
+At termination, $d^{(k+1)} = d^{(k)}$, which means
+$V^{d^{(k)}}(s) = \max_a Q^{d^{(k)}}(s,a)$ for all $s$ --
+the Bellman optimality equation. Thus $V^{d^{(k)}} = \Vstar$ and
+$d^{(k)} = \optpolicy$.
+\end{proof}
+
+\begin{example}[Policy Iteration on a Two-State MDP]
+\label{ex:pi-two-state}
+Using the same two-state MDP as Example~\ref{ex:vi-two-state}:
+
+\textbf{Iteration 0}: Start with $d^{(0)}(s_1) = a_1$,
+$d^{(0)}(s_2) = a_1$.
+
+Policy evaluation: $V^{d^{(0)}} = (I - 0.5 P^{d^{(0)}})^{-1}
+r^{d^{(0)}}$. With $r^{d^{(0)}} = (5, -1)^\top$ and
+$P^{d^{(0)}} = \bigl(\begin{smallmatrix} 0.5 & 0.5 \\
+0.8 & 0.2 \end{smallmatrix}\bigr)$, solving gives
+$V^{d^{(0)}} \approx (7.39, 2.17)^\top$.
+
+Policy improvement:
+$Q^{d^{(0)}}(s_1, a_2) = 10 + 0.5 \cdot 2.17 = 11.09 > 7.39$,
+so $d^{(1)}(s_1) = a_2$.
+$Q^{d^{(0)}}(s_2, a_2) = 2 + 0.5(0.3 \cdot 7.39 + 0.7 \cdot 2.17)
+= 2 + 0.5(2.217 + 1.519) = 3.87 > 2.17$,
+so $d^{(1)}(s_2) = a_2$.
+
+\textbf{Iteration 1}: $d^{(1)}(s_1) = a_2$, $d^{(1)}(s_2) = a_2$.
+
+Policy evaluation gives $V^{d^{(1)}} \approx (13.04, 6.09)^\top$.
+
+Policy improvement: checking all actions confirms $d^{(2)} = d^{(1)}$.
+Algorithm terminates: $\optpolicy = d^{(1)}$.
+
+Policy iteration found the optimal policy in just 2 iterations (1
+improvement step), compared to the many iterations needed by value
+iteration.
+\end{example}
+
+\begin{keyresult}[title={Value Iteration vs.\ Policy Iteration}]
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Value Iteration} & \textbf{Policy Iteration} \\
+\midrule
+Per-iteration cost & $O(S^2 A)$ & $O(S^3 + S^2 A)$ \\
+Convergence & Geometric, rate $\discount$ & Finite, $\leq A^S$ steps \\
+Stopping criterion & $\|v^{(n)}-v^{(n-1)}\|_\infty < \epsilon$ &
+$d^{(k+1)} = d^{(k)}$ \\
+Sensitivity to $\discount$ & Slow for $\discount \approx 1$ &
+Independent of $\discount$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Policy iteration is typically preferred for moderate state spaces due
+to its fast convergence; value iteration scales better to large state
+spaces where exact policy evaluation (an $O(S^3)$ linear solve) is
+prohibitive.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 8: MONOTONICITY AND ADDITIONAL PROPERTIES
+%% ============================================================
+
+\section{Monotonicity of the Bellman Operator}
+\label{sec:monotonicity}
+
+The monotonicity property of $\Bellman^*$ is used throughout the
+convergence analysis. We state and prove it formally.
+
+\begin{proposition}[Monotonicity of $\Bellman^*$]
+\label{prop:monotonicity}
+The Bellman optimality operator is monotone: if
+$u(s) \leq v(s)$ for all $s \in \States$, then
+$(\Bellman^* u)(s) \leq (\Bellman^* v)(s)$ for all $s$.
+The same holds for $\Bellman^\policy$ for any policy $\policy$.
+\end{proposition}
+
+\begin{proof}
+If $u \leq v$ componentwise, then for any $s$ and $a$:
+\[
+    R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, u(s')
+    \leq R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, v(s'),
+\]
+since $P(s' \mid s,a) \geq 0$ and $u(s') \leq v(s')$. Taking the
+max over $a$ on both sides preserves the inequality:
+$(\Bellman^* u)(s) \leq (\Bellman^* v)(s)$.
+
+For $\Bellman^\policy$, the argument is identical with the
+weighted sum $\sum_a \policy(a \mid s)[\cdots]$ replacing the max.
+\end{proof}
+
+\begin{proposition}[Shift Property of $\Bellman^*$]
+\label{prop:shift}
+For any $v \in \R^S$ and constant $c \in \R$, define
+$(v + c)(s) = v(s) + c$. Then
+$\Bellman^*(v + c) = \Bellman^* v + \discount c$.
+\end{proposition}
+
+\begin{proof}
+For any $s$:
+\begin{align*}
+    (\Bellman^*(v+c))(s)
+    &= \max_a \left[R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+    (v(s') + c)\right] \\
+    &= \max_a \left[R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+    v(s') + \discount c\right] \\
+    &= (\Bellman^* v)(s) + \discount c. \qedhere
+\end{align*}
+\end{proof}
+
+\begin{remark}
+\label{rem:shift-implication}
+The shift property implies that a uniform translation of the value
+function is ``damped'' by $\discount$ after one Bellman backup.
+Combined with monotonicity, this gives an alternative proof of the
+contraction property: if $\|u - v\|_\infty \leq \delta$, then
+$v - \delta \leq u \leq v + \delta$, so by monotonicity
+$\Bellman^*(v - \delta) \leq \Bellman^* u \leq
+\Bellman^*(v + \delta)$, and by the shift property
+$\Bellman^* v - \discount\delta \leq \Bellman^* u \leq
+\Bellman^* v + \discount\delta$, giving
+$\|\Bellman^* u - \Bellman^* v\|_\infty \leq \discount\delta$.
+\end{remark}
+
+This alternative characterization -- contraction via monotonicity
+and shift -- generalizes to settings where the explicit proof of
+contraction is more difficult.
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Value Iteration by Hand] \textnormal{(\(*\))} \\
+Consider the MDP with $\States = \{1, 2, 3\}$,
+$\Actions = \{L, R\}$, $\discount = 0.9$:
+\begin{center}
+\begin{tabular}{cccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ &
+$P(3 \mid s,a)$ \\
+\midrule
+1 & L & 0 & 0.5 & 0.5 & 0 \\
+1 & R & 1 & 0 & 0 & 1 \\
+2 & L & 2 & 0.3 & 0.4 & 0.3 \\
+2 & R & 0 & 0 & 0 & 1 \\
+3 & L & 0 & 0 & 0 & 1 \\
+3 & R & 0 & 0 & 0 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Starting from $v^{(0)} = (0, 0, 0)^\top$, compute $v^{(1)}$,
+$v^{(2)}$, and $v^{(3)}$. Verify that $\|v^{(n)} - v^{(n-1)}\|_\infty$
+decreases by approximately a factor of $\discount = 0.9$ at each step.
+\end{exercise}
+
+\begin{exercise}[A Posteriori Stopping Criterion]
+\textnormal{(\(*\))} \\
+For the MDP in Exercise~\ref{ex:vi-two-state} with $\discount = 0.5$,
+after 3 iterations we found $v^{(3)} = (12.10, 5.12)^\top$.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute $\|v^{(3)} - v^{(2)}\|_\infty$.
+    \item Use the a posteriori bound
+    (Theorem~\ref{thm:aposteriori}) to bound
+    $\|v^{(3)} - \Vstar\|_\infty$.
+    \item Compare with the actual error
+    $\|v^{(3)} - \Vstar\|_\infty$ (using
+    $\Vstar \approx (13.04, 6.09)^\top$).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Policy Iteration Convergence]
+\textnormal{(\(**\))} \\
+Prove that during policy iteration, if $V^{d^{(k+1)}} = V^{d^{(k)}}$
+at \emph{any} state, then $V^{d^{(k+1)}} = V^{d^{(k)}}$ at
+\emph{all} states and $d^{(k)}$ is optimal.
+
+\textit{Hint:} Use the Bellman optimality equation characterization.
+\end{exercise}
+
+\begin{exercise}[Tightness of the Approximate Policy Bound]
+\textnormal{(\(**\))} \\
+Show that the bound $\|V^{d_{\tilde{v}}} - \Vstar\|_\infty \leq
+2\discount\varepsilon/(1-\discount)$ in
+Theorem~\ref{thm:approx-policy} is tight up to a constant factor by
+constructing a two-state MDP where the policy loss is at least
+$\discount\varepsilon/(1-\discount)$ for an appropriately chosen
+$\tilde{v}$ with $\|\tilde{v} - \Vstar\|_\infty = \varepsilon$.
+
+\textit{Hint:} Use a deterministic MDP where the greedy action
+with respect to $\tilde{v}$ differs from the optimal action due to
+the approximation error.
+\end{exercise}
+
+\begin{exercise}[Modified Policy Iteration]
+\textnormal{(\(***\))} \\
+\emph{Modified policy iteration} performs only $m$ steps of policy
+evaluation (rather than solving the linear system exactly):
+$v^{(k,0)} = v^{(k-1)}$,
+$v^{(k,j+1)} = \Bellman^{d^{(k)}} v^{(k,j)}$ for
+$j = 0, \ldots, m-1$, then $v^{(k)} = v^{(k,m)}$ and
+$d^{(k+1)} = \text{greedy}(v^{(k)})$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $m = 0$ gives value iteration and $m = \infty$
+    gives exact policy iteration.
+    \item Prove that $\|v^{(k)} - \Vstar\|_\infty \leq
+    \discount^m \|v^{(k-1)} - \Vstar\|_\infty +
+    (1 - \discount^m)\|V^{d^{(k)}} - \Vstar\|_\infty$.
+    \item Show that modified policy iteration converges to $\Vstar$
+    for any fixed $m \geq 1$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item \emph{Value iteration} computes $v^{(n+1)} = \Bellman^*
+    v^{(n)}$ and converges geometrically:
+    $\|v^{(n)} - \Vstar\|_\infty \leq \discount^n
+    \|v^{(0)} - \Vstar\|_\infty$.
+    \item The \emph{a priori bound} starting from $v^{(0)} = 0$
+    gives $\|v^{(n)} - \Vstar\|_\infty \leq
+    \discount^n R_{\max}/(1-\discount)$, requiring
+    $O(\frac{1}{1-\discount}
+    \log\frac{R_{\max}}{\varepsilon(1-\discount)})$ iterations for
+    $\varepsilon$-accuracy.
+    \item The \emph{a posteriori bound}
+    $\|v^{(n)} - \Vstar\|_\infty \leq
+    \frac{\discount}{1-\discount}\|v^{(n)} - v^{(n-1)}\|_\infty$
+    provides a computable stopping criterion.
+    \item A greedy policy from an $\varepsilon$-approximate value
+    function is $\frac{2\discount\varepsilon}{1-\discount}$-optimal,
+    demonstrating error amplification by $1/(1-\discount)$.
+    \item Q-value iteration applies the Bellman optimality operator
+    for action values; it is the model-based template for Q-learning.
+    \item \emph{Policy iteration} alternates exact policy evaluation
+    and greedy improvement, converging in finitely many steps
+    ($\leq A^S$), independent of $\discount$.
+    \item The \emph{monotonicity} and \emph{shift properties} of
+    $\Bellman^*$ provide an alternative route to the contraction
+    property and generalize to broader settings.
+    \item Per iteration, VI costs $O(S^2 A)$ and PI costs
+    $O(S^3 + S^2 A)$; VI suits large state spaces while PI suits
+    small state spaces with $\discount \approx 1$.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~43} develops refined error bounds for value
+    iteration, stopping criteria, and proves monotonicity properties
+    of VI sequences.
+    \item \textbf{Lesson~44} extends the MDP framework to the average
+    reward criterion, where the discount factor is absent and long-run
+    average performance is optimized.
+    \item \citet[Chapters 6--7]{puterman2014} provides the definitive
+    treatment of value iteration and policy iteration, including
+    acceleration techniques and linear programming formulations.
+    \item \citet[Chapter 2]{bertsekas2012} extends the analysis to
+    approximate dynamic programming, where Bellman backups use
+    function approximation rather than exact tabular updates.
+    \item \citet{denardo1967} places value iteration in the general
+    framework of contraction mappings on ordered Banach spaces,
+    yielding convergence results for a broad class of dynamic
+    programming operators.
+    \item \citet[Chapter 4]{suttonbarto2018} presents value iteration
+    and policy iteration from the RL practitioner's perspective, with
+    pseudocode and implementation details.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

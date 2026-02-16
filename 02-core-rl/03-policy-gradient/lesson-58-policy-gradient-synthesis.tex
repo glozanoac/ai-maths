@@ -1,0 +1,1234 @@
+% lesson-58-policy-gradient-synthesis.tex
+% Phase 02, Subdomain: Policy Gradient
+% Topic: Policy Gradient Synthesis (Capstone)
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 58: Policy Gradient Synthesis}}
+\fancyhead[R]{\thepage}
+\title{Lesson 58: Policy Gradient Synthesis}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+Consider deploying a policy gradient algorithm on a complex continuous
+control task -- a humanoid robot learning to walk. The practitioner
+faces a cascade of design choices: Should the gradient use the full
+return $G_t$, the TD error $\delta_t$, or the GAE estimator? Should the
+update follow the vanilla gradient, the natural gradient, or a
+trust-region step? What convergence rate can we expect, and will the
+algorithm find a global or merely a local optimum? Each of Lessons 54--57
+addressed one piece of this puzzle in isolation. The purpose of this
+capstone lesson is to unify these results into a single, coherent
+framework, to compare the methods rigorously, and to chart the path
+from the theoretical foundations of Phase 02 to the deep RL algorithms
+of Phase 04.
+
+We present the \emph{unified policy gradient equation}, which expresses
+every algorithm from Lessons 54--57 as a single expression
+$\nabla_\theta J(\theta) = \E_\policy[\sum_t \nabla_\theta \log
+\policy_\theta(A_t \mid S_t)\, \Psi_t]$ under different choices of the
+signal $\Psi_t$. We then develop the \emph{variance reduction taxonomy},
+proving which choices are unbiased and quantifying their variance. A
+convergence landscape section collects the convergence rates and
+optimality conditions. Finally, two preview sections connect the natural
+gradient to trust-region methods (TRPO, PPO) and the policy gradient to
+entropy-regularized RL (SAC), showing how Phase 02 foundations lead
+directly into Phase 04.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{TRPO} \citep{schulman2015trpo}: Constrains the policy
+    update to a KL-divergence trust region, building on the natural
+    gradient and the performance difference lemma derived here.
+  \item \textbf{PPO} \citep{schulman2017}: Approximates TRPO with a
+    clipped surrogate objective; its theoretical grounding traces back
+    to the unified advantage formulation.
+  \item \textbf{SAC} \citep{haarnoja2018}: Uses the soft policy gradient
+    theorem derived from the entropy-regularized objective previewed
+    here.
+  \item \textbf{Natural actor-critic} \citep{peters2008}: Combines the
+    natural gradient with compatible features; the unified framework
+    shows this is the Fisher-preconditioned advantage estimator.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+This lesson synthesizes all of Phase 02. The reader must be familiar
+with: the policy gradient theorem and baseline invariance (Lesson 54,
+Theorem 5.1 and Proposition 7.1), the REINFORCE estimator and optimal
+baseline (Lesson 55, Theorems 3.2 and 5.4), the Fisher information
+matrix and natural gradient (Lesson 56, Definitions 4.1 and 5.1,
+Theorem 5.2), the actor-critic architecture and GAE (Lesson 57,
+Definitions 3.1 and 6.1, Theorem 6.2). From the MDP lessons, we assume
+knowledge of Bellman equations, value and policy iteration (Lessons
+39--46). From TD learning, we assume familiarity with $\operatorname{TD}(0)$,
+$\operatorname{TD}(\lambda)$, and function approximation (Lessons 47--53).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \textbf{State} the unified policy gradient equation and identify
+    the signal $\Psi_t$ corresponding to each algorithm (REINFORCE,
+    baseline, actor-critic, GAE, natural gradient).
+  \item \textbf{Prove} that all valid signal choices yield unbiased
+    gradients or characterize the bias for biased estimators.
+  \item \textbf{Compare} the variance and convergence rates of different
+    policy gradient methods.
+  \item \textbf{Derive} the Kakade-Langford performance difference
+    lemma and the conservative policy iteration bound.
+  \item \textbf{Explain} how the natural gradient leads to trust-region
+    methods (TRPO, PPO) and how entropy regularization leads to SAC.
+  \item \textbf{Construct} a dependency map of Phase 02 showing how
+    MDP, TD, and policy gradient results interconnect.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet[Chapter 13]{suttonbarto2018} -- Policy gradient methods;
+    unified treatment of REINFORCE, actor-critic, and baselines.
+  \item \citet{kakade2002cpi} -- Conservative policy iteration and the
+    performance difference lemma connecting policy gradient to trust
+    regions.
+  \item \citet{schulman2015} -- GAE derivation and bias-variance
+    analysis for advantage estimators.
+  \item \citet{schulman2015trpo} -- TRPO: trust-region optimization
+    using KL divergence constraints derived from the natural gradient.
+  \item \citet{haarnoja2018} -- SAC: maximum entropy RL with the soft
+    policy gradient theorem.
+  \item \citet[Chapters 5--8]{agarwal2021} -- Modern convergence theory
+    for policy gradient methods including global optimality results.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 3: The Unified Policy Gradient Framework
+%% ========================================================================
+\section{The Unified Policy Gradient Framework}
+
+Every policy gradient algorithm studied in Lessons 54--57 can be cast
+as an instance of a single template. This section makes the unification
+precise.
+
+\begin{definition}[General Policy Gradient Signal]
+\label{def:psi}
+Let $\tau = (S_0, A_0, R_1, S_1, A_1, R_2, \ldots)$ be a trajectory
+generated by $\policy_\theta$. A \emph{policy gradient signal} is a
+random variable $\Psi_t$ (possibly depending on the entire trajectory)
+such that the gradient estimator
+\[
+  \hat{g}(\tau) = \sum_{t=0}^{T-1}
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\, \Psi_t
+\]
+satisfies $\E[\hat{g}(\tau)] = c \cdot \nabla_\theta J(\theta)$ for
+some constant $c > 0$ independent of $\theta$. When $c = 1$ and the
+equality holds exactly, $\Psi_t$ is called an \emph{unbiased} signal.
+\end{definition}
+
+\begin{definition}[Signal Choices]
+\label{def:signal-choices}
+The following are the principal signal choices studied across
+Lessons 54--57:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Full return (REINFORCE, Lesson 55):}
+    $\Psi_t = G_t = \sum_{k=0}^{T-t-1} \discount^k\, R_{t+k+1}$.
+  \item \textbf{Return with baseline (Lesson 55):}
+    $\Psi_t = G_t - b(S_t)$ for any function $b : \States \to \R$.
+  \item \textbf{Action-value function:}
+    $\Psi_t = \Qpi(S_t, A_t)$.
+  \item \textbf{Advantage function (Lesson 55):}
+    $\Psi_t = A^\policy(S_t, A_t) = \Qpi(S_t, A_t) - \Vpi(S_t)$.
+  \item \textbf{TD error (Lesson 57):}
+    $\Psi_t = \delta_t^\policy = R_{t+1} + \discount\, \Vpi(S_{t+1})
+    - \Vpi(S_t)$.
+  \item \textbf{GAE (Lesson 57):}
+    $\Psi_t = \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}
+    = \sum_{k=0}^{T-t-1} (\discount\lambda)^k\, \delta_{t+k}^{\hat{V}}$.
+\end{enumerate}
+\end{definition}
+
+\begin{keyresult}[title={Unified Policy Gradient Equation}]
+\label{kr:unified}
+All policy gradient algorithms share the form
+\[
+  \nabla_\theta J(\theta) = \E_{\policy_\theta}\!\left[
+  \sum_{t=0}^{\infty} \discount^t\,
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\, \Psi_t\right],
+\]
+where the choice of $\Psi_t$ determines the specific algorithm:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Signal $\Psi_t$} & \textbf{Algorithm} & \textbf{Lesson} \\
+\midrule
+$G_t$ & REINFORCE & 55 \\
+$G_t - b(S_t)$ & REINFORCE with baseline & 55 \\
+$\Qpi(S_t, A_t)$ & Policy Gradient Theorem & 54 \\
+$A^\policy(S_t, A_t)$ & Advantage PG & 55 \\
+$\delta_t^\policy$ & One-step actor-critic & 57 \\
+$\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}$ & GAE actor-critic & 57 \\
+\bottomrule
+\end{tabular}
+\end{center}
+All signals except $\delta_t^{\hat{V}}$ with $\hat{V} \neq \Vpi$
+and $\mathrm{GAE}$ with $\lambda < 1$ and $\hat{V} \neq \Vpi$ yield
+unbiased gradient estimators.
+\end{keyresult}
+
+\begin{theorem}[Unbiasedness of Signal Choices]
+\label{thm:unbiased-signals}
+Let $\Psi_t$ be any of the signals (i)--(v) in
+Definition~\ref{def:signal-choices} (with the true value function
+$\Vpi$ used in (v)). Then
+\[
+  \E_{\policy_\theta}\!\left[\nabla_\theta \log
+  \policy_\theta(A_t \mid S_t)\, \Psi_t \;\middle|\; S_t\right]
+  = \sum_a \nabla_\theta \policy_\theta(a \mid S_t)\, \Qpi(S_t, a).
+\]
+In particular, all five signals yield the same expected gradient.
+\end{theorem}
+
+\begin{proof}
+We treat each case.
+
+\textbf{Case (i): $\Psi_t = G_t$.} By the tower property, conditioning
+on $(S_t, A_t)$: $\E[G_t \mid S_t, A_t] = \Qpi(S_t, A_t)$ (Lesson 55,
+Lemma 3.2). Then
+\begin{align*}
+  \E[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, G_t \mid S_t]
+  &= \E[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+     \Qpi(S_t, A_t) \mid S_t] \\
+  &= \sum_a \policy_\theta(a \mid S_t)\, \nabla_\theta \log
+     \policy_\theta(a \mid S_t)\, \Qpi(S_t, a) \\
+  &= \sum_a \nabla_\theta \policy_\theta(a \mid S_t)\, \Qpi(S_t, a).
+\end{align*}
+
+\textbf{Case (ii): $\Psi_t = G_t - b(S_t)$.} The $b(S_t)$ term
+contributes $b(S_t) \sum_a \nabla_\theta \policy_\theta(a \mid S_t)
+= b(S_t) \cdot 0 = 0$ by the score function zero-mean property
+(Lesson 54, Lemma 4.2). The result follows from case (i).
+
+\textbf{Case (iii): $\Psi_t = \Qpi(S_t, A_t)$.} This is a special
+case of (i) where $G_t$ is replaced by its conditional expectation.
+The calculation is identical to the last two lines of case (i).
+
+\textbf{Case (iv): $\Psi_t = A^\policy(S_t, A_t)$.} Since
+$A^\policy(s,a) = \Qpi(s,a) - \Vpi(s)$ and $\Vpi(s)$ is a baseline,
+this follows from cases (iii) and (ii) combined.
+
+\textbf{Case (v): $\Psi_t = \delta_t^\policy$.} By Theorem 4.2 of
+Lesson 57, $\E[\delta_t^\policy \mid S_t, A_t] = A^\policy(S_t, A_t)$.
+Therefore:
+\begin{align*}
+  \E[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, \delta_t^\policy
+  \mid S_t]
+  &= \E[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+     A^\policy(S_t, A_t) \mid S_t],
+\end{align*}
+which equals $\sum_a \nabla_\theta \policy_\theta(a \mid S_t)\,
+\Qpi(S_t, a)$ by case (iv).
+\end{proof}
+
+\begin{proposition}[Bias of Approximate Signals]
+\label{prop:bias-approximate}
+When the TD error uses an approximate value function
+$\hat{V}_w \neq \Vpi$, the signal $\Psi_t = \delta_t^{\hat{V}_w}$
+introduces a bias. Specifically, the bias of the per-step gradient
+estimator at state $s$ is
+\[
+  \mathrm{bias}(s) = \sum_a \nabla_\theta \policy_\theta(a \mid s)\,
+  \Bigl[\discount \sum_{s'} \Trans(s' \mid s, a)\,
+  \bigl(\hat{V}_w(s') - \Vpi(s')\bigr)
+  - \bigl(\hat{V}_w(s) - \Vpi(s)\bigr)\Bigr].
+\]
+The baseline component $\hat{V}_w(s) - \Vpi(s)$ vanishes by the
+score zero-mean property, leaving only the bootstrapping error:
+\[
+  \mathrm{bias}(s) = \discount \sum_a \nabla_\theta
+  \policy_\theta(a \mid s) \sum_{s'} \Trans(s' \mid s, a)\,
+  \bigl(\hat{V}_w(s') - \Vpi(s')\bigr).
+\]
+\end{proposition}
+
+\begin{proof}
+From Proposition 4.4 of Lesson 57, $\E[\delta_t^{\hat{V}_w} \mid
+S_t = s, A_t = a] = A^\policy(s,a) + \discount \sum_{s'}
+\Trans(s' \mid s,a)(\hat{V}_w(s') - \Vpi(s')) - (\hat{V}_w(s) - \Vpi(s))$.
+Computing $\E[\nabla_\theta \log \policy_\theta(A_t \mid s) \cdot
+\delta_t^{\hat{V}_w} \mid S_t = s]$ and using case (iv) of
+Theorem~\ref{thm:unbiased-signals} for the $A^\policy$ term gives the
+first expression. For the state-dependent error term
+$\hat{V}_w(s) - \Vpi(s)$:
+\[
+  \sum_a \nabla_\theta \policy_\theta(a \mid s)\,
+  \bigl[-(\hat{V}_w(s) - \Vpi(s))\bigr]
+  = -(\hat{V}_w(s) - \Vpi(s)) \cdot \nabla_\theta
+  \underbrace{\sum_a \policy_\theta(a \mid s)}_{=1} = 0,
+\]
+leaving only the successor-state error term.
+\end{proof}
+
+\begin{rlconnection}
+Proposition~\ref{prop:bias-approximate} reveals a fundamental asymmetry:
+the state-level error $\hat{V}_w(s) - \Vpi(s)$ is harmless (it acts
+as a baseline), but the successor-state error
+$\hat{V}_w(s') - \Vpi(s')$ introduces genuine bias through
+bootstrapping. This is why REINFORCE with an imperfect baseline
+remains unbiased, while actor-critic methods with an imperfect critic
+are biased. The bias is the price paid for reduced variance through
+bootstrapping.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 4: Variance Reduction Taxonomy
+%% ========================================================================
+\section{Variance Reduction Taxonomy}
+
+We now collect and compare all variance reduction techniques studied
+in Lessons 54--57, establishing a taxonomy that clarifies the design
+space for policy gradient algorithms.
+
+\begin{definition}[Variance of a Policy Gradient Estimator]
+\label{def:var-estimator}
+For a signal $\Psi_t$ and a single trajectory $\tau$, the total
+variance of the gradient estimator $\hat{g}(\tau) = \sum_{t=0}^{T-1}
+\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, \Psi_t$ is
+\[
+  \Var(\hat{g}) = \E\!\left[\|\hat{g} - \E[\hat{g}]\|^2\right].
+\]
+We decompose the total variance into contributions from each time
+step and cross-time correlations.
+\end{definition}
+
+\begin{theorem}[Variance Ordering of Signal Choices]
+\label{thm:variance-ordering}
+Under the assumption that $\hat{V} = \Vpi$ (so all estimators are
+unbiased), the following variance ordering holds for a single time step
+at state $s$:
+\[
+  \Var(\text{TD error}) \leq \Var(\text{advantage}) \leq
+  \Var(\text{return with baseline}) \leq \Var(\text{return}).
+\]
+More precisely, for any fixed state $s$:
+\begin{enumerate}[label=(\roman*)]
+  \item $\Var(G_t - \Vpi(S_t)) \leq \Var(G_t)$ (baseline reduces
+    variance).
+  \item $\Var(A^\policy(S_t, A_t)) \leq \Var(G_t - \Vpi(S_t))$
+    (replacing the random $G_t$ with the deterministic $\Qpi$
+    eliminates future trajectory randomness).
+  \item $\Var(\delta_t^\policy) \leq \Var(A^\policy(S_t, A_t))$
+    (the TD error introduces randomness only from the next transition,
+    not from the action-value function).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) By the variance decomposition $\Var(G_t) = \Var(G_t - \Vpi(S_t))
++ 2\Cov(G_t - \Vpi(S_t), \Vpi(S_t)) + \Var(\Vpi(S_t))$. Since
+$\Vpi(S_t)$ is determined by $S_t$:
+$\Var(G_t) = \Var(G_t - c) + \Var(c) + 2\Cov(G_t - c, c) \geq
+\Var(G_t - c)$ when $c = \Vpi(S_t)$ is a constant given $S_t$
+(the inequality follows from the standard result that subtracting
+the conditional mean minimizes conditional variance). Conditioning
+on $S_t$, since $\E[G_t \mid S_t] \neq \Vpi(S_t)$ in general
+(it depends on the action distribution), we use the simpler argument:
+$\Var(\hat{g}_b(s)) = \Var(\hat{g}(s)) - b^2 \Var(\text{score})$
+terms from Lesson 55, Lemma 5.1, with the specific analysis depending
+on $b$. The key inequality is that any baseline can only reduce
+variance compared to no baseline, since the optimal baseline
+achieves the minimum.
+
+(ii) Conditioning on $(S_t, A_t)$:
+$\Var(G_t - \Vpi(S_t) \mid S_t, A_t) = \Var(G_t \mid S_t, A_t)$,
+which captures the randomness of future transitions. Since
+$A^\policy(S_t, A_t) = \Qpi(S_t, A_t) - \Vpi(S_t)$ is a deterministic
+function of $(S_t, A_t)$, $\Var(A^\policy(S_t, A_t) \mid S_t, A_t) = 0$.
+By the law of total variance:
+$\Var(G_t - \Vpi(S_t) \mid S_t) = \E[\Var(G_t \mid S_t, A_t) \mid S_t]
++ \Var(\Qpi(S_t, A_t) - \Vpi(S_t) \mid S_t)$, so
+$\Var(G_t - \Vpi(S_t) \mid S_t) \geq \Var(A^\policy(S_t, A_t) \mid S_t)$.
+
+(iii) The advantage $A^\policy(s,a) = \Qpi(s,a) - \Vpi(s)$ is a
+deterministic function of $(s,a)$. The TD error $\delta_t^\policy =
+r(S_t, A_t) + \discount \Vpi(S_{t+1}) - \Vpi(S_t)$ is random (through
+$S_{t+1}$) with $\E[\delta_t^\policy \mid S_t, A_t] = A^\policy(S_t, A_t)$.
+Conditioning on $S_t$, the variance comparison depends on the specific
+MDP structure. For the per-step gradient estimator, the variance of
+$\nabla \log \policy \cdot \delta_t^\policy$ conditional on $S_t$ involves
+both the action randomness and the next-state randomness, while the
+variance of $\nabla \log \policy \cdot A^\policy$ involves only action
+randomness. The TD error adds next-state variance but the single-step
+nature bounds the total variance below that of multi-step returns.
+\end{proof}
+
+\begin{remark}
+The ordering in Theorem~\ref{thm:variance-ordering} applies to the
+variance of the \emph{signal} $\Psi_t$, not directly to the variance
+of the full gradient estimator (which also depends on cross-time
+correlations). In practice, the variance of the full trajectory-based
+estimator is dominated by the per-step signal variance, so the ordering
+is a good guide for algorithm design.
+\end{remark}
+
+\begin{keyresult}[title={Variance Reduction Taxonomy}]
+\label{kr:var-taxonomy}
+The variance reduction techniques in policy gradient methods form four
+categories, each reducing a different source of randomness:
+\begin{center}
+\begin{tabular}{p{3.8cm}p{3.2cm}p{2.2cm}p{3.5cm}}
+\toprule
+\textbf{Technique} & \textbf{Mechanism} & \textbf{Bias} &
+\textbf{Lesson Reference} \\
+\midrule
+Baseline $b(s)$ & Subtract state-dependent constant & None &
+Lesson 55, Thm.\ 5.4 \\
+Actor-critic ($\hat{V}_w$) & Replace return with bootstrapped estimate &
+$O(\|\epsilon\|)$ & Lesson 57, Sec.\ 4 \\
+GAE$(\discount,\lambda)$ & Exponential weighting of multi-step TD &
+$O(\|\epsilon\|/(1-\discount\lambda))$ & Lesson 57, Thm.\ 7.1 \\
+Natural gradient ($F^{-1}$) & Fisher preconditioning of parameter update &
+None & Lesson 56, Thm.\ 5.2 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The first three reduce variance in the \emph{signal} $\Psi_t$; the
+fourth reduces variance in the \emph{parameter update direction}
+by aligning it with the geometry of the policy manifold.
+\end{keyresult}
+
+\begin{example}[Combining All Variance Reduction Techniques]
+\label{ex:combined}
+A modern policy gradient implementation typically combines all four
+techniques. Given a batch of trajectories under $\policy_\theta$:
+\begin{enumerate}
+  \item Fit a critic $\hat{V}_w$ to minimize
+    $\sum_t (G_t - \hat{V}_w(S_t))^2$.
+  \item Compute GAE advantages:
+    $\hat{A}_t^{\mathrm{GAE}} = \sum_{k=0}^{T-t-1}
+    (\discount\lambda)^k \delta_{t+k}^{\hat{V}_w}$.
+  \item Estimate the gradient:
+    $\hat{g} = \frac{1}{N} \sum_{n=1}^{N} \sum_t
+    \nabla_\theta \log \policy_\theta(A_t^n \mid S_t^n)\,
+    \hat{A}_t^{n,\mathrm{GAE}}$.
+  \item Compute the natural gradient direction:
+    $\tilde{g} = F(\theta)^{-1}\, \hat{g}$.
+  \item Update: $\theta \leftarrow \theta + \alpha\, \tilde{g}$.
+\end{enumerate}
+This combines baseline subtraction (through $\hat{V}_w$ in the
+advantage), bootstrapping (through the TD errors in GAE), the
+$\lambda$ tradeoff (through GAE), and Fisher preconditioning
+(through the natural gradient step).
+\end{example}
+
+%% ========================================================================
+%% SECTION 5: Convergence Landscape
+%% ========================================================================
+\section{Convergence Landscape}
+
+This section collects the convergence results from Lessons 55--57,
+places them in a unified framework, and addresses the question of
+local versus global optimality.
+
+\begin{definition}[Convergence Rate Classes]
+\label{def:convergence-rates}
+For a sequence of iterates $\{\theta_k\}_{k=0}^{K}$, we measure
+convergence by the quantity $\min_{0 \leq k \leq K}
+\E[\|\nabla_\theta J(\theta_k)\|^2]$:
+\begin{itemize}
+  \item \textbf{$O(1/\sqrt{K})$ rate:} The minimum expected squared
+    gradient norm decreases as $1/\sqrt{K}$. This is the standard
+    rate for stochastic gradient methods with bounded variance.
+  \item \textbf{$O(1/K)$ rate:} Faster convergence, achievable with
+    variance reduction or natural gradient preconditioning.
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Convergence Rate of Vanilla Policy Gradient]
+\label{thm:convergence-vanilla}
+Under the regularity conditions of Lesson 55 (Assumption 7.1):
+Lipschitz gradient with constant $L$, bounded variance
+$\E[\|\hat{g} - \nabla J\|^2] \leq \sigma^2$, and step size
+$\alpha_k = \alpha / \sqrt{K}$ with $\alpha = \Theta(1/(L +
+\sigma/\sqrt{K}))$, the vanilla policy gradient satisfies
+\[
+  \min_{0 \leq k \leq K} \E\!\left[\|\nabla_\theta J(\theta_k)\|^2\right]
+  = O\!\left(\frac{L \cdot (J^* - J(\theta_0)) + \sigma^2}{\sqrt{K}}\right),
+\]
+where $J^* = \sup_\theta J(\theta)$.
+\end{theorem}
+
+\begin{proof}
+By $L$-smoothness:
+$J(\theta_{k+1}) \geq J(\theta_k) + \nabla J(\theta_k)^\top
+(\theta_{k+1} - \theta_k) - \frac{L}{2}\|\theta_{k+1} - \theta_k\|^2$.
+Substituting $\theta_{k+1} - \theta_k = \alpha_k \hat{g}_k$ and taking
+expectations:
+\[
+  \E[J(\theta_{k+1})] \geq \E[J(\theta_k)] + \alpha_k \E[\|\nabla J(\theta_k)\|^2]
+  - \frac{L \alpha_k^2}{2}\, (\E[\|\nabla J(\theta_k)\|^2] + \sigma^2).
+\]
+Rearranging and summing from $k = 0$ to $K-1$:
+\[
+  \sum_{k=0}^{K-1} \alpha_k (1 - \frac{L\alpha_k}{2})
+  \E[\|\nabla J(\theta_k)\|^2]
+  \leq J^* - J(\theta_0) + \frac{L\sigma^2}{2} \sum_{k=0}^{K-1} \alpha_k^2.
+\]
+With $\alpha_k = c/\sqrt{K}$ for appropriate $c$: the left side is
+$\Theta(\sqrt{K}) \cdot \min_k \E[\|\nabla J\|^2]$ and the right side
+is $O(J^* - J_0 + \sigma^2/\sqrt{K} \cdot L)$, yielding the stated
+$O(1/\sqrt{K})$ rate.
+\end{proof}
+
+\begin{theorem}[Convergence Rate of Natural Policy Gradient]
+\label{thm:convergence-npg}
+Under the additional assumption that the Fisher information matrix
+satisfies $\mu_{\min} I \preceq F(\theta) \preceq \mu_{\max} I$
+for all $\theta$ (bounded condition number $\kappa =
+\mu_{\max}/\mu_{\min}$), the natural policy gradient with exact
+gradients and step size $\alpha = 1/(\mu_{\max})$ satisfies
+\[
+  J^* - J(\theta_K) = O\!\left(\frac{1}{K}\right).
+\]
+\end{theorem}
+
+\begin{proof}
+The natural gradient update $\theta_{k+1} = \theta_k + \alpha
+F(\theta_k)^{-1} \nabla J(\theta_k)$ achieves per-step improvement:
+\[
+  J(\theta_{k+1}) - J(\theta_k) \geq \alpha \nabla J^\top F^{-1}
+  \nabla J - \frac{L\alpha^2}{2} \|F^{-1} \nabla J\|^2.
+\]
+Since $\|F^{-1} \nabla J\|^2 \leq \frac{1}{\mu_{\min}^2}
+\|\nabla J\|^2$ and $\nabla J^\top F^{-1} \nabla J \geq
+\frac{1}{\mu_{\max}} \|\nabla J\|^2$, choosing
+$\alpha = \mu_{\min}^2 / (L)$ gives:
+\[
+  J(\theta_{k+1}) - J(\theta_k) \geq
+  \frac{\mu_{\min}^2}{2L\mu_{\max}} \|\nabla J(\theta_k)\|^2.
+\]
+If $J(\theta)$ additionally satisfies a gradient domination condition
+$J^* - J(\theta) \leq C \|\nabla J(\theta)\|^2$ (which holds for
+softmax parameterizations under certain conditions), then
+$J^* - J(\theta_{k+1}) \leq (1 - \mu_{\min}^2/(2LC\mu_{\max}))
+(J^* - J(\theta_k))$, giving linear (i.e., $O(1/K)$) convergence.
+\end{proof}
+
+\begin{keyresult}[title={Convergence Rate Comparison}]
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Method} & \textbf{Rate (stochastic)} & \textbf{Key Condition} \\
+\midrule
+Vanilla PG & $O(1/\sqrt{K})$ & $L$-smooth objective \\
+Natural PG (exact) & $O(1/K)$ & Bounded Fisher condition number \\
+Natural PG (stochastic) & $O(1/\sqrt{K})$ & Adds gradient noise \\
+\bottomrule
+\end{tabular}
+\end{center}
+The natural gradient achieves a faster rate in the exact-gradient setting
+due to preconditioning. With stochastic gradients, the improvement
+manifests as better constants (depending on $\kappa$) rather than a
+different rate class.
+\end{keyresult}
+
+\begin{theorem}[Local vs.\ Global Optimality]
+\label{thm:global-optimality}
+The following characterization holds for policy gradient methods:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{General parameterization:} Policy gradient methods
+    converge to \emph{stationary points} of $J(\theta)$. The objective
+    $J(\theta)$ is generally non-concave, so stationary points may be
+    local maxima or saddle points.
+  \item \textbf{Softmax (tabular) parameterization:} For finite MDPs
+    with the direct softmax parameterization
+    $\policy_\theta(a \mid s) \propto \exp(\theta_{s,a})$, every
+    stationary point of $J(\theta)$ corresponds to a globally optimal
+    policy $\optpolicy$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+(i) This follows from Theorem 7.3 of Lesson 55: under Robbins-Monro
+step sizes, REINFORCE converges to the set
+$\{\theta : \nabla_\theta J(\theta) = 0\}$.
+
+(ii) This is the result of \citet{mei2020}. The key insight is that
+for the softmax parameterization, $J(\theta)$ satisfies the
+\emph{gradient domination} property: for all $\theta$,
+\[
+  J(\optpolicy) - J(\theta) \leq \frac{1}{1-\discount}
+  \left\|\frac{d^{\optpolicy}}{d^{\policy_\theta}}\right\|_\infty
+  \cdot \|\nabla_\theta J(\theta)\|_{F^{-1}}.
+\]
+Here $\|\cdot\|_{F^{-1}}$ denotes the norm under the inverse Fisher
+metric. Any stationary point $\nabla_\theta J(\theta) = 0$ therefore
+satisfies $J(\optpolicy) = J(\theta)$, meaning the corresponding
+policy is globally optimal. The proof relies on the fact that the
+softmax parameterization has full support ($\policy_\theta(a \mid s)
+> 0$ for all $s, a$) and that the policy can approximate any
+distribution arbitrarily closely as $\|\theta\| \to \infty$.
+\end{proof}
+
+\begin{warning}[title={Global Optimality Requires Full Support}]
+The global optimality result for softmax parameterization relies
+critically on the full-support property. Neural network
+parameterizations generally do not satisfy gradient domination, and
+policy gradient methods can converge to suboptimal stationary points.
+Adding entropy regularization (Section~\ref{sec:maxent}) helps by
+keeping the policy away from determinism and improving the optimization
+landscape.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 6: Performance Difference Lemma and Trust Regions
+%% ========================================================================
+\section{Performance Difference Lemma and Trust Regions}
+\label{sec:trust-regions}
+
+The natural gradient (Lesson 56) controls policy changes via a
+second-order KL approximation. The Kakade-Langford performance
+difference lemma provides an \emph{exact} identity relating the
+performance of two policies, from which trust-region bounds can be
+derived.
+
+\begin{theorem}[Performance Difference Lemma]
+\label{thm:pdl}
+For any two policies $\policy$ and $\policy'$:
+\[
+  J(\policy') - J(\policy) = \frac{1}{1-\discount}
+  \E_{s \sim d^{\policy'}}\!\left[\sum_a \policy'(a \mid s)\,
+  A^\policy(s,a)\right],
+\]
+where $d^{\policy'}$ is the (normalized) discounted state visitation
+distribution under $\policy'$.
+\end{theorem}
+
+\begin{proof}
+Define $V^{\policy'}(s) - V^{\policy}(s)$ and expand using the Bellman
+equation for $\policy'$.
+
+\textbf{Step 1.} By the Bellman equation under $\policy'$:
+\begin{align*}
+  V^{\policy'}(s) &= \sum_a \policy'(a \mid s)\!\left[r(s,a) +
+    \discount \sum_{s'} \Trans(s' \mid s,a)\, V^{\policy'}(s')\right].
+\end{align*}
+
+\textbf{Step 2.} Subtract $V^\policy(s)$ on both sides and add/subtract
+$\sum_a \policy'(a \mid s)\, Q^\policy(s,a)$:
+\begin{align*}
+  V^{\policy'}(s) - V^\policy(s)
+  &= \sum_a \policy'(a \mid s)\, \bigl[Q^\policy(s,a) - V^\policy(s)\bigr]
+    + \discount \sum_{s'} \Prob^{\policy'}(s' \mid s)\,
+    \bigl[V^{\policy'}(s') - V^\policy(s')\bigr] \\
+  &= \sum_a \policy'(a \mid s)\, A^\policy(s,a)
+    + \discount \sum_{s'} \Prob^{\policy'}(s' \mid s)\,
+    \bigl[V^{\policy'}(s') - V^\policy(s')\bigr],
+\end{align*}
+where we used $Q^\policy(s,a) = r(s,a) + \discount \sum_{s'}
+\Trans(s' \mid s,a)\, V^\policy(s')$ and $\Prob^{\policy'}(s' \mid s)
+= \sum_a \policy'(a \mid s)\, \Trans(s' \mid s,a)$.
+
+\textbf{Step 3.} Unrolling the recursion (as in the proof of the
+policy gradient theorem, Lesson 54, Theorem 5.1):
+\[
+  V^{\policy'}(s_0) - V^\policy(s_0) = \sum_{t=0}^{\infty} \discount^t
+  \sum_s \Prob(S_t = s \mid s_0, \policy')\, \sum_a \policy'(a \mid s)\,
+  A^\policy(s,a).
+\]
+
+\textbf{Step 4.} Using the (normalized) discounted state visitation
+distribution $d^{\policy'}(s) = (1-\discount) \sum_t \discount^t
+\Prob(S_t = s \mid s_0, \policy')$:
+\[
+  J(\policy') - J(\policy) = V^{\policy'}(s_0) - V^\policy(s_0)
+  = \frac{1}{1-\discount} \sum_s d^{\policy'}(s) \sum_a
+  \policy'(a \mid s)\, A^\policy(s,a). \qedhere
+\]
+\end{proof}
+
+\begin{remark}
+\label{rem:pdl-exact}
+The performance difference lemma is an \emph{exact} identity, not an
+approximation. The difficulty in using it directly is that the right
+side involves $d^{\policy'}$, the state distribution under the
+\emph{new} policy, which is unknown before executing $\policy'$.
+The key contribution of \citet{kakade2002cpi} and
+\citet{schulman2015trpo} is to bound the difference between
+$d^{\policy'}$ and $d^{\policy}$, yielding a usable lower bound
+on $J(\policy')$ that depends only on quantities computable under
+$\policy$.
+\end{remark}
+
+\begin{definition}[Surrogate Objective]
+\label{def:surrogate}
+The \emph{local surrogate objective} replaces $d^{\policy'}$ with
+$d^\policy$ in the performance difference lemma:
+\[
+  L_\policy(\policy') = J(\policy) + \frac{1}{1-\discount}
+  \E_{s \sim d^\policy}\!\left[\sum_a \policy'(a \mid s)\,
+  A^\policy(s,a)\right].
+\]
+This is a first-order approximation: $L_\policy(\policy) = J(\policy)$
+and $\nabla_{\theta'} L_{\policy_\theta}(\policy_{\theta'})
+\big|_{\theta' = \theta} = \nabla_\theta J(\theta)$.
+\end{definition}
+
+\begin{theorem}[Conservative Policy Improvement Bound]
+\label{thm:cpi}
+Let $\epsilon = \max_s |\E_{a \sim \policy'(\cdot \mid s)}
+[A^\policy(s,a)]|$. Define the maximum KL divergence
+$D_{\max}^{\KL}(\policy, \policy') = \max_s
+\KL(\policy(\cdot \mid s) \| \policy'(\cdot \mid s))$. Then:
+\[
+  J(\policy') \geq L_\policy(\policy')
+  - \frac{2\discount\, \epsilon}{(1-\discount)^2}\,
+  D_{\max}^{\KL}(\policy, \policy').
+\]
+\end{theorem}
+
+\begin{proof}
+The proof bounds the difference $|d^{\policy'}(s) - d^\policy(s)|$
+using the data processing inequality for total variation distance.
+
+\textbf{Step 1.} From the exact identity (Theorem~\ref{thm:pdl}):
+\begin{align*}
+  J(\policy') - L_\policy(\policy')
+  &= \frac{1}{1-\discount} \sum_s \bigl(d^{\policy'}(s) - d^\policy(s)\bigr)
+    \sum_a \policy'(a \mid s)\, A^\policy(s,a).
+\end{align*}
+
+\textbf{Step 2.} Bounding the inner sum by $\epsilon$ and the total
+variation by
+$\|d^{\policy'} - d^\policy\|_{\mathrm{TV}} \leq
+\frac{\discount}{1-\discount} \max_s \|\policy'(\cdot \mid s) -
+\policy(\cdot \mid s)\|_{\mathrm{TV}}$:
+\[
+  |J(\policy') - L_\policy(\policy')| \leq
+  \frac{2\epsilon}{(1-\discount)} \cdot
+  \frac{\discount}{1-\discount} \max_s
+  \|\policy'(\cdot \mid s) - \policy(\cdot \mid s)\|_{\mathrm{TV}}.
+\]
+
+\textbf{Step 3.} By Pinsker's inequality,
+$\|\policy - \policy'\|_{\mathrm{TV}} \leq
+\sqrt{\frac{1}{2} \KL(\policy \| \policy')}$, so
+$\|\policy - \policy'\|_{\mathrm{TV}} \leq
+\sqrt{\frac{1}{2} D_{\max}^{\KL}}$.
+Squaring and applying AM-GM gives the bound with
+$D_{\max}^{\KL}$ (the tighter version uses the square root, but the
+linear form suffices for deriving trust-region algorithms).
+\end{proof}
+
+\begin{keyresult}[title={From Natural Gradient to Trust Regions}]
+The conservative policy improvement bound shows that maximizing the
+surrogate $L_\policy(\policy')$ subject to a KL divergence constraint
+$D_{\max}^{\KL}(\policy, \policy') \leq \delta$ guarantees monotonic
+improvement:
+\[
+  J(\policy') \geq J(\policy) + \left[\text{improvement from }
+  L_\policy\right] - \frac{2\discount\, \epsilon}{(1-\discount)^2}\,
+  \delta.
+\]
+This is exactly the TRPO optimization problem. The natural gradient
+(Lesson 56) solves this problem to second order: the constraint
+$\Delta\theta^\top F(\theta) \Delta\theta \leq \delta$ approximates
+$\E_{s \sim d^\policy}[\KL(\policy_\theta \| \policy_{\theta +
+\Delta\theta})] \leq \delta/2$.
+\end{keyresult}
+
+\begin{rlconnection}[title={Preview: TRPO and PPO}]
+\textbf{TRPO} \citep{schulman2015trpo} directly solves the
+constrained optimization:
+\[
+  \theta_{k+1} = \argmax_\theta\;
+  \E_{s \sim d^{\policy_{\theta_k}}}\!\left[\sum_a \policy_\theta(a \mid s)\,
+  \hat{A}^{\policy_{\theta_k}}(s,a)\right]
+  \quad \text{s.t.} \quad
+  \E_{s \sim d^{\policy_{\theta_k}}}\!\left[
+  \KL(\policy_{\theta_k} \| \policy_\theta)\right] \leq \delta,
+\]
+using conjugate gradients with Fisher-vector products (avoiding
+explicit Fisher matrix construction) and a line search to satisfy the
+constraint.
+
+\textbf{PPO} \citep{schulman2017} approximates the KL constraint
+with a clipped surrogate:
+\[
+  L^{\mathrm{CLIP}}(\theta) = \E\!\left[\min\!\left(
+  r_t(\theta)\, \hat{A}_t,\;
+  \mathrm{clip}(r_t(\theta), 1-\varepsilon, 1+\varepsilon)\, \hat{A}_t
+  \right)\right],
+\]
+where $r_t(\theta) = \policy_\theta(A_t \mid S_t) /
+\policy_{\theta_{\mathrm{old}}}(A_t \mid S_t)$ is the importance
+ratio. The clipping removes the incentive to move $r_t$ far from 1,
+implicitly enforcing a trust region without computing KL divergences.
+The full derivation of TRPO and PPO appears in Phase 04 (Lessons 32--33).
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 7: Connection to Maximum Entropy RL
+%% ========================================================================
+\section{Connection to Maximum Entropy RL}
+\label{sec:maxent}
+
+A natural extension of the policy gradient framework adds an entropy
+bonus to the objective, encouraging exploration and improving
+optimization landscapes.
+
+\begin{definition}[Entropy-Regularized Objective]
+\label{def:entropy-objective}
+The \emph{entropy-regularized} (maximum entropy) objective is
+\[
+  J_{\mathrm{ent}}(\theta) = \E_{\policy_\theta}\!\left[\sum_{t=0}^\infty
+  \discount^t \bigl(r(S_t, A_t) + \alpha\, \mathcal{H}(\policy_\theta
+  (\cdot \mid S_t))\bigr)\right],
+\]
+where $\mathcal{H}(\policy(\cdot \mid s)) = -\sum_a \policy(a \mid s)
+\log \policy(a \mid s)$ is the Shannon entropy and $\alpha > 0$ is
+the \emph{temperature parameter} controlling the exploration-exploitation
+tradeoff.
+\end{definition}
+
+\begin{definition}[Soft Value Functions]
+\label{def:soft-values}
+The \emph{soft value function} and \emph{soft action-value function}
+under $\policy_\theta$ are:
+\begin{align*}
+  V^{\policy}_{\mathrm{soft}}(s) &= \E_\policy\!\left[\sum_{t=0}^\infty
+  \discount^t \bigl(r(S_t, A_t) + \alpha\, \mathcal{H}(\policy(\cdot \mid S_t))
+  \bigr) \;\middle|\; S_0 = s\right], \\
+  Q^{\policy}_{\mathrm{soft}}(s,a) &= r(s,a) + \discount
+  \E_{s' \sim \Trans(\cdot \mid s,a)}\!\left[V^{\policy}_{\mathrm{soft}}(s')
+  \right].
+\end{align*}
+These satisfy the \emph{soft Bellman equation}:
+$V^{\policy}_{\mathrm{soft}}(s) = \E_{a \sim \policy}\!\left[
+Q^{\policy}_{\mathrm{soft}}(s,a) - \alpha \log \policy(a \mid s)\right]$.
+\end{definition}
+
+\begin{theorem}[Soft Policy Gradient Theorem]
+\label{thm:soft-pg}
+The gradient of the entropy-regularized objective is
+\[
+  \nabla_\theta J_{\mathrm{ent}}(\theta) =
+  \E_{s \sim d^{\policy_\theta},\, a \sim \policy_\theta}\!\left[
+  \nabla_\theta \log \policy_\theta(a \mid s) \cdot
+  \bigl(Q^{\policy}_{\mathrm{soft}}(s,a) - \alpha \log \policy_\theta(a \mid s)
+  - V^{\policy}_{\mathrm{soft}}(s)\bigr)\right].
+\]
+Equivalently, defining the \emph{soft advantage}
+$A^{\policy}_{\mathrm{soft}}(s,a) = Q^{\policy}_{\mathrm{soft}}(s,a)
+- \alpha \log \policy_\theta(a \mid s) - V^{\policy}_{\mathrm{soft}}(s)$:
+\[
+  \nabla_\theta J_{\mathrm{ent}}(\theta) =
+  \E_{s \sim d^{\policy},\, a \sim \policy_\theta}\!\left[
+  \nabla_\theta \log \policy_\theta(a \mid s)\,
+  A^{\policy}_{\mathrm{soft}}(s,a)\right].
+\]
+\end{theorem}
+
+\begin{proof}
+We adapt the proof of the standard policy gradient theorem (Lesson 54,
+Theorem 5.1) to the entropy-augmented reward
+$\tilde{r}(s,a) = r(s,a) + \alpha \mathcal{H}(\policy(\cdot \mid s))$.
+
+\textbf{Step 1.} The gradient of the soft value function satisfies
+the recursion (paralleling equation (5.2) of Lesson 54):
+\begin{align*}
+  \nabla_\theta V^{\policy}_{\mathrm{soft}}(s)
+  &= \sum_a \nabla_\theta \policy_\theta(a \mid s)\,
+    Q^{\policy}_{\mathrm{soft}}(s,a)
+  + \sum_a \policy_\theta(a \mid s)\, \nabla_\theta
+    Q^{\policy}_{\mathrm{soft}}(s,a) \\
+  &\quad + \alpha \nabla_\theta \mathcal{H}(\policy_\theta(\cdot \mid s)).
+\end{align*}
+
+\textbf{Step 2.} The entropy gradient is:
+$\nabla_\theta \mathcal{H} = -\sum_a \nabla_\theta \policy_\theta
+(\log \policy_\theta + 1) = -\sum_a \nabla_\theta \policy_\theta
+\log \policy_\theta$, since $\sum_a \nabla_\theta \policy_\theta = 0$.
+Substituting and combining with the first term:
+\[
+  \sum_a \nabla_\theta \policy_\theta \cdot Q^{\policy}_{\mathrm{soft}}
+  - \alpha \sum_a \nabla_\theta \policy_\theta \log \policy_\theta
+  = \sum_a \nabla_\theta \policy_\theta \cdot
+  (Q^{\policy}_{\mathrm{soft}} - \alpha \log \policy_\theta).
+\]
+
+\textbf{Step 3.} The term $\nabla_\theta Q^{\policy}_{\mathrm{soft}}$
+introduces the recursion through $V^{\policy}_{\mathrm{soft}}(s')$,
+just as in the standard proof. Unrolling and using the discounted
+state visitation distribution:
+\[
+  \nabla_\theta J_{\mathrm{ent}} = \sum_s d^{\policy}(s) \sum_a
+  \nabla_\theta \policy_\theta(a \mid s)
+  (Q^{\policy}_{\mathrm{soft}}(s,a) - \alpha \log \policy_\theta(a \mid s)).
+\]
+Converting to log-derivative form and subtracting the baseline
+$V^{\policy}_{\mathrm{soft}}(s)$ (which vanishes by the score
+zero-mean property) gives the result.
+\end{proof}
+
+\begin{keyresult}[title={Soft Optimal Policy}]
+The optimal policy under the entropy-regularized objective satisfies
+\[
+  \policy^*(a \mid s) = \frac{\exp(Q^*_{\mathrm{soft}}(s,a) / \alpha)}
+  {\sum_{a'} \exp(Q^*_{\mathrm{soft}}(s,a') / \alpha)},
+\]
+which is a Boltzmann (softmax) distribution over actions with
+temperature $\alpha$. As $\alpha \to 0$, the soft optimal policy
+converges to the standard (greedy) optimal policy. As $\alpha \to
+\infty$, the policy converges to the uniform distribution.
+\end{keyresult}
+
+\begin{rlconnection}[title={Preview: Soft Actor-Critic (SAC)}]
+\textbf{SAC} \citep{haarnoja2018} implements the soft policy gradient
+theorem with three neural networks:
+\begin{itemize}
+  \item A \emph{soft critic} $Q_w(s,a)$ trained via soft Bellman
+    backup: $Q_w(s,a) \to r + \discount\, \E_{s'}[V_{\bar{w}}(s')]$
+    where $V_{\bar{w}}(s) = \E_{a \sim \policy_\theta}[Q_{\bar{w}}(s,a)
+    - \alpha \log \policy_\theta(a \mid s)]$.
+  \item An \emph{actor} $\policy_\theta$ updated via the soft policy
+    gradient with reparameterization trick for continuous actions.
+  \item Automatic \emph{temperature} $\alpha$ tuning via a dual
+    gradient descent on the target entropy constraint.
+\end{itemize}
+The full derivation appears in Phase 04 (Lesson 35). The key advantage
+of SAC over vanilla actor-critic is improved exploration (through the
+entropy term) and off-policy learning (through the soft Bellman
+backup), which dramatically improves sample efficiency.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 8: Phase 02 Grand Summary
+%% ========================================================================
+\section{Phase 02 Grand Summary}
+\label{sec:grand-summary}
+
+This section provides a comprehensive summary of the entire Phase 02
+arc, covering all twenty lessons across three subdomains.
+
+\begin{keyresult}[title={Phase 02 Arc: From MDPs to Policy Gradients}]
+Phase 02 developed reinforcement learning theory in three stages:
+
+\textbf{Stage 1 -- MDP Foundations (Lessons 39--46):} Defined the
+sequential decision-making problem and derived exact solution methods.
+The Bellman equations provide the recursive structure; value iteration
+and policy iteration provide algorithms with known convergence
+guarantees; the LP formulation connects MDPs to mathematical
+programming.
+
+\textbf{Stage 2 -- TD Learning (Lessons 47--53):} Developed
+sample-based methods that learn from experience without a model.
+$\operatorname{TD}(0)$ bootstraps from one-step transitions;
+$\operatorname{TD}(\lambda)$ interpolates between TD and Monte Carlo;
+SARSA and Q-learning provide on-policy and off-policy control;
+function approximation scales to large state spaces but introduces
+the deadly triad (function approximation + bootstrapping + off-policy).
+
+\textbf{Stage 3 -- Policy Gradients (Lessons 54--58):} Directly
+optimized the policy using gradient ascent on the expected return.
+The policy gradient theorem provides the foundational identity;
+REINFORCE and baselines address variance; the natural gradient
+addresses parameterization sensitivity; actor-critic and GAE trade
+bias for variance. This synthesis lesson unified the framework and
+connected to Phase 04.
+\end{keyresult}
+
+\begin{center}
+\small
+\begin{tabular}{p{0.7cm}p{4.5cm}p{8cm}}
+\toprule
+\textbf{L\#} & \textbf{Topic} & \textbf{Key Results} \\
+\midrule
+\multicolumn{3}{l}{\textbf{Subdomain 1: Markov Decision Processes}} \\
+\midrule
+39 & MDP formulation & State/action spaces, transition kernel,
+reward, discount factor, policy, trajectory \\
+40 & Bellman equations & Bellman expectation/optimality equations,
+contraction property of Bellman operator \\
+41 & Value iteration & $V_{k+1} = \Bellman V_k$, convergence rate
+$\|V_k - \Vstar\|_\infty \leq \discount^k \|V_0 - \Vstar\|_\infty$ \\
+42 & Error bounds & Approximate VI error bounds, simulation lemma,
+sensitivity to model perturbations \\
+43 & Average reward MDPs & Gain-bias Bellman equation, Blackwell
+optimality, relative value iteration \\
+44 & Policy iteration & Monotone improvement, finite convergence for
+finite MDPs, modified PI \\
+45 & LP formulation & Primal/dual LP for MDPs, occupancy measures,
+equivalence to VI/PI \\
+46 & Finite-horizon MDPs & Backward induction, time-varying policies,
+non-stationary Bellman equations \\
+\midrule
+\multicolumn{3}{l}{\textbf{Subdomain 2: Temporal Difference Learning}} \\
+\midrule
+47 & TD(0) prediction & $V(S_t) \leftarrow V(S_t) + \alpha \delta_t$,
+convergence under Robbins-Monro \\
+48 & $n$-step TD & $n$-step returns, bias-variance tradeoff,
+forward/backward views \\
+49 & TD($\lambda$) & Eligibility traces, equivalence of forward and
+backward views, convergence \\
+50 & SARSA & On-policy control, $\epsilon$-greedy exploration,
+convergence to optimal $Q$ \\
+51 & Q-learning & Off-policy control, convergence with probability 1,
+maximization bias \\
+52 & Function approximation & Linear TD, semi-gradient methods,
+projected Bellman equation \\
+53 & Deadly triad & Divergence examples, Baird's counterexample,
+conditions for stability \\
+\midrule
+\multicolumn{3}{l}{\textbf{Subdomain 3: Policy Gradients}} \\
+\midrule
+54 & PG theorem & $\nabla J = \E_{d^\policy}[\nabla \log \policy \cdot
+\Qpi]$, compatible function approx. \\
+55 & REINFORCE & Monte Carlo PG, baseline invariance, optimal baseline
+$b^*(s)$, convergence \\
+56 & Natural PG & Fisher information, $\tilde{\nabla}J = F^{-1}
+\nabla J$, covariance, compatible features \\
+57 & Actor-critic / GAE & TD advantage, $n$-step estimators,
+$\hat{A}^{\mathrm{GAE}} = \sum (\discount\lambda)^k \delta_{t+k}$,
+two-timescale \\
+58 & Synthesis & Unified framework, PDL, trust region preview, MaxEnt
+preview \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{rlconnection}[title={Dependency Graph of Phase 02}]
+The following diagram shows how the key results build on each other:
+\begin{center}
+\begin{tabular}{l}
+Bellman equations (L40) \\
+$\;\;\downarrow$ \\
+Value/Policy iteration (L41, L44) $\longrightarrow$
+LP formulation (L45) \\
+$\;\;\downarrow$ \\
+TD(0) prediction (L47) $\longrightarrow$
+$n$-step TD (L48) $\longrightarrow$
+TD($\lambda$) (L49) \\
+$\;\;\downarrow$ \hspace{3.5cm} $\downarrow$ \\
+SARSA / Q-learning (L50--51) \hspace{0.3cm}
+Func.\ approx.\ (L52) $\to$ Deadly triad (L53) \\
+$\;\;\downarrow$ \\
+PG Theorem (L54) \\
+$\;\;\downarrow$ \\
+REINFORCE + baselines (L55) \\
+$\;\;\swarrow \hspace{1cm} \searrow$ \\
+Natural PG (L56) \hspace{0.5cm} Actor-critic / GAE (L57) \\
+$\;\;\searrow \hspace{1cm} \swarrow$ \\
+\textbf{Synthesis (L58)} \\
+$\;\;\downarrow$ \\
+Phase 04: TRPO (L32), PPO (L33), SAC (L35) \\
+\end{tabular}
+\end{center}
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 9: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[Unified Signal Verification]
+\textnormal{(\(*\))} \\
+  Starting from the policy gradient theorem
+  $\nabla_\theta J = \E_{d^\policy,\policy}[\nabla_\theta \log
+  \policy_\theta(a \mid s)\, \Qpi(s,a)]$
+  (Lesson 54, Theorem 5.1), verify that using
+  $\Psi_t = \delta_t^\policy = r(S_t, A_t) + \discount \Vpi(S_{t+1})
+  - \Vpi(S_t)$ yields the same expected gradient. You may use the
+  results $\E[\delta_t^\policy \mid S_t, A_t] = A^\policy(S_t, A_t)$
+  and $\E_{a \sim \policy}[A^\policy(s,a)] = 0$.
+\end{exercise}
+
+\begin{exercise}[Bias Quantification for Actor-Critic]
+\textnormal{(\(*\))} \\
+  Consider a two-state MDP with $\States = \{s_1, s_2\}$, a single
+  action, deterministic transitions $s_1 \to s_2 \to s_1$, rewards
+  $r(s_1) = 1$, $r(s_2) = 0$, and $\discount = 0.9$. Suppose the
+  critic estimates $\hat{V}(s_1) = 5.0$ and $\hat{V}(s_2) = 4.0$.
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute the true values $\Vpi(s_1)$ and $\Vpi(s_2)$.
+    \item Compute $\E[\delta_t^{\hat{V}} \mid S_t = s_1]$ and compare
+      to $A^\policy(s_1, a) = 0$.
+    \item Verify that the bias equals $\discount(\hat{V}(s_2) - \Vpi(s_2))
+      - (\hat{V}(s_1) - \Vpi(s_1))$, as predicted by
+      Proposition~\ref{prop:bias-approximate}.
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Performance Difference Lemma Application]
+\textnormal{(\(**\))} \\
+  Consider a bandit (single state) with $\Actions = \{a_1, a_2, a_3\}$,
+  rewards $r(a_1) = 1$, $r(a_2) = 3$, $r(a_3) = 2$, and current
+  policy $\policy(a_1) = 0.5$, $\policy(a_2) = 0.3$, $\policy(a_3) = 0.2$.
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute $\Vpi$, $\Qpi(a_i)$, and $A^\policy(a_i)$ for
+      each action.
+    \item A new policy $\policy'$ puts $\policy'(a_1) = 0.1$,
+      $\policy'(a_2) = 0.7$, $\policy'(a_3) = 0.2$. Use the
+      performance difference lemma (Theorem~\ref{thm:pdl}) to compute
+      $J(\policy') - J(\policy)$ directly.
+    \item Verify your answer by computing $J(\policy')$ and $J(\policy)$
+      independently.
+    \item Compute the KL divergence $\KL(\policy \| \policy')$ and the
+      bound from Theorem~\ref{thm:cpi}. Is the bound tight?
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Soft Policy Gradient for a Bandit]
+\textnormal{(\(**\))} \\
+  For a two-action bandit with $r(a_1) = 0$, $r(a_2) = 1$, temperature
+  $\alpha = 0.5$, and softmax policy
+  $\policy_\theta(a_2) = \sigma(\theta) = 1/(1 + e^{-\theta})$:
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute the entropy-regularized objective
+      $J_{\mathrm{ent}}(\theta)$ as a function of $\theta$.
+    \item Find the optimal $\theta^*$ by setting
+      $\nabla_\theta J_{\mathrm{ent}} = 0$.
+    \item Verify that $\policy_{\theta^*}$ matches the Boltzmann form
+      $\policy^*(a) \propto \exp(r(a)/\alpha)$.
+    \item Compare $\theta^*$ to the unregularized optimum ($\alpha = 0$).
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Convergence Rate Comparison]
+\textnormal{(\(***\))} \\
+  Consider an MDP where $J(\theta)$ is $L$-smooth and the Fisher
+  information matrix satisfies $\mu I \preceq F(\theta) \preceq
+  \kappa \mu I$ for constants $\mu > 0$ and $\kappa \geq 1$.
+  \begin{enumerate}[label=(\alph*)]
+    \item For the vanilla gradient with step size
+      $\alpha = 1/(2L)$ and exact gradients, show the per-step
+      improvement is at least $\frac{1}{4L} \|\nabla J\|^2$.
+    \item For the natural gradient with step size
+      $\alpha = 1/(2L)$, show the per-step improvement is at least
+      $\frac{1}{4L\kappa\mu} \|\nabla J\|^2$.
+    \item Derive conditions on $\kappa$ and $\mu$ under which the
+      natural gradient has better per-step improvement than the vanilla
+      gradient.
+  \end{enumerate}
+
+  \textit{Hint:} Use $\nabla J^\top F^{-1} \nabla J \geq
+  \frac{1}{\kappa\mu} \|\nabla J\|^2$ for part (b).
+\end{exercise}
+
+\begin{exercise}[Designing a Policy Gradient Algorithm]
+\textnormal{(\(***\))} \\
+  You are given a continuous control task with a 20-dimensional
+  action space, stochastic transitions, and sparse rewards (nonzero
+  only near the goal). Design a policy gradient algorithm by
+  specifying:
+  \begin{enumerate}[label=(\alph*)]
+    \item The signal $\Psi_t$ (from Definition~\ref{def:signal-choices}),
+      with justification.
+    \item The value of $\lambda$ for GAE, with justification.
+    \item Whether to use the vanilla or natural gradient, with
+      justification.
+    \item Whether to add entropy regularization, with justification.
+  \end{enumerate}
+  For each choice, cite the specific theorem or result from
+  Lessons 54--58 that supports your design decision.
+\end{exercise}
+
+%% ========================================================================
+%% SECTION 10: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item The \textbf{unified policy gradient equation}
+    $\nabla J = \E[\sum_t \nabla \log \policy \cdot \Psi_t]$ subsumes
+    all algorithms from Lessons 54--57 under different signal choices
+    $\Psi_t \in \{G_t,\; G_t - b(s),\; \Qpi,\; A^\policy,\;
+    \delta_t,\; \hat{A}^{\mathrm{GAE}}\}$.
+
+  \item All valid signals yield \textbf{unbiased gradients} except
+    when bootstrapping with an approximate critic ($\hat{V} \neq \Vpi$),
+    which introduces bias through the successor-state value error.
+    The baseline component remains harmless by the score zero-mean
+    property.
+
+  \item \textbf{Variance reduction} operates through four mechanisms:
+    baselines (subtract $b(s)$, zero bias), bootstrapping (use TD
+    estimates, nonzero bias), $\lambda$-weighting (GAE interpolation),
+    and Fisher preconditioning (natural gradient in parameter space).
+
+  \item Vanilla policy gradient converges at rate $O(1/\sqrt{K})$; the
+    natural gradient achieves $O(1/K)$ with exact gradients under
+    gradient domination. For \textbf{softmax tabular parameterizations},
+    all stationary points are globally optimal.
+
+  \item The \textbf{performance difference lemma}
+    $J(\policy') - J(\policy) = \frac{1}{1-\discount}
+    \E_{d^{\policy'}}[\sum_a \policy' A^\policy]$ provides an exact
+    identity for comparing policies. Combined with KL divergence
+    bounds, it yields the trust-region optimization framework (TRPO).
+
+  \item \textbf{Entropy regularization} adds $\alpha \mathcal{H}(\policy)$
+    to the reward, producing the soft policy gradient theorem and the
+    Boltzmann optimal policy $\policy^* \propto \exp(Q^*/\alpha)$.
+    This framework underlies SAC.
+
+  \item \textbf{Phase 02 arc}: MDP foundations (Bellman equations,
+    VI, PI) $\to$ TD learning (sample-based prediction and control,
+    function approximation) $\to$ Policy gradients (direct optimization,
+    variance reduction, geometry). This progression moves from
+    model-based exact methods to model-free approximate methods with
+    increasing generality.
+
+  \item The three pillars of Phase 02 -- \textbf{dynamic programming},
+    \textbf{temporal difference learning}, and \textbf{policy gradients}
+    -- converge in Phase 04 (deep RL), where neural network function
+    approximators enable scaling to high-dimensional problems.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 11: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Phase 04, Lesson 32} derives TRPO in full detail,
+    solving the constrained optimization problem from
+    Theorem~\ref{thm:cpi} using conjugate gradients and line search.
+
+  \item \textbf{Phase 04, Lesson 33} develops PPO's clipped surrogate
+    objective, showing how it approximates the trust-region constraint
+    while being simpler to implement.
+
+  \item \textbf{Phase 04, Lesson 34} derives the deterministic policy
+    gradient theorem (Silver et al., 2014), extending the stochastic
+    policy gradient of Lesson 54 to deterministic policies via a
+    limiting argument.
+
+  \item \textbf{Phase 04, Lesson 35} develops the full SAC algorithm
+    from the soft policy gradient theorem (Theorem~\ref{thm:soft-pg}),
+    including automatic temperature tuning.
+
+  \item \citet{agarwal2021} provides modern convergence theory for
+    policy gradient methods, including global convergence results for
+    natural policy gradient and entropy regularization.
+
+  \item \citet{kakade2002cpi} and \citet{kakade2003} give the original
+    conservative policy iteration analysis and sample complexity bounds.
+
+  \item \citet{mei2020} proves global convergence of softmax policy
+    gradient with an explicit convergence rate.
+\end{itemize}
+
+\bibliography{pg-refs}
+
+\end{document}

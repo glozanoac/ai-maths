@@ -1,0 +1,800 @@
+% lesson-55-reinforce-and-baselines.tex
+% Phase 02, Subdomain: Policy Gradient
+% Topic: REINFORCE and Baselines
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 55: REINFORCE and Baselines}}
+\fancyhead[R]{\thepage}
+\title{Lesson 55: REINFORCE and Baselines}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+The policy gradient theorem (Lesson 54) provides a clean expression for
+$\nabla_\theta J(\theta)$, but it involves the unknown action-value
+function $\Qpi(s,a)$ and an expectation over the on-policy state
+distribution. To turn this into a practical algorithm, we need to
+estimate the gradient from sampled trajectories. The simplest approach is
+to replace $\Qpi(s_t, a_t)$ with the sample return $G_t$ -- the actual
+discounted sum of rewards observed from time $t$ onward. This yields the
+REINFORCE algorithm of \citet{williams1992}, one of the earliest and most
+influential policy gradient methods.
+
+However, REINFORCE in its basic form suffers from high variance: the
+sampled returns $G_t$ fluctuate wildly across episodes, leading to noisy
+gradient estimates and slow convergence. This lesson develops the theory
+of \emph{baseline subtraction}, showing that we can subtract any
+state-dependent function $b(s)$ from the return without biasing the
+gradient, and derives the \emph{optimal baseline} that minimizes the
+variance of the gradient estimator. The tools developed here will let us
+understand the variance-bias tradeoff that governs all modern policy
+gradient algorithms.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{REINFORCE} \citep{williams1992}: The canonical Monte Carlo
+    policy gradient algorithm derived directly from the policy gradient
+    theorem with sampled returns.
+  \item \textbf{Advantage actor-critic (A2C)}: Uses a learned value
+    function $\hat{V}(s)$ as a baseline, reducing REINFORCE to updates
+    proportional to the estimated advantage.
+  \item \textbf{Generalized Advantage Estimation (GAE)}
+    \citep{schulman2015}: Extends the baseline idea by interpolating
+    between Monte Carlo returns and bootstrapped estimates via an
+    exponentially weighted average.
+  \item \textbf{PPO} \citep{schulman2017}: Builds on the REINFORCE
+    gradient structure with a clipped surrogate objective for stable
+    large-scale training.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+The reader must know the policy gradient theorem in both the
+log-derivative and expectation form (Lesson 54,
+Theorem 5.1), the baseline invariance proposition
+(Lesson 54, Proposition 7.1), score function properties
+(Lesson 54, Lemmas 4.1--4.2), and the definition of the discounted
+state visitation distribution (Lesson 54, Definition 3.3). From
+probability, we need the law of iterated expectation (tower property,
+Lesson 11), variance decomposition, and conditional independence in
+Markov chains (Lesson 9). Familiarity with stochastic approximation
+convergence conditions (Lesson 19, Robbins-Monro theorem) is helpful for
+the convergence section.
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \textbf{Derive} the REINFORCE gradient estimator from the policy
+    gradient theorem and prove its unbiasedness.
+  \item \textbf{Prove} that subtracting a state-dependent baseline
+    preserves unbiasedness of the gradient estimate.
+  \item \textbf{Derive} the optimal baseline that minimizes the variance
+    of the REINFORCE gradient estimator.
+  \item \textbf{Explain} why $\Vpi(s)$ is a near-optimal baseline and
+    how it gives rise to the advantage function formulation.
+  \item \textbf{State} convergence conditions for REINFORCE and justify
+    the requirement of diminishing step sizes.
+  \item \textbf{Compute} REINFORCE updates for concrete policy
+    parameterizations on simple MDPs.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet{williams1992} -- The original REINFORCE paper; derives the
+    algorithm and the baseline result.
+  \item \citet[Chapter 13]{suttonbarto2018} -- REINFORCE with and without
+    baseline, intuitive presentation with pseudocode.
+  \item \citet{sutton2000} -- Policy gradient theorem; the theoretical
+    basis for REINFORCE.
+  \item \citet{schulman2015} -- Generalized advantage estimation; extends
+    the baseline idea to multi-step returns.
+  \item \citet[Chapter 6]{bertsekas1996} -- Convergence of stochastic
+    gradient methods in approximate dynamic programming.
+  \item \citet{konda2003} -- Actor-critic convergence; formalizes the
+    connection between REINFORCE with baseline and actor-critic methods.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 3: The REINFORCE Estimator
+%% ========================================================================
+\section{The REINFORCE Estimator}
+
+We begin by showing how to turn the policy gradient theorem into a
+practical Monte Carlo estimator using sampled trajectories.
+
+\begin{definition}[Trajectory and Return]
+\label{def:trajectory}
+A \emph{trajectory} $\tau = (S_0, A_0, R_1, S_1, A_1, R_2, \ldots)$
+is generated by following $\policy_\theta$: $A_t \sim
+\policy_\theta(\cdot \mid S_t)$, $S_{t+1} \sim \Trans(\cdot \mid S_t, A_t)$,
+$R_{t+1} = r(S_t, A_t)$. The \emph{return from time $t$} is
+\[
+  G_t = \sum_{k=0}^{\infty} \discount^k\, R_{t+k+1}
+      = \sum_{k=0}^{\infty} \discount^k\, r(S_{t+k}, A_{t+k}).
+\]
+For episodic tasks terminating at time $T$, $G_t = \sum_{k=0}^{T-t-1}
+\discount^k\, R_{t+k+1}$.
+\end{definition}
+
+\begin{lemma}[Return as Unbiased Estimate of $\Qpi$]
+\label{lem:return-unbiased}
+For any $t \geq 0$, conditioning on the state-action pair $(S_t, A_t)$:
+\[
+  \E[G_t \mid S_t = s, A_t = a] = \Qpi(s, a).
+\]
+\end{lemma}
+
+\begin{proof}
+By definition, $\Qpi(s,a) = \E_{\policy_\theta}[\sum_{k=0}^{\infty}
+\discount^k r(S_{t+k}, A_{t+k}) \mid S_t = s, A_t = a]$, and by the
+Markov property, this expectation depends only on $(s,a)$ and is exactly
+$\E[G_t \mid S_t = s, A_t = a]$.
+\end{proof}
+
+\begin{theorem}[Unbiasedness of REINFORCE]
+\label{thm:reinforce-unbiased}
+Let $\tau$ be a trajectory generated by $\policy_\theta$ starting from
+$S_0 = s_0$. The REINFORCE gradient estimator
+\[
+  \hat{g}(\tau) = \sum_{t=0}^{\infty} \discount^t\,
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\, G_t
+\]
+satisfies $\E[\hat{g}(\tau)] = \nabla_\theta J(\theta)$, i.e., it is an
+unbiased estimator of the policy gradient.
+\end{theorem}
+
+\begin{proof}
+We show that the expectation of $\hat{g}(\tau)$ equals the policy
+gradient derived in Lesson 54 (Theorem 5.1).
+
+\textbf{Step 1.} Consider a single term at time $t$. By the tower
+property (conditioning on the history up to time $t$):
+\begin{align*}
+  \E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, G_t\bigr]
+  &= \E\Bigl[\E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+     G_t \;\big|\; S_t, A_t\bigr]\Bigr] \\
+  &= \E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+     \Qpi(S_t, A_t)\bigr],
+\end{align*}
+where we used Lemma~\ref{lem:return-unbiased} and the fact that
+$\nabla_\theta \log \policy_\theta(A_t \mid S_t)$ is measurable with
+respect to $(S_t, A_t)$.
+
+\textbf{Step 2.} The inner expectation over $A_t \sim
+\policy_\theta(\cdot \mid S_t)$ gives:
+\[
+  \E_{A_t}\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+  \Qpi(S_t, A_t) \mid S_t = s\bigr]
+  = \sum_a \policy_\theta(a \mid s)\, \nabla_\theta \log
+    \policy_\theta(a \mid s)\, \Qpi(s,a)
+  = \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a).
+\]
+
+\textbf{Step 3.} Taking the outer expectation over $S_t$:
+\[
+  \E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, G_t\bigr]
+  = \sum_s \Prob(S_t = s \mid s_0, \policy_\theta)
+    \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a).
+\]
+
+\textbf{Step 4.} Summing over $t$ with weights $\discount^t$:
+\begin{align*}
+  \E[\hat{g}(\tau)]
+  &= \sum_{t=0}^{\infty} \discount^t \sum_s
+     \Prob(S_t = s \mid s_0, \policy_\theta)
+     \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a) \\
+  &= \sum_s \underbrace{\left(\sum_{t=0}^{\infty} \discount^t\,
+     \Prob(S_t = s \mid s_0, \policy_\theta)\right)}_{
+     \tilde{d}^{\policy_\theta}(s)}
+     \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a)
+  = \nabla_\theta J(\theta). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{keyresult}[title={REINFORCE Gradient Estimator}]
+Given a trajectory $\tau = (S_0, A_0, R_1, S_1, A_1, R_2, \ldots)$
+sampled under $\policy_\theta$, the gradient of $J(\theta)$ can be
+estimated as
+\[
+  \hat{g}(\tau) = \sum_{t=0}^{T-1} \discount^t\,
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\, G_t,
+\]
+where $G_t = \sum_{k=0}^{T-t-1} \discount^k R_{t+k+1}$ is the
+discounted return from time $t$ and $T$ is the episode length. This
+estimator is unbiased: $\E[\hat{g}(\tau)] = \nabla_\theta J(\theta)$.
+\end{keyresult}
+
+\begin{remark}[Causality]
+\label{rem:causality}
+Past rewards $r(S_{t'}, A_{t'})$ for $t' < t$ can be dropped from the
+product with $\nabla_\theta \log \policy_\theta(A_t \mid S_t)$ because
+$\E[\nabla_\theta \log \policy_\theta(A_t \mid S_t) \mid S_t] = 0$
+(Lesson 54, Lemma 4.2). This justifies using $G_t$ rather than $G_0$.
+\end{remark}
+
+\begin{example}[REINFORCE on a Single-State Bandit]
+\label{ex:bandit}
+Consider a bandit (single state $s$) with two actions
+$\Actions = \{0, 1\}$ and rewards $r(s,0) = 1$, $r(s,1) = 3$. Use a
+softmax policy: $\policy_\theta(1 \mid s) = \sigma(\theta) = 1/(1+e^{-\theta})$,
+$\policy_\theta(0 \mid s) = 1 - \sigma(\theta)$. Then:
+\[
+  \nabla_\theta \log \policy_\theta(a \mid s)
+  = \begin{cases}
+    1 - \sigma(\theta), & a = 1, \\
+    -\sigma(\theta), & a = 0.
+  \end{cases}
+\]
+The REINFORCE update $\theta \leftarrow \theta + \alpha\, r \cdot
+\nabla_\theta \log \policy_\theta(a \mid s)$ gives
+$\Delta\theta = 3\alpha(1-\sigma(\theta)) > 0$ when $a=1$, and
+$\Delta\theta = -\alpha\sigma(\theta) < 0$ when $a=0$; both push
+$\theta$ toward selecting action 1. The true gradient
+$\nabla_\theta J = 2\sigma(\theta)(1-\sigma(\theta)) > 0$ confirms this.
+\end{example}
+
+%% ========================================================================
+%% SECTION 4: Baseline Subtraction and Variance Reduction
+%% ========================================================================
+\section{Baseline Subtraction and Variance Reduction}
+
+While REINFORCE is unbiased, its variance can be prohibitively high.
+We now develop the theory of baseline subtraction as a variance
+reduction technique.
+
+\begin{definition}[Baseline]
+\label{def:baseline}
+A \emph{baseline} is any function $b : \States \to \R$ that depends on
+the state but not on the action. The \emph{REINFORCE with baseline}
+estimator is
+\[
+  \hat{g}_b(\tau) = \sum_{t=0}^{T-1} \discount^t\,
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+  \bigl(G_t - b(S_t)\bigr).
+\]
+\end{definition}
+
+\begin{proposition}[Unbiasedness with Baseline]
+\label{prop:baseline-unbiased}
+For any baseline $b : \States \to \R$, the estimator $\hat{g}_b(\tau)$
+is unbiased: $\E[\hat{g}_b(\tau)] = \nabla_\theta J(\theta)$.
+\end{proposition}
+
+\begin{proof}
+It suffices to show that
+$\E[\discount^t \nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+b(S_t)] = 0$ for each $t$. By the tower property:
+\begin{align*}
+  \E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\, b(S_t)\bigr]
+  &= \E\Bigl[\E\bigl[\nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+     b(S_t) \mid S_t\bigr]\Bigr] \\
+  &= \E\Bigl[b(S_t)\, \E\bigl[\nabla_\theta \log
+     \policy_\theta(A_t \mid S_t) \mid S_t\bigr]\Bigr] \\
+  &= \E\bigl[b(S_t) \cdot 0\bigr] = 0,
+\end{align*}
+where we used that $b(S_t)$ is measurable with respect to $S_t$ and
+$\E_{A_t \sim \policy_\theta}[\nabla_\theta \log \policy_\theta(A_t \mid S_t)
+\mid S_t] = 0$ by Lemma 4.2 of Lesson 54. Since the baseline term has
+zero expectation, $\E[\hat{g}_b] = \E[\hat{g}] = \nabla_\theta J(\theta)$.
+\end{proof}
+
+\begin{definition}[Advantage Function]
+\label{def:advantage}
+The \emph{advantage function} under policy $\policy$ is
+\[
+  A^{\policy}(s,a) = \Qpi(s,a) - \Vpi(s).
+\]
+It measures how much better action $a$ is compared to the average
+action under $\policy$ in state $s$. By definition,
+$\E_{a \sim \policy(\cdot \mid s)}[A^{\policy}(s,a)] = 0$.
+\end{definition}
+
+\begin{proposition}[Policy Gradient via Advantages]
+\label{prop:advantage-pg}
+Using $b(s) = \Vpi(s)$ as the baseline, the policy gradient becomes
+\[
+  \nabla_\theta J(\theta) = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, A^{\policy}(s,a)\bigr].
+\]
+\end{proposition}
+
+\begin{proof}
+By the policy gradient theorem (Lesson 54, Theorem 5.1) and
+baseline invariance (Lesson 54, Proposition 7.1):
+\[
+  \nabla_\theta J(\theta)
+  = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\,
+  (\Qpi(s,a) - \Vpi(s))\bigr]
+  = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, A^{\policy}(s,a)
+  \bigr]. \qedhere
+\]
+\end{proof}
+
+\begin{rlconnection}
+The advantage form is used in virtually all modern policy gradient
+algorithms. The advantage $A^{\policy}(s,a)$ is positive for actions
+better than average and negative for worse-than-average actions. The
+gradient update therefore increases the probability of good actions
+and decreases the probability of bad actions, providing a clearer
+learning signal than using the raw return $G_t$, which is always
+positive and pushes all actions in the gradient direction (with varying
+magnitude).
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 5: Variance Analysis and the Optimal Baseline
+%% ========================================================================
+\section{Variance Analysis and the Optimal Baseline}
+
+We now analyze the variance of the REINFORCE estimator and derive the
+baseline that minimizes it.
+
+\begin{definition}[Per-Step Gradient Estimator]
+\label{def:per-step}
+To simplify the variance analysis, consider the \emph{per-step} gradient
+estimator at a single state $s$:
+\[
+  \hat{g}_b(s) = \nabla_\theta \log \policy_\theta(A \mid s)\,
+  \bigl(\Qpi(s,A) - b(s)\bigr), \quad A \sim \policy_\theta(\cdot \mid s).
+\]
+We analyze the variance of each component $[\hat{g}_b(s)]_i$ for
+$i = 1, \ldots, d$, where $d$ is the dimension of $\theta$.
+\end{definition}
+
+\begin{remark}
+We use $\Qpi(s,A)$ rather than $G_t$ in the variance analysis to
+isolate the effect of the baseline. In practice, $G_t$ introduces
+additional variance from the stochasticity of future transitions, but the
+baseline $b(s)$ cannot reduce that component.
+\end{remark}
+
+\begin{lemma}[Variance Decomposition]
+\label{lem:var-decomp}
+For the per-step estimator, the variance of the $i$-th component is
+\begin{align*}
+  \Var\bigl([\hat{g}_b(s)]_i\bigr)
+  &= \E_{A \sim \policy_\theta}\!\left[
+     \bigl(\partial_i \log \policy_\theta(A \mid s)\bigr)^2\,
+     \bigl(\Qpi(s,A) - b(s)\bigr)^2\right]
+     - \bigl([\nabla_\theta J_s]_i\bigr)^2,
+\end{align*}
+where $\partial_i = \partial/\partial \theta_i$ and
+$J_s = \sum_a \policy_\theta(a \mid s)\, \Qpi(s,a)$.
+Since the second term is independent of $b$, minimizing the variance
+reduces to minimizing the first term.
+\end{lemma}
+
+\begin{proof}
+This follows directly from $\Var(X) = \E[X^2] - (\E[X])^2$ and the
+fact that $\E[\hat{g}_b(s)] = \sum_a \nabla_\theta \policy_\theta(a \mid s)
+\Qpi(s,a)$ is independent of $b$ (by baseline invariance).
+\end{proof}
+
+\begin{theorem}[Optimal Baseline -- Scalar Case]
+\label{thm:optimal-baseline-scalar}
+For the $i$-th component of the gradient, the baseline that minimizes
+$\Var([\hat{g}_b(s)]_i)$ is
+\[
+  b^*_i(s) = \frac{\E_{A \sim \policy_\theta}\!\left[
+    \bigl(\partial_i \log \policy_\theta(A \mid s)\bigr)^2\, \Qpi(s,A)
+    \right]}
+    {\E_{A \sim \policy_\theta}\!\left[
+    \bigl(\partial_i \log \policy_\theta(A \mid s)\bigr)^2\right]}.
+\]
+This is a weighted average of $\Qpi(s,A)$, where the weights are the
+squared score function components.
+\end{theorem}
+
+\begin{proof}
+We minimize over $b(s)$ the quantity (suppressing the state argument):
+\[
+  f(b) = \E_A\!\left[(\partial_i \log \policy)^2\,
+  (Q(A) - b)^2\right]
+  = \E_A\!\left[(\partial_i \log \policy)^2\, Q(A)^2\right]
+  - 2b\, \E_A\!\left[(\partial_i \log \policy)^2\, Q(A)\right]
+  + b^2\, \E_A\!\left[(\partial_i \log \policy)^2\right].
+\]
+This is quadratic in $b$ with positive leading coefficient (assuming the
+score is not identically zero). Setting $f'(b) = 0$:
+\[
+  -2\, \E_A[(\partial_i \log \policy)^2\, Q(A)]
+  + 2b\, \E_A[(\partial_i \log \policy)^2] = 0,
+\]
+which gives $b^*_i(s)$ as stated.
+\end{proof}
+
+Since the optimal baseline differs for each component $i$, a single
+scalar baseline cannot simultaneously minimize all components. However, a
+practical and commonly used choice is $b(s) = \Vpi(s)$.
+
+\begin{theorem}[Optimal Baseline -- Total Variance]
+\label{thm:optimal-baseline-total}
+The baseline minimizing the total variance
+$\sum_{i=1}^{d} \Var([\hat{g}_b(s)]_i)$ is
+\[
+  b^*(s)
+  = \frac{\E_{A \sim \policy_\theta}\!\left[
+    \|\nabla_\theta \log \policy_\theta(A \mid s)\|^2\, \Qpi(s,A)\right]}
+    {\E_{A \sim \policy_\theta}\!\left[
+    \|\nabla_\theta \log \policy_\theta(A \mid s)\|^2\right]}.
+\]
+\end{theorem}
+
+\begin{proof}
+The total variance is $\sum_{i=1}^d \Var([\hat{g}_b(s)]_i)$. By
+Lemma~\ref{lem:var-decomp}, we minimize:
+\[
+  \sum_{i=1}^d \E_A\!\left[(\partial_i \log \policy)^2\,
+  (Q(A) - b)^2\right]
+  = \E_A\!\left[\|\nabla_\theta \log \policy\|^2\, (Q(A) - b)^2\right].
+\]
+This is quadratic in $b$ with the same structure as the scalar case.
+Setting the derivative to zero yields $b^*(s)$ as stated.
+\end{proof}
+
+\begin{keyresult}[title={Optimal Baseline}]
+The variance-minimizing baseline for the REINFORCE estimator is
+\[
+  b^*(s) = \frac{\E\bigl[\|\nabla_\theta \log \policy_\theta(A \mid s)\|^2
+    \, \Qpi(s,A)\bigr]}
+    {\E\bigl[\|\nabla_\theta \log \policy_\theta(A \mid s)\|^2\bigr]}.
+\]
+When $\|\nabla_\theta \log \policy_\theta(a \mid s)\|^2$ is approximately
+constant across actions (which holds, e.g., for Gaussian policies with
+fixed variance in the small-variance limit), $b^*(s) \approx
+\E_A[\Qpi(s,A)] = \Vpi(s)$. This justifies using $\Vpi(s)$ as a
+practical near-optimal baseline.
+\end{keyresult}
+
+\begin{example}[Optimal Baseline for a Bandit]
+\label{ex:optimal-baseline-bandit}
+Revisiting Example 3.3 from Lesson 54 with the softmax policy on
+$\Actions = \{0,1\}$: let $p = \sigma(\theta)$, so
+$\policy_\theta(1) = p$ and $\policy_\theta(0) = 1-p$. The score
+functions are $\nabla_\theta \log \policy_\theta(1) = 1-p$ and
+$\nabla_\theta \log \policy_\theta(0) = -p$. Then:
+\begin{align*}
+  b^*
+  &= \frac{p(1-p)^2 \cdot r(1) + (1-p)p^2 \cdot r(0)}
+          {p(1-p)^2 + (1-p)p^2}
+  = \frac{p(1-p)[(1-p)r(1) + p \cdot r(0)]}{p(1-p)}
+  = (1-p)r(1) + p\cdot r(0).
+\end{align*}
+This equals $\E[r(A)] = \Vpi(s)$ exactly. For a bandit with two actions
+and a one-dimensional parameter, the optimal baseline and the value
+function coincide.
+\end{example}
+
+\begin{warning}[title={Optimal Baseline $\neq$ Value Function in General}]
+The coincidence in Example~\ref{ex:optimal-baseline-bandit} does not hold
+in general. When the squared score norm
+$\|\nabla_\theta \log \policy_\theta(a \mid s)\|^2$ varies significantly
+across actions, the optimal baseline $b^*(s)$ can differ substantially
+from $\Vpi(s)$. Nevertheless, $\Vpi(s)$ remains the standard practical
+choice because (a) it is much simpler to estimate, (b) the suboptimality
+in variance is typically small, and (c) it leads naturally to the
+advantage function.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 6: The REINFORCE Algorithms
+%% ========================================================================
+\section{The REINFORCE Algorithms}
+
+We now state the complete REINFORCE algorithms in both the basic and
+baseline variants.
+
+\begin{definition}[REINFORCE Update Rule]
+\label{def:reinforce-update}
+The \emph{REINFORCE} parameter update at iteration $k$ using a single
+episode $\tau_k = (S_0, A_0, R_1, \ldots, S_{T-1}, A_{T-1}, R_T)$ is
+\[
+  \theta_{k+1} = \theta_k + \alpha_k \sum_{t=0}^{T-1}
+  \discount^t\, \nabla_\theta \log \policy_{\theta_k}(A_t \mid S_t)\, G_t,
+\]
+where $\alpha_k > 0$ is the step size (learning rate).
+\end{definition}
+
+\begin{definition}[REINFORCE with Baseline Update Rule]
+\label{def:reinforce-baseline-update}
+Given a baseline function $b : \States \to \R$ (typically an estimate
+$\hat{V}(s)$ of $\Vpi(s)$), the update is
+\[
+  \theta_{k+1} = \theta_k + \alpha_k \sum_{t=0}^{T-1}
+  \discount^t\, \nabla_\theta \log \policy_{\theta_k}(A_t \mid S_t)\,
+  \bigl(G_t - b(S_t)\bigr).
+\]
+When $b(s) = \hat{V}_w(s)$ is parameterized by $w$, the baseline
+parameters are updated simultaneously:
+\[
+  w_{k+1} = w_k + \beta_k \sum_{t=0}^{T-1} \discount^t\,
+  (G_t - \hat{V}_{w_k}(S_t))\, \nabla_w \hat{V}_{w_k}(S_t).
+\]
+\end{definition}
+
+\begin{rlconnection}
+The two-parameter update (for $\theta$ and $w$) is the simplest example
+of an \emph{actor-critic} architecture. The ``actor'' is the policy
+$\policy_\theta$ and the ``critic'' is the value estimate $\hat{V}_w$.
+REINFORCE with a learned baseline can be viewed as a Monte Carlo
+actor-critic: the critic uses full returns $G_t$ rather than bootstrapped
+TD estimates. Replacing $G_t$ with a TD target
+$R_{t+1} + \discount \hat{V}_w(S_{t+1})$ yields one-step actor-critic
+methods, which trade increased bias for reduced variance.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 7: Convergence of REINFORCE
+%% ========================================================================
+\section{Convergence of REINFORCE}
+
+We now establish conditions under which REINFORCE converges to a
+stationary point of $J(\theta)$.
+
+\begin{assumption}[Regularity Conditions]
+\label{assump:regularity}
+We assume:
+\begin{enumerate}[label=(\roman*)]
+  \item The parameter space $\Theta \subseteq \R^d$ is open.
+  \item $\policy_\theta(a \mid s) > 0$ for all $s, a, \theta$ and is
+    twice continuously differentiable in $\theta$.
+  \item The score function satisfies
+    $\E_{s \sim d^\policy, a \sim \policy_\theta}
+    [\|\nabla_\theta \log \policy_\theta(a \mid s)\|^2 \cdot
+    \Qpi(s,a)^2] < \infty$ for all $\theta$.
+  \item $J(\theta)$ is bounded above:
+    $\sup_\theta J(\theta) < \infty$.
+  \item $\nabla_\theta J(\theta)$ is $L$-Lipschitz continuous.
+\end{enumerate}
+\end{assumption}
+
+\begin{assumption}[Step Size Schedule]
+\label{assump:step-size}
+The step sizes $\{\alpha_k\}_{k \geq 0}$ satisfy the Robbins-Monro
+conditions:
+\[
+  \sum_{k=0}^{\infty} \alpha_k = \infty, \qquad
+  \sum_{k=0}^{\infty} \alpha_k^2 < \infty.
+\]
+\end{assumption}
+
+\begin{theorem}[Convergence of REINFORCE]
+\label{thm:convergence}
+Under Assumptions~\ref{assump:regularity} and \ref{assump:step-size},
+the REINFORCE iterates $\{\theta_k\}$ satisfy
+\[
+  \lim_{k \to \infty} \nabla_\theta J(\theta_k) = 0 \quad \text{a.s.}
+\]
+That is, $\theta_k$ converges almost surely to the set of stationary
+points of $J(\theta)$.
+\end{theorem}
+
+\begin{proof}
+Write $\theta_{k+1} = \theta_k + \alpha_k (\nabla_\theta J(\theta_k) + \xi_k)$
+where $\xi_k = \hat{g}(\tau_k) - \nabla_\theta J(\theta_k)$ satisfies
+$\E[\xi_k \mid \theta_k] = 0$ by Theorem~\ref{thm:reinforce-unbiased}.
+
+\textbf{Step 1.} By Assumption~\ref{assump:regularity}(iii),
+$\E[\|\hat{g}(\tau_k)\|^2 \mid \theta_k] \leq C$ for some constant $C$.
+
+\textbf{Step 2.} Define $V_k = \sup_\theta J(\theta) - J(\theta_k) \geq 0$.
+The $L$-Lipschitz gradient gives the descent inequality:
+\[
+  \E[V_{k+1} \mid \theta_k] \leq V_k - \alpha_k \|\nabla J(\theta_k)\|^2
+  + \frac{LC}{2}\, \alpha_k^2.
+\]
+
+\textbf{Step 3.} Since $\sum \alpha_k^2 < \infty$, the Robbins-Siegmund
+theorem implies $V_k$ converges a.s.\ and
+$\sum_k \alpha_k \|\nabla J(\theta_k)\|^2 < \infty$ a.s. Combined with
+$\sum \alpha_k = \infty$, this gives
+$\lim_{k \to \infty} \|\nabla J(\theta_k)\| = 0$ a.s.
+\end{proof}
+
+\begin{warning}[title={Local Optima}]
+Theorem~\ref{thm:convergence} guarantees convergence to a \emph{stationary
+point}, not a global maximum. The policy objective $J(\theta)$ is
+generally non-concave, so REINFORCE may converge to a local maximum or
+saddle point. In practice, the choice of policy parameterization (e.g.,
+neural networks) determines the loss landscape, and multiple restarts or
+entropy regularization are used to mitigate this issue.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 8: Worked Example -- REINFORCE on a Two-State MDP
+%% ========================================================================
+\section{Worked Example: Two-State MDP}
+
+We illustrate REINFORCE with baseline on a concrete MDP to build
+intuition.
+
+\begin{example}[Two-State MDP]
+\label{ex:two-state}
+Consider an MDP with $\States = \{s_1, s_2\}$,
+$\Actions = \{\text{left}, \text{right}\}$, and $\discount = 0.9$.
+The transitions and rewards are:
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+State & Action & Next State & Reward \\
+\midrule
+$s_1$ & left & $s_1$ & $+1$ \\
+$s_1$ & right & $s_2$ & $+5$ \\
+$s_2$ & left & $s_1$ & $0$ \\
+$s_2$ & right & $s_2$ & $+2$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+We use a softmax policy with $\policy_\theta(\text{right} \mid s_i) =
+\sigma(\theta_i)$ where $\theta = (\theta_1, \theta_2) \in \R^2$.
+The score for state $s_i$ is
+$\nabla_{\theta_i} \log \policy_\theta(\text{right} \mid s_i) =
+1 - \sigma(\theta_i)$ and
+$\nabla_{\theta_i} \log \policy_\theta(\text{left} \mid s_i) =
+-\sigma(\theta_i)$, with all cross-derivatives zero.
+
+\textbf{At $\theta = (0, 0)$} (equal action probabilities $p = 0.5$),
+solving the Bellman system
+$(I - \discount P^\policy) V = r^\policy$ gives $\Vpi(s_1) \approx 17.39$
+and $\Vpi(s_2) \approx 16.05$.
+
+The action-values at $s_1$ are:
+$\Qpi(s_1, \text{right}) = 5 + 0.9 \cdot 16.05 \approx 19.45$ and
+$\Qpi(s_1, \text{left}) = 1 + 0.9 \cdot 17.39 \approx 16.65$.
+The advantages are $A^\policy(s_1, \text{right}) \approx 2.06$ and
+$A^\policy(s_1, \text{left}) \approx -0.74$.
+
+The REINFORCE with baseline gradient at $s_1$ (component $\theta_1$) is:
+\[
+  \nabla_{\theta_1} J \approx 0.5 \cdot 0.5 \cdot 2.06
+  + 0.5 \cdot (-0.5) \cdot (-0.74) = 0.515 + 0.185 = 0.70.
+\]
+This positive gradient increases $\theta_1$, making ``right'' more
+likely in $s_1$, which is correct since $\Qpi(s_1, \text{right}) >
+\Qpi(s_1, \text{left})$.
+\end{example}
+
+%% ========================================================================
+%% SECTION 9: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[Verify Unbiasedness] \textnormal{(\(*\))} \\
+  For the bandit in Example~\ref{ex:bandit} (Lesson 54 setup with
+  $r(0) = 1$, $r(1) = 3$, $p = \sigma(\theta) = 0.5$), enumerate all
+  possible one-step trajectories and their probabilities. Explicitly
+  compute $\E[\hat{g}(\tau)]$ and verify it equals $\nabla_\theta J(\theta)$.
+\end{exercise}
+
+\begin{exercise}[Variance Reduction Ratio] \textnormal{(\(*\))} \\
+  Continuing with the bandit above, compute:
+  \begin{enumerate}[label=(\alph*)]
+    \item $\Var(\hat{g})$ for REINFORCE without baseline,
+    \item $\Var(\hat{g}_b)$ for REINFORCE with the optimal baseline
+      $b^* = \Vpi$.
+  \end{enumerate}
+  What is the ratio $\Var(\hat{g}_b) / \Var(\hat{g})$?
+\end{exercise}
+
+\begin{exercise}[Baseline Does Not Reduce All Variance] \textnormal{(\(**\))} \\
+  Show that even with the optimal baseline $b^*(s)$, the variance of the
+  REINFORCE estimator is strictly positive as long as $\Qpi(s,a)$ is not
+  constant across actions. Specifically, prove that
+  \[
+    \Var([\hat{g}_{b^*}(s)]_i) = 0 \quad \Longleftrightarrow \quad
+    \Qpi(s,a) = c \text{ for all } a \in \supp(\policy_\theta(\cdot \mid s)).
+  \]
+  \textit{Hint:} Use the Cauchy-Schwarz inequality to analyze when
+  the variance equals zero.
+\end{exercise}
+
+\begin{exercise}[REINFORCE with Discounted Weighting] \textnormal{(\(**\))} \\
+  An alternative REINFORCE estimator uses the ``undiscounted'' form:
+  \[
+    \hat{g}'(\tau) = \sum_{t=0}^{T-1} \nabla_\theta \log
+    \policy_\theta(A_t \mid S_t)\, G_t,
+  \]
+  without the $\discount^t$ factor. Show that this estimator is
+  \emph{not} an unbiased estimator of $\nabla_\theta J(\theta)$ but
+  rather estimates $\nabla_\theta \tilde{J}(\theta)$ for a different
+  objective $\tilde{J}$. Identify $\tilde{J}$ and explain why this
+  alternative is still commonly used in practice.
+\end{exercise}
+
+\begin{exercise}[Convergence Rate] \textnormal{(\(***\))} \\
+  Under the conditions of Theorem~\ref{thm:convergence}, suppose
+  $\alpha_k = c / (k + k_0)$ for constants $c > 0$ and $k_0 > 0$.
+  Using the bound from Step 2 of the convergence proof, show that
+  \[
+    \min_{0 \leq k \leq K} \E\bigl[\|\nabla_\theta J(\theta_k)\|^2\bigr]
+    = O\!\left(\frac{\log K}{K}\right).
+  \]
+  \textit{Hint:} Sum the one-step descent inequality from $k = 0$ to $K$
+  and bound the step-size sums.
+\end{exercise}
+
+\begin{exercise}[Action-Dependent Baseline] \textnormal{(\(***\))} \\
+  Show that if the baseline is allowed to depend on the action, i.e.,
+  $b(s, a)$, then the gradient estimator
+  $\nabla_\theta \log \policy_\theta(a \mid s) \cdot (Q^\policy(s,a) -
+  b(s,a))$ is generally \emph{biased}. Derive the exact bias term and
+  find a condition on $b(s,a)$ under which the bias vanishes.
+\end{exercise}
+
+%% ========================================================================
+%% SECTION 10: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item \textbf{REINFORCE} uses $G_t$ as an unbiased estimate of
+    $\Qpi(S_t, A_t)$, yielding an unbiased Monte Carlo policy gradient
+    estimator.
+
+  \item \textbf{Baseline subtraction}: replacing $G_t$ with
+    $G_t - b(S_t)$ preserves unbiasedness for any state-dependent $b(s)$,
+    by the zero-mean property of the score function.
+
+  \item The \textbf{advantage function}
+    $A^\policy(s,a) = \Qpi(s,a) - \Vpi(s)$ arises from using $\Vpi(s)$
+    as baseline, centering the gradient signal around average action quality.
+
+  \item The \textbf{optimal baseline} is a score-weighted average of
+    $\Qpi$ and approximately equals $\Vpi(s)$ when the squared score norm
+    is nearly action-independent.
+
+  \item REINFORCE converges to a \textbf{stationary point} (not
+    necessarily a global maximum) under Robbins-Monro step-size conditions.
+
+  \item REINFORCE with a learned baseline $\hat{V}_w(s)$ is the simplest
+    \textbf{actor-critic} architecture, bridging Monte Carlo and
+    bootstrapped policy gradient methods.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 11: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 56} (Trust Region Methods) constrains the policy
+    update to a KL-divergence neighborhood, addressing the step-size
+    sensitivity of REINFORCE.
+
+  \item \textbf{Lesson 57} (PPO) builds on the advantage formulation with
+    a clipped surrogate objective for stable large-scale training.
+
+  \item \citet{schulman2015} introduces \emph{Generalized Advantage
+    Estimation} (GAE), interpolating between Monte Carlo and TD advantage
+    estimates via a parameter $\lambda$.
+
+  \item \citet{konda2003} provides a rigorous two-timescale convergence
+    analysis of actor-critic methods with a simultaneously learned critic.
+
+  \item \citet{bhatnagar2009} analyzes natural actor-critic algorithms,
+    connecting baselines to Fisher information geometry.
+
+  \item \citet[Chapter 6]{bertsekas1996} gives a deeper treatment of
+    variance reduction in gradient estimation, including general control
+    variates.
+\end{itemize}
+
+\bibliography{pg-refs}
+
+\end{document}

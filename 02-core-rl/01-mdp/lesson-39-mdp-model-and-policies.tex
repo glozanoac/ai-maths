@@ -1,0 +1,739 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 39: MDP Model and Policies}}
+\fancyhead[R]{\thepage}
+\title{Lesson 39: MDP Model and Policies}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider an autonomous robot navigating a grid-world warehouse. At each
+time step the robot observes its current cell, selects a movement action
+(north, south, east, west, or stay), and receives a reward that depends
+on the cell reached -- perhaps $+10$ for reaching the charging station,
+$-1$ for each movement to encourage efficiency, and $-100$ for
+colliding with an obstacle. The warehouse layout, the probabilistic
+effects of actions (wheels may slip on a wet floor), and the reward
+structure together define a sequential decision problem. How should we
+formalize this setting so that we can reason mathematically about
+optimal behavior? What class of decision rules should we consider, and
+how do we measure the long-run performance of a particular strategy?
+
+The Markov decision process (MDP) provides the canonical mathematical
+framework for sequential decision-making under uncertainty. The tools
+developed in this lesson -- the formal MDP tuple, policy classes, value
+functions, and the Bellman expectation equations -- form the foundation
+upon which all of reinforcement learning is built.
+
+\begin{rlconnection}[title={Why MDPs Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Tabular RL algorithms}: Q-learning, SARSA, and Monte
+    Carlo methods all operate within the MDP framework; their
+    convergence proofs require the formal definitions introduced here.
+    \item \textbf{Policy gradient methods}: REINFORCE and actor-critic
+    algorithms optimize over parameterized policy classes, but the
+    underlying objective (maximizing the value function) is defined
+    through the MDP model.
+    \item \textbf{Deep RL}: DQN, PPO, and SAC extend tabular methods
+    using function approximation, yet their theoretical guarantees
+    ultimately rely on MDP structure and Bellman equations.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Probability spaces, conditional probability, and conditional
+expectation including the tower property (Lessons~9--12). Geometric
+series and absolute convergence (Lesson~1). Basic linear algebra:
+vectors and matrices (Lesson~5). Contraction mappings on complete
+metric spaces (Lesson~4, Lesson~15).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} a Markov decision process and each of its
+    components formally.
+    \item \emph{Classify} policies as history-dependent, Markov,
+    stationary, deterministic, or stochastic, and \emph{explain} the
+    relationships among these classes.
+    \item \emph{Derive} the Bellman expectation equations for both the
+    state-value function $\Vpi$ and the action-value function $\Qpi$.
+    \item \emph{Compute} value functions for small MDPs by direct
+    solution of the Bellman equations.
+    \item \emph{State} the existence theorem for deterministic
+    stationary optimal policies in finite MDPs.
+    \item \emph{Prove} that the return is well-defined and bounded
+    under the discounted criterion.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 2--3]{puterman2014} -- Definitive treatment
+    of MDP formulation, policy classes, and optimality criteria.
+    \item \citet[Chapter 1]{bertsekas2012} -- Concise development of
+    dynamic programming foundations with emphasis on infinite-horizon
+    discounted problems.
+    \item \citet[Chapters 3--4]{suttonbarto2018} -- Accessible
+    introduction to MDPs, value functions, and Bellman equations from
+    the RL perspective.
+    \item \citet{howard1960} -- Howard's seminal monograph introducing
+    policy iteration and the MDP framework.
+    \item \citet{blackwell1962} -- Foundational paper on discounted
+    dynamic programming and optimality.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE MDP MODEL
+%% ============================================================
+
+\section{The Markov Decision Process Model}
+\label{sec:mdp-model}
+
+\begin{definition}[Markov Decision Process]
+\label{def:mdp}
+A \emph{Markov decision process} (MDP) is a tuple
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ where:
+\begin{enumerate}[nosep]
+    \item $\States$ is a finite set of \emph{states}, with
+    $|\States| = S$.
+    \item $\Actions$ is a finite set of \emph{actions}, with
+    $|\Actions| = A$.
+    \item $P : \States \times \Actions \times \States \to [0,1]$ is
+    the \emph{transition kernel}, where
+    $P(s' \mid s, a) = \Prob(S_{t+1} = s' \mid S_t = s, A_t = a)$
+    satisfies $\sum_{s' \in \States} P(s' \mid s, a) = 1$ for every
+    $(s,a) \in \States \times \Actions$.
+    \item $R : \States \times \Actions \to \R$ is the (deterministic)
+    \emph{reward function}, where $R(s,a)$ is the immediate reward
+    received upon taking action $a$ in state $s$.
+    \item $\discount \in [0,1)$ is the \emph{discount factor}.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:reward-variants}
+Several equivalent reward formulations appear in the literature:
+$R(s,a,s')$, $R(s)$, or random rewards with
+$\E[R_t \mid S_t = s, A_t = a] = R(s,a)$. In the finite-state,
+finite-action case with bounded rewards, these formulations are
+interchangeable up to a redefinition of the reward function. We adopt
+$R(s,a)$ throughout for notational simplicity. When using
+$R(s,a,s')$, the expected reward is
+$\bar{R}(s,a) = \sum_{s'} P(s' \mid s,a) R(s,a,s')$.
+\end{remark}
+
+The key structural property of MDPs is the \emph{Markov property}: the
+future evolution depends on the past only through the current state and
+action.
+
+\begin{definition}[Markov Property]
+\label{def:markov-property}
+A stochastic process $(S_t)_{t \geq 0}$ controlled by actions
+$(A_t)_{t \geq 0}$ satisfies the \emph{Markov property} if for all
+$t \geq 0$ and all histories
+$h_t = (s_0, a_0, s_1, a_1, \ldots, s_t, a_t)$,
+\[
+    \Prob(S_{t+1} = s' \mid S_0 = s_0, A_0 = a_0, \ldots, S_t = s_t,
+    A_t = a_t) = \Prob(S_{t+1} = s' \mid S_t = s_t, A_t = a_t)
+    = P(s' \mid s_t, a_t).
+\]
+\end{definition}
+
+\begin{example}[Grid World MDP]
+\label{ex:gridworld}
+Consider a $3 \times 3$ grid world with states
+$\States = \{(i,j) : i,j \in \{1,2,3\}\}$ and actions
+$\Actions = \{\text{N}, \text{S}, \text{E}, \text{W}\}$. The agent
+starts at $(1,1)$ and aims to reach the goal at $(3,3)$. The
+transition kernel is deterministic:
+$P((i+1,j) \mid (i,j), \text{N}) = 1$ if $i < 3$, and
+$P((i,j) \mid (i,j), \text{N}) = 1$ if $i = 3$ (wall bounce),
+with analogous rules for the other directions. The reward is
+$R(s,a) = +1$ if the transition leads to $(3,3)$, and $R(s,a) = 0$
+otherwise. With $\discount = 0.9$, this defines a complete MDP
+$\mathcal{M} = (\States, \Actions, P, R, 0.9)$ with $S = 9$ states
+and $A = 4$ actions.
+\end{example}
+
+%% ============================================================
+%% SECTION 4: POLICIES
+%% ============================================================
+
+\section{Policies}
+\label{sec:policies}
+
+A \emph{policy} specifies how the agent selects actions. We define a
+hierarchy of increasingly restrictive policy classes.
+
+\begin{definition}[History]
+\label{def:history}
+A \emph{history} at time $t$ is the sequence
+$h_t = (s_0, a_0, r_0, s_1, a_1, r_1, \ldots, s_{t-1}, a_{t-1},
+r_{t-1}, s_t)$ recording all states visited, actions taken, and
+rewards received up to time $t$. Let $\mathcal{H}_t$ denote the set
+of all possible histories at time $t$, and
+$\mathcal{H} = \bigcup_{t=0}^{\infty} \mathcal{H}_t$.
+\end{definition}
+
+\begin{definition}[History-Dependent Policy]
+\label{def:hd-policy}
+A \emph{history-dependent randomized policy} is a sequence
+$\policy = (\policy_0, \policy_1, \policy_2, \ldots)$ where each
+$\policy_t : \mathcal{H}_t \to \Delta(\Actions)$ maps histories to
+probability distributions over actions. Here
+$\Delta(\Actions) = \{p \in \R^{|\Actions|} : p(a) \geq 0,\;
+\sum_a p(a) = 1\}$ denotes the probability simplex over $\Actions$.
+We write $\policy_t(a \mid h_t)$ for the probability of selecting
+action $a$ given history $h_t$.
+\end{definition}
+
+\begin{definition}[Markov Policy]
+\label{def:markov-policy}
+A \emph{Markov randomized policy} is a sequence
+$\policy = (\policy_0, \policy_1, \policy_2, \ldots)$ where each
+$\policy_t : \States \to \Delta(\Actions)$ depends only on the
+current state (not the full history). That is,
+$\policy_t(a \mid h_t) = \policy_t(a \mid s_t)$ for all $h_t$
+ending in $s_t$.
+\end{definition}
+
+\begin{definition}[Stationary Policy]
+\label{def:stationary-policy}
+A \emph{stationary randomized policy} is a Markov policy that is
+time-independent: $\policy_t = \policy_0$ for all $t \geq 0$. We
+identify such a policy with a single mapping
+$\policy : \States \to \Delta(\Actions)$ and write
+$\policy(a \mid s)$ for the probability of action $a$ in state $s$.
+\end{definition}
+
+\begin{definition}[Deterministic Policy]
+\label{def:det-policy}
+A \emph{deterministic stationary policy} is a mapping
+$\policy : \States \to \Actions$ assigning a single action to each
+state. Equivalently, $\policy(a \mid s) = \indicator\{a = \policy(s)\}$.
+We denote the set of all deterministic stationary policies by
+$\Pi^{\mathrm{SD}}$ and the set of all stationary randomized policies
+by $\Pi^{\mathrm{SR}}$.
+\end{definition}
+
+\begin{remark}
+\label{rem:policy-hierarchy}
+The policy classes form a strict hierarchy:
+\[
+    \Pi^{\mathrm{SD}} \subset \Pi^{\mathrm{SR}} \subset
+    \Pi^{\mathrm{MR}} \subset \Pi^{\mathrm{HR}},
+\]
+where $\Pi^{\mathrm{MR}}$ and $\Pi^{\mathrm{HR}}$ denote the Markov
+randomized and history-dependent randomized policy classes,
+respectively. For the discounted infinite-horizon criterion, the
+optimal policy can always be found in $\Pi^{\mathrm{SD}}$, so the
+larger classes offer no advantage (Theorem~\ref{thm:det-optimal}).
+\end{remark}
+
+\begin{warning}[title={Stochastic Policies Are Not Redundant}]
+Although deterministic policies suffice for optimality in standard
+MDPs, stochastic policies play an essential role in several settings:
+partially observable MDPs (POMDPs), multi-agent games (where mixed
+strategies are necessary for Nash equilibria), constrained MDPs (where
+randomization achieves the constraint boundary), and policy gradient
+methods (where stochastic policies enable gradient estimation).
+\end{warning}
+
+\begin{example}[Inventory Management MDP]
+\label{ex:inventory}
+A retailer manages inventory of a single product. The state
+$s \in \States = \{0, 1, \ldots, M\}$ is the current stock level,
+and the action $a \in \Actions = \{0, 1, \ldots, M\}$ is the number
+of units ordered, subject to $s + a \leq M$ (warehouse capacity).
+Demand $D$ is random with known distribution $p_D$. The transition
+kernel is $P(s' \mid s, a) = \Prob(\max(s + a - D, 0) = s')$. The
+reward is $R(s,a) = p \cdot \E[\min(s+a, D)] - c \cdot a
+- h \cdot \E[\max(s+a-D, 0)]$, where $p$ is the unit selling price,
+$c$ is the unit ordering cost, and $h$ is the per-unit holding cost.
+A stationary deterministic policy $\policy(s) = a(s)$ specifies an
+order quantity for each stock level.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: RETURN AND VALUE FUNCTIONS
+%% ============================================================
+
+\section{Return and Value Functions}
+\label{sec:return-value}
+
+\begin{definition}[Discounted Return]
+\label{def:return}
+The \emph{discounted return} from time $t$ onward is the random
+variable
+\[
+    G_t = \sum_{k=0}^{\infty} \discount^k R(S_{t+k}, A_{t+k}).
+\]
+\end{definition}
+
+The first key result establishes that this infinite sum is
+well-defined.
+
+\begin{proposition}[The Return Is Well-Defined and Bounded]
+\label{prop:return-bounded}
+Let $R_{\max} = \max_{s,a} |R(s,a)|$. For any $\discount \in [0,1)$
+and any policy $\policy$, the return $G_t$ satisfies:
+\begin{enumerate}[nosep]
+    \item The series $\sum_{k=0}^{\infty} \discount^k R(S_{t+k},
+    A_{t+k})$ converges absolutely almost surely.
+    \item $|G_t| \leq R_{\max} / (1 - \discount)$ almost surely.
+    \item $\E[|G_t|] \leq R_{\max} / (1 - \discount)$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+For each $k \geq 0$, $|R(S_{t+k}, A_{t+k})| \leq R_{\max}$, so
+\[
+    \sum_{k=0}^{\infty} \discount^k |R(S_{t+k}, A_{t+k})|
+    \leq R_{\max} \sum_{k=0}^{\infty} \discount^k
+    = \frac{R_{\max}}{1 - \discount} < \infty.
+\]
+Absolute convergence implies convergence, establishing (1). The same
+bound gives (2). Taking expectations and applying the monotone
+convergence theorem yields (3).
+\end{proof}
+
+\begin{remark}
+\label{rem:recursive-return}
+The return satisfies the recursive relationship
+$G_t = R(S_t, A_t) + \discount G_{t+1}$, which is the foundation of
+temporal-difference methods and the Bellman equations derived below.
+\end{remark}
+
+\begin{definition}[State-Value Function]
+\label{def:value-function}
+The \emph{state-value function} of policy $\policy$ is
+\[
+    \Vpi(s) = \E_\policy\!\left[\, G_t \mid S_t = s \,\right]
+    = \E_\policy\!\left[\,
+    \sum_{k=0}^{\infty} \discount^k R(S_{t+k}, A_{t+k})
+    \;\middle|\; S_t = s \,\right],
+\]
+where $\E_\policy$ denotes expectation under the probability measure
+induced by policy $\policy$ and transition kernel $P$.
+\end{definition}
+
+\begin{definition}[Action-Value Function]
+\label{def:action-value}
+The \emph{action-value function} of policy $\policy$ is
+\[
+    \Qpi(s,a) = \E_\policy\!\left[\, G_t \mid S_t = s,\, A_t = a
+    \,\right].
+\]
+\end{definition}
+
+\begin{definition}[Advantage Function]
+\label{def:advantage}
+The \emph{advantage function} of policy $\policy$ is
+\[
+    A^\policy(s,a) = \Qpi(s,a) - \Vpi(s).
+\]
+It measures the relative advantage of taking action $a$ in state $s$
+compared to acting according to $\policy$.
+\end{definition}
+
+\begin{proposition}[Value-Action Value Relationship]
+\label{prop:v-q-relation}
+For any stationary policy $\policy$ and state $s \in \States$,
+\[
+    \Vpi(s) = \sum_{a \in \Actions} \policy(a \mid s)\, \Qpi(s,a).
+\]
+Consequently, $\sum_{a \in \Actions} \policy(a \mid s) A^\policy(s,a) = 0$
+for all $s$.
+\end{proposition}
+
+\begin{proof}
+By the law of total expectation (tower property),
+\[
+    \Vpi(s)
+    = \E_\policy[G_t \mid S_t = s]
+    = \sum_{a \in \Actions} \policy(a \mid s)\,
+      \E_\policy[G_t \mid S_t = s, A_t = a]
+    = \sum_{a \in \Actions} \policy(a \mid s)\, \Qpi(s,a).
+\]
+The advantage identity follows immediately:
+$\sum_a \policy(a \mid s) A^\policy(s,a)
+= \sum_a \policy(a \mid s) \Qpi(s,a) - \Vpi(s)
+= \Vpi(s) - \Vpi(s) = 0$.
+\end{proof}
+
+\begin{rlconnection}[title={Advantage Functions in Policy Gradients}]
+The advantage function $A^\policy(s,a)$ plays a central role in
+variance reduction for policy gradient methods. The policy gradient
+theorem (Lesson on Policy Gradients) shows that the gradient of the
+expected return can be written as
+$\nabla_\theta J(\theta) = \E[\nabla_\theta \log \policy_\theta(A_t
+\mid S_t) A^{\policy_\theta}(S_t, A_t)]$. Since
+$\sum_a \policy(a \mid s) A^\policy(s,a) = 0$, using the advantage
+as a baseline does not bias the gradient estimate but substantially
+reduces variance.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: BELLMAN EXPECTATION EQUATIONS
+%% ============================================================
+
+\section{Bellman Expectation Equations}
+\label{sec:bellman-expectation}
+
+The Bellman expectation equations express the value of a state
+recursively in terms of the values of successor states. They are the
+most fundamental equations in the theory of MDPs.
+
+\begin{theorem}[Bellman Expectation Equation for $\Vpi$]
+\label{thm:bellman-v}
+For any stationary policy $\policy$ and any state $s \in \States$,
+\begin{equation}
+\label{eq:bellman-v}
+    \Vpi(s) = \sum_{a \in \Actions} \policy(a \mid s)
+    \left[ R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a)\, \Vpi(s') \right].
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Starting from the recursive decomposition of the return,
+$G_t = R(S_t, A_t) + \discount G_{t+1}$, and conditioning on
+$S_t = s$:
+\begin{align*}
+    \Vpi(s)
+    &= \E_\policy[G_t \mid S_t = s] \\
+    &= \E_\policy[R(S_t, A_t) + \discount G_{t+1} \mid S_t = s] \\
+    &= \sum_{a \in \Actions} \policy(a \mid s)
+       \E_\policy[R(s, a) + \discount G_{t+1}
+       \mid S_t = s, A_t = a] \\
+    &= \sum_{a \in \Actions} \policy(a \mid s)
+       \left[ R(s,a) + \discount
+       \E_\policy[G_{t+1} \mid S_t = s, A_t = a] \right].
+\end{align*}
+By the Markov property and stationarity of $\policy$,
+\[
+    \E_\policy[G_{t+1} \mid S_t = s, A_t = a]
+    = \sum_{s' \in \States} P(s' \mid s,a)\,
+      \E_\policy[G_{t+1} \mid S_{t+1} = s']
+    = \sum_{s' \in \States} P(s' \mid s,a)\, \Vpi(s').
+\]
+The last equality uses stationarity: the value function $\Vpi$ is
+time-independent under a stationary policy. Substituting yields
+\eqref{eq:bellman-v}.
+\end{proof}
+
+\begin{theorem}[Bellman Expectation Equation for $\Qpi$]
+\label{thm:bellman-q}
+For any stationary policy $\policy$ and any
+$(s,a) \in \States \times \Actions$,
+\begin{equation}
+\label{eq:bellman-q}
+    \Qpi(s,a) = R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a) \sum_{a' \in \Actions}
+    \policy(a' \mid s')\, \Qpi(s', a').
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Decompose the return as $G_t = R(S_t, A_t) + \discount G_{t+1}$ and
+condition on $(S_t, A_t) = (s, a)$:
+\begin{align*}
+    \Qpi(s,a)
+    &= \E_\policy[G_t \mid S_t = s, A_t = a] \\
+    &= R(s,a) + \discount\, \E_\policy[G_{t+1} \mid S_t = s, A_t = a] \\
+    &= R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\,
+       \E_\policy[G_{t+1} \mid S_{t+1} = s'] \\
+    &= R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, \Vpi(s').
+\end{align*}
+Applying Proposition~\ref{prop:v-q-relation} to replace $\Vpi(s')$
+gives \eqref{eq:bellman-q}.
+\end{proof}
+
+\begin{keyresult}[title={Bellman Expectation Equations -- Matrix Form}]
+For a stationary policy $\policy$, define the $S \times S$ transition
+matrix $P^\policy$ with entries
+$P^\policy_{ss'} = \sum_a \policy(a \mid s) P(s' \mid s,a)$ and the
+reward vector $r^\policy \in \R^S$ with entries
+$r^\policy_s = \sum_a \policy(a \mid s) R(s,a)$. Then the Bellman
+equation \eqref{eq:bellman-v} becomes $v^\policy = r^\policy +
+\discount P^\policy v^\policy$, which has the unique solution
+\[
+    v^\policy = (I - \discount P^\policy)^{-1} r^\policy.
+\]
+The matrix $I - \discount P^\policy$ is invertible because all
+eigenvalues of $\discount P^\policy$ have modulus at most
+$\discount < 1$ (since $P^\policy$ is a stochastic matrix).
+\end{keyresult}
+
+\begin{example}[Two-State MDP]
+\label{ex:two-state}
+Consider an MDP with $\States = \{s_1, s_2\}$,
+$\Actions = \{a_1, a_2\}$, $\discount = 0.5$, and:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(s_1 \mid s,a)$ & $P(s_2 \mid s,a)$ \\
+\midrule
+$s_1$ & $a_1$ & 5 & 0.5 & 0.5 \\
+$s_1$ & $a_2$ & 10 & 0 & 1 \\
+$s_2$ & $a_1$ & $-1$ & 0.8 & 0.2 \\
+$s_2$ & $a_2$ & 2 & 0.3 & 0.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Under the deterministic policy $\policy(s_1) = a_1$,
+$\policy(s_2) = a_1$, the Bellman equation in matrix form is
+$v = r + 0.5 P^\policy v$ where $r = (5, -1)^\top$ and
+\[
+    P^\policy = \begin{pmatrix} 0.5 & 0.5 \\ 0.8 & 0.2 \end{pmatrix}.
+\]
+Solving $(I - 0.5 P^\policy) v = r$:
+\[
+    \begin{pmatrix} 0.75 & -0.25 \\ -0.4 & 0.9 \end{pmatrix}
+    \begin{pmatrix} v_1 \\ v_2 \end{pmatrix}
+    = \begin{pmatrix} 5 \\ -1 \end{pmatrix},
+\]
+which gives $v_1 = \frac{0.9 \cdot 5 + 0.25 \cdot (-1)}{0.75 \cdot
+0.9 - 0.25 \cdot 0.4} = \frac{4.25}{0.575} \approx 7.39$ and
+$v_2 = \frac{0.75 \cdot (-1) + 0.4 \cdot 5}{0.575}
+= \frac{1.25}{0.575} \approx 2.17$.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: OPTIMAL POLICIES AND VALUE FUNCTIONS
+%% ============================================================
+
+\section{Optimal Policies and Value Functions}
+\label{sec:optimal}
+
+\begin{definition}[Optimal Value Functions]
+\label{def:optimal-value}
+The \emph{optimal state-value function} is
+$\Vstar(s) = \sup_{\policy \in \Pi^{\mathrm{HR}}} \Vpi(s)$ for all
+$s \in \States$. The \emph{optimal action-value function} is
+$\Qstar(s,a) = \sup_{\policy \in \Pi^{\mathrm{HR}}} \Qpi(s,a)$ for
+all $(s,a) \in \States \times \Actions$.
+\end{definition}
+
+\begin{definition}[Optimal Policy]
+\label{def:optimal-policy}
+A policy $\optpolicy$ is \emph{optimal} if
+$V^{\optpolicy}(s) = \Vstar(s)$ for all $s \in \States$.
+\end{definition}
+
+\begin{theorem}[Existence of Deterministic Stationary Optimal Policy]
+\label{thm:det-optimal}
+For any finite MDP $(\States, \Actions, P, R, \discount)$ with
+$\discount \in [0,1)$, there exists a deterministic stationary policy
+$\optpolicy \in \Pi^{\mathrm{SD}}$ that is optimal. That is,
+$V^{\optpolicy}(s) = \Vstar(s)$ for all $s \in \States$.
+\end{theorem}
+
+\begin{proof}
+The proof relies on the Bellman optimality equations, which are
+developed in detail in Lesson~41. We outline the argument here;
+the complete proof appears there.
+
+Since $\States$ and $\Actions$ are finite, there are finitely many
+deterministic stationary policies: $|\Pi^{\mathrm{SD}}| = A^S$.
+Each deterministic stationary policy $d \in \Pi^{\mathrm{SD}}$ has a
+well-defined value function $V^d$, computable via the matrix formula
+$V^d = (I - \discount P^d)^{-1} r^d$. Define
+$\hat{V}(s) = \max_{d \in \Pi^{\mathrm{SD}}} V^d(s)$. It can be
+shown (Lesson~41, using the Bellman optimality operator as a
+contraction) that there exists a single deterministic policy
+$d^*$ achieving $V^{d^*}(s) = \hat{V}(s)$ for all $s$
+simultaneously, and that $\hat{V} = \Vstar$, i.e., no
+history-dependent or randomized policy can improve upon $d^*$.
+\end{proof}
+
+\begin{rlconnection}[title={Why Deterministic Optimal Policies Exist}]
+Theorem~\ref{thm:det-optimal} justifies the design of algorithms
+like Q-learning that search for deterministic policies. The greedy
+action $\argmax_a Q(s,a)$ is always sufficient -- there is no need
+to maintain or learn a stochastic policy for optimality in standard
+MDPs. This is why DQN and its variants output a single best action
+per state, rather than a probability distribution over actions.
+\end{rlconnection}
+
+\begin{example}[Optimal Policy for Two-State MDP]
+\label{ex:two-state-optimal}
+Returning to Example~\ref{ex:two-state}, we can evaluate all
+$|\Pi^{\mathrm{SD}}| = 2^2 = 4$ deterministic policies. Solving the
+Bellman equations for each:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$\policy(s_1)$ & $\policy(s_2)$ & $\Vpi(s_1)$ & $\Vpi(s_2)$ \\
+\midrule
+$a_1$ & $a_1$ & $7.39$ & $2.17$ \\
+$a_1$ & $a_2$ & $8.50$ & $5.00$ \\
+$a_2$ & $a_1$ & $11.30$ & $3.48$ \\
+$a_2$ & $a_2$ & $14.00$ & $6.00$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The optimal policy is $\optpolicy(s_1) = a_2$,
+$\optpolicy(s_2) = a_2$, with $\Vstar(s_1) = 14$ and
+$\Vstar(s_2) = 6$. As guaranteed by
+Theorem~\ref{thm:det-optimal}, a single deterministic stationary
+policy achieves the maximum simultaneously at both states.
+\end{example}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[MDP Formulation] \textnormal{(\(*\))} \\
+A taxi operates in a $5 \times 5$ grid city. The state includes the
+taxi's position, whether it is carrying a passenger, and the
+passenger's destination (one of 4 designated locations). The taxi can
+move in four cardinal directions, pick up, or drop off. Formally
+define this problem as an MDP: specify $\States$, $\Actions$, the
+transition kernel $P$, reward function $R$, and an appropriate
+discount factor $\discount$.
+\end{exercise}
+
+\begin{exercise}[Bellman Equation Solution] \textnormal{(\(*\))} \\
+Consider a three-state MDP with $\States = \{s_1, s_2, s_3\}$,
+$\Actions = \{a\}$ (a single action), $\discount = 0.9$, rewards
+$R(s_1) = 1$, $R(s_2) = 2$, $R(s_3) = 0$, and transition matrix
+\[
+    P = \begin{pmatrix}
+    0.2 & 0.5 & 0.3 \\
+    0.1 & 0.6 & 0.3 \\
+    0.4 & 0.1 & 0.5
+    \end{pmatrix}.
+\]
+Compute $\Vpi(s)$ for each state by solving the linear system
+$(I - \discount P) v = r$.
+\end{exercise}
+
+\begin{exercise}[Advantage Function Properties]
+\textnormal{(\(**\))} \\
+Let $\policy$ be a stationary policy for a finite MDP.
+\begin{enumerate}[label=(\alph*)]
+    \item Prove that $\sum_{a} \policy(a \mid s) A^\policy(s,a) = 0$
+    for all $s$.
+    \item Show that if $\policy$ is a deterministic policy with
+    $\policy(s) = a^*$, then $A^\policy(s, a^*) = 0$ and
+    $A^\policy(s, a) = \Qpi(s,a) - \Qpi(s, a^*)$ for all $a$.
+    \item Prove that a stationary policy $\policy$ is optimal if and
+    only if $A^\policy(s,a) \leq 0$ for all $(s,a)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Inventory MDP Analysis] \textnormal{(\(**\))} \\
+For the inventory MDP of Example~\ref{ex:inventory} with $M = 2$,
+demand $\Prob(D = 0) = 0.3$, $\Prob(D = 1) = 0.5$,
+$\Prob(D = 2) = 0.2$, $p = 4$, $c = 2$, $h = 1$, and
+$\discount = 0.95$:
+\begin{enumerate}[label=(\alph*)]
+    \item Write out the transition matrix $P(s' \mid s, a)$ for each
+    feasible state-action pair.
+    \item Compute the reward $R(s,a)$ for each feasible pair.
+    \item Evaluate $\Vpi$ for the policy ``order up to 2'' (i.e.,
+    $\policy(s) = 2 - s$).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Policy Hierarchy and Counterexample]
+\textnormal{(\(***\))} \\
+Theorem~\ref{thm:det-optimal} states that deterministic stationary
+policies suffice for optimality in finite discounted MDPs. Construct
+an explicit example demonstrating that this fails for constrained MDPs:
+give a two-state, two-action MDP with a constraint on average cost
+where the optimal constrained policy is necessarily stochastic (i.e.,
+no deterministic stationary policy is optimal among policies satisfying
+the constraint).
+
+\textit{Hint:} Consider a constraint of the form
+$\E_\policy[\sum_t \discount^t c(S_t, A_t)] \leq C$ with
+appropriately chosen costs $c$ and threshold $C$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item A Markov decision process
+    $\mathcal{M} = (\States, \Actions, P, R, \discount)$ is the
+    canonical framework for sequential decision-making under
+    uncertainty, defined by states, actions, transitions, rewards, and
+    a discount factor.
+    \item The Markov property ensures that the future depends on the
+    past only through the current state and action, enabling recursive
+    decompositions.
+    \item Policies range from history-dependent randomized (most
+    general) to deterministic stationary (most restrictive):
+    $\Pi^{\mathrm{SD}} \subset \Pi^{\mathrm{SR}} \subset
+    \Pi^{\mathrm{MR}} \subset \Pi^{\mathrm{HR}}$.
+    \item The discounted return $G_t = \sum_{k=0}^\infty \discount^k
+    R(S_{t+k}, A_{t+k})$ is well-defined and bounded by
+    $R_{\max}/(1-\discount)$ whenever $\discount < 1$.
+    \item The state-value function $\Vpi(s)$ and action-value function
+    $\Qpi(s,a)$ are linked by
+    $\Vpi(s) = \sum_a \policy(a \mid s) \Qpi(s,a)$.
+    \item The advantage function $A^\policy(s,a) = \Qpi(s,a) - \Vpi(s)$
+    measures the relative merit of action $a$; its expected value
+    under $\policy$ is zero.
+    \item The Bellman expectation equations express $\Vpi$ and $\Qpi$
+    recursively and, in the finite case, reduce to a linear system
+    with unique solution $v^\policy = (I - \discount P^\policy)^{-1}
+    r^\policy$.
+    \item For finite MDPs with $\discount < 1$, an optimal
+    deterministic stationary policy always exists.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~40} extends the MDP framework to
+    finite-horizon problems, develops backward induction, and proves
+    the principle of optimality.
+    \item \textbf{Lesson~41} derives the Bellman optimality equations,
+    introduces the Bellman operators $\Bellman^\policy$ and
+    $\Bellman^*$, and proves the optimality of the greedy policy with
+    respect to $\Vstar$.
+    \item \citet[Chapters 4--6]{puterman2014} provides an exhaustive
+    treatment of optimality criteria, including average reward and
+    total reward formulations beyond the discounted setting.
+    \item \citet{blackwell1962} proves the existence of optimal
+    stationary policies using contraction arguments; the original
+    paper remains highly readable.
+    \item \citet{altman1999} extends the MDP framework to constrained
+    settings where stochastic policies are necessary for optimality,
+    complementing Exercise~5 above.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

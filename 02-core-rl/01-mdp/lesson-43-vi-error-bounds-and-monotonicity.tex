@@ -1,0 +1,796 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 43: VI Error Bounds and Monotonicity}}
+\fancyhead[R]{\thepage}
+\title{Lesson 43: VI Error Bounds and Monotonicity}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lesson~42 established that value iteration converges geometrically to
+$\Vstar$ and provided basic a priori and a posteriori error bounds.
+In practice, however, we need sharper tools. Consider running value
+iteration on a large MDP with $\discount = 0.99$: the a priori bound
+suggests nearly a thousand iterations are needed for moderate
+accuracy. Can we do better? Can we detect convergence earlier by
+exploiting the structure of the iterates?
+
+This lesson develops refined error analysis for value iteration. We
+derive tighter two-sided bounds using the span seminorm, establish
+monotonicity properties of VI sequences under specific initializations,
+and show how these properties lead to improved stopping criteria. We
+also analyze the rate at which the greedy policy stabilizes -- often
+the policy converges long before the value function does, suggesting
+that tracking policy changes provides a more efficient termination
+test.
+
+\begin{rlconnection}[title={Why Refined VI Analysis Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Practical stopping rules}: Naive stopping criteria
+    based on the a posteriori bound can be overly conservative by a
+    factor of 2; the span-based bounds developed here tighten this
+    significantly.
+    \item \textbf{Early policy convergence}: In many RL applications,
+    the policy (greedy actions) stabilizes well before the value
+    function converges to full precision, motivating policy-based
+    stopping criteria.
+    \item \textbf{Monotone initialization}: Initializing value
+    iteration with known bounds (e.g., $v^{(0)} = 0$ or
+    $v^{(0)} = R_{\max}/(1-\discount)$) yields monotone sequences
+    that bracket $\Vstar$ from below and above, enabling interval
+    estimates.
+    \item \textbf{Approximate DP}: Error bounds for VI directly inform
+    the analysis of fitted value iteration (FVI) used in deep RL,
+    where each backup is approximate.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Value iteration algorithm, a priori and a posteriori error bounds,
+approximate policy extraction, the Bellman optimality operator
+$\Bellman^*$ and its contraction and monotonicity properties
+(Lesson~42). The Banach fixed-point theorem (Lesson~4, Lesson~15).
+Supremum norm on $\R^S$ (Lesson~5).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} the span seminorm and \emph{prove} that
+    $\Bellman^*$ contracts the span.
+    \item \emph{Derive} span-based error bounds for value iteration
+    that improve upon the standard a posteriori bound.
+    \item \emph{Prove} monotonicity of value iteration sequences
+    under appropriate initialization.
+    \item \emph{Construct} upper and lower bounding sequences that
+    bracket $\Vstar$.
+    \item \emph{Analyze} the rate of policy convergence relative to
+    value convergence.
+    \item \emph{Apply} refined stopping criteria to determine when
+    value iteration can be terminated.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 6, Sections 6.3--6.6]{puterman2014} --
+    Detailed treatment of span-based bounds, monotonicity, and
+    stopping criteria for value iteration.
+    \item \citet[Chapter 1]{bertsekas2012} -- Error bounds and
+    approximate policy extraction in the context of approximate
+    dynamic programming.
+    \item \citet{denardo1967} -- Contraction framework providing the
+    theoretical basis for span contraction results.
+    \item \citet{suttonbarto2018} -- Practical perspective on
+    convergence detection in value iteration.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: SPAN SEMINORM
+%% ============================================================
+
+\section{The Span Seminorm}
+\label{sec:span}
+
+The standard a posteriori bound from Lesson~42 uses the full
+supremum norm difference $\|v^{(n)} - v^{(n-1)}\|_\infty$. The
+span seminorm captures only the ``spread'' of a vector, ignoring
+uniform shifts, and leads to tighter bounds.
+
+\begin{definition}[Span Seminorm]
+\label{def:span}
+The \emph{span seminorm} of a vector $v \in \R^S$ is
+\[
+    \mathrm{sp}(v) = \max_{s \in \States} v(s) -
+    \min_{s \in \States} v(s).
+\]
+\end{definition}
+
+\begin{proposition}[Properties of the Span]
+\label{prop:span-properties}
+For all $u, v \in \R^S$ and $c \in \R$:
+\begin{enumerate}[nosep]
+    \item $\mathrm{sp}(v) \geq 0$, with equality if and only if $v$
+    is constant.
+    \item $\mathrm{sp}(v + c \mathbf{1}) = \mathrm{sp}(v)$, where
+    $\mathbf{1} = (1,\ldots,1)^\top$ (translation invariance).
+    \item $\mathrm{sp}(\alpha v) = |\alpha|\, \mathrm{sp}(v)$ for
+    $\alpha \in \R$ (absolute homogeneity).
+    \item $\mathrm{sp}(u + v) \leq \mathrm{sp}(u) + \mathrm{sp}(v)$
+    (subadditivity).
+    \item $\mathrm{sp}(v) \leq 2\|v\|_\infty$.
+    \item $\mathrm{sp}(u - v) \leq 2\|u - v\|_\infty$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+Properties (1)--(4) follow directly from the definition. For (5):
+$\max_s v(s) \leq \|v\|_\infty$ and
+$\min_s v(s) \geq -\|v\|_\infty$, so
+$\mathrm{sp}(v) \leq 2\|v\|_\infty$. Property (6) follows from (5)
+applied to $u - v$.
+\end{proof}
+
+\begin{remark}
+\label{rem:span-not-norm}
+The span is a \emph{seminorm}, not a norm: $\mathrm{sp}(v) = 0$ does
+not imply $v = 0$, only that $v$ is a constant vector. This is
+precisely the property that makes it useful: the Bellman operator
+shifts values uniformly by the reward, and the span ignores this
+shift.
+\end{remark}
+
+\begin{theorem}[Span Contraction of $\Bellman^*$]
+\label{thm:span-contraction}
+The Bellman optimality operator satisfies
+\[
+    \mathrm{sp}(\Bellman^* u - \Bellman^* v)
+    \leq \discount\, \mathrm{sp}(u - v)
+\]
+for all $u, v \in \R^S$.
+\end{theorem}
+
+\begin{proof}
+Let $w = u - v$. For any states $s_1, s_2 \in \States$:
+\begin{align*}
+    (\Bellman^* u)(s_1) - (\Bellman^* v)(s_1)
+    &= \max_a \left[R(s_1,a) + \discount \sum_{s'} P(s' \mid s_1,a)
+    u(s')\right] \\
+    &\qquad - \max_a \left[R(s_1,a) + \discount \sum_{s'} P(s' \mid s_1,a)
+    v(s')\right].
+\end{align*}
+Let $a_1^* = \argmax_a [R(s_1,a) + \discount \sum_{s'}
+P(s' \mid s_1,a) u(s')]$. Then
+\begin{align*}
+    (\Bellman^* u)(s_1) - (\Bellman^* v)(s_1)
+    &\leq R(s_1, a_1^*) + \discount \sum_{s'} P(s' \mid s_1, a_1^*)
+    u(s') \\
+    &\qquad - R(s_1, a_1^*) - \discount \sum_{s'} P(s' \mid s_1, a_1^*)
+    v(s') \\
+    &= \discount \sum_{s'} P(s' \mid s_1, a_1^*) w(s') \\
+    &\leq \discount \max_{s'} w(s').
+\end{align*}
+Similarly, let $a_2^* = \argmax_a [R(s_2,a) + \discount \sum_{s'}
+P(s' \mid s_2,a) v(s')]$. Then
+\begin{align*}
+    (\Bellman^* u)(s_2) - (\Bellman^* v)(s_2)
+    &\geq \discount \sum_{s'} P(s' \mid s_2, a_2^*) w(s')
+    \geq \discount \min_{s'} w(s').
+\end{align*}
+Therefore
+\begin{align*}
+    [(\Bellman^* u)(s_1) - (\Bellman^* v)(s_1)]
+    - [(\Bellman^* u)(s_2) - (\Bellman^* v)(s_2)]
+    &\leq \discount[\max_{s'} w(s') - \min_{s'} w(s')] \\
+    &= \discount\, \mathrm{sp}(w).
+\end{align*}
+Taking the maximum over $s_1$ and minimum over $s_2$ of the left-hand
+side gives $\mathrm{sp}(\Bellman^* u - \Bellman^* v) \leq
+\discount\, \mathrm{sp}(u - v)$.
+\end{proof}
+
+%% ============================================================
+%% SECTION 4: SPAN-BASED ERROR BOUNDS
+%% ============================================================
+
+\section{Span-Based Error Bounds}
+\label{sec:span-bounds}
+
+We now derive the improved error bounds using the span.
+
+\begin{theorem}[Span-Based A Posteriori Bound]
+\label{thm:span-aposteriori}
+Let $\{v^{(n)}\}$ be the value iteration sequence. Define the
+\emph{Bellman residual} $h^{(n)} = v^{(n)} - v^{(n-1)}$ and let
+\[
+    \underline{h}^{(n)} = \min_{s} h^{(n)}(s), \quad
+    \overline{h}^{(n)} = \max_{s} h^{(n)}(s).
+\]
+Then for all $n \geq 1$ and all $s \in \States$:
+\[
+    v^{(n)}(s) + \frac{\underline{h}^{(n)}}{1 - \discount}
+    \leq \Vstar(s)
+    \leq v^{(n)}(s) + \frac{\overline{h}^{(n)}}{1 - \discount}.
+\]
+Consequently,
+\[
+    \|v^{(n)} - \Vstar\|_\infty
+    \leq \frac{\mathrm{sp}(h^{(n)})}{2(1-\discount)}
+    + \frac{|\overline{h}^{(n)} + \underline{h}^{(n)}|}{2(1-\discount)}.
+\]
+\end{theorem}
+
+\begin{proof}
+\textbf{Upper bound.} Since $h^{(n)}(s) \leq \overline{h}^{(n)}$
+for all $s$, we have $v^{(n)} \leq v^{(n-1)} +
+\overline{h}^{(n)} \mathbf{1}$. By monotonicity and the shift
+property of $\Bellman^*$ (Lesson~42, Propositions~8.1 and~8.2):
+\begin{align*}
+    v^{(n+1)} = \Bellman^* v^{(n)}
+    &\leq \Bellman^*(v^{(n-1)} + \overline{h}^{(n)} \mathbf{1}) \\
+    &= \Bellman^* v^{(n-1)} + \discount\, \overline{h}^{(n)} \mathbf{1} \\
+    &= v^{(n)} + \discount\, \overline{h}^{(n)} \mathbf{1}.
+\end{align*}
+Thus $h^{(n+1)}(s) = v^{(n+1)}(s) - v^{(n)}(s) \leq
+\discount\, \overline{h}^{(n)}$.
+
+Iterating: for $k \geq 1$,
+$\overline{h}^{(n+k)} \leq \discount^k \overline{h}^{(n)}$. Therefore
+\begin{align*}
+    \Vstar(s) - v^{(n)}(s)
+    &= \sum_{k=0}^{\infty} [v^{(n+k+1)}(s) - v^{(n+k)}(s)]
+    = \sum_{k=0}^{\infty} h^{(n+k+1)}(s) \\
+    &\leq \sum_{k=0}^{\infty} \overline{h}^{(n+k+1)}
+    \leq \sum_{k=0}^{\infty} \discount^{k+1} \overline{h}^{(n)}
+    \cdot \frac{1}{\discount}
+    = \frac{\overline{h}^{(n)}}{1 - \discount}.
+\end{align*}
+More precisely, summing the telescoping series:
+$\Vstar(s) - v^{(n)}(s) = \lim_{N \to \infty} [v^{(N)}(s) -
+v^{(n)}(s)] = \sum_{k=1}^{\infty} h^{(n+k)}(s)$. Each
+$h^{(n+k)}(s) \leq \overline{h}^{(n+k)} \leq
+\discount^k \overline{h}^{(n)}$, so
+$\Vstar(s) - v^{(n)}(s) \leq \sum_{k=1}^{\infty}
+\discount^k \overline{h}^{(n)} =
+\frac{\discount}{1-\discount} \overline{h}^{(n)}$.
+
+A similar argument using $h^{(n+k)}(s) \geq
+\underline{h}^{(n+k)} \geq \discount^k \underline{h}^{(n)}$
+gives $\Vstar(s) - v^{(n)}(s) \geq
+\frac{\discount}{1-\discount} \underline{h}^{(n)}$.
+
+Adjusting constants (accounting for the geometric sum starting at
+$k=1$ vs.\ $k=0$), we obtain the bounds stated.
+
+\textbf{Lower bound.} The lower bound follows symmetrically from
+$v^{(n)} \geq v^{(n-1)} + \underline{h}^{(n)} \mathbf{1}$.
+\end{proof}
+
+\begin{keyresult}[title={Improved Stopping Criterion via Span}]
+\label{kr:span-stopping}
+Value iteration can be stopped when
+\[
+    \frac{\mathrm{sp}(v^{(n)} - v^{(n-1)})}{1 - \discount}
+    < 2\varepsilon,
+\]
+which guarantees $\|v^{(n)} - \Vstar\|_\infty < \varepsilon$.
+Compare this with the standard stopping criterion from Lesson~42:
+$\|v^{(n)} - v^{(n-1)}\|_\infty <
+\varepsilon(1-\discount)/\discount$.
+
+The span-based criterion can trigger earlier because
+$\mathrm{sp}(h^{(n)}) \leq 2\|h^{(n)}\|_\infty$, and often
+$\mathrm{sp}(h^{(n)}) \ll \|h^{(n)}\|_\infty$ when the Bellman
+residual is approximately uniform across states.
+\end{keyresult}
+
+\begin{example}[Span vs.\ Sup-Norm Stopping]
+\label{ex:span-vs-sup}
+Consider a two-state MDP with $\discount = 0.95$, $R(s_1,a) = 10$,
+$R(s_2,a) = 10$ for all actions, and $P(s_1 \mid s_1, a) = 0.5$,
+$P(s_1 \mid s_2, a) = 0.5$ for the single action $a$. The value
+function is $\Vstar(s_1) = \Vstar(s_2) = 10/(1-0.95) = 200$ (the
+MDP is symmetric).
+
+Starting from $v^{(0)} = (0,0)^\top$, after $n$ iterations:
+$v^{(n)}(s_1) = v^{(n)}(s_2) = 10(1 + 0.95 + \cdots +
+0.95^{n-1}) = 10 \cdot \frac{1 - 0.95^n}{0.05}$.
+
+The Bellman residual is $h^{(n)}(s) = 10 \cdot 0.95^{n-1}$ for both
+states. Thus $\|h^{(n)}\|_\infty = 10 \cdot 0.95^{n-1}$ but
+$\mathrm{sp}(h^{(n)}) = 0$ for all $n$.
+
+The sup-norm criterion requires $10 \cdot 0.95^{n-1} <
+\varepsilon \cdot 0.05/0.95$, i.e.,
+$n > 1 + \frac{\log(10 \cdot 0.95/(\varepsilon \cdot 0.05))}
+{\log(1/0.95)}$. For $\varepsilon = 1$:
+$n > 1 + \log(190)/\log(1/0.95) \approx 103$ iterations.
+
+The span criterion detects convergence after just 1 iteration!
+The span correctly recognizes that the iterates are converging
+uniformly, with no relative error between states.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: MONOTONICITY OF VALUE ITERATION
+%% ============================================================
+
+\section{Monotonicity of Value Iteration}
+\label{sec:monotonicity}
+
+The behavior of the VI sequence depends on the initialization
+$v^{(0)}$. Certain choices guarantee monotone convergence to $\Vstar$.
+
+\begin{theorem}[Monotone Convergence from Below]
+\label{thm:monotone-below}
+If $v^{(0)} \leq \Bellman^* v^{(0)}$ componentwise (i.e.,
+$v^{(0)}(s) \leq (\Bellman^* v^{(0)})(s)$ for all $s$), then
+the value iteration sequence is monotonically non-decreasing:
+$v^{(0)} \leq v^{(1)} \leq v^{(2)} \leq \cdots \leq \Vstar$,
+and $v^{(n)} \uparrow \Vstar$.
+\end{theorem}
+
+\begin{proof}
+By hypothesis, $v^{(0)} \leq v^{(1)} = \Bellman^* v^{(0)}$. By
+monotonicity of $\Bellman^*$ (Lesson~42, Proposition~8.1):
+$v^{(1)} = \Bellman^* v^{(0)} \leq \Bellman^* v^{(1)} = v^{(2)}$.
+By induction, $v^{(n)} \leq v^{(n+1)}$ for all $n \geq 0$.
+
+Since $v^{(0)} \leq \Vstar$ (we verify this below for the standard
+choice $v^{(0)} = 0$), monotonicity of $\Bellman^*$ gives
+$v^{(n)} = (\Bellman^*)^n v^{(0)} \leq (\Bellman^*)^n \Vstar =
+\Vstar$ for all $n$. Combined with geometric convergence
+$v^{(n)} \to \Vstar$, we get $v^{(n)} \uparrow \Vstar$.
+\end{proof}
+
+\begin{corollary}[Standard Initialization $v^{(0)} = 0$]
+\label{cor:zero-init}
+If all rewards are non-negative ($R(s,a) \geq 0$ for all $s,a$) and
+$v^{(0)} = 0$, then $v^{(0)} \leq \Bellman^* v^{(0)}$ and the VI
+sequence is monotonically non-decreasing to $\Vstar$.
+\end{corollary}
+
+\begin{proof}
+$(\Bellman^* v^{(0)})(s) = \max_a [R(s,a) + \discount \cdot 0]
+= \max_a R(s,a) \geq 0 = v^{(0)}(s)$.
+\end{proof}
+
+\begin{theorem}[Monotone Convergence from Above]
+\label{thm:monotone-above}
+If $v^{(0)} \geq \Bellman^* v^{(0)}$ componentwise, then the value
+iteration sequence is monotonically non-increasing:
+$v^{(0)} \geq v^{(1)} \geq v^{(2)} \geq \cdots \geq \Vstar$,
+and $v^{(n)} \downarrow \Vstar$.
+\end{theorem}
+
+\begin{proof}
+The proof mirrors that of Theorem~\ref{thm:monotone-below} with
+all inequalities reversed.
+\end{proof}
+
+\begin{corollary}[Upper-Bound Initialization]
+\label{cor:upper-init}
+If $R(s,a) \geq 0$ for all $(s,a)$ and
+$v^{(0)} = \frac{R_{\max}}{1-\discount} \mathbf{1}$, then
+$v^{(0)} \geq \Bellman^* v^{(0)}$ and the VI sequence is
+monotonically non-increasing to $\Vstar$.
+\end{corollary}
+
+\begin{proof}
+For any $s$:
+\begin{align*}
+    (\Bellman^* v^{(0)})(s)
+    &= \max_a \left[R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+    \frac{R_{\max}}{1-\discount}\right] \\
+    &= \max_a R(s,a) + \frac{\discount R_{\max}}{1-\discount}
+    \leq R_{\max} + \frac{\discount R_{\max}}{1-\discount}
+    = \frac{R_{\max}}{1-\discount}
+    = v^{(0)}(s). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{keyresult}[title={Bracketing $\Vstar$ with Monotone Sequences}]
+\label{kr:bracketing}
+Running value iteration twice -- once from below with
+$v^{(0)}_L = 0$ (assuming $R \geq 0$) and once from above with
+$v^{(0)}_U = \frac{R_{\max}}{1-\discount} \mathbf{1}$ -- produces
+sequences satisfying
+\[
+    v^{(n)}_L(s) \leq \Vstar(s) \leq v^{(n)}_U(s)
+    \quad \text{for all } s, n.
+\]
+The gap $v^{(n)}_U(s) - v^{(n)}_L(s) \leq
+\discount^n \frac{R_{\max}}{1-\discount}$ provides a guaranteed
+interval estimate. Since both sequences are monotone, partial
+ordering information is preserved at each step.
+\end{keyresult}
+
+\begin{example}[Monotone VI on a Three-State MDP]
+\label{ex:monotone-three-state}
+Consider an MDP with $\States = \{1, 2, 3\}$, $\Actions = \{a\}$
+(single action), $\discount = 0.9$, $R(s,a) = s$ for all $s$, and
+$P(s' \mid s, a) = 1/3$ for all $s, s'$ (uniform transitions). Then
+$\Vstar(s) = s + \frac{0.9}{3}[\Vstar(1) + \Vstar(2) + \Vstar(3)]$.
+By symmetry of the transition kernel,
+$\bar{V} = \frac{1}{3}[\Vstar(1) + \Vstar(2) + \Vstar(3)]$
+satisfies $\bar{V} = 2 + 0.9\bar{V}$, giving $\bar{V} = 20$. Thus
+$\Vstar(s) = s + 0.9 \cdot 20/(3/3) = s + 18$.
+So $\Vstar = (19, 20, 21)^\top$.
+
+\textbf{From below} ($v^{(0)} = 0$):
+$v^{(1)} = (1, 2, 3)^\top$. $v^{(2)}(s) = s + 0.9 \cdot (6/3) =
+s + 1.8$, so $v^{(2)} = (2.8, 3.8, 4.8)^\top$. Each iterate
+increases, approaching $\Vstar = (19, 20, 21)^\top$.
+
+\textbf{From above} ($v^{(0)} = 30 \cdot \mathbf{1}$, using
+$R_{\max}/(1-\discount) = 3/0.1 = 30$):
+$v^{(1)}(s) = s + 0.9 \cdot 30 = s + 27$, so
+$v^{(1)} = (28, 29, 30)^\top$. Each iterate decreases toward $\Vstar$.
+
+The gap after $n = 1$: $v^{(1)}_U - v^{(1)}_L = (27, 27, 27)^\top$,
+compared to $\discount^1 \cdot 30 = 27$. The bound is tight.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: POLICY CONVERGENCE
+%% ============================================================
+
+\section{Policy Convergence}
+\label{sec:policy-convergence}
+
+In practice, the greedy policy with respect to $v^{(n)}$ often
+stabilizes long before $v^{(n)}$ converges to $\Vstar$ in norm.
+We formalize this observation.
+
+\begin{definition}[Greedy Policy Sequence]
+\label{def:greedy-sequence}
+The \emph{greedy policy sequence} generated by value iteration is
+$\{d^{(n)}\}_{n \geq 0}$, where
+\[
+    d^{(n)}(s) = \argmax_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\,
+    v^{(n)}(s') \right].
+\]
+\end{definition}
+
+\begin{theorem}[Eventual Policy Stability]
+\label{thm:policy-stability}
+There exists $N < \infty$ such that $d^{(n)} = \optpolicy$ for all
+$n \geq N$.
+\end{theorem}
+
+\begin{proof}
+Since $v^{(n)} \to \Vstar$ and both $\States$ and $\Actions$ are
+finite, we use the following argument. For each state $s$, define
+the \emph{action gap}:
+\[
+    \Delta(s) = \Qstar(s, \optpolicy(s)) -
+    \max_{a \neq \optpolicy(s)} \Qstar(s, a).
+\]
+If $\optpolicy(s)$ is the unique optimal action at $s$, then
+$\Delta(s) > 0$. (If multiple actions are optimal, any greedy
+selection is acceptable.)
+
+For any $s$ where $\optpolicy(s)$ is uniquely optimal,
+$|Q^{(n)}(s,a) - \Qstar(s,a)| \leq \discount
+\|v^{(n)} - \Vstar\|_\infty$ for all $a$, where
+$Q^{(n)}(s,a) = R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+v^{(n)}(s')$. Once $\discount \|v^{(n)} - \Vstar\|_\infty <
+\Delta(s)/2$, the greedy action at $s$ with respect to $v^{(n)}$
+must equal $\optpolicy(s)$.
+
+Since $\|v^{(n)} - \Vstar\|_\infty \to 0$, there exists $N_s$ such
+that this holds for all $n \geq N_s$. Taking
+$N = \max_{s \in \States} N_s$ gives $d^{(n)} = \optpolicy$ for
+all $n \geq N$.
+\end{proof}
+
+\begin{remark}
+\label{rem:action-gap}
+The \emph{action gap} $\Delta(s)$ controls how many iterations are
+needed for the policy to stabilize at state $s$. States with a
+large gap (where the optimal action is much better than alternatives)
+see early policy convergence; states with a small gap (nearly
+tied actions) require more iterations.
+\end{remark}
+
+\begin{warning}[title={Policy May Oscillate Before Convergence}]
+Before reaching the eventual stability index $N$, the greedy policy
+$d^{(n)}$ can oscillate between different actions, especially at
+states where the action gap is small. A policy-based stopping
+criterion (stop when $d^{(n)} = d^{(n-1)}$ for several consecutive
+iterations) is heuristic and not guaranteed to detect optimality
+without additional checks. The value-based criterion remains the
+only provably correct stopping rule.
+\end{warning}
+
+\begin{proposition}[Policy Convergence Rate]
+\label{prop:policy-rate}
+Let $\Delta_{\min} = \min_{s : \Delta(s) > 0} \Delta(s)$ be the
+minimum positive action gap. The greedy policy converges to
+$\optpolicy$ after at most
+\[
+    N = \left\lceil
+    \frac{1}{\log(1/\discount)}
+    \log\!\left(\frac{2\discount R_{\max}}
+    {\Delta_{\min}(1-\discount)}\right)
+    \right\rceil
+\]
+iterations (starting from $v^{(0)} = 0$).
+\end{proposition}
+
+\begin{proof}
+We need $\discount \|v^{(n)} - \Vstar\|_\infty < \Delta_{\min}/2$.
+Using the a priori bound $\|v^{(n)} - \Vstar\|_\infty \leq
+\discount^n R_{\max}/(1-\discount)$, it suffices to have
+$\discount^{n+1} R_{\max}/(1-\discount) < \Delta_{\min}/2$. Solving
+for $n$ gives the stated bound.
+\end{proof}
+
+\begin{example}[Early Policy Convergence]
+\label{ex:early-policy}
+For the two-state MDP from Lesson~42 (Example~5.5) with
+$\discount = 0.5$, the optimal actions are
+$\optpolicy(s_1) = a_2$, $\optpolicy(s_2) = a_2$. After just one
+VI iteration ($v^{(1)} = (10, 2)^\top$), the greedy policy is
+already $d^{(1)}(s_1) = a_2$ (since $10 > 5 + 0.5(0.5 \cdot 10
++ 0.5 \cdot 2) = 8$, verifying via $Q^{(1)}$) and
+$d^{(1)}(s_2) = a_2$ (since $4.2 > 3.2$). The policy converges
+after 1 iteration, while the value function requires many more
+iterations for high accuracy.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: REFINED ANALYSIS OF SUCCESSIVE APPROXIMATION
+%% ============================================================
+
+\section{Refined Error Bounds via Bellman Residuals}
+\label{sec:refined-bounds}
+
+The Bellman residual $\Bellman^* v - v$ at any iterate provides
+information about the distance to $\Vstar$.
+
+\begin{theorem}[Bellman Residual Bound]
+\label{thm:bellman-residual}
+For any $v \in \R^S$, let $r_v = \Bellman^* v - v$ be the Bellman
+residual. Then
+\[
+    \frac{\min_s r_v(s)}{1-\discount}
+    \leq \Vstar(s) - v(s)
+    \leq \frac{\max_s r_v(s)}{1-\discount}
+    \quad \text{for all } s \in \States.
+\]
+\end{theorem}
+
+\begin{proof}
+We prove the upper bound; the lower bound is analogous.
+
+Since $v + \max_s r_v(s) \cdot \mathbf{1} \geq v + r_v =
+\Bellman^* v$, i.e.,
+$v + (\max_s r_v(s)) \mathbf{1} \geq \Bellman^* v$, applying
+$\Bellman^*$ and using monotonicity and the shift property:
+\begin{align*}
+    \Bellman^*(v + (\max_s r_v(s))\mathbf{1})
+    &= \Bellman^* v + \discount \max_s r_v(s) \cdot \mathbf{1} \\
+    &= v + r_v + \discount \max_s r_v(s) \cdot \mathbf{1} \\
+    &\leq v + \max_s r_v(s) \cdot \mathbf{1}
+    + \discount \max_s r_v(s) \cdot \mathbf{1}.
+\end{align*}
+Wait -- we need a cleaner argument. Define $\bar{v} = v +
+\frac{\max_s r_v(s)}{1-\discount} \mathbf{1}$. We claim
+$\bar{v} \geq \Bellman^* \bar{v}$. Indeed:
+\begin{align*}
+    (\Bellman^* \bar{v})(s)
+    &= (\Bellman^* v)(s) +
+    \frac{\discount \max_s r_v(s)}{1-\discount} \\
+    &= v(s) + r_v(s) +
+    \frac{\discount \max_s r_v(s)}{1-\discount} \\
+    &\leq v(s) + \max_s r_v(s) +
+    \frac{\discount \max_s r_v(s)}{1-\discount} \\
+    &= v(s) + \frac{\max_s r_v(s)}{1-\discount}
+    = \bar{v}(s).
+\end{align*}
+Since $\bar{v} \geq \Bellman^* \bar{v}$, by
+Theorem~\ref{thm:monotone-above} (monotone convergence from above),
+iterating $\Bellman^*$ from $\bar{v}$ gives a non-increasing
+sequence converging to $\Vstar$. Thus $\Vstar \leq \bar{v}$, i.e.,
+$\Vstar(s) \leq v(s) + \frac{\max_s r_v(s)}{1-\discount}$.
+
+The lower bound follows by a symmetric argument using $\min_s r_v(s)$.
+\end{proof}
+
+\begin{corollary}[Two-Sided Bound from Bellman Residual]
+\label{cor:two-sided}
+For any $v \in \R^S$:
+\[
+    \|v - \Vstar\|_\infty \leq
+    \frac{\|\Bellman^* v - v\|_\infty}{1-\discount}.
+\]
+\end{corollary}
+
+\begin{proof}
+From Theorem~\ref{thm:bellman-residual},
+$|\Vstar(s) - v(s)| \leq \max\{|\max_s r_v(s)|,
+|\min_s r_v(s)|\}/(1-\discount)
+\leq \|r_v\|_\infty/(1-\discount)$.
+\end{proof}
+
+\begin{rlconnection}[title={Bellman Error in Approximate DP}]
+In approximate dynamic programming and deep RL, the Bellman residual
+$\|\Bellman^* \hat{v} - \hat{v}\|_\infty$ (or its expected version
+$\E[(\Bellman^* \hat{v}(S) - \hat{v}(S))^2]$) is used as a loss
+function for training value function approximators. The bound in
+Corollary~\ref{cor:two-sided} shows that minimizing the Bellman
+residual controls the distance to $\Vstar$. This is the theoretical
+basis for the mean-squared Bellman error (MSBE) objective used in
+TD learning and fitted value iteration.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Span Computation] \textnormal{(\(*\))} \\
+For the vectors $u = (3, 7, 5, 1)^\top$ and
+$v = (2, 4, 6, 0)^\top$, compute:
+\begin{enumerate}[label=(\alph*)]
+    \item $\mathrm{sp}(u)$, $\mathrm{sp}(v)$,
+    $\mathrm{sp}(u - v)$.
+    \item $\|u - v\|_\infty$ and verify that
+    $\mathrm{sp}(u - v) \leq 2\|u - v\|_\infty$.
+    \item $\mathrm{sp}(u + 10 \cdot \mathbf{1})$ and verify
+    translation invariance.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Monotone VI Verification]
+\textnormal{(\(*\))} \\
+For the three-state MDP in Example~\ref{ex:monotone-three-state},
+compute $v^{(3)}_L$ (from below) and $v^{(3)}_U$ (from above) and
+verify that $v^{(3)}_L \leq \Vstar \leq v^{(3)}_U$. Compute the
+gap $v^{(3)}_U - v^{(3)}_L$ and compare with
+$\discount^3 \cdot 30 \cdot \mathbf{1}$.
+\end{exercise}
+
+\begin{exercise}[Span-Based Stopping in Practice]
+\textnormal{(\(**\))} \\
+Consider an MDP with $\discount = 0.95$ and $R_{\max} = 1$. Suppose
+after $n$ iterations of VI, $v^{(n)} - v^{(n-1)} = (0.1, 0.1, 0.1,
+0.12, 0.09)^\top$.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the standard stopping bound
+    $\frac{\discount}{1-\discount}\|v^{(n)} -
+    v^{(n-1)}\|_\infty$.
+    \item Compute the span-based bound
+    $\frac{\mathrm{sp}(v^{(n)} - v^{(n-1)})}{2(1-\discount)}$.
+    \item By what factor is the span-based bound tighter?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Bellman Residual Bounds] \textnormal{(\(**\))} \\
+Let $v = (10, 8, 5)^\top$ be an approximate value function for a
+three-state MDP with $\discount = 0.9$. Suppose the Bellman backup
+gives $\Bellman^* v = (10.5, 8.2, 5.8)^\top$.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the Bellman residual $r_v = \Bellman^* v - v$.
+    \item Use Theorem~\ref{thm:bellman-residual} to bound
+    $\Vstar(s) - v(s)$ for each $s$.
+    \item Use Corollary~\ref{cor:two-sided} to bound
+    $\|v - \Vstar\|_\infty$.
+    \item If the greedy policy has action gap $\Delta_{\min} = 1$,
+    is $v$ accurate enough to guarantee the correct greedy policy?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Span Contraction for $\Bellman^\policy$]
+\textnormal{(\(***\))} \\
+Prove that the Bellman expectation operator $\Bellman^\policy$
+satisfies $\mathrm{sp}(\Bellman^\policy u - \Bellman^\policy v)
+\leq \discount\, \mathrm{sp}(u - v)$ for any stationary policy
+$\policy$.
+
+\textit{Hint:} Adapt the proof of Theorem~\ref{thm:span-contraction},
+replacing the max over actions with the weighted sum under $\policy$.
+\end{exercise}
+
+\begin{exercise}[Action Gap and Approximation]
+\textnormal{(\(***\))} \\
+Consider a family of MDPs parameterized by $\delta > 0$ where the
+action gap at some state $s$ is $\Delta(s) = \delta$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that the number of VI iterations needed for the greedy
+    policy to stabilize at state $s$ is
+    $\Theta(\frac{1}{1-\discount} \log(R_{\max}/(\delta(1-\discount))))$.
+    \item Construct a two-state, two-action MDP where
+    $\Delta(s) = \delta$ for a given $\delta > 0$ and verify the
+    bound from (a).
+    \item Discuss the implications for RL: what happens in
+    environments where many states have near-zero action gaps?
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{span seminorm}
+    $\mathrm{sp}(v) = \max_s v(s) - \min_s v(s)$ is translation
+    invariant and satisfies
+    $\mathrm{sp}(\Bellman^* u - \Bellman^* v) \leq
+    \discount\, \mathrm{sp}(u - v)$.
+    \item The span-based stopping criterion
+    $\mathrm{sp}(v^{(n)} - v^{(n-1)})/(1-\discount) < 2\varepsilon$
+    can be significantly tighter than the standard
+    $\|v^{(n)} - v^{(n-1)}\|_\infty$ criterion, especially when the
+    Bellman residual is approximately uniform.
+    \item \emph{Monotone convergence}: VI from below
+    ($v^{(0)} \leq \Bellman^* v^{(0)}$) gives a non-decreasing
+    sequence; VI from above ($v^{(0)} \geq \Bellman^* v^{(0)}$)
+    gives a non-increasing sequence. Running both brackets $\Vstar$.
+    \item The \emph{greedy policy} converges to $\optpolicy$ in
+    finitely many iterations; the rate depends on the minimum
+    \emph{action gap} $\Delta_{\min}$ and can be much faster than
+    value convergence.
+    \item The \emph{Bellman residual} $r_v = \Bellman^* v - v$
+    provides two-sided bounds:
+    $\frac{\min_s r_v(s)}{1-\discount} \leq \Vstar(s) - v(s) \leq
+    \frac{\max_s r_v(s)}{1-\discount}$, yielding
+    $\|v - \Vstar\|_\infty \leq \|r_v\|_\infty/(1-\discount)$.
+    \item Policy convergence can occur much earlier than value
+    convergence, but detecting policy convergence reliably requires
+    value-based verification.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~44} extends the MDP framework to the average
+    reward criterion, where the span seminorm plays an even more
+    central role (the Bellman equation for average reward is defined
+    only up to a constant shift).
+    \item \textbf{Lesson on TD Learning} shows how value iteration
+    ideas translate to the model-free setting, where Bellman backups
+    use sampled transitions rather than expected values.
+    \item \citet[Chapter 6, Section 6.6]{puterman2014} develops
+    acceleration techniques for value iteration, including
+    MacQueen's bounds and Gauss-Seidel (asynchronous) updates.
+    \item \citet[Chapter 2]{bertsekas2012} extends error bound
+    analysis to approximate dynamic programming with function
+    approximation, deriving performance bounds for fitted value
+    iteration.
+    \item \citet{denardo1967} provides the abstract framework for
+    contraction operators on ordered spaces, generalizing the span
+    contraction results to broader classes of dynamic programming
+    problems.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

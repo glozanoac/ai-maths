@@ -441,14 +441,14 @@ the most important -- you should be able to state and prove these from memory.
 
 | Lesson | Reading | Key Results | Document |
 |--------|---------|-------------|----------|
-| 39 | Puterman Ch.2: model formulation | MDP components (S, A, P, R), policies, histories | [01-mdp-formulation-and-finite-horizon](02-core-rl/01-mdp/01-mdp-formulation-and-finite-horizon.pdf) |
-| 40 | Puterman Ch.3: finite-horizon MDPs | Backward induction, finite-horizon optimality equations | [01-mdp-formulation-and-finite-horizon](02-core-rl/01-mdp/01-mdp-formulation-and-finite-horizon.pdf) |
-| 41 | Puterman Ch.4: infinite-horizon, discounted | Bellman optimality equation, discounted reward criterion | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
-| 42 | Puterman Ch.5.1--5.3: contraction, value iteration | Contraction property of Bellman operator (sup-norm), value iteration convergence | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
-| 43 | Puterman Ch.5.4--5.6: value iteration (cont.) | Error bounds, stopping criteria, monotonicity | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
-| 44 | Puterman Ch.6: average reward | Average reward criterion, gain-bias equations, Blackwell optimality | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
-| 45 | Puterman Ch.8.1--8.4: policy iteration | Policy improvement theorem, policy iteration convergence | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
-| 46 | Puterman Ch.8.5--8.8: LP formulation | Linear programming formulation of MDPs, occupancy measures | [02-infinite-horizon-and-dynamic-programming](02-core-rl/01-mdp/02-infinite-horizon-and-dynamic-programming.pdf) |
+| 39 | Puterman Ch.2: model formulation | MDP components (S, A, P, R), policies, histories | [lesson-39](02-core-rl/01-mdp/lesson-39-mdp-model-and-policies.pdf) |
+| 40 | Puterman Ch.3: finite-horizon MDPs | Backward induction, finite-horizon optimality equations | [lesson-40](02-core-rl/01-mdp/lesson-40-finite-horizon-mdp.pdf) |
+| 41 | Puterman Ch.4: infinite-horizon, discounted | Bellman optimality equation, discounted reward criterion | [lesson-41](02-core-rl/01-mdp/lesson-41-discounted-reward-bellman-equations.pdf) |
+| 42 | Puterman Ch.5.1--5.3: contraction, value iteration | Contraction property of Bellman operator (sup-norm), value iteration convergence | [lesson-42](02-core-rl/01-mdp/lesson-42-contraction-and-value-iteration.pdf) |
+| 43 | Puterman Ch.5.4--5.6: value iteration (cont.) | Error bounds, stopping criteria, monotonicity | [lesson-43](02-core-rl/01-mdp/lesson-43-vi-error-bounds-and-monotonicity.pdf) |
+| 44 | Puterman Ch.6: average reward | Average reward criterion, gain-bias equations, Blackwell optimality | [lesson-44](02-core-rl/01-mdp/lesson-44-average-reward-mdp.pdf) |
+| 45 | Puterman Ch.8.1--8.4: policy iteration | Policy improvement theorem, policy iteration convergence | [lesson-45](02-core-rl/01-mdp/lesson-45-policy-iteration.pdf) |
+| 46 | Puterman Ch.8.5--8.8: LP formulation | Linear programming formulation of MDPs, occupancy measures | [lesson-46](02-core-rl/01-mdp/lesson-46-lp-formulation-and-occupancy.pdf) |
 
 ### 2.2 Reinforcement Learning Algorithms (Lessons 47--53)
 
@@ -457,13 +457,13 @@ the most important -- you should be able to state and prove these from memory.
 
 | Lesson | Reading | Key Results | Document |
 |--------|---------|-------------|----------|
-| 47 | S&B Ch.6--7 + B&T Ch.4: TD(0), n-step TD | TD(0) update rule, n-step returns, bias-variance tradeoff | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 48 | B&T Ch.4: TD(lambda), eligibility traces | TD(lambda), forward/backward views, eligibility trace mechanism | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 49 | S&B Ch.6 + B&T Ch.4: SARSA | SARSA update, on-policy TD control, convergence conditions | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 50 | S&B Ch.6 + B&T Ch.6: Q-learning | Q-learning update, off-policy control, convergence proof (Jaakkola, Jordan, Singh 1994) | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 51 | B&T Ch.2: function approximation | Linear function approximation, feature construction, projection operators | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 52 | B&T Ch.3: approximate policy iteration | Approximate policy iteration, error propagation bounds | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
-| 53 | S&B Ch.11 + B&T: the deadly triad | Deadly triad (function approx + bootstrapping + off-policy), Baird's counterexample, divergence | [temporal-difference-learning](02-core-rl/02-rl-algorithms/temporal-difference-learning.pdf) |
+| 47 | S&B Ch.6--7 + B&T Ch.4: TD(0), n-step TD | TD(0) update rule, n-step returns, bias-variance tradeoff | [lesson-47](02-core-rl/02-rl-algorithms/lesson-47-td0-and-nstep-td.pdf) |
+| 48 | B&T Ch.4: TD(lambda), eligibility traces | TD(lambda), forward/backward views, eligibility trace mechanism | [lesson-48](02-core-rl/02-rl-algorithms/lesson-48-td-lambda-eligibility-traces.pdf) |
+| 49 | S&B Ch.6 + B&T Ch.4: SARSA | SARSA update, on-policy TD control, convergence conditions | [lesson-49](02-core-rl/02-rl-algorithms/lesson-49-sarsa.pdf) |
+| 50 | S&B Ch.6 + B&T Ch.6: Q-learning | Q-learning update, off-policy control, convergence proof (Jaakkola, Jordan, Singh 1994) | [lesson-50](02-core-rl/02-rl-algorithms/lesson-50-q-learning.pdf) |
+| 51 | B&T Ch.2: function approximation | Linear function approximation, feature construction, projection operators | [lesson-51](02-core-rl/02-rl-algorithms/lesson-51-function-approximation.pdf) |
+| 52 | B&T Ch.3: approximate policy iteration | Approximate policy iteration, error propagation bounds | [lesson-52](02-core-rl/02-rl-algorithms/lesson-52-approximate-policy-iteration.pdf) |
+| 53 | S&B Ch.11 + B&T: the deadly triad | Deadly triad (function approx + bootstrapping + off-policy), Baird's counterexample, divergence | [lesson-53](02-core-rl/02-rl-algorithms/lesson-53-deadly-triad.pdf) |
 
 ### 2.3 Policy Gradient Theory (Lessons 54--58)
 
@@ -471,11 +471,11 @@ the most important -- you should be able to state and prove these from memory.
 
 | Lesson | Reading | Key Results | Document |
 |--------|---------|-------------|----------|
-| 54 | S&B Ch.13: policy gradient theorem | Policy gradient theorem derivation: nabla J = E[nabla log pi * Q^pi] | [policy-gradient-theorem](02-core-rl/03-policy-gradient/policy-gradient-theorem.pdf) |
-| 55 | Sutton et al. (2000): REINFORCE | REINFORCE algorithm, variance reduction via baselines | [policy-gradient-theorem](02-core-rl/03-policy-gradient/policy-gradient-theorem.pdf) |
-| 56 | Kakade (2002): natural gradient | Natural policy gradient, Fisher information matrix, information geometry | [policy-gradient-theorem](02-core-rl/03-policy-gradient/policy-gradient-theorem.pdf) |
-| 57 | S&B Ch.13: actor-critic | Actor-critic architecture, advantage functions, GAE | [policy-gradient-theorem](02-core-rl/03-policy-gradient/policy-gradient-theorem.pdf) |
-| 58 | Review + connections | Synthesis of policy gradient theory, connections to Phase 04 methods | [policy-gradient-theorem](02-core-rl/03-policy-gradient/policy-gradient-theorem.pdf) |
+| 54 | S&B Ch.13: policy gradient theorem | Policy gradient theorem derivation: nabla J = E[nabla log pi * Q^pi] | [lesson-54](02-core-rl/03-policy-gradient/lesson-54-policy-gradient-theorem.pdf) |
+| 55 | Sutton et al. (2000): REINFORCE | REINFORCE algorithm, variance reduction via baselines | [lesson-55](02-core-rl/03-policy-gradient/lesson-55-reinforce-and-baselines.pdf) |
+| 56 | Kakade (2002): natural gradient | Natural policy gradient, Fisher information matrix, information geometry | [lesson-56](02-core-rl/03-policy-gradient/lesson-56-natural-policy-gradient.pdf) |
+| 57 | S&B Ch.13: actor-critic | Actor-critic architecture, advantage functions, GAE | [lesson-57](02-core-rl/03-policy-gradient/lesson-57-actor-critic-and-gae.pdf) |
+| 58 | Review + connections | Synthesis of policy gradient theory, connections to Phase 04 methods | [lesson-58](02-core-rl/03-policy-gradient/lesson-58-policy-gradient-synthesis.pdf) |
 
 ---
 

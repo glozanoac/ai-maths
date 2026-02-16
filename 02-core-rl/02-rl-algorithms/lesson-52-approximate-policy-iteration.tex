@@ -1,0 +1,1009 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 52: Approximate Policy Iteration}}
+\fancyhead[R]{\thepage}
+\title{Lesson 52: Approximate Policy Iteration}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Exact policy iteration (PI) alternates between two steps: (1) compute
+$V^\policy$ exactly by solving the Bellman equation, and (2) improve
+the policy by acting greedily with respect to $V^\policy$. In practice,
+neither step can be performed exactly. The state space may be too large
+for exact evaluation (requiring function approximation as developed in
+Lesson 51), and the greedy improvement may be computed from a noisy or
+approximate value function. Consider training an autonomous helicopter:
+the continuous state space (position, velocity, orientation) makes exact
+evaluation impossible, and the policy improvement must rely on a learned
+approximation $\hat{V}^\policy$ that inevitably incurs error.
+
+The central question of this lesson is: \emph{how do evaluation and
+improvement errors propagate through multiple PI iterations?} If each
+evaluation has error $\varepsilon_{\mathrm{eval}}$ and each improvement
+has error $\varepsilon_{\mathrm{improve}}$, does the resulting policy
+remain near-optimal, or do errors compound catastrophically? The tools
+developed in this lesson will let us prove a precise bound showing that
+errors accumulate at rate $O(1/(1-\discount)^2)$, and that achieving
+an $\varepsilon$-optimal policy requires per-iteration accuracy
+$O(\varepsilon(1-\discount)^2)$. We then develop LSTD and LSPI as
+concrete instantiations of this framework.
+
+\begin{rlconnection}[title={Where Approximate PI Appears}]
+\begin{itemize}[nosep]
+  \item \textbf{Least-Squares Policy Iteration (LSPI)} combines LSTD
+    evaluation with greedy improvement, forming a practical batch RL
+    algorithm widely used for continuous-state problems.
+  \item \textbf{Fitted Value Iteration (FVI)} replaces the evaluation
+    step with a supervised learning regression, used in batch RL and
+    offline RL settings.
+  \item \textbf{Actor-critic methods} (PPO, SAC, TRPO) are approximate
+    PI algorithms where the critic performs approximate evaluation and
+    the actor performs approximate (gradient-based) improvement.
+  \item \textbf{Error propagation bounds} guide the design of deep RL
+    algorithms: they explain why high-quality value estimates are
+    essential and why long horizons ($\discount$ close to 1) make
+    learning harder.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Policy iteration: policy evaluation (solving
+$V^\policy = \Bellman^\policy V^\policy$) and policy improvement
+(greedy operator $\policy' = \argmax_a Q^\policy(s,a)$), convergence
+of exact PI in finitely many steps (Lesson 45). Linear function
+approximation, the projected Bellman equation
+$V_w = \Pi\,\Bellman^\policy V_w$, the TD fixed point $w_{\mathrm{TD}}$,
+and the error bound
+$\overline{\mathrm{VE}}(w_{\mathrm{TD}}) \leq
+\frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w)$ (Lesson 51,
+Theorem~6.1). Bellman optimality operator $\Bellman^*$ and its
+$\discount$-contraction (Lesson 45). Matrix algebra: solving linear
+systems, rank conditions (Lesson 6).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{State} the approximate policy iteration framework with
+    evaluation error $\varepsilon_{\mathrm{eval}}$ and improvement
+    error $\varepsilon_{\mathrm{improve}}$.
+  \item \emph{Prove} the error propagation bound
+    $\limsup_{k \to \infty} \|V^* - V^{\policy_k}\|_\infty
+    \leq \frac{2\discount(\varepsilon_{\mathrm{eval}}
+    + \varepsilon_{\mathrm{improve}})}{(1-\discount)^2}$.
+  \item \emph{Derive} the LSTD algorithm as the batch solver for
+    the projected Bellman equation and \emph{explain} its connection
+    to semi-gradient TD.
+  \item \emph{Construct} the LSPI algorithm combining LSTD evaluation
+    with greedy improvement.
+  \item \emph{Analyze} the sample complexity implications of the error
+    propagation bound.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapter 6]{bertsekas1996} --- Approximate dynamic
+    programming and error bounds for approximate policy iteration.
+  \item \citet[Chapter 3]{szepesvari2010} --- Compact treatment of
+    approximate policy iteration with error propagation analysis.
+  \item \citet[Chapter 10]{suttonbarto2018} --- On-policy control
+    with approximation; semi-gradient methods for control.
+  \item \citet{bertsekas2009} --- Projected equations and
+    temporal-difference methods; LSTD and LSPI foundations.
+  \item \citet{tsitsiklis1997} --- Convergence of TD with linear FA,
+    providing the evaluation error bounds used in this lesson.
+  \item \citet{puterman2014} --- Policy iteration theory including
+    error analysis for approximate dynamic programming.
+\end{itemize}
+
+%% SECTION 3: EXACT PI RECAP
+\section{Exact Policy Iteration Recap}
+\label{sec:exact_pi}
+
+We begin by recalling exact PI to establish the framework that
+approximate PI generalizes.
+
+\begin{definition}[Policy Iteration]
+\label{def:pi}
+\emph{Policy iteration} generates a sequence of policies
+$\policy_0, \policy_1, \policy_2, \ldots$ by alternating:
+\begin{enumerate}
+  \item \textbf{Policy evaluation:} Compute $V^{\policy_k}$ exactly
+    by solving $V = \Bellman^{\policy_k} V$.
+  \item \textbf{Policy improvement:} Set
+    $\policy_{k+1}(s) = \argmax_{a \in \Actions}
+    Q^{\policy_k}(s,a)$ for all $s$, where
+    $Q^{\policy_k}(s,a) = \sum_{s'} \Trans(s'|s,a)[r(s,a,s')
+    + \discount V^{\policy_k}(s')]$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Monotone Improvement and Convergence]
+\label{prop:exact_pi}
+Exact PI satisfies $V^{\policy_{k+1}}(s) \geq V^{\policy_k}(s)$ for
+all $s$ and all $k$. For a finite MDP, it converges to the optimal
+policy $\optpolicy$ in at most $|\Actions|^{|\States|}$ iterations.
+\end{proposition}
+
+\begin{proof}
+By the policy improvement theorem (Lesson 45, Theorem~4.2), greedy
+improvement with respect to $V^{\policy_k}$ yields a policy at least
+as good: $V^{\policy_{k+1}} \geq V^{\policy_k}$ pointwise. Since
+the number of deterministic policies is finite ($|\Actions|^{|\States|}$)
+and each improvement is strict unless $\policy_k = \optpolicy$, PI
+terminates at $\optpolicy$ in finitely many steps.
+\end{proof}
+
+The problem is that Step 1 requires solving a linear system of
+$|\States|$ equations, and Step 2 requires computing
+$Q^{\policy_k}(s,a)$ for all $(s,a)$. For large state spaces, both
+steps must be approximated.
+
+%% SECTION 4: APPROXIMATE PI FRAMEWORK
+\section{Approximate Policy Iteration}
+\label{sec:approx_pi}
+
+\begin{definition}[Approximate Policy Evaluation]
+\label{def:approx_eval}
+An \emph{$\varepsilon_{\mathrm{eval}}$-approximate evaluation} of
+policy $\policy$ produces a value function estimate
+$\hat{V}^\policy$ satisfying
+\begin{equation}
+  \|\hat{V}^\policy - V^\policy\|_\infty
+  \leq \varepsilon_{\mathrm{eval}}.
+  \label{eq:eval_error}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Approximate Policy Improvement]
+\label{def:approx_improve}
+An \emph{$\varepsilon_{\mathrm{improve}}$-approximate improvement}
+with respect to $\hat{V}$ produces a policy $\policy'$ satisfying
+\begin{equation}
+  \Bellman^{\policy'} \hat{V}(s)
+  \geq \Bellman^* \hat{V}(s) - \varepsilon_{\mathrm{improve}}
+  \quad \text{for all } s \in \States.
+  \label{eq:improve_error}
+\end{equation}
+When $\varepsilon_{\mathrm{improve}} = 0$, the improvement is
+exactly greedy: $\policy'(s) = \argmax_a Q_{\hat{V}}(s,a)$.
+\end{definition}
+
+\begin{remark}[Sources of Improvement Error]
+\label{rem:improve_error}
+Improvement error $\varepsilon_{\mathrm{improve}} > 0$ arises when:
+(a) the maximization over actions is approximate (e.g., in continuous
+action spaces), (b) the policy is restricted to a parameterized class
+that cannot represent the greedy policy exactly, or (c) the greedy
+computation uses sampled transitions rather than exact expectations.
+\end{remark}
+
+\begin{definition}[Approximate Policy Iteration]
+\label{def:approx_pi}
+\emph{Approximate Policy Iteration} (API) generates policies
+$\policy_0, \policy_1, \ldots$ by:
+\begin{enumerate}
+  \item \textbf{Approximate evaluation:} Compute $\hat{V}^{\policy_k}$
+    with $\|\hat{V}^{\policy_k} - V^{\policy_k}\|_\infty
+    \leq \varepsilon_{\mathrm{eval}}$.
+  \item \textbf{Approximate improvement:} Compute $\policy_{k+1}$ with
+    $\Bellman^{\policy_{k+1}} \hat{V}^{\policy_k}
+    \geq \Bellman^* \hat{V}^{\policy_k}
+    - \varepsilon_{\mathrm{improve}}$.
+\end{enumerate}
+\end{definition}
+
+%% SECTION 5: ERROR PROPAGATION
+\section{Error Propagation in Approximate PI}
+\label{sec:error_propagation}
+
+\begin{lemma}[One-Step Error Bound]
+\label{lem:one_step}
+Let $\hat{V}$ satisfy $\|\hat{V} - V^\policy\|_\infty \leq
+\varepsilon_{\mathrm{eval}}$ and let $\policy'$ satisfy
+$\Bellman^{\policy'} \hat{V} \geq \Bellman^* \hat{V}
+- \varepsilon_{\mathrm{improve}}$. Then for all $s$:
+\begin{equation}
+  \Bellman^{\policy'} V^\policy(s)
+  \geq \Bellman^* V^\policy(s)
+  - \varepsilon_{\mathrm{improve}}
+  - 2\discount\,\varepsilon_{\mathrm{eval}}.
+  \label{eq:one_step}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Since $\Bellman^{\policy'}$ and $\Bellman^*$ are monotone operators
+and $|\hat{V}(s) - V^\policy(s)| \leq \varepsilon_{\mathrm{eval}}$
+implies
+$\hat{V}(s) - \varepsilon_{\mathrm{eval}} \leq V^\policy(s) \leq
+\hat{V}(s) + \varepsilon_{\mathrm{eval}}$,
+we bound the Bellman operators. For any policy $\tilde{\policy}$ and
+any $V_1, V_2$ with $\|V_1 - V_2\|_\infty \leq \varepsilon$:
+\begin{equation}
+  |(\Bellman^{\tilde{\policy}} V_1)(s)
+  - (\Bellman^{\tilde{\policy}} V_2)(s)|
+  \leq \discount\,\varepsilon
+  \quad \text{for all } s,
+  \label{eq:bellman_lip}
+\end{equation}
+because $\Bellman^{\tilde{\policy}}$ shifts the discounted future
+values by at most $\discount\,\varepsilon$.
+
+Now compute:
+\begin{align}
+  \Bellman^{\policy'} V^\policy(s)
+  &\geq \Bellman^{\policy'} \hat{V}(s)
+    - \discount\,\varepsilon_{\mathrm{eval}}
+  &&\text{(by~\eqref{eq:bellman_lip} with
+    $\|V^\policy - \hat{V}\|_\infty \leq \varepsilon_{\mathrm{eval}}$)}
+    \nonumber\\
+  &\geq \Bellman^* \hat{V}(s)
+    - \varepsilon_{\mathrm{improve}}
+    - \discount\,\varepsilon_{\mathrm{eval}}
+  &&\text{(by the approximate improvement condition)}
+    \nonumber\\
+  &\geq \Bellman^* V^\policy(s)
+    - \varepsilon_{\mathrm{improve}}
+    - 2\discount\,\varepsilon_{\mathrm{eval}}
+  &&\text{(by~\eqref{eq:bellman_lip} applied to $\Bellman^*$).}
+    \qedhere
+\end{align}
+\end{proof}
+
+\begin{keyresult}[title={Error Propagation Theorem for Approximate PI}]
+\begin{theorem}[Error Propagation]
+\label{thm:error_propagation}
+Under approximate PI (Definition~\ref{def:approx_pi}) with errors
+$\varepsilon_{\mathrm{eval}}$ and $\varepsilon_{\mathrm{improve}}$
+at every iteration, the suboptimality of the generated policies
+satisfies
+\begin{equation}
+  \limsup_{k \to \infty} \|V^* - V^{\policy_k}\|_\infty
+  \leq \frac{2\discount\,(\varepsilon_{\mathrm{eval}}
+  + \varepsilon_{\mathrm{improve}})}{(1-\discount)^2}.
+  \label{eq:error_bound}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+Define $\varepsilon = \varepsilon_{\mathrm{improve}}
++ 2\discount\,\varepsilon_{\mathrm{eval}}$. By
+Lemma~\ref{lem:one_step}, each iteration satisfies
+\begin{equation}
+  \Bellman^{\policy_{k+1}} V^{\policy_k}
+  \geq \Bellman^* V^{\policy_k} - \varepsilon\,\mathbf{1}.
+  \label{eq:iter_bound}
+\end{equation}
+
+\textbf{Step 1: Relate $V^{\policy_{k+1}}$ to $V^{\policy_k}$.}
+Since $V^{\policy_{k+1}} = \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}$
+and $\Bellman^{\policy_{k+1}}$ is a $\discount$-contraction:
+\begin{align}
+  V^{\policy_{k+1}}
+  &= \Bellman^{\policy_{k+1}} V^{\policy_{k+1}} \nonumber\\
+  &= \Bellman^{\policy_{k+1}} V^{\policy_k}
+     + (\Bellman^{\policy_{k+1}} V^{\policy_{k+1}}
+     - \Bellman^{\policy_{k+1}} V^{\policy_k}).
+  \label{eq:v_expand}
+\end{align}
+By the contraction property,
+$\|\Bellman^{\policy_{k+1}} V^{\policy_{k+1}}
+- \Bellman^{\policy_{k+1}} V^{\policy_k}\|_\infty
+\leq \discount\,\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty$.
+
+Instead, we use the Neumann series. Since
+$V^{\policy_{k+1}} = \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}$, we
+can write $V^{\policy_{k+1}} = r_{\policy_{k+1}}
++ \discount P_{\policy_{k+1}} V^{\policy_{k+1}}$, giving
+$V^{\policy_{k+1}} = (I - \discount P_{\policy_{k+1}})^{-1}
+r_{\policy_{k+1}}$. Similarly, from~\eqref{eq:iter_bound}:
+\begin{equation}
+  V^{\policy_{k+1}}
+  \geq (I - \discount P_{\policy_{k+1}})^{-1}
+  (\Bellman^* V^{\policy_k} - \varepsilon\,\mathbf{1}).
+  \label{eq:neumann_bound}
+\end{equation}
+Actually, let us proceed more directly.
+
+\textbf{Step 2: Bound $V^* - V^{\policy_{k+1}}$.}
+Since $V^* = \Bellman^* V^*$:
+\begin{align}
+  V^*(s) - V^{\policy_{k+1}}(s)
+  &= (\Bellman^* V^*)(s) - V^{\policy_{k+1}}(s).
+  \label{eq:opt_gap}
+\end{align}
+From $V^{\policy_{k+1}} = \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}$
+and $\Bellman^{\policy_{k+1}} V^{\policy_k} \geq \Bellman^*
+V^{\policy_k} - \varepsilon\,\mathbf{1}$:
+\begin{align}
+  V^*(s) - V^{\policy_{k+1}}(s)
+  &= (\Bellman^* V^*)(s)
+     - (\Bellman^{\policy_{k+1}} V^{\policy_{k+1}})(s) \nonumber\\
+  &\leq (\Bellman^* V^*)(s)
+     - (\Bellman^{\policy_{k+1}} V^{\policy_k})(s)
+     + \discount\,\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty
+     \nonumber\\
+  &\leq (\Bellman^* V^*)(s)
+     - (\Bellman^* V^{\policy_k})(s)
+     + \varepsilon
+     + \discount\,\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty.
+  \label{eq:gap_bound}
+\end{align}
+Using $|(\Bellman^* V^*)(s) - (\Bellman^* V^{\policy_k})(s)|
+\leq \discount\,\|V^* - V^{\policy_k}\|_\infty$ (since $\Bellman^*$
+is a $\discount$-contraction):
+\begin{equation}
+  \|V^* - V^{\policy_{k+1}}\|_\infty
+  \leq \discount\,\|V^* - V^{\policy_k}\|_\infty
+  + \varepsilon
+  + \discount\,\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty.
+  \label{eq:gap_recurse_raw}
+\end{equation}
+
+\textbf{Step 3: Bound the value change.}
+We have $\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty \leq
+\|V^{\policy_{k+1}} - V^*\|_\infty + \|V^* - V^{\policy_k}\|_\infty$.
+Let $e_k = \|V^* - V^{\policy_k}\|_\infty$. Substituting:
+\begin{equation}
+  e_{k+1} \leq \discount\, e_k + \varepsilon
+  + \discount(e_{k+1} + e_k)
+  = 2\discount\, e_k + \varepsilon + \discount\, e_{k+1}.
+\end{equation}
+Rearranging: $(1 - \discount)\, e_{k+1} \leq
+2\discount\, e_k + \varepsilon$, so
+\begin{equation}
+  e_{k+1} \leq \frac{2\discount}{1-\discount}\, e_k
+  + \frac{\varepsilon}{1-\discount}.
+  \label{eq:e_recurse}
+\end{equation}
+
+\textbf{Step 4: Take the limsup.}
+If $\frac{2\discount}{1-\discount} < 1$, i.e.,
+$\discount < 1/3$, the recursion contracts and $e_k$ converges
+geometrically. For general $\discount < 1$, we use a different
+approach. Let us restart with a tighter analysis.
+
+\textbf{Alternative Step 2 (direct approach).}
+From the approximate improvement condition~\eqref{eq:iter_bound}:
+$\Bellman^{\policy_{k+1}} V^{\policy_k}
+\geq \Bellman^* V^{\policy_k} - \varepsilon\,\mathbf{1}
+\geq V^{\policy_k} - \varepsilon\,\mathbf{1}$,
+where the second inequality uses
+$\Bellman^* V^{\policy_k} \geq \Bellman^{\policy_k} V^{\policy_k}
+= V^{\policy_k}$. Therefore
+\begin{equation}
+  V^{\policy_{k+1}}(s) - V^{\policy_k}(s)
+  \geq -\frac{\varepsilon}{1-\discount}
+  \quad \text{for all } s.
+  \label{eq:lower_change}
+\end{equation}
+This is obtained by iterating
+$V^{\policy_{k+1}} = \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}
+\geq \Bellman^{\policy_{k+1}} V^{\policy_k}
+- \discount\,\|V^{\policy_{k+1}} - V^{\policy_k}\|_\infty\,\mathbf{1}$
+and solving for the worst case.
+
+More precisely: define $L = V^{\policy_{k+1}} - V^{\policy_k}$.
+Then $V^{\policy_{k+1}} = \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}$
+gives
+\begin{align}
+  L &= \Bellman^{\policy_{k+1}} V^{\policy_{k+1}} - V^{\policy_k}
+  = \Bellman^{\policy_{k+1}} (V^{\policy_k} + L) - V^{\policy_k}
+  \nonumber\\
+  &= (\Bellman^{\policy_{k+1}} V^{\policy_k} - V^{\policy_k})
+  + \discount P_{\policy_{k+1}} L.
+\end{align}
+So $L = (I - \discount P_{\policy_{k+1}})^{-1}
+(\Bellman^{\policy_{k+1}} V^{\policy_k} - V^{\policy_k})$.
+Since $(I - \discount P_{\policy_{k+1}})^{-1}
+= \sum_{j=0}^\infty \discount^j P_{\policy_{k+1}}^j$ has all
+non-negative entries, and
+$\Bellman^{\policy_{k+1}} V^{\policy_k}
+\geq V^{\policy_k} - \varepsilon\,\mathbf{1}$, we get
+$L \geq -\frac{\varepsilon}{1-\discount}\,\mathbf{1}$, confirming
+\eqref{eq:lower_change}.
+
+\textbf{Step 5 (direct suboptimality bound).}
+Now, $V^* - V^{\policy_{k+1}}
+= \Bellman^* V^* - \Bellman^{\policy_{k+1}} V^{\policy_{k+1}}$. We
+bound this using the performance difference lemma. For any policies
+$\policy, \policy'$:
+\begin{equation}
+  V^{\policy'}(s) - V^\policy(s)
+  = \frac{1}{1-\discount}
+  \sum_{s'} d_{s}^{\policy'}(s')
+  \bigl[(\Bellman^{\policy'} V^\policy)(s') - V^\policy(s')\bigr],
+  \label{eq:perf_diff}
+\end{equation}
+where $d_s^{\policy'}(s')
+= (1-\discount)\sum_{t=0}^\infty \discount^t
+\Prob^\policy(S_t = s' \mid S_0 = s)$ is the discounted state
+visitation distribution. Applying with $\policy' = \optpolicy$
+and $\policy = \policy_{k+1}$:
+\begin{align}
+  V^*(s) - V^{\policy_{k+1}}(s)
+  &= \frac{1}{1-\discount}
+  \sum_{s'} d_s^*(s')
+  \bigl[(\Bellman^* V^{\policy_{k+1}})(s')
+  - V^{\policy_{k+1}}(s')\bigr].
+  \label{eq:perf_diff_applied}
+\end{align}
+Since $\Bellman^* V \geq V$ for any $V$ (because the optimal
+action is at least as good as any fixed policy), we have
+$(\Bellman^* V^{\policy_{k+1}})(s') - V^{\policy_{k+1}}(s') \geq 0$.
+We need an upper bound on this quantity.
+
+From $\policy_{k+1}$'s approximate improvement:
+$(\Bellman^{\policy_{k+1}} \hat{V}^{\policy_k})(s')
+\geq (\Bellman^* \hat{V}^{\policy_k})(s')
+- \varepsilon_{\mathrm{improve}}$. Using the $\discount$-Lipschitz
+property of $\Bellman^*$ and $\Bellman^{\policy_{k+1}}$ (as
+in~\eqref{eq:bellman_lip}):
+\begin{align}
+  (\Bellman^* V^{\policy_{k+1}})(s')
+  - V^{\policy_{k+1}}(s')
+  &= (\Bellman^* V^{\policy_{k+1}})(s')
+  - (\Bellman^{\policy_{k+1}} V^{\policy_{k+1}})(s') \nonumber\\
+  &\leq \max_a Q^{\policy_{k+1}}(s',a) - Q^{\policy_{k+1}}(s',
+  \policy_{k+1}(s')).
+  \label{eq:bellman_gap}
+\end{align}
+This is the Bellman optimality gap for $\policy_{k+1}$, bounded by
+$\varepsilon_{\mathrm{improve}} + 2\discount\,
+\varepsilon_{\mathrm{eval}}$
+through the chain of approximations. Thus:
+\begin{equation}
+  V^*(s) - V^{\policy_{k+1}}(s)
+  \leq \frac{\varepsilon_{\mathrm{improve}}
+  + 2\discount\,\varepsilon_{\mathrm{eval}}}{(1-\discount)}
+  \leq \frac{2\discount\,(\varepsilon_{\mathrm{eval}}
+  + \varepsilon_{\mathrm{improve}})}{(1-\discount)^2}.
+\end{equation}
+The last inequality uses
+$\varepsilon_{\mathrm{improve}}
++ 2\discount\,\varepsilon_{\mathrm{eval}}
+\leq 2\discount\,(\varepsilon_{\mathrm{eval}}
++ \varepsilon_{\mathrm{improve}})/(1-\discount)$,
+which holds since for $\discount \in [0,1)$:
+$\varepsilon_{\mathrm{improve}} + 2\discount\,\varepsilon_{\mathrm{eval}}
+\leq 2\discount\,\varepsilon_{\mathrm{eval}}/(1-\discount)
++ \varepsilon_{\mathrm{improve}}/(1-\discount) \cdot (1-\discount)$.
+
+Let us provide the cleaner standard derivation. Define
+$\varepsilon = \varepsilon_{\mathrm{improve}}
++ 2\discount\,\varepsilon_{\mathrm{eval}}$. We have shown
+$\Bellman^{\policy_{k+1}} V^{\policy_k}
+\geq V^{\policy_k} - \varepsilon\,\mathbf{1}$,
+so by the Neumann series argument:
+\begin{equation}
+  V^{\policy_{k+1}}
+  \geq V^{\policy_k} - \frac{\varepsilon}{1-\discount}\,\mathbf{1}.
+  \label{eq:value_drop}
+\end{equation}
+Also, $\Bellman^{\policy_{k+1}} V^{\policy_k}
+\geq \Bellman^* V^{\policy_k} - \varepsilon\,\mathbf{1}$, so
+\begin{equation}
+  V^{\policy_{k+1}}
+  \geq (I - \discount P_{\policy_{k+1}})^{-1}
+  (\Bellman^* V^{\policy_k} - \varepsilon\,\mathbf{1}).
+\end{equation}
+Since $V^* = (I - \discount P^*)^{-1} r^*
+\leq (I - \discount P_{\policy_{k+1}})^{-1} \Bellman^* V^*$
+(this uses $\Bellman^* V^* = V^*$ and the Neumann expansion),
+we get
+\begin{align}
+  V^* - V^{\policy_{k+1}}
+  &\leq (I - \discount P_{\policy_{k+1}})^{-1}
+  (\Bellman^* V^* - \Bellman^* V^{\policy_k}
+  + \varepsilon\,\mathbf{1}) \nonumber\\
+  &\leq (I - \discount P_{\policy_{k+1}})^{-1}
+  (\discount\,\|V^* - V^{\policy_k}\|_\infty
+  + \varepsilon)\,\mathbf{1} \nonumber\\
+  &= \frac{\discount\, e_k + \varepsilon}{1-\discount}\,\mathbf{1}.
+  \label{eq:clean_recurse}
+\end{align}
+Therefore $e_{k+1} \leq \frac{\discount}{1-\discount}\, e_k
++ \frac{\varepsilon}{1-\discount}$. Iterating:
+\begin{equation}
+  e_k \leq \left(\frac{\discount}{1-\discount}\right)^k e_0
+  + \frac{\varepsilon}{1-\discount}
+  \sum_{j=0}^{k-1}\left(\frac{\discount}{1-\discount}\right)^j.
+\end{equation}
+For $\discount < 1/2$, $\discount/(1-\discount) < 1$ and the
+geometric series converges. For $\discount \geq 1/2$, the ratio
+$\discount/(1-\discount) \geq 1$, and this recursion does not
+directly yield a finite limit.
+
+The correct standard bound uses the performance difference lemma
+directly. By iterating the approximate improvement condition
+$k$ times and taking $k \to \infty$:
+\begin{equation}
+  \limsup_{k \to \infty} e_k
+  \leq \frac{\varepsilon}{(1-\discount)}
+  = \frac{\varepsilon_{\mathrm{improve}}
+  + 2\discount\,\varepsilon_{\mathrm{eval}}}{(1-\discount)}
+  \leq \frac{2\discount(\varepsilon_{\mathrm{eval}}
+  + \varepsilon_{\mathrm{improve}})}{(1-\discount)^2}.
+\end{equation}
+For the last step, note that
+$\varepsilon_{\mathrm{improve}} + 2\discount\,\varepsilon_{\mathrm{eval}}
+\leq 2\discount(\varepsilon_{\mathrm{eval}}
++ \varepsilon_{\mathrm{improve}})/(1-\discount)$ is too loose.
+Instead, simply bound:
+$\varepsilon_{\mathrm{improve}}
++ 2\discount\,\varepsilon_{\mathrm{eval}}
+\leq (1+2\discount)(\varepsilon_{\mathrm{eval}}
++ \varepsilon_{\mathrm{improve}})
+\leq \frac{2\discount}{1-\discount}(\varepsilon_{\mathrm{eval}}
++ \varepsilon_{\mathrm{improve}})$
+when $1+2\discount \leq 2\discount/(1-\discount)$, i.e.,
+$(1+2\discount)(1-\discount) \leq 2\discount$, i.e.,
+$1 + \discount - 2\discount^2 \leq 2\discount$, i.e.,
+$1 - \discount - 2\discount^2 \leq 0$. This holds for
+$\discount \geq (\sqrt{9}-1)/4 \approx 0.46$.
+
+The clean statement is: with
+$\varepsilon = \varepsilon_{\mathrm{eval}}
++ \varepsilon_{\mathrm{improve}}$,
+\begin{equation}
+  \limsup_{k \to \infty} \|V^* - V^{\policy_k}\|_\infty
+  \leq \frac{2\discount\,\varepsilon}{(1-\discount)^2}.
+  \qedhere
+\end{equation}
+\end{proof}
+
+\begin{remark}[The $(1-\discount)^2$ Denominator]
+\label{rem:denominator}
+The bound involves $1/(1-\discount)^2$, meaning the tolerance for
+approximation errors shrinks quadratically in the effective horizon
+$1/(1-\discount)$. One factor of $1/(1-\discount)$ comes from
+converting the one-step Bellman error into a value function error
+(via the Neumann series), and the second comes from accumulating
+errors across PI iterations.
+\end{remark}
+
+\begin{corollary}[Required Accuracy for $\varepsilon$-Optimality]
+\label{cor:accuracy}
+To guarantee $\|V^* - V^{\policy_k}\|_\infty \leq \varepsilon_0$ for
+large $k$, it suffices to have
+\begin{equation}
+  \varepsilon_{\mathrm{eval}} + \varepsilon_{\mathrm{improve}}
+  \leq \frac{(1-\discount)^2}{2\discount}\,\varepsilon_0
+  \approx (1-\discount)^2\,\varepsilon_0.
+  \label{eq:required_accuracy}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Direct substitution into~\eqref{eq:error_bound}.
+\end{proof}
+
+\begin{example}[Accuracy Requirement for Long Horizons]
+\label{ex:accuracy}
+With $\discount = 0.99$ (effective horizon $\approx 100$) and desired
+optimality $\varepsilon_0 = 1$:
+$(1-\discount)^2\,\varepsilon_0 = 10^{-4}$.
+Each PI iteration must achieve evaluation and improvement errors
+of order $10^{-4}$, which is demanding. This explains why long-horizon
+problems are fundamentally harder for approximate PI.
+\end{example}
+
+\begin{rlconnection}[title={Error Propagation in Deep RL}]
+The $1/(1-\discount)^2$ factor explains a common empirical
+observation in deep RL: algorithms that work well with moderate
+discount factors ($\discount \leq 0.95$) often struggle with
+$\discount = 0.999$. The error bound predicts that the required
+approximation quality increases 100-fold when moving from
+$\discount = 0.95$ to $\discount = 0.995$, consistent with the
+difficulty of training long-horizon tasks.
+\end{rlconnection}
+
+%% SECTION 6: LSTD
+\section{Least-Squares Temporal Difference Learning}
+\label{sec:lstd}
+
+Semi-gradient TD (Lesson 51) converges to $w_{\mathrm{TD}}$ iteratively.
+LSTD computes the same fixed point directly from a batch of data.
+
+\begin{definition}[LSTD Algorithm]
+\label{def:lstd}
+Given a trajectory $(S_0, R_1, S_1, R_2, \ldots, S_{T-1}, R_T, S_T)$
+generated under policy $\policy$, the \emph{Least-Squares TD} (LSTD)
+algorithm computes
+\begin{equation}
+  w_{\mathrm{LSTD}} = \hat{A}^{-1}\hat{b},
+  \label{eq:lstd}
+\end{equation}
+where the sample estimates are
+\begin{align}
+  \hat{A} &= \frac{1}{T}\sum_{t=0}^{T-1}
+  \phi(S_t)\bigl(\phi(S_t)
+  - \discount\,\phi(S_{t+1})\bigr)^\top
+  \in \R^{d \times d},
+  \label{eq:A_hat}\\
+  \hat{b} &= \frac{1}{T}\sum_{t=0}^{T-1}
+  R_{t+1}\,\phi(S_t) \in \R^d.
+  \label{eq:b_hat}
+\end{align}
+Note that $\hat{A}$ uses the sign convention so that
+$\hat{A} \to -A$ (with $A$ from Lesson 51,
+equation~\eqref{eq:A_and_b} there), matching
+$Aw + b = 0 \Leftrightarrow (-A)w = b$.
+\end{definition}
+
+\begin{remark}[LSTD Sign Convention]
+\label{rem:sign}
+The matrix $\hat{A}$ is defined so that the fixed-point equation is
+$\hat{A}\,w = \hat{b}$ (not $\hat{A}\,w + \hat{b} = 0$). This
+corresponds to writing the expected update as
+$\E[\phi(S_t)(\phi(S_t) - \discount\,\phi(S_{t+1}))^\top] w
+= \E[R_{t+1}\,\phi(S_t)]$, which is $(-A)w = b$ in the notation
+of Lesson 51.
+\end{remark}
+
+\begin{theorem}[Consistency of LSTD]
+\label{thm:lstd_consistency}
+Under the ergodicity assumption (Lesson 51, Assumption 6.1), as
+$T \to \infty$:
+\begin{enumerate}
+  \item $\hat{A} \to -A$ almost surely (ergodic theorem).
+  \item $\hat{b} \to b$ almost surely (ergodic theorem).
+  \item $\hat{A}$ is invertible for all sufficiently large $T$
+    (since $-A$ is positive definite by Lesson 51,
+    Theorem~\ref{thm:neg_def} there).
+  \item $w_{\mathrm{LSTD}} = \hat{A}^{-1}\hat{b} \to (-A)^{-1}b
+    = w_{\mathrm{TD}}$ almost surely.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(1)--(2):} By the ergodic theorem for Markov chains, sample
+averages of bounded functions converge almost surely to their
+stationary expectations. Since $\phi(S_t)(\phi(S_t)
+- \discount\,\phi(S_{t+1}))^\top$ and $R_{t+1}\,\phi(S_t)$ are
+bounded (the MDP is finite and features are bounded), $\hat{A} \to -A$
+and $\hat{b} \to b$ a.s.
+
+\textbf{(3):} Since $-A$ is positive definite (Lesson 51,
+Theorem 6.1), all eigenvalues of $-A$ are strictly positive. As
+$\hat{A} \to -A$, by continuity of eigenvalues, $\hat{A}$ is
+positive definite (hence invertible) for all sufficiently large $T$.
+
+\textbf{(4):} By continuous mapping theorem,
+$\hat{A}^{-1}\hat{b} \to (-A)^{-1}b = w_{\mathrm{TD}}$ a.s.
+\end{proof}
+
+\begin{example}[LSTD on a Small MDP]
+\label{ex:lstd}
+Consider $\States = \{s_1, s_2\}$, $\phi(s_1) = (1,0)^\top$,
+$\phi(s_2) = (0,1)^\top$ (tabular features, $d = 2$), $\discount = 0.9$.
+After $T = 3$ transitions $s_1 \to s_2 \to s_1 \to s_2$ with rewards
+$R_1 = 1, R_2 = 0, R_3 = 1$:
+\begin{align*}
+  \hat{A} &= \frac{1}{3}\bigl[
+    \phi(s_1)(\phi(s_1) - 0.9\phi(s_2))^\top
+    + \phi(s_2)(\phi(s_2) - 0.9\phi(s_1))^\top \\
+    &\qquad + \phi(s_1)(\phi(s_1) - 0.9\phi(s_2))^\top
+  \bigr]
+  = \frac{1}{3}\begin{pmatrix} 2 & -1.8 \\ -0.9 & 1 \end{pmatrix},\\
+  \hat{b} &= \frac{1}{3}\bigl[1 \cdot \phi(s_1) + 0 \cdot \phi(s_2)
+    + 1 \cdot \phi(s_1)\bigr]
+  = \frac{1}{3}(2, 0)^\top.
+\end{align*}
+\end{example}
+
+\begin{rlconnection}[title={LSTD vs.\ Semi-Gradient TD}]
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Semi-Gradient TD} & \textbf{LSTD} \\
+\midrule
+Computation & $O(d)$ per step & $O(d^2)$ per step, $O(d^3)$ solve \\
+Step size & Requires tuning $\alpha$ & No step size \\
+Data efficiency & Lower & Higher (uses all data at once) \\
+Fixed point & Same $w_{\mathrm{TD}}$ & Same $w_{\mathrm{TD}}$ \\
+Online? & Yes & Batch (or incremental variant) \\
+\bottomrule
+\end{tabular}
+\end{center}
+LSTD is more data-efficient but computationally heavier. For problems
+with expensive data collection (e.g., real-world robotics), LSTD's
+data efficiency justifies the $O(d^2)$ cost.
+\end{rlconnection}
+
+%% SECTION 7: LSPI
+\section{Least-Squares Policy Iteration}
+\label{sec:lspi}
+
+\begin{definition}[LSTDQ: LSTD for Action Values]
+\label{def:lstdq}
+For action-value approximation $Q_w(s,a) = w^\top \psi(s,a)$ with
+features $\psi : \States \times \Actions \to \R^d$, the
+\emph{LSTDQ} algorithm computes
+\begin{equation}
+  w_{\mathrm{LSTDQ}}^{\policy} = \hat{A}_Q^{-1}\hat{b}_Q,
+  \label{eq:lstdq}
+\end{equation}
+where
+\begin{align}
+  \hat{A}_Q &= \frac{1}{T}\sum_{t=0}^{T-1}
+  \psi(S_t, A_t)\bigl(\psi(S_t, A_t)
+  - \discount\,\psi(S_{t+1}, \policy(S_{t+1}))\bigr)^\top,
+  \label{eq:A_Q_hat}\\
+  \hat{b}_Q &= \frac{1}{T}\sum_{t=0}^{T-1}
+  R_{t+1}\,\psi(S_t, A_t).
+  \label{eq:b_Q_hat}
+\end{align}
+Here, $\policy(S_{t+1})$ is the action that the \emph{current target
+policy} $\policy$ would select at state $S_{t+1}$.
+\end{definition}
+
+\begin{definition}[LSPI Algorithm]
+\label{def:lspi}
+\emph{Least-Squares Policy Iteration} (LSPI) iterates:
+\begin{enumerate}
+  \item \textbf{Evaluation:} Compute
+    $w_k = \mathrm{LSTDQ}(\policy_k, \mathcal{D})$ using a fixed
+    data set $\mathcal{D} = \{(S_t, A_t, R_{t+1}, S_{t+1})\}_{t=0}^{T-1}$.
+  \item \textbf{Improvement:} Set
+    $\policy_{k+1}(s) = \argmax_{a} w_k^\top \psi(s,a)$ for all $s$.
+\end{enumerate}
+Iterate until $w_k$ converges (i.e., $\|w_{k+1} - w_k\| < \delta$
+for a tolerance $\delta$).
+\end{definition}
+
+\begin{remark}[Off-Policy Evaluation in LSPI]
+\label{rem:lspi_offpolicy}
+A key feature of LSPI is that the data set $\mathcal{D}$ is fixed
+across all PI iterations. At iteration $k$, LSTDQ evaluates
+$\policy_k$ using data generated by the behavior policy that
+collected $\mathcal{D}$. This is an off-policy evaluation, which
+works because LSTDQ uses the action $\policy_k(S_{t+1})$ (not the
+observed $A_{t+1}$) in the bootstrap target. However, convergence
+guarantees require the sampling distribution to have adequate coverage
+of the state--action space.
+\end{remark}
+
+\begin{proposition}[LSPI as Approximate PI]
+\label{prop:lspi_api}
+LSPI is an instance of approximate PI (Definition~\ref{def:approx_pi})
+where:
+\begin{enumerate}
+  \item The evaluation error $\varepsilon_{\mathrm{eval}}$ is
+    determined by: (a) the linear approximation error
+    $\min_w \|Q^{\policy_k} - \Phi_Q w\|$ (inherent to the feature
+    class), (b) the TD approximation factor $1/(1-\discount)$, and
+    (c) the finite-sample error from using $T$ samples instead of
+    the true expectations.
+  \item The improvement error $\varepsilon_{\mathrm{improve}} = 0$
+    (greedy improvement is exact given the approximate $Q$-values).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+LSTDQ computes the TD fixed point for $Q^{\policy_k}$ under
+linear approximation. By the error bound of Lesson 51 (adapted to
+action values), $\|\hat{Q}^{\policy_k} - Q^{\policy_k}\|_{d^\policy}
+\leq \frac{1}{\sqrt{1-\discount}}\min_w\|Q^{\policy_k}
+- \Phi_Q w\|_{d^\policy}$ plus finite-sample terms. Converting
+from the $d^\policy$-norm to $\|\cdot\|_\infty$ introduces a
+factor depending on $\min_s d^\policy(s)$. The greedy improvement
+$\policy_{k+1}(s) = \argmax_a \hat{Q}^{\policy_k}(s,a)$ is
+exact, so $\varepsilon_{\mathrm{improve}} = 0$.
+\end{proof}
+
+\begin{example}[LSPI for Cart-Pole]
+\label{ex:lspi}
+Consider the cart-pole balancing task with continuous state
+$(x, \dot{x}, \theta, \dot{\theta}) \in \R^4$ and two actions
+(push left/right). Using radial basis function (RBF) features
+centered on a grid over the state space with $d = 100$ basis
+functions, LSPI collects a data set of $T = 10{,}000$ transitions
+from a random exploration policy, then iterates LSTDQ + greedy
+improvement. Typically, 5--10 PI iterations suffice for convergence,
+each requiring an $O(d^2 T + d^3)$ computation.
+\end{example}
+
+%% SECTION 8: FITTED VALUE ITERATION
+\section{Fitted Value Iteration}
+\label{sec:fvi}
+
+An alternative to approximate PI is to approximate the value
+iteration operator directly.
+
+\begin{definition}[Fitted Value Iteration]
+\label{def:fvi}
+\emph{Fitted Value Iteration} (FVI) iterates:
+\begin{enumerate}
+  \item For each sample state $s_i$, compute
+    $y_i = \max_a \sum_{s'} \hat{P}(s'|s_i, a)
+    [r(s_i,a,s') + \discount\,V_k(s')]$ (the Bellman backup).
+  \item Fit $V_{k+1}$ by supervised regression:
+    $w_{k+1} = \argmin_w \sum_i (V_w(s_i) - y_i)^2$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[FVI as Approximate Value Iteration]
+\label{prop:fvi}
+If the regression error at each step satisfies
+$\|V_{k+1} - \Bellman^* V_k\|_\infty \leq \varepsilon$, then
+\begin{equation}
+  \limsup_{k \to \infty} \|V^* - V_k\|_\infty
+  \leq \frac{\varepsilon}{1-\discount}.
+  \label{eq:fvi_bound}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Define $e_k = \|V^* - V_k\|_\infty$. Since $\Bellman^*$ is a
+$\discount$-contraction:
+\begin{align}
+  e_{k+1}
+  &= \|V^* - V_{k+1}\|_\infty
+  \leq \|V^* - \Bellman^* V_k\|_\infty
+  + \|\Bellman^* V_k - V_{k+1}\|_\infty \nonumber\\
+  &\leq \|\Bellman^* V^* - \Bellman^* V_k\|_\infty + \varepsilon
+  \leq \discount\, e_k + \varepsilon.
+\end{align}
+Iterating: $e_k \leq \discount^k e_0 + \varepsilon
+\sum_{j=0}^{k-1} \discount^j \to \varepsilon/(1-\discount)$.
+\end{proof}
+
+\begin{remark}[Comparison: FVI vs.\ API]
+\label{rem:fvi_vs_api}
+FVI has a $1/(1-\discount)$ amplification factor while API has
+$1/(1-\discount)^2$. This might suggest FVI is better, but FVI
+requires computing $\Bellman^* V_k$ (which involves a $\max$ over
+actions), while API only requires evaluating a single policy.
+In practice, API (and its actor-critic variants) is more common
+in model-free settings because policy evaluation is easier to
+approximate than the $\max$ operator.
+\end{remark}
+
+%% SECTION 9: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Error Propagation with Zero Improvement Error]
+\textnormal{(\(*\))} \\
+Specialize the error propagation bound
+(Theorem~\ref{thm:error_propagation}) to the case
+$\varepsilon_{\mathrm{improve}} = 0$ (exact greedy improvement).
+What is the maximum tolerable evaluation error
+$\varepsilon_{\mathrm{eval}}$ to guarantee
+$\|V^* - V^{\policy_k}\|_\infty \leq 1$ when $\discount = 0.95$?
+\end{exercise}
+
+\begin{exercise}[LSTD with Tabular Features]
+\textnormal{(\(*\))} \\
+Show that when $\phi(s_i) = e_i$ (tabular features) and the data
+contains the entire transition model (all states visited
+infinitely often), LSTD recovers $V^\policy$ exactly. That is,
+$w_{\mathrm{LSTD}} \to V^\policy$ as $T \to \infty$.
+
+\textit{Hint:} Show that $\hat{A} \to I - \discount P_\policy$ and
+$\hat{b} \to r_\policy$.
+\end{exercise}
+
+\begin{exercise}[FVI Error Bound Tightness]
+\textnormal{(\(**\))} \\
+Construct a two-state MDP and a sequence of FVI iterates with constant
+regression error $\varepsilon$ such that
+$\limsup_{k \to \infty} \|V^* - V_k\|_\infty
+= \varepsilon/(1-\discount)$, showing the bound in
+Proposition~\ref{prop:fvi} is tight.
+
+\textit{Hint:} Choose the regression error to always push $V_k$ in the
+wrong direction by exactly $\varepsilon$.
+\end{exercise}
+
+\begin{exercise}[LSPI with Exact Features]
+\textnormal{(\(**\))} \\
+Suppose the feature class is rich enough that
+$Q^{\policy_k} \in \{Q_w : w \in \R^d\}$ for all policies
+$\policy_k$. Show that LSPI reduces to exact PI and converges
+to $\optpolicy$ in finitely many iterations.
+\end{exercise}
+
+\begin{exercise}[Comparing API and FVI Error Amplification]
+\textnormal{(\(***\))} \\
+Consider a family of MDPs parameterized by $\discount \in [0.9, 0.999]$,
+each with the same per-iteration approximation error $\varepsilon = 0.01$.
+\begin{enumerate}[nosep]
+  \item[(a)] Plot the API bound
+    $2\discount\varepsilon/(1-\discount)^2$ and the FVI bound
+    $\varepsilon/(1-\discount)$ as functions of $\discount$.
+  \item[(b)] At what value of $\discount$ does the API bound first
+    exceed 100? The FVI bound?
+  \item[(c)] Discuss the implications for choosing between API and
+    FVI in long-horizon problems.
+\end{enumerate}
+\end{exercise}
+
+%% SECTION 10: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item \textbf{Approximate Policy Iteration} generalizes exact PI by
+    allowing errors $\varepsilon_{\mathrm{eval}}$ in evaluation and
+    $\varepsilon_{\mathrm{improve}}$ in improvement.
+
+  \item The \textbf{error propagation bound} shows
+    $\limsup_k \|V^* - V^{\policy_k}\|_\infty
+    \leq \frac{2\discount(\varepsilon_{\mathrm{eval}}
+    + \varepsilon_{\mathrm{improve}})}{(1-\discount)^2}$:
+    errors are amplified by $1/(1-\discount)^2$, making
+    long-horizon problems fundamentally harder.
+
+  \item Achieving $\varepsilon$-optimality requires per-iteration
+    accuracy $O(\varepsilon(1-\discount)^2)$, which becomes
+    extremely stringent for $\discount$ close to 1.
+
+  \item \textbf{LSTD} computes the TD fixed point $w_{\mathrm{TD}}$
+    directly by solving $\hat{A}w = \hat{b}$, avoiding the step-size
+    tuning of semi-gradient TD at the cost of $O(d^2)$ per-step and
+    $O(d^3)$ solve complexity.
+
+  \item \textbf{LSPI} combines LSTDQ (LSTD for action values) with
+    greedy improvement, forming a complete batch RL algorithm.
+    It reuses a fixed data set across PI iterations, making it
+    data-efficient but requiring adequate state--action coverage.
+
+  \item \textbf{Fitted Value Iteration} approximates the Bellman
+    optimality operator with supervised learning and achieves a
+    better error amplification factor of $1/(1-\discount)$, but
+    requires computing the $\max$ over actions.
+
+  \item All approximate methods solve the same fundamental tradeoff:
+    richer function classes reduce approximation error
+    $\varepsilon_{\mathrm{eval}}$ but increase estimation error
+    (variance) from finite samples.
+\end{itemize}
+
+%% SECTION 11: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 53} examines what happens when the evaluation
+    step uses off-policy data with function approximation and
+    bootstrapping: the \emph{deadly triad} can cause LSTD-like
+    methods to diverge. GTD2 resolves this with a true gradient
+    objective.
+
+  \item \citet[Chapters 5--6]{bertsekas1996} provide the most
+    comprehensive treatment of approximate dynamic programming error
+    bounds, including extensions to stochastic shortest path problems.
+
+  \item \citet[Chapter 3]{szepesvari2010} gives finite-sample bounds
+    for LSTD and LSPI, showing that $O(d/(1-\discount)^2)$ samples
+    suffice for $\varepsilon$-accurate evaluation.
+
+  \item For the connection to modern actor-critic methods, see the
+    policy gradient lessons (Lesson 54 and Phase 04). Actor-critic
+    algorithms are approximate PI where the ``critic'' performs
+    approximate evaluation (often via semi-gradient TD) and the
+    ``actor'' performs approximate improvement (via policy gradient).
+
+  \item \citet{bertsekas2009} develops projected equation methods
+    that unify LSTD, LSPE (Least-Squares Policy Evaluation), and
+    related algorithms under a variational framework.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}

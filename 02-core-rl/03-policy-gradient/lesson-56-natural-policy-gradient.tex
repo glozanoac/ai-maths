@@ -1,0 +1,806 @@
+% lesson-56-natural-policy-gradient.tex
+% Phase 02, Subdomain: Policy Gradient
+% Topic: Natural Policy Gradient
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 56: Natural Policy Gradient}}
+\fancyhead[R]{\thepage}
+\title{Lesson 56: Natural Policy Gradient}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+Consider training a policy $\policy_\theta$ for a locomotion task via
+the vanilla policy gradient $\theta_{k+1} = \theta_k + \alpha\,
+\nabla_\theta J(\theta_k)$. In practice, a small step in parameter space
+$\|\Delta\theta\| = \epsilon$ can produce an enormous change in the
+policy distribution when the Fisher information matrix has large
+eigenvalues, or almost no change when it has small eigenvalues. The
+steepest-ascent direction in Euclidean parameter space is therefore
+poorly matched to the geometry of the policy manifold: the same step
+size $\alpha$ that works for one parameterization may be catastrophically
+large or wastefully small for another. What we need is a gradient that
+is \emph{covariant} -- that descends in the same direction regardless of
+how we parameterize the policy. The natural gradient of
+\citet{amari1998}, adapted to policy optimization by \citet{kakade2002},
+provides exactly this: by preconditioning the gradient with the inverse
+Fisher information matrix, we obtain the steepest ascent direction in the
+space of probability distributions rather than the space of parameters.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{Natural actor-critic} \citep{peters2008}: Combines the
+    natural policy gradient with compatible function approximation,
+    solving a least-squares critic problem to obtain the natural gradient
+    direction in closed form.
+  \item \textbf{TRPO} \citep{schulman2015trpo}: Approximates the natural
+    policy gradient via a trust-region constraint on the KL divergence,
+    using conjugate gradients to solve the Fisher-vector product.
+  \item \textbf{K-FAC for policy optimization}: Approximates the Fisher
+    information matrix using Kronecker-factored representations for
+    efficient natural gradient computation in deep networks.
+  \item \textbf{PPO} \citep{schulman2017}: Can be viewed as an
+    approximate natural gradient method where the clipped surrogate
+    implicitly limits the KL step size.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+The reader must know the policy gradient theorem in both the
+log-derivative and expectation form (Lesson 54, Theorem 5.1), the
+baseline invariance proposition (Lesson 54, Proposition 7.1), the
+compatible function approximation theorem (Lesson 54, Theorem 8.2), and
+the advantage function (Lesson 55, Definition 4.3). From linear algebra,
+we need positive semi-definite matrices, eigenvalue decompositions, and
+the Moore-Penrose pseudoinverse (Lesson 7). Familiarity with the
+KL divergence and its second-order expansion (Lesson 12) is assumed.
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \textbf{Explain} why the vanilla policy gradient is not covariant
+    under reparameterization and why this is problematic.
+  \item \textbf{Define} the Fisher information matrix for a parameterized
+    policy and derive its key properties (positive semi-definiteness,
+    relation to KL divergence Hessian).
+  \item \textbf{Derive} the natural policy gradient as the solution to
+    the steepest-ascent problem under a KL divergence constraint.
+  \item \textbf{Prove} that the natural policy gradient is covariant
+    under smooth invertible reparameterizations.
+  \item \textbf{State} and prove the connection between compatible
+    function approximation and the natural gradient.
+  \item \textbf{Compute} the Fisher information matrix and natural
+    gradient update for softmax and Gaussian policy parameterizations.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet{amari1998} -- The original natural gradient paper;
+    defines the Fisher metric and derives the natural gradient update
+    for general statistical models.
+  \item \citet{kakade2002} -- Adapts the natural gradient to policy
+    optimization; introduces the compatible function approximation
+    connection.
+  \item \citet[Chapter 2]{kakade2003} -- Extended treatment of
+    natural policy gradients with sample complexity analysis.
+  \item \citet{peters2008} -- Natural actor-critic algorithms;
+    practical implementations using compatible features.
+  \item \citet{bhatnagar2009} -- Convergence analysis of natural
+    actor-critic algorithms.
+  \item \citet{amari2016} -- Comprehensive reference on information
+    geometry; Chapters 1--3 cover the Fisher metric and its properties.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 3: The Reparameterization Problem
+%% ========================================================================
+\section{The Reparameterization Problem}
+
+We begin by demonstrating that the vanilla policy gradient is not
+invariant under reparameterization, motivating the need for a
+geometry-aware gradient.
+
+\begin{definition}[Reparameterization]
+\label{def:reparam}
+Let $\policy_\theta$ be a parameterized policy with $\theta \in \Theta
+\subseteq \R^d$, and let $\varphi : \Phi \to \Theta$ be a smooth
+invertible map (a diffeomorphism). The \emph{reparameterized} policy is
+$\policy_{\varphi(\eta)} = \tilde{\policy}_\eta$, parameterized by
+$\eta \in \Phi$.
+\end{definition}
+
+\begin{proposition}[Non-Covariance of the Vanilla Gradient]
+\label{prop:non-covariance}
+Under the reparameterization $\theta = \varphi(\eta)$, the gradient of
+the objective $\tilde{J}(\eta) = J(\varphi(\eta))$ transforms as
+\[
+  \nabla_\eta \tilde{J}(\eta) = \left(\frac{\partial \varphi}{\partial \eta}\right)^\top \nabla_\theta J(\theta).
+\]
+Consequently, the vanilla gradient ascent direction depends on the
+parameterization: the update $\Delta\eta = \alpha\, \nabla_\eta
+\tilde{J}$ corresponds to $\Delta\theta = \alpha\,
+(\partial\varphi/\partial\eta)^\top \nabla_\theta J$ in the original
+space, which generally differs from $\alpha\, \nabla_\theta J$.
+\end{proposition}
+
+\begin{proof}
+By the chain rule:
+\[
+  \nabla_\eta \tilde{J}(\eta) = \nabla_\eta J(\varphi(\eta))
+  = \left(\frac{\partial \varphi}{\partial \eta}\right)^\top \nabla_\theta J(\theta),
+\]
+where $\partial\varphi/\partial\eta \in \R^{d \times d}$ is the Jacobian
+matrix. The transformed gradient direction is
+$(\partial\varphi/\partial\eta)^\top \nabla_\theta J$, which differs from
+$\nabla_\theta J$ unless the Jacobian is the identity.
+\end{proof}
+
+\begin{example}[Scaling Reparameterization]
+\label{ex:scaling}
+Consider a one-dimensional parameter $\theta \in \R$ and the
+reparameterization $\theta = c\,\eta$ for some constant $c > 0$. Then
+$\nabla_\eta \tilde{J} = c\, \nabla_\theta J$. A gradient step
+$\eta \leftarrow \eta + \alpha\, \nabla_\eta \tilde{J}$ corresponds to
+$\theta \leftarrow \theta + \alpha c^2\, \nabla_\theta J$ -- the
+effective step size is scaled by $c^2$. If $c = 100$, the update in the
+original space is $10{,}000$ times larger. This simple example shows how
+the choice of parameterization can drastically affect optimization
+behavior.
+\end{example}
+
+\begin{rlconnection}
+In deep RL, reparameterizations arise naturally from different network
+architectures, initializations, and activation functions. The
+non-covariance of vanilla gradients means optimization can be highly
+sensitive to these choices, motivating parameterization-invariant updates.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 4: The Fisher Information Matrix
+%% ========================================================================
+\section{The Fisher Information Matrix}
+
+The Fisher information matrix provides the natural Riemannian metric on
+the space of parameterized probability distributions.
+
+\begin{definition}[Fisher Information Matrix]
+\label{def:fisher}
+For a parameterized policy $\policy_\theta(a \mid s)$, the
+\emph{Fisher information matrix} at state $s$ is
+\[
+  F_s(\theta) = \E_{a \sim \policy_\theta(\cdot \mid s)}\!\left[
+    \nabla_\theta \log \policy_\theta(a \mid s)\,
+    \nabla_\theta \log \policy_\theta(a \mid s)^\top
+  \right] \in \R^{d \times d}.
+\]
+The \emph{average Fisher information matrix} under the on-policy state
+distribution $d^{\policy_\theta}$ is
+\[
+  F(\theta) = \E_{s \sim d^{\policy_\theta}}\!\bigl[F_s(\theta)\bigr]
+  = \E_{s \sim d^{\policy_\theta},\, a \sim \policy_\theta}\!\left[
+    \nabla_\theta \log \policy_\theta(a \mid s)\,
+    \nabla_\theta \log \policy_\theta(a \mid s)^\top
+  \right].
+\]
+\end{definition}
+
+\begin{proposition}[Properties of the Fisher Information Matrix]
+\label{prop:fisher-properties}
+The Fisher information matrix $F(\theta)$ satisfies:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Positive semi-definiteness:} $F(\theta) \succeq 0$ for
+    all $\theta$.
+  \item \textbf{Covariance interpretation:} $F_s(\theta) =
+    \Cov_{a \sim \policy_\theta}[\nabla_\theta \log \policy_\theta(a \mid s)]$.
+  \item \textbf{Hessian of negative log-likelihood:}
+    $F_s(\theta) = -\E_{a \sim \policy_\theta}[\nabla_\theta^2 \log
+    \policy_\theta(a \mid s)]$, provided the interchange of
+    differentiation and expectation is valid.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+(i) For any $v \in \R^d$:
+\[
+  v^\top F_s(\theta)\, v
+  = \E_a\!\left[(v^\top \nabla_\theta \log \policy_\theta(a \mid s))^2\right]
+  \geq 0.
+\]
+Averaging over $s$ preserves the inequality, so $v^\top F(\theta) v \geq 0$.
+
+(ii) By Lemma 4.2 of Lesson 54, $\E_a[\nabla_\theta \log
+\policy_\theta(a \mid s)] = 0$. Therefore:
+\begin{align*}
+  F_s(\theta) &= \E_a\!\left[\nabla_\theta \log \policy_\theta\,
+    (\nabla_\theta \log \policy_\theta)^\top\right]
+  - \underbrace{\E_a[\nabla_\theta \log \policy_\theta]}_{=\,0}\,
+    \underbrace{\E_a[\nabla_\theta \log \policy_\theta]^\top}_{=\,0} \\
+  &= \Cov_a[\nabla_\theta \log \policy_\theta(a \mid s)].
+\end{align*}
+
+(iii) Using $\nabla_\theta^2 \log \policy_\theta = \nabla_\theta^2
+\policy_\theta / \policy_\theta - (\nabla_\theta \log \policy_\theta)
+(\nabla_\theta \log \policy_\theta)^\top$ and noting
+$\sum_a \nabla_\theta^2 \policy_\theta = \nabla_\theta^2 1 = 0$:
+\[
+  \E_a[\nabla_\theta^2 \log \policy_\theta]
+  = \underbrace{\sum_a \nabla_\theta^2 \policy_\theta}_{=\,0}
+    - F_s(\theta)
+  = -F_s(\theta). \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Fisher Information as KL Hessian]
+\label{thm:fisher-kl}
+The Fisher information matrix equals the Hessian of the KL divergence
+between neighboring policies:
+\[
+  F_s(\theta) = \nabla_{\theta'}^2\,
+  \KL\!\bigl(\policy_\theta(\cdot \mid s) \;\|\;
+  \policy_{\theta'}(\cdot \mid s)\bigr)\Big|_{\theta' = \theta}.
+\]
+In particular, the KL divergence admits the local quadratic approximation
+\[
+  \KL\!\bigl(\policy_\theta(\cdot \mid s) \;\|\;
+  \policy_{\theta + \Delta\theta}(\cdot \mid s)\bigr)
+  \approx \frac{1}{2}\, \Delta\theta^\top F_s(\theta)\, \Delta\theta.
+\]
+\end{theorem}
+
+\begin{proof}
+Differentiating $\KL(\policy_\theta \| \policy_{\theta'})
+= \sum_a \policy_\theta(a \mid s) \log(\policy_\theta / \policy_{\theta'})$
+with respect to $\theta'$:
+$\nabla_{\theta'} \KL = -\sum_a \policy_\theta\, \nabla_{\theta'}
+\log \policy_{\theta'}$ and
+$\nabla_{\theta'}^2 \KL = -\sum_a \policy_\theta\, \nabla_{\theta'}^2
+\log \policy_{\theta'}$. At $\theta' = \theta$:
+$\nabla_{\theta'}^2 \KL\big|_{\theta'=\theta}
+= -\E_\policy[\nabla_\theta^2 \log \policy_\theta] = F_s(\theta)$
+by Proposition~\ref{prop:fisher-properties}(iii). Since
+$\KL(\policy_\theta \| \policy_\theta) = 0$ and the first derivative
+vanishes at $\theta' = \theta$ (zero-mean score), the Taylor expansion
+gives $\KL(\policy_\theta \| \policy_{\theta+\Delta\theta})
+\approx \frac{1}{2}\, \Delta\theta^\top F_s(\theta)\, \Delta\theta$.
+\end{proof}
+
+\begin{keyresult}[title={Fisher Information as KL Curvature}]
+The Fisher information matrix $F(\theta)$ captures the local curvature
+of the KL divergence between the current policy and nearby policies.
+A direction $v$ with large $v^\top F(\theta) v$ corresponds to a
+parameter perturbation that changes the policy distribution rapidly;
+a direction with small curvature changes the distribution slowly.
+The Fisher metric thus provides a notion of ``distance in distribution
+space'' that is more meaningful for optimization than Euclidean distance
+in parameter space.
+\end{keyresult}
+
+\begin{example}[Fisher Information for Softmax Policy]
+\label{ex:fisher-softmax}
+For the softmax policy $\policy_\theta(a \mid s) = \exp(\theta^\top
+\phi(s,a)) / \sum_{a'} \exp(\theta^\top \phi(s,a'))$ with score
+function $\nabla_\theta \log \policy_\theta(a \mid s) = \phi(s,a) -
+\bar{\phi}_\theta(s)$ where $\bar{\phi}_\theta(s) = \E_{a' \sim
+\policy_\theta}[\phi(s,a')]$ (Lesson 54, Example 4.5), the Fisher
+information at state $s$ is:
+\begin{align*}
+  F_s(\theta) &= \E_{a \sim \policy_\theta}\!\left[
+    (\phi(s,a) - \bar{\phi}_\theta(s))
+    (\phi(s,a) - \bar{\phi}_\theta(s))^\top\right] \\
+  &= \Cov_{a \sim \policy_\theta}\!\bigl[\phi(s,a)\bigr].
+\end{align*}
+The Fisher information is the covariance matrix of the feature vectors
+under the current policy.
+\end{example}
+
+\begin{example}[Fisher Information for Gaussian Policy]
+\label{ex:fisher-gaussian}
+For the Gaussian policy $\policy_\theta(a \mid s) = \mathcal{N}(a;\,
+\theta^\top \phi(s),\, \sigma^2 I)$ with fixed variance $\sigma^2$ and
+score function $\nabla_\theta \log \policy_\theta(a \mid s) =
+\frac{(a - \theta^\top \phi(s))}{\sigma^2}\, \phi(s)$ (scalar action
+case, from Lesson 54, Example 4.6), the Fisher information at state $s$
+is:
+\begin{align*}
+  F_s(\theta) &= \E_{a \sim \policy_\theta}\!\left[
+    \frac{(a - \theta^\top \phi(s))^2}{\sigma^4}\,
+    \phi(s)\, \phi(s)^\top\right]
+  = \frac{1}{\sigma^2}\, \phi(s)\, \phi(s)^\top,
+\end{align*}
+since $\E[(a - \mu)^2] = \sigma^2$. The average Fisher information is
+$F(\theta) = \frac{1}{\sigma^2}\, \E_{s \sim d^\policy}[\phi(s)\,
+\phi(s)^\top]$, which is $1/\sigma^2$ times the feature covariance
+matrix under the state distribution.
+\end{example}
+
+%% ========================================================================
+%% SECTION 5: The Natural Gradient
+%% ========================================================================
+\section{The Natural Gradient}
+
+We now derive the natural gradient as the steepest-ascent direction
+in the Riemannian manifold defined by the Fisher metric.
+
+\begin{definition}[Steepest Ascent under a Metric]
+\label{def:steepest-ascent}
+Given a positive definite matrix $G(\theta) \succ 0$ defining a local
+inner product $\langle u, v \rangle_G = u^\top G\, v$, the
+\emph{steepest ascent direction} of $J(\theta)$ under this metric is
+\[
+  \Delta\theta^* = \argmax_{\Delta\theta}\; \nabla_\theta J(\theta)^\top
+  \Delta\theta \quad \text{subject to} \quad
+  \Delta\theta^\top G(\theta)\, \Delta\theta \leq \epsilon.
+\]
+\end{definition}
+
+\begin{theorem}[Natural Gradient]
+\label{thm:natural-gradient}
+The steepest ascent direction under the Fisher metric
+$G(\theta) = F(\theta)$ is
+\[
+  \Delta\theta^* \propto F(\theta)^{-1}\, \nabla_\theta J(\theta).
+\]
+The vector $\tilde{\nabla}_\theta J(\theta) = F(\theta)^{-1}\,
+\nabla_\theta J(\theta)$ is called the \emph{natural policy gradient}.
+\end{theorem}
+
+\begin{proof}
+The constrained optimization problem in
+Definition~\ref{def:steepest-ascent} has the Lagrangian
+\[
+  \mathcal{L}(\Delta\theta, \lambda) = \nabla_\theta J^\top \Delta\theta
+  - \lambda\, (\Delta\theta^\top F\, \Delta\theta - \epsilon).
+\]
+Setting $\nabla_{\Delta\theta} \mathcal{L} = 0$:
+\[
+  \nabla_\theta J - 2\lambda\, F\, \Delta\theta = 0
+  \quad \Longrightarrow \quad
+  \Delta\theta = \frac{1}{2\lambda}\, F^{-1}\, \nabla_\theta J.
+\]
+The multiplier $\lambda > 0$ is determined by the constraint
+$\Delta\theta^\top F\, \Delta\theta = \epsilon$, which fixes the step
+length but not the direction. Therefore
+$\Delta\theta^* \propto F^{-1}\, \nabla_\theta J$.
+\end{proof}
+
+\begin{remark}
+\label{rem:kl-trust-region}
+By Theorem~\ref{thm:fisher-kl}, the constraint
+$\Delta\theta^\top F(\theta)\, \Delta\theta \leq \epsilon$ is equivalent
+(to second order) to the KL divergence constraint
+\[
+  \E_{s \sim d^\policy}\!\left[\KL\!\bigl(\policy_\theta(\cdot \mid s)
+  \;\|\; \policy_{\theta+\Delta\theta}(\cdot \mid s)\bigr)\right]
+  \leq \frac{\epsilon}{2}.
+\]
+The natural gradient is therefore the steepest ascent direction under
+the constraint that the policy distribution changes by at most a fixed
+amount, as measured by KL divergence. This is the starting point for
+trust-region methods (Lesson 58).
+\end{remark}
+
+\begin{keyresult}[title={Natural Policy Gradient Update}]
+The natural policy gradient update is
+\[
+  \theta_{k+1} = \theta_k + \alpha\, F(\theta_k)^{-1}\,
+  \nabla_\theta J(\theta_k),
+\]
+where $F(\theta_k)$ is the Fisher information matrix and $\alpha > 0$
+is the step size. This update takes the steepest ascent step in
+distribution space (as measured by KL divergence) rather than in
+Euclidean parameter space.
+\end{keyresult}
+
+\begin{warning}[title={Invertibility of the Fisher Matrix}]
+The Fisher information matrix $F(\theta)$ is positive semi-definite but
+may be singular (e.g., when the parameterization is redundant). In
+practice, a damping term is added: $\tilde{\nabla}_\theta J =
+(F(\theta) + \lambda I)^{-1} \nabla_\theta J$ for small $\lambda > 0$.
+This ensures invertibility and is equivalent to adding an $L^2$
+regularization term in the steepest-ascent problem. Alternatively, one
+can use the Moore-Penrose pseudoinverse $F^\dagger$.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 6: Covariance of the Natural Gradient
+%% ========================================================================
+\section{Covariance of the Natural Gradient}
+
+The key property that distinguishes the natural gradient from the vanilla
+gradient is its invariance under reparameterization.
+
+\begin{theorem}[Covariance under Reparameterization]
+\label{thm:covariance}
+Let $\theta = \varphi(\eta)$ be a smooth invertible reparameterization
+with Jacobian $J_\varphi = \partial\varphi/\partial\eta$. Then the
+natural gradient is covariant:
+\[
+  \tilde{\nabla}_\eta \tilde{J}(\eta)
+  = J_\varphi^{-1}\, \tilde{\nabla}_\theta J(\theta).
+\]
+In particular, the natural gradient update applied in the $\eta$
+parameterization maps to the same natural gradient update in the
+$\theta$ parameterization (up to a reparameterization of the step).
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Gradient transformation.}
+By the chain rule, $\nabla_\eta \tilde{J} = J_\varphi^\top\,
+\nabla_\theta J$.
+
+\textbf{Step 2: Fisher transformation.}
+The score function transforms as $\nabla_\eta \log \tilde{\policy}_\eta
+= J_\varphi^\top\, \nabla_\theta \log \policy_\theta$, so:
+\begin{align*}
+  \tilde{F}(\eta) &= \E\!\left[\nabla_\eta \log \tilde{\policy}_\eta\,
+    (\nabla_\eta \log \tilde{\policy}_\eta)^\top\right] \\
+  &= J_\varphi^\top\, \E\!\left[\nabla_\theta \log \policy_\theta\,
+    (\nabla_\theta \log \policy_\theta)^\top\right] J_\varphi
+  = J_\varphi^\top\, F(\theta)\, J_\varphi.
+\end{align*}
+
+\textbf{Step 3: Natural gradient in $\eta$ coordinates.}
+\begin{align*}
+  \tilde{\nabla}_\eta \tilde{J}
+  &= \tilde{F}(\eta)^{-1}\, \nabla_\eta \tilde{J}
+  = (J_\varphi^\top F J_\varphi)^{-1}\, J_\varphi^\top \nabla_\theta J \\
+  &= J_\varphi^{-1}\, F^{-1}\, (J_\varphi^\top)^{-1}\,
+    J_\varphi^\top\, \nabla_\theta J
+  = J_\varphi^{-1}\, F^{-1}\, \nabla_\theta J
+  = J_\varphi^{-1}\, \tilde{\nabla}_\theta J.
+\end{align*}
+The update $\Delta\eta = \alpha\, \tilde{\nabla}_\eta \tilde{J}$
+maps to $\Delta\theta = J_\varphi\, \Delta\eta = \alpha\,
+\tilde{\nabla}_\theta J$ in the original coordinates, confirming
+covariance.
+\end{proof}
+
+\begin{example}[Covariance Verification for Scaling]
+\label{ex:covariance-scaling}
+For $\theta = c\,\eta$ (Example~\ref{ex:scaling}): $J_\varphi = c$,
+$\tilde{F}(\eta) = c^2 F(\theta)$, and $\tilde{\nabla}_\eta \tilde{J}
+= (c^2 F)^{-1} (c\, \nabla_\theta J) = \frac{1}{c}
+\tilde{\nabla}_\theta J$. The update $\Delta\theta = c\, \Delta\eta
+= \alpha\, \tilde{\nabla}_\theta J$ is identical to the natural gradient
+in the original parameterization, unlike vanilla which scales by $c^2$.
+\end{example}
+
+%% ========================================================================
+%% SECTION 7: Compatible Function Approximation and the Natural Gradient
+%% ========================================================================
+\section{Compatible Function Approximation and the Natural Gradient}
+
+A remarkable connection exists between the compatible function
+approximation theorem (Lesson 54, Theorem 8.2) and the natural
+gradient: the weight vector of the optimal compatible critic is
+exactly the natural gradient direction.
+
+\begin{theorem}[Natural Gradient via Compatible Features]
+\label{thm:natural-compatible}
+Let $f_w(s,a) = w^\top \nabla_\theta \log \policy_\theta(a \mid s)$ be
+the compatible function approximator, and let $w^*$ minimize the
+mean squared error
+\[
+  \varepsilon(w) = \E_{s \sim d^\policy,\, a \sim \policy_\theta}\!\left[
+    \bigl(f_w(s,a) - A^{\policy}(s,a)\bigr)^2\right].
+\]
+Then $w^* = \tilde{\nabla}_\theta J(\theta) = F(\theta)^{-1}\,
+\nabla_\theta J(\theta)$, the natural policy gradient.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Optimality condition.}
+Setting $\nabla_w \varepsilon(w) = 0$:
+\[
+  \E_{s,a}\!\left[\nabla_\theta \log \policy_\theta(a \mid s)\,
+  \bigl(w^\top \nabla_\theta \log \policy_\theta(a \mid s)
+  - A^\policy(s,a)\bigr)\right] = 0.
+\]
+
+\textbf{Step 2: Expanding.}
+\begin{align*}
+  &\E_{s,a}\!\left[\nabla_\theta \log \policy_\theta\,
+    (\nabla_\theta \log \policy_\theta)^\top\right] w \\
+  &\qquad = \E_{s,a}\!\left[\nabla_\theta \log \policy_\theta\,
+    A^\policy(s,a)\right].
+\end{align*}
+The left-hand matrix is $F(\theta)$. By the policy gradient theorem
+with the advantage form (Lesson 55, Proposition 4.5), the right-hand
+side equals $\nabla_\theta J(\theta)$.
+
+\textbf{Step 3: Solving.}
+\[
+  F(\theta)\, w^* = \nabla_\theta J(\theta)
+  \quad \Longrightarrow \quad
+  w^* = F(\theta)^{-1}\, \nabla_\theta J(\theta)
+  = \tilde{\nabla}_\theta J(\theta). \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[title={Compatible Features Yield the Natural Gradient}]
+The natural policy gradient $\tilde{\nabla}_\theta J(\theta) =
+F(\theta)^{-1}\, \nabla_\theta J(\theta)$ equals the weight vector
+$w^*$ that solves the compatible function approximation least-squares
+problem. This provides a practical algorithm: instead of explicitly
+computing and inverting $F(\theta)$, one can solve a regression problem
+to obtain the natural gradient direction.
+\end{keyresult}
+
+\begin{rlconnection}
+The natural actor-critic of \citet{peters2008} exploits
+Theorem~\ref{thm:natural-compatible}: the critic learns $w$ via TD on
+compatible features $f_w(s,a) = w^\top \nabla_\theta \log
+\policy_\theta(a \mid s)$; at convergence $w \approx w^*$, and the
+actor updates $\theta \leftarrow \theta + \alpha\, w$. This avoids
+explicit computation and inversion of $F(\theta)$.
+\end{rlconnection}
+
+\begin{example}[Natural Gradient for Gaussian Policy]
+\label{ex:natural-gaussian}
+For the Gaussian policy with $\policy_\theta(a \mid s) = \mathcal{N}(a;\,
+\theta^\top \phi(s),\, \sigma^2)$ (scalar action), the Fisher
+information is $F = \frac{1}{\sigma^2}\, \E_s[\phi(s)\, \phi(s)^\top]
+= \frac{1}{\sigma^2}\, \Phi$ where $\Phi$ is the feature covariance
+(Example~\ref{ex:fisher-gaussian}). The natural gradient is:
+\[
+  \tilde{\nabla}_\theta J = F^{-1}\, \nabla_\theta J
+  = \sigma^2\, \Phi^{-1}\, \nabla_\theta J.
+\]
+This removes the $1/\sigma^2$ scaling present in the vanilla gradient,
+making the natural gradient independent of the noise level $\sigma^2$.
+As training proceeds and $\sigma^2$ decreases, the vanilla gradient
+shrinks while the natural gradient remains well-scaled.
+\end{example}
+
+%% ========================================================================
+%% SECTION 8: The Natural Policy Gradient Algorithm
+%% ========================================================================
+\section{The Natural Policy Gradient Algorithm}
+
+We now present the complete natural policy gradient algorithm and
+analyze its computational requirements.
+
+\begin{definition}[Natural Policy Gradient Algorithm]
+\label{def:npg-algorithm}
+The natural policy gradient algorithm iterates:
+\begin{enumerate}[label=\arabic*.]
+  \item Collect trajectory data $\{(s_t, a_t, r_t)\}$ under $\policy_{\theta_k}$.
+  \item Estimate the policy gradient $\hat{g}_k \approx \nabla_\theta
+    J(\theta_k)$ using the REINFORCE or advantage estimator.
+  \item Estimate the Fisher information matrix $\hat{F}_k \approx
+    F(\theta_k)$ from the same trajectory data.
+  \item Compute the natural gradient $\hat{w}_k = (\hat{F}_k +
+    \lambda I)^{-1}\, \hat{g}_k$.
+  \item Update: $\theta_{k+1} = \theta_k + \alpha_k\, \hat{w}_k$.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Sample Fisher Estimate]
+\label{prop:sample-estimates}
+Given $N$ state-action pairs $\{(s_i, a_i)\}_{i=1}^N$ sampled from the
+on-policy distribution, $\hat{F} = \frac{1}{N} \sum_{i=1}^{N}
+\nabla_\theta \log \policy_\theta(a_i \mid s_i)\,
+\nabla_\theta \log \policy_\theta(a_i \mid s_i)^\top$ is an unbiased
+estimate of $F(\theta)$. Forming $\hat{F}$ costs $O(Nd^2)$ and inverting
+it costs $O(d^3)$. For large $d$, the conjugate gradient method solves
+$\hat{F}\, w = \hat{g}$ using only Fisher-vector products, each costing
+$O(Nd)$; typically 10--20 iterations suffice.
+\end{proposition}
+
+\begin{rlconnection}
+The conjugate gradient approach is exactly the technique used in TRPO
+\citep{schulman2015trpo}, where the Fisher-vector product is computed by
+automatic differentiation through the KL divergence Hessian, avoiding
+explicit construction of the $d \times d$ Fisher matrix.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 9: Performance Improvement Bound
+%% ========================================================================
+\section{Performance Improvement Bound}
+
+The natural gradient enjoys a stronger performance improvement guarantee
+than the vanilla gradient, as established by \citet{kakade2002}.
+
+\begin{theorem}[Policy Improvement under Natural Gradient]
+\label{thm:kakade-bound}
+Let $\theta' = \theta + \alpha\, \tilde{\nabla}_\theta J(\theta)$ be
+the natural gradient update. For small $\alpha$:
+\[
+  J(\theta') - J(\theta)
+  \geq \alpha\, \nabla_\theta J(\theta)^\top F(\theta)^{-1}\,
+  \nabla_\theta J(\theta) - O(\alpha^2).
+\]
+Since $\nabla_\theta J^\top F^{-1} \nabla_\theta J =
+\|F^{-1/2} \nabla_\theta J\|^2 \geq 0$ (with equality iff
+$\nabla_\theta J = 0$, assuming $F \succ 0$), the natural gradient
+guarantees performance improvement at every step for sufficiently small
+$\alpha$.
+\end{theorem}
+
+\begin{proof}
+By Taylor expansion: $J(\theta') = J(\theta) + \nabla_\theta J^\top
+(\theta' - \theta) + O(\|\theta' - \theta\|^2)$. Substituting
+$\theta' - \theta = \alpha\, F^{-1}\, \nabla_\theta J$ gives the result.
+\end{proof}
+
+%% ========================================================================
+%% SECTION 10: Worked Example -- Natural Gradient on a Two-Action Bandit
+%% ========================================================================
+\section{Worked Example: Natural Gradient on a Bandit}
+
+\begin{example}[Comparing Vanilla and Natural Gradients]
+\label{ex:bandit-comparison}
+Consider a bandit with $\Actions = \{0, 1\}$, rewards $r(0) = 1$,
+$r(1) = 3$, and softmax policy $\policy_\theta(1) = \sigma(\theta) = p$.
+At $\theta = 0$ (so $p = 0.5$):
+
+\textbf{Vanilla gradient.} From Lesson 55, Example 3.3:
+$\nabla_\theta J = 2p(1-p) = 0.5$.
+
+\textbf{Fisher information.} For the scalar Bernoulli case, the score
+for $a=1$ is $1-p$ and for $a=0$ is $-p$, so:
+\[
+  F(\theta) = p(1-p)^2 + (1-p)p^2 = p(1-p)[(1-p) + p] = p(1-p) = 0.25.
+\]
+
+\textbf{Natural gradient.}
+$\tilde{\nabla}_\theta J = F^{-1}\, \nabla_\theta J
+= \frac{0.5}{0.25} = 2.0$.
+
+The natural gradient is 4 times larger. At $\theta = 3$
+($p \approx 0.953$): $\nabla_\theta J \approx 0.090$,
+$F \approx 0.045$, $\tilde{\nabla}_\theta J = 2.0$. The natural
+gradient remains constant at $2.0$ regardless of $\theta$, while the
+vanilla gradient shrinks as the policy becomes deterministic. The
+natural gradient correctly identifies that the same improvement in
+distribution space requires larger parameter steps near determinism.
+\end{example}
+
+%% ========================================================================
+%% SECTION 11: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[Fisher Information for Bernoulli Policy]
+\textnormal{(\(*\))} \\
+  For a Bernoulli policy $\policy_\theta(a=1 \mid s) = \sigma(\theta^\top
+  \phi(s))$ with sigmoid function $\sigma$, show that the Fisher
+  information at state $s$ is
+  \[
+    F_s(\theta) = \sigma(\theta^\top \phi(s))\,
+    (1 - \sigma(\theta^\top \phi(s)))\, \phi(s)\, \phi(s)^\top.
+  \]
+  Verify that $F_s$ is positive semi-definite with rank at most 1.
+\end{exercise}
+
+\begin{exercise}[KL Divergence Hessian Verification]
+\textnormal{(\(*\))} \\
+  For the softmax policy with $\Actions = \{0, 1\}$ and scalar parameter
+  $\theta$, explicitly compute $\KL(\policy_\theta \| \policy_{\theta'})$
+  as a function of $\theta$ and $\theta'$, then verify that
+  $\frac{\partial^2}{\partial \theta'^2}
+  \KL(\policy_\theta \| \policy_{\theta'})\big|_{\theta'=\theta}
+  = F(\theta) = \sigma(\theta)(1-\sigma(\theta))$.
+\end{exercise}
+
+\begin{exercise}[Natural Gradient for Gaussian with Learnable Variance]
+\textnormal{(\(**\))} \\
+  Consider a Gaussian policy with parameters $\theta = (\mu, \log\sigma)
+  \in \R^2$ (scalar state and action): $\policy_\theta(a) =
+  \mathcal{N}(a;\, \mu,\, \sigma^2)$.
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute the $2 \times 2$ Fisher information matrix $F(\theta)$.
+    \item Show that $F$ is diagonal, i.e., the mean and log-variance
+      parameters are ``orthogonal'' in the Fisher metric.
+    \item For the objective $J = \E_\policy[r(a)]$ with $r(a) = -a^2$,
+      compute the vanilla and natural gradients at $\mu = 1$,
+      $\sigma = 1$.
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Compatible Features and Advantage Regression]
+\textnormal{(\(**\))} \\
+  Let $\policy_\theta$ be a softmax policy with features $\phi(s,a)
+  \in \R^d$. Consider the compatible function approximator $f_w(s,a) =
+  w^\top (\phi(s,a) - \bar{\phi}_\theta(s))$.
+  \begin{enumerate}[label=(\alph*)]
+    \item Show that $f_w$ automatically satisfies
+      $\E_{a \sim \policy_\theta}[f_w(s,a)] = 0$ for all $s$,
+      confirming it approximates the advantage (not the $Q$-function).
+    \item Write the normal equations for $w^*$ and verify they give
+      $w^* = F^{-1}\, \nabla_\theta J$.
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Convergence Rate of Natural Policy Gradient]
+\textnormal{(\(***\))} \\
+  Suppose the Fisher information matrix satisfies $\mu_{\min} I \preceq
+  F(\theta) \preceq \mu_{\max} I$ for all $\theta$, with
+  $0 < \mu_{\min} \leq \mu_{\max}$. Show that the natural gradient
+  satisfies the ``gradient domination'' bound:
+  \[
+    \|\tilde{\nabla}_\theta J\|^2
+    \geq \frac{1}{\mu_{\max}^2}\, \|\nabla_\theta J\|^2,
+  \]
+  and use this to argue that the natural gradient converges at least as
+  fast as the vanilla gradient (in terms of the norm of the Euclidean
+  gradient) up to a condition number factor
+  $\kappa = \mu_{\max}/\mu_{\min}$.
+
+  \textit{Hint:} Compare the per-step improvement
+  $\nabla J^\top F^{-1} \nabla J$ to $\|\nabla J\|^2/\mu_{\max}$.
+\end{exercise}
+
+%% ========================================================================
+%% SECTION 12: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item The \textbf{vanilla policy gradient} is not covariant under
+    reparameterization, leading to optimization sensitivity.
+
+  \item The \textbf{Fisher information matrix} $F(\theta) = \E[\nabla
+    \log \policy_\theta\, (\nabla \log \policy_\theta)^\top]$ defines a
+    Riemannian metric on the policy manifold and equals the Hessian of
+    the KL divergence between neighboring policies.
+
+  \item The \textbf{natural gradient} $\tilde{\nabla}_\theta J =
+    F(\theta)^{-1}\, \nabla_\theta J(\theta)$ is the steepest ascent
+    direction under a KL divergence constraint and is covariant under
+    smooth invertible reparameterizations.
+
+  \item The natural gradient equals the \textbf{optimal compatible
+    function approximation weight vector}, providing a practical
+    alternative to explicit Fisher matrix inversion.
+
+  \item For \textbf{Gaussian policies}, the natural gradient removes
+    the $1/\sigma^2$ scaling; for \textbf{softmax policies}, the Fisher
+    information is the feature covariance under the current policy.
+
+  \item The natural gradient guarantees \textbf{monotonic improvement}
+    (for small step sizes) and provides a foundation for trust-region
+    methods.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 13: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 57} develops actor-critic architectures and
+    Generalized Advantage Estimation (GAE), which combines with the
+    natural gradient in the natural actor-critic algorithm.
+
+  \item \textbf{Lesson 58} extends the natural gradient idea to
+    trust-region methods, leading to TRPO \citep{schulman2015trpo}.
+
+  \item \citet{amari2016} provides a comprehensive treatment of
+    information geometry, including the Fisher metric and connections
+    to exponential families.
+
+  \item \citet{peters2008} develops the natural actor-critic with
+    compatible features and TD-based critic updates.
+
+  \item \citet[Chapter 2]{kakade2003} treats the sample complexity of
+    natural policy gradient methods.
+\end{itemize}
+
+\bibliography{pg-refs}
+
+\end{document}

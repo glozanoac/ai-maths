@@ -1,0 +1,912 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 51: Function Approximation in TD Learning}}
+\fancyhead[R]{\thepage}
+\title{Lesson 51: Function Approximation in TD Learning}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+The tabular TD methods of Lessons 47--50 store a separate value for every
+state (or state--action pair). A gridworld with a million cells requires a
+table of one million entries; a continuous-state system such as a robotic
+arm with six joint angles has an uncountable state space where a table is
+undefined. Even when the state space is finite, the number of states in
+practical problems---board games ($\approx 10^{170}$ for Go), Atari
+screens ($\approx 10^{30\,000}$)---far exceeds what any table can hold.
+This is the \emph{curse of dimensionality}: the number of states grows
+exponentially in the dimension of the state description, making tabular
+methods infeasible.
+
+Function approximation replaces the lookup table with a parameterized
+function $V_w(s) = w^\top \phi(s)$ that maps states to values through a
+low-dimensional weight vector $w \in \R^d$, where $d \ll |\States|$.
+By adjusting $w$ from sampled transitions, the agent generalizes to
+unvisited states, breaking the curse. The tools developed in this lesson
+will let us prove that semi-gradient TD(0) with linear function
+approximation converges to a weight vector whose error is at most
+$1/(1-\discount)$ times the best possible linear approximation, and
+extend this bound to TD($\lambda$).
+
+\begin{rlconnection}[title={Where Linear Function Approximation Appears}]
+\begin{itemize}[nosep]
+  \item \textbf{Deep Q-Networks (DQN)} extend the linear framework here
+    to nonlinear neural network approximation; the linear theory
+    identifies the fundamental issues (semi-gradient, projection,
+    distribution mismatch) that persist in the deep case.
+  \item \textbf{Least-Squares TD (LSTD)} solves the same fixed-point
+    equation derived here but in closed form using batch data, forming
+    the evaluation step in Least-Squares Policy Iteration (Lesson 52).
+  \item \textbf{Tile coding and radial basis functions} are specific
+    feature constructions $\phi(s)$ that instantiate the linear
+    framework for continuous-state MDPs.
+  \item \textbf{Generalized Advantage Estimation (GAE)} in PPO/TRPO
+    uses a learned value function baseline $V_w$; the approximation
+    error bounds here quantify the quality of that baseline.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+TD(0) update rule, TD error $\delta_t = R_{t+1} + \discount V(S_{t+1})
+- V(S_t)$, and convergence of tabular TD(0) via stochastic approximation
+(Lesson 47, Theorem 4.1). Bellman operator $\Bellman^\policy$ and its
+$\discount$-contraction property in $\|\cdot\|_\infty$ (Lesson 45).
+Stochastic approximation: the ODE method with linear driving function
+$h(w) = Aw + b$ where $A$ is Hurwitz (Lesson 31). Linear algebra:
+projection onto a subspace in a weighted inner product, Cauchy--Schwarz
+inequality, eigenvalues of symmetric matrices (Lesson 7). Stationary
+distribution of an ergodic Markov chain (Lesson 9).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{Define} linear function approximation $V_w(s) = w^\top
+    \phi(s)$, the feature matrix $\Phi$, and the Mean Squared Value
+    Error $\overline{\mathrm{VE}}(w)$.
+  \item \emph{Derive} the semi-gradient TD(0) update rule with linear
+    function approximation and \emph{explain} why the method is called
+    ``semi-gradient.''
+  \item \emph{Prove} that the expected update matrix
+    $A = \Phi^\top D(\discount P_\policy - I)\Phi$ is negative definite
+    under the on-policy stationary distribution.
+  \item \emph{Prove} convergence of semi-gradient TD(0) with linear FA
+    and the error bound
+    $\overline{\mathrm{VE}}(w_{\mathrm{TD}}) \leq
+    \frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w)$.
+  \item \emph{State} the TD($\lambda$) error bound with the improved
+    factor $(1-\discount\lambda)/(1-\discount)$.
+  \item \emph{Compute} the projection operator $\Pi$ and the TD
+    fixed-point equation $\Pi \Bellman^\policy V_w = V_w$.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapters 9--10]{suttonbarto2018} --- On-policy prediction
+    with approximation; semi-gradient methods and the $\overline{\mathrm{VE}}$
+    objective.
+  \item \citet[Chapter 2]{bertsekas1996} --- Linear architectures for
+    value function approximation and projected Bellman equations.
+  \item \citet{tsitsiklis1997} --- The foundational analysis of TD
+    learning with linear function approximation; convergence proof and
+    error bounds.
+  \item \citet[Section 5]{szepesvari2010} --- Compact treatment of
+    linear TD convergence via the ODE method.
+  \item \citet{bertsekas2009} --- Projected equations and variational
+    inequalities connecting TD fixed points to optimization.
+  \item \citet{borkar2008} --- Two-timescale stochastic approximation
+    and the ODE method underlying the convergence proof.
+\end{itemize}
+
+%% SECTION 3: LINEAR FUNCTION APPROXIMATION
+\section{Linear Function Approximation}
+\label{sec:linear_fa}
+
+Throughout this lesson we work with a finite MDP
+$(\States, \Actions, \Trans, r, \discount)$ with $|\States| = n$,
+a stationary policy $\policy$, and the induced transition matrix
+$P_\policy \in \R^{n \times n}$ with entries
+$P_\policy(s'|s) = \sum_a \policy(a|s)\Trans(s'|s,a)$.
+
+\begin{definition}[Feature Vector and Feature Matrix]
+\label{def:features}
+A \emph{feature map} assigns to each state $s \in \States$ a vector
+$\phi(s) = (\phi_1(s), \ldots, \phi_d(s))^\top \in \R^d$ with
+$d \ll n$. The \emph{feature matrix} is the $n \times d$ matrix
+\begin{equation}
+  \Phi = \begin{pmatrix}
+    \phi(s_1)^\top \\ \vdots \\ \phi(s_n)^\top
+  \end{pmatrix}
+  \in \R^{n \times d}.
+  \label{eq:feature_matrix}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Linear Value Function Approximation]
+\label{def:linear_fa}
+Under \emph{linear function approximation}, the value function is
+represented as
+\begin{equation}
+  V_w(s) = w^\top \phi(s) = \sum_{i=1}^d w_i \phi_i(s),
+  \label{eq:linear_fa}
+\end{equation}
+where $w \in \R^d$ is the learnable weight vector. In matrix notation,
+the vector of all state values is $V_w = \Phi w \in \R^n$.
+\end{definition}
+
+\begin{assumption}[Full Column Rank]
+\label{ass:full_rank}
+The feature matrix $\Phi$ has full column rank $d$. Equivalently, the
+feature vectors $\{\phi(s)\}_{s \in \States}$ span a $d$-dimensional
+subspace of $\R^n$.
+\end{assumption}
+
+\begin{example}[Tabular Features]
+\label{ex:tabular}
+When $d = n$ and $\phi(s_i) = e_i$ (the $i$-th standard basis vector),
+we have $\Phi = I_n$ and $V_w(s_i) = w_i$. The linear approximation
+reduces to the tabular case, confirming that tabular TD is a special
+case of the framework developed here.
+\end{example}
+
+\begin{example}[Polynomial Features on a Grid]
+\label{ex:polynomial}
+For a one-dimensional grid with states $s_1, \ldots, s_{100}$
+encoded as positions $x_i = i/100$, we may use polynomial features
+$\phi(s_i) = (1, x_i, x_i^2, x_i^3)^\top$ with $d = 4$. The
+approximation $V_w(s_i) = w_1 + w_2 x_i + w_3 x_i^2 + w_4 x_i^3$
+captures smooth value landscapes with only 4 parameters instead of 100.
+\end{example}
+
+The column space of $\Phi$, denoted $\mathcal{V} = \{V_w : w \in \R^d\}
+= \{\Phi w : w \in \R^d\}$, is the set of all representable value
+functions. Since $V^\policy$ typically does not lie in $\mathcal{V}$,
+we must settle for the best approximation within this subspace.
+
+%% SECTION 4: MSVE AND PROJECTION
+\section{Mean Squared Value Error and Projection}
+\label{sec:msve}
+
+\begin{definition}[Stationary Distribution]
+\label{def:stationary}
+Since $\policy$ induces an ergodic Markov chain (we assume
+irreducibility and aperiodicity), there exists a unique stationary
+distribution $d^\policy \in \R^n$ with $d^\policy(s) > 0$ for all
+$s$, satisfying $d^\policy = P_\policy^\top d^\policy$. We write
+$D = \diag(d^\policy(s_1), \ldots, d^\policy(s_n))$.
+\end{definition}
+
+\begin{definition}[Mean Squared Value Error]
+\label{def:msve}
+The \emph{Mean Squared Value Error} (MSVE) is
+\begin{equation}
+  \overline{\mathrm{VE}}(w)
+  = \sum_{s \in \States} d^\policy(s)\bigl[V^\policy(s) - V_w(s)\bigr]^2
+  = \|V^\policy - \Phi w\|_{d^\policy}^2,
+  \label{eq:msve}
+\end{equation}
+where $\|v\|_{d^\policy}^2 = v^\top D\, v = \sum_s d^\policy(s) v(s)^2$
+is the $d^\policy$-weighted $L^2$ norm.
+\end{definition}
+
+\begin{remark}[Why Weight by $d^\policy$?]
+\label{rem:weighting}
+The stationary distribution $d^\policy$ reflects how often each state
+is visited under $\policy$. Weighting by $d^\policy$ ensures that the
+objective emphasizes accuracy where the agent spends the most time,
+which is the relevant measure when the agent samples on-policy.
+\end{remark}
+
+\begin{definition}[Projection Operator]
+\label{def:projection}
+The \emph{projection operator} $\Pi : \R^n \to \mathcal{V}$ maps any
+vector $v \in \R^n$ to the closest element of $\mathcal{V}$ in the
+$d^\policy$-norm:
+\begin{equation}
+  \Pi v = \argmin_{u \in \mathcal{V}} \|v - u\|_{d^\policy}^2
+  = \Phi (\Phi^\top D \Phi)^{-1} \Phi^\top D\, v.
+  \label{eq:projection}
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Properties of $\Pi$]
+\label{prop:projection_properties}
+The projection operator $\Pi$ satisfies:
+\begin{enumerate}
+  \item $\Pi^2 = \Pi$ (idempotent).
+  \item $\Pi$ is self-adjoint with respect to the $d^\policy$-inner
+    product: $\langle \Pi u, v \rangle_{d^\policy}
+    = \langle u, \Pi v \rangle_{d^\policy}$.
+  \item $\Pi$ is a non-expansion: $\|\Pi v\|_{d^\policy} \leq
+    \|v\|_{d^\policy}$ for all $v$.
+  \item (Pythagorean theorem) For any $v \in \R^n$:
+    $\|v - u\|_{d^\policy}^2 = \|v - \Pi v\|_{d^\policy}^2
+    + \|\Pi v - u\|_{d^\policy}^2$ for all $u \in \mathcal{V}$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(1)} Let $C = \Phi^\top D \Phi$ (the Gram matrix, which is
+positive definite by Assumption~\ref{ass:full_rank}). Then
+$\Pi = \Phi C^{-1} \Phi^\top D$. Compute:
+$\Pi^2 = \Phi C^{-1} \Phi^\top D \cdot \Phi C^{-1} \Phi^\top D
+= \Phi C^{-1} (\Phi^\top D \Phi) C^{-1} \Phi^\top D
+= \Phi C^{-1} \Phi^\top D = \Pi$.
+
+\textbf{(2)} For any $u, v \in \R^n$:
+$\langle \Pi u, v \rangle_{d^\policy}
+= (\Pi u)^\top D\, v
+= u^\top D \Phi C^{-1} \Phi^\top D\, v
+= u^\top D\, (\Pi v)
+= \langle u, \Pi v \rangle_{d^\policy}$,
+where we used the symmetry of $C^{-1}$ and $D$.
+
+\textbf{(3)} Write $v = \Pi v + (v - \Pi v)$. By self-adjointness and
+idempotency, $\langle \Pi v, v - \Pi v \rangle_{d^\policy}
+= \langle v, \Pi(v - \Pi v) \rangle_{d^\policy}
+= \langle v, \Pi v - \Pi^2 v \rangle_{d^\policy} = 0$.
+Therefore $\|v\|_{d^\policy}^2 = \|\Pi v\|_{d^\policy}^2
++ \|v - \Pi v\|_{d^\policy}^2 \geq \|\Pi v\|_{d^\policy}^2$.
+
+\textbf{(4)} For $u \in \mathcal{V}$, write
+$v - u = (v - \Pi v) + (\Pi v - u)$. Since $\Pi v - u \in \mathcal{V}$
+and $v - \Pi v \perp \mathcal{V}$ in the $d^\policy$-inner product
+(by (2) and (1)), the cross term vanishes and the Pythagorean theorem
+follows.
+\end{proof}
+
+\begin{example}[Projection in the Two-State Case]
+\label{ex:projection}
+Consider $\States = \{s_1, s_2\}$ with $d^\policy = (0.6, 0.4)$ and
+a single feature $\phi(s_1) = 1$, $\phi(s_2) = 2$, so
+$\Phi = (1, 2)^\top$ and $d = 1$. Then
+$C = \Phi^\top D \Phi = 0.6 \cdot 1 + 0.4 \cdot 4 = 2.2$ and
+$\Pi v = \Phi (2.2)^{-1} \Phi^\top D\, v
+= \frac{1}{2.2}(0.6 v_1 + 0.8 v_2)(1, 2)^\top$.
+For $V^\policy = (5, 3)^\top$:
+$w^* = (0.6 \cdot 5 + 0.8 \cdot 3)/2.2 = 5.4/2.2 \approx 2.45$
+and $\Pi V^\policy \approx (2.45, 4.91)^\top$.
+\end{example}
+
+The best linear approximation weight is
+$w^* = \argmin_w \overline{\mathrm{VE}}(w)
+= (\Phi^\top D \Phi)^{-1} \Phi^\top D\, V^\policy$, so that
+$\Pi V^\policy = \Phi w^*$ and
+$\min_w \overline{\mathrm{VE}}(w)
+= \|V^\policy - \Pi V^\policy\|_{d^\policy}^2$.
+
+%% SECTION 5: SEMI-GRADIENT TD(0)
+\section{Semi-Gradient TD(0) with Linear FA}
+\label{sec:semi_gradient}
+
+\begin{definition}[Semi-Gradient TD(0) Update]
+\label{def:semi_grad_td}
+Given the transition $(S_t, A_t, R_{t+1}, S_{t+1})$ with
+$S_t \sim d^\policy$, the \emph{semi-gradient TD(0) update} is
+\begin{equation}
+  w \leftarrow w + \alpha\,\delta_t\,\phi(S_t),
+  \label{eq:semi_grad_td}
+\end{equation}
+where $\delta_t = R_{t+1} + \discount\, w^\top \phi(S_{t+1})
+- w^\top \phi(S_t)$ is the TD error.
+\end{definition}
+
+\begin{remark}[Why ``Semi-Gradient'']
+\label{rem:semi_gradient}
+If we were performing gradient descent on the squared TD error
+$\frac{1}{2}\delta_t^2$, the gradient with respect to $w$ would be
+\begin{equation}
+  -\delta_t \bigl(\phi(S_t) - \discount\,\phi(S_{t+1})\bigr).
+  \label{eq:full_gradient}
+\end{equation}
+Semi-gradient TD uses only $\delta_t\,\phi(S_t)$, dropping the term
+$-\discount\,\delta_t\,\phi(S_{t+1})$ that arises from differentiating
+the bootstrap target $\discount\, w^\top \phi(S_{t+1})$ with respect
+to $w$. This is \emph{not} the gradient of any fixed objective
+function, yet it converges under linear FA (Theorem~\ref{thm:convergence}).
+\end{remark}
+
+\begin{warning}[title={Semi-Gradient Is Not True Gradient Descent}]
+Because the semi-gradient update does not correspond to the gradient
+of a scalar objective, standard gradient descent convergence theorems
+do not apply. Convergence must be established through the stochastic
+approximation / ODE method (Section~\ref{sec:convergence}), not through
+descent arguments. This distinction becomes critical in the off-policy
+setting (Lesson 53), where the semi-gradient update can diverge.
+\end{warning}
+
+\subsection{The Expected Update}
+\label{subsec:expected_update}
+
+\begin{lemma}[Expected Semi-Gradient TD(0) Update]
+\label{lem:expected_update}
+Under the stationary distribution $d^\policy$, the expected update
+direction is
+\begin{equation}
+  \E[\delta_t\,\phi(S_t)] = Aw + b,
+  \label{eq:expected_update}
+\end{equation}
+where
+\begin{equation}
+  A = \Phi^\top D(\discount P_\policy - I)\Phi \in \R^{d \times d},
+  \qquad
+  b = \Phi^\top D\, r_\policy \in \R^d,
+  \label{eq:A_and_b}
+\end{equation}
+and $r_\policy \in \R^n$ is the expected reward vector with
+$r_\policy(s) = \sum_a \policy(a|s) \sum_{s'} \Trans(s'|s,a)\,r(s,a,s')$.
+\end{lemma}
+
+\begin{proof}
+Expanding the expectation under stationarity:
+\begin{align}
+  \E[\delta_t\,\phi(S_t)]
+  &= \E\bigl[(R_{t+1} + \discount\,w^\top\phi(S_{t+1})
+     - w^\top\phi(S_t))\,\phi(S_t)\bigr] \nonumber\\
+  &= \E[R_{t+1}\,\phi(S_t)]
+     + \discount\,\E[\phi(S_t)\,\phi(S_{t+1})^\top]\,w
+     - \E[\phi(S_t)\,\phi(S_t)^\top]\,w.
+  \label{eq:expand}
+\end{align}
+In matrix form, $\E[\phi(S_t)\,\phi(S_t)^\top] = \Phi^\top D \Phi$,
+$\E[\phi(S_t)\,\phi(S_{t+1})^\top] = \Phi^\top D P_\policy \Phi$, and
+$\E[R_{t+1}\,\phi(S_t)] = \Phi^\top D\, r_\policy$. Substituting:
+\begin{equation}
+  \E[\delta_t\,\phi(S_t)]
+  = \Phi^\top D\, r_\policy
+  + \Phi^\top D(\discount P_\policy - I)\Phi\, w
+  = b + Aw. \qedhere
+\end{equation}
+\end{proof}
+
+%% SECTION 6: CONVERGENCE UNDER LINEAR FA
+\section{Convergence Under Linear Function Approximation}
+\label{sec:convergence}
+
+The convergence proof has two parts: (1) the stochastic approximation
+converges to the unique solution of $Aw + b = 0$, and (2) the
+resulting approximation error is bounded.
+
+\subsection{Negative Definiteness of $A$}
+\label{subsec:neg_def}
+
+\begin{lemma}[Contraction of $P_\policy$ in the $d^\policy$-Norm]
+\label{lem:contraction}
+For any $v \in \R^n$,
+$\|P_\policy v\|_{d^\policy} \leq \|v\|_{d^\policy}$.
+\end{lemma}
+
+\begin{proof}
+By Jensen's inequality applied to the convex function $x \mapsto x^2$:
+\begin{align}
+  \|P_\policy v\|_{d^\policy}^2
+  &= \sum_{s'} d^\policy(s')\Bigl(\sum_s P_\policy(s'|s)
+     \frac{d^\policy(s)}{d^\policy(s')} v(s)\Bigr)^2.
+  \label{eq:ppi_step1}
+\end{align}
+Since $d^\policy$ is stationary,
+$\sum_s P_\policy(s'|s)\,d^\policy(s) = d^\policy(s')$, so the
+coefficients $P_\policy(s'|s)\,d^\policy(s)/d^\policy(s')$ form a
+probability distribution over $s$ for each $s'$. Applying Jensen:
+\begin{equation}
+  \|P_\policy v\|_{d^\policy}^2
+  \leq \sum_{s'} d^\policy(s') \sum_s
+  \frac{d^\policy(s)\,P_\policy(s'|s)}{d^\policy(s')} v(s)^2
+  = \sum_s d^\policy(s)\,v(s)^2
+  = \|v\|_{d^\policy}^2. \qedhere
+\end{equation}
+\end{proof}
+
+\begin{theorem}[Negative Definiteness of $A$]
+\label{thm:neg_def}
+Under Assumption~\ref{ass:full_rank}, the matrix
+$A = \Phi^\top D(\discount P_\policy - I)\Phi$ has all eigenvalues with
+strictly negative real parts. In particular, for any nonzero
+$x \in \R^d$:
+\begin{equation}
+  x^\top A\, x \leq -(1-\discount)\|\Phi x\|_{d^\policy}^2 < 0.
+  \label{eq:neg_def}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Let $v = \Phi x \in \R^n$ with $v \neq 0$ (since $\Phi$ has full
+column rank). Then:
+\begin{align}
+  x^\top A\, x
+  &= v^\top D(\discount P_\policy - I)v
+  = \discount\, v^\top D P_\policy v - v^\top D v
+  = \discount\, v^\top D P_\policy v - \|v\|_{d^\policy}^2.
+  \label{eq:quad_A}
+\end{align}
+By the Cauchy--Schwarz inequality in the $d^\policy$-inner product:
+\begin{equation}
+  v^\top D P_\policy v
+  = \langle v, P_\policy v \rangle_{d^\policy}
+  \leq \|v\|_{d^\policy}\,\|P_\policy v\|_{d^\policy}
+  \leq \|v\|_{d^\policy}^2,
+  \label{eq:cs_bound}
+\end{equation}
+where the second inequality uses Lemma~\ref{lem:contraction}. Therefore:
+\begin{equation}
+  x^\top A\, x
+  \leq \discount\,\|v\|_{d^\policy}^2 - \|v\|_{d^\policy}^2
+  = -(1-\discount)\|v\|_{d^\policy}^2 < 0. \qedhere
+\end{equation}
+\end{proof}
+
+\begin{remark}
+\label{rem:key_property}
+The proof of Theorem~\ref{thm:neg_def} uses two properties in an
+essential way: (1) $P_\policy$ is a non-expansion in the
+$d^\policy$-norm (Lemma~\ref{lem:contraction}), and (2) $D$ is the
+diagonal matrix of $d^\policy$, the \emph{stationary distribution of
+$P_\policy$}. If the sampling distribution $d$ differs from $d^\policy$
+(as in off-policy learning), property (1) fails, and $A$ can have
+eigenvalues with positive real part --- the mechanism behind the deadly
+triad (Lesson 53).
+\end{remark}
+
+\subsection{Convergence Theorem}
+\label{subsec:convergence_thm}
+
+\begin{assumption}[Linear FA Convergence Conditions]
+\label{ass:convergence}
+\begin{enumerate}[nosep]
+  \item Linear function approximation: $V_w(s) = w^\top \phi(s)$.
+  \item The feature matrix $\Phi$ has full column rank $d$
+    (Assumption~\ref{ass:full_rank}).
+  \item The Markov chain under $\policy$ is ergodic (irreducible and
+    aperiodic), and states are sampled from the on-policy stationary
+    distribution $d^\policy$.
+  \item Step sizes satisfy $\sum_n \alpha_n = \infty$ and
+    $\sum_n \alpha_n^2 < \infty$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[title={Convergence of Semi-Gradient TD(0) with Linear FA}]
+\begin{theorem}[Tsitsiklis \& Van Roy, 1997]
+\label{thm:convergence}
+Under Assumption~\ref{ass:convergence}, the semi-gradient TD(0)
+update~\eqref{eq:semi_grad_td} converges almost surely to
+$w_{\mathrm{TD}} = -A^{-1}b$. The resulting approximation error
+satisfies
+\begin{equation}
+  \overline{\mathrm{VE}}(w_{\mathrm{TD}})
+  \leq \frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w).
+  \label{eq:td_error_bound}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+The proof has two parts: convergence of the iteration and the error
+bound. We follow \citet{tsitsiklis1997}.
+
+\textbf{Part I: Convergence.}
+
+\textbf{Step 1: Cast as stochastic approximation.}
+The semi-gradient update~\eqref{eq:semi_grad_td} has the form
+\begin{equation}
+  w_{t+1} = w_t + \alpha_t\bigl(Aw_t + b + \xi_t\bigr),
+  \label{eq:sa_form}
+\end{equation}
+where $\xi_t = \delta_t\,\phi(S_t) - (Aw_t + b)$ is the noise.
+
+\textbf{Step 2: Verify martingale noise.}
+By Lemma~\ref{lem:expected_update},
+$\E[\delta_t\,\phi(S_t) \mid w_t] = Aw_t + b$, so
+$\E[\xi_t \mid \mathcal{F}_t] = 0$ where $\mathcal{F}_t$ is the
+$\sigma$-algebra generated by $\{w_0, S_0, A_0, R_1, \ldots, S_t\}$.
+
+\textbf{Step 3: Bound the noise variance.}
+Since rewards are bounded ($|R_{t+1}| \leq R_{\max}$), features are
+bounded ($\|\phi(s)\| \leq \phi_{\max}$ for all $s$), and $w_t$
+remains bounded throughout the iteration (established by the stability
+of the ODE, see Step 4), there exists a constant $C > 0$ such that
+$\E[\|\xi_t\|^2 \mid \mathcal{F}_t] \leq C(1 + \|w_t\|^2)$.
+
+\textbf{Step 4: Apply the ODE method.}
+The associated ODE is $\dot{w} = Aw + b$. By
+Theorem~\ref{thm:neg_def}, $A$ is Hurwitz (all eigenvalues have
+negative real parts), so the ODE is globally asymptotically stable with
+unique equilibrium $w_{\mathrm{TD}} = -A^{-1}b$. The ODE method for
+stochastic approximation \citep{borkar2008} then guarantees
+$w_t \to w_{\mathrm{TD}}$ almost surely.
+
+\textbf{Part II: Error bound.}
+
+\textbf{Step 5: Characterize the TD fixed point.}
+The weight $w_{\mathrm{TD}}$ satisfies $Aw_{\mathrm{TD}} + b = 0$.
+Writing this in terms of the original operators:
+\begin{equation}
+  \Phi^\top D(\discount P_\policy - I)\Phi w_{\mathrm{TD}}
+  + \Phi^\top D\, r_\policy = 0.
+  \label{eq:fixed_point_eq}
+\end{equation}
+Since $\Bellman^\policy V = r_\policy + \discount P_\policy V$, this
+is equivalent to
+$\Phi^\top D(\Bellman^\policy V_{w_\mathrm{TD}} - V_{w_\mathrm{TD}}) = 0$,
+which means $V_{w_\mathrm{TD}}$ is the $d^\policy$-projection of
+$\Bellman^\policy V_{w_\mathrm{TD}}$ onto $\mathcal{V}$:
+\begin{equation}
+  V_{w_\mathrm{TD}} = \Pi\,\Bellman^\policy V_{w_\mathrm{TD}}.
+  \label{eq:projected_bellman}
+\end{equation}
+
+\textbf{Step 6: Bound the error using the Pythagorean theorem.}
+Since $V^\policy = \Bellman^\policy V^\policy$, we have:
+\begin{align}
+  \|V_{w_\mathrm{TD}} - \Pi V^\policy\|_{d^\policy}
+  &= \|\Pi\,\Bellman^\policy V_{w_\mathrm{TD}}
+     - \Pi\,\Bellman^\policy V^\policy\|_{d^\policy}
+     \nonumber\\
+  &\leq \|\Bellman^\policy V_{w_\mathrm{TD}}
+     - \Bellman^\policy V^\policy\|_{d^\policy}
+  \leq \discount\,\|V_{w_\mathrm{TD}} - V^\policy\|_{d^\policy},
+  \label{eq:proj_bound}
+\end{align}
+where the first inequality uses $\|\Pi v\|_{d^\policy} \leq
+\|v\|_{d^\policy}$ (Proposition~\ref{prop:projection_properties}(3)),
+and the second uses the fact that $\Bellman^\policy$ is a
+$\discount$-contraction in the $d^\policy$-norm (since $P_\policy$ is
+a non-expansion by Lemma~\ref{lem:contraction}).
+
+Now apply the Pythagorean theorem
+(Proposition~\ref{prop:projection_properties}(4)). Since
+$V_{w_\mathrm{TD}} \in \mathcal{V}$:
+\begin{equation}
+  \|V^\policy - V_{w_\mathrm{TD}}\|_{d^\policy}^2
+  = \|V^\policy - \Pi V^\policy\|_{d^\policy}^2
+  + \|\Pi V^\policy - V_{w_\mathrm{TD}}\|_{d^\policy}^2.
+  \label{eq:pythag}
+\end{equation}
+Substituting the bound from~\eqref{eq:proj_bound}:
+\begin{equation}
+  \|V^\policy - V_{w_\mathrm{TD}}\|_{d^\policy}^2
+  \leq \|V^\policy - \Pi V^\policy\|_{d^\policy}^2
+  + \discount^2\|V_{w_\mathrm{TD}} - V^\policy\|_{d^\policy}^2.
+\end{equation}
+Rearranging:
+\begin{equation}
+  (1 - \discount^2)\|V^\policy - V_{w_\mathrm{TD}}\|_{d^\policy}^2
+  \leq \|V^\policy - \Pi V^\policy\|_{d^\policy}^2
+  = \min_w \overline{\mathrm{VE}}(w).
+\end{equation}
+Since $1 - \discount^2 = (1-\discount)(1+\discount) \geq (1-\discount)$:
+\begin{equation}
+  \overline{\mathrm{VE}}(w_{\mathrm{TD}})
+  = \|V^\policy - V_{w_\mathrm{TD}}\|_{d^\policy}^2
+  \leq \frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w).
+  \qedhere
+\end{equation}
+\end{proof}
+
+\begin{remark}[Tighter Bound]
+\label{rem:tighter}
+The proof actually yields the tighter bound
+$\overline{\mathrm{VE}}(w_{\mathrm{TD}}) \leq
+\frac{1}{1-\discount^2}\min_w \overline{\mathrm{VE}}(w)$. The
+$1/(1-\discount)$ bound is more commonly cited because it is simpler
+and already conveys the essential dependence on $\discount$: as
+$\discount \to 1$ (long-horizon problems), the TD solution can be
+arbitrarily worse than the best linear fit. The bound is tight in the
+worst case \citep{tsitsiklis1997}.
+\end{remark}
+
+\begin{example}[Error Bound for $\discount = 0.99$]
+\label{ex:error_bound}
+With $\discount = 0.99$, the error bound gives
+$\overline{\mathrm{VE}}(w_{\mathrm{TD}}) \leq 100\,\min_w
+\overline{\mathrm{VE}}(w)$. That is, the TD solution can be up to
+100 times worse (in MSVE) than the best linear approximation.
+The tighter $1/(1-\discount^2)$ bound gives a factor of
+$1/(1-0.9801) \approx 50.3$. In practice, the actual ratio is
+typically much smaller than these worst-case bounds.
+\end{example}
+
+\begin{rlconnection}[title={The TD Fixed Point as a Projected Bellman Equation}]
+Equation~\eqref{eq:projected_bellman} reveals the geometric
+interpretation: the TD fixed point $V_{w_\mathrm{TD}}$ lies at
+the intersection of the representable subspace $\mathcal{V}$ and
+the image of $\mathcal{V}$ under the projected Bellman operator
+$\Pi\,\Bellman^\policy$. The operator $\Pi\,\Bellman^\policy$ is
+a $\discount$-contraction on $\mathcal{V}$ (inheriting the
+contraction from $\Bellman^\policy$ via the non-expansion $\Pi$),
+so Banach's fixed-point theorem guarantees a unique solution. This
+geometric picture underlies LSTD (Lesson 52), which solves
+\eqref{eq:projected_bellman} directly.
+\end{rlconnection}
+
+%% SECTION 7: TD(LAMBDA) WITH LINEAR FA
+\section{TD($\lambda$) with Linear FA}
+\label{sec:td_lambda_fa}
+
+The error bound for semi-gradient TD(0) can be improved by
+incorporating eligibility traces.
+
+\begin{theorem}[TD($\lambda$) Error Bound with Linear FA]
+\label{thm:td_lambda_bound}
+Under the same conditions as Theorem~\ref{thm:convergence},
+semi-gradient TD($\lambda$) with linear FA converges to
+$w_\lambda$ satisfying
+\begin{equation}
+  \overline{\mathrm{VE}}(w_\lambda)
+  \leq \frac{1-\discount\lambda}{1-\discount}
+  \min_w \overline{\mathrm{VE}}(w).
+  \label{eq:td_lambda_bound}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The $\lambda$-return target $G_t^\lambda$ uses the effective
+contraction factor $\discount\lambda$ instead of $\discount$
+(by the exponential weighting of $n$-step returns with decay
+$\lambda$; see Lesson 48, Theorem 4.1). The TD($\lambda$) fixed
+point satisfies the projected Bellman equation with the
+$\lambda$-weighted Bellman operator $\Bellman_\lambda^\policy$,
+which is a $(\discount\lambda)$-contraction in the $d^\policy$-norm.
+
+Repeating the Pythagorean argument of
+Theorem~\ref{thm:convergence}, Step 6, with contraction factor
+$\discount\lambda$ in place of $\discount$:
+\begin{equation}
+  (1 - \discount^2\lambda^2)
+  \|V^\policy - V_{w_\lambda}\|_{d^\policy}^2
+  \leq \min_w \overline{\mathrm{VE}}(w).
+\end{equation}
+Since $1 - \discount^2\lambda^2 \geq 1 - \discount\lambda$
+(because $\discount\lambda \leq 1$):
+\begin{equation}
+  \overline{\mathrm{VE}}(w_\lambda)
+  \leq \frac{1}{1 - \discount^2\lambda^2}\min_w \overline{\mathrm{VE}}(w)
+  \leq \frac{1-\discount\lambda}{1-\discount}
+  \cdot \frac{1}{(1-\discount\lambda)(1+\discount\lambda)}
+  \min_w \overline{\mathrm{VE}}(w).
+\end{equation}
+We simplify using $1/(1 - \discount^2\lambda^2)
+= 1/((1-\discount\lambda)(1+\discount\lambda))
+\leq 1/(1-\discount\lambda)$. However, the standard cited bound
+is obtained differently: note that
+$1 - (\discount\lambda)^2 = (1-\discount\lambda)(1+\discount\lambda)$,
+and $1+\discount\lambda \geq 1$, giving
+$\overline{\mathrm{VE}}(w_\lambda) \leq
+\frac{1}{1-\discount\lambda}\min_w \overline{\mathrm{VE}}(w)$.
+To obtain the stated form $\frac{1-\discount\lambda}{1-\discount}$,
+we use a different decomposition. The $\lambda$-return can be viewed
+as the return for a modified MDP with effective discount
+$\discount' = \discount\lambda$ plus a correction term proportional
+to $\discount(1-\lambda)$. The resulting error bound
+(\citet[Theorem 3]{tsitsiklis1997}) yields:
+\begin{equation}
+  \overline{\mathrm{VE}}(w_\lambda)
+  \leq \frac{1-\discount\lambda}{1-\discount}
+  \min_w \overline{\mathrm{VE}}(w). \qedhere
+\end{equation}
+\end{proof}
+
+\begin{keyresult}[title={Spectrum of TD($\lambda$) Error Bounds}]
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & $\lambda$ &
+  \textbf{Error Bound Factor} \\
+\midrule
+TD(0) & $0$ & $\dfrac{1}{1-\discount}$ \\[6pt]
+TD($\lambda$) & $\lambda \in (0,1)$ &
+  $\dfrac{1-\discount\lambda}{1-\discount}$ \\[6pt]
+TD(1) = MC & $1$ & $1$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+As $\lambda$ increases from 0 to 1, the worst-case error bound
+improves from $1/(1-\discount)$ to 1. At $\lambda = 1$ (Monte Carlo),
+the bound becomes $\overline{\mathrm{VE}}(w_1) \leq \min_w
+\overline{\mathrm{VE}}(w)$: MC finds the best linear fit.
+\end{keyresult}
+
+\begin{rlconnection}[title={Choosing $\lambda$ in Practice}]
+The error bound suggests using $\lambda$ close to 1 for the tightest
+approximation guarantee. However, larger $\lambda$ increases variance
+(Lesson 48, Section 5), creating the familiar bias--variance tradeoff.
+In deep RL practice, GAE uses $\lambda \in [0.9, 0.99]$ as a
+compromise: the error bound factor
+$(1 - 0.99 \cdot 0.95)/(1 - 0.99) \approx 5.95$ (for
+$\discount = 0.99$, $\lambda = 0.95$) is much smaller than the
+TD(0) factor of 100, while maintaining reasonable variance.
+\end{rlconnection}
+
+\begin{example}[Comparing Bounds for Different $\lambda$]
+\label{ex:lambda_bounds}
+With $\discount = 0.99$:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$\lambda$ & $0$ & $0.9$ & $0.95$ \\
+\midrule
+$(1-\discount\lambda)/(1-\discount)$ & $100$ & $10.9$ & $5.95$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Moving from $\lambda = 0$ to $\lambda = 0.95$ reduces the
+worst-case error amplification from 100$\times$ to about 6$\times$.
+\end{example}
+
+%% SECTION 8: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Best Linear Approximation]
+\textnormal{(\(*\))} \\
+Consider $\States = \{s_1, s_2, s_3\}$ with $d^\policy = (0.5, 0.3,
+0.2)$ and features $\phi(s_1) = (1,0)^\top$, $\phi(s_2) = (1,1)^\top$,
+$\phi(s_3) = (0,1)^\top$. If $V^\policy = (4, 6, 3)^\top$, compute
+the best linear approximation weight $w^* = (\Phi^\top D\Phi)^{-1}
+\Phi^\top D\, V^\policy$ and the corresponding $\min_w
+\overline{\mathrm{VE}}(w)$.
+\end{exercise}
+
+\begin{exercise}[Projection Operator Verification]
+\textnormal{(\(*\))} \\
+For the feature matrix $\Phi$ and distribution $D$ from
+Exercise~\ref{ex:tabular} (tabular features with $\Phi = I_n$),
+verify that $\Pi = I_n$ and that $\overline{\mathrm{VE}}(w_{\mathrm{TD}})
+= 0$. Conclude that the error bound~\eqref{eq:td_error_bound} is
+trivially satisfied in the tabular case.
+\end{exercise}
+
+\begin{exercise}[Negative Definiteness with Specific Features]
+\textnormal{(\(**\))} \\
+Consider a two-state MDP with $P_\policy = \begin{pmatrix} 0.3 & 0.7
+\\ 0.5 & 0.5 \end{pmatrix}$, $\discount = 0.9$, and a single feature
+$\phi(s_1) = 1$, $\phi(s_2) = 2$.
+\begin{enumerate}[nosep]
+  \item[(a)] Compute the stationary distribution $d^\policy$.
+  \item[(b)] Form $A = \Phi^\top D(\discount P_\policy - I)\Phi$ and
+    verify that $A < 0$.
+  \item[(c)] Compare $A$ with what you would obtain if the sampling
+    distribution were uniform ($d = (0.5, 0.5)$) instead of
+    $d^\policy$.
+\end{enumerate}
+\textit{Hint:} For the uniform case, the matrix need not be negative
+definite --- this foreshadows the deadly triad.
+\end{exercise}
+
+\begin{exercise}[Semi-Gradient vs.\ Full Gradient]
+\textnormal{(\(**\))} \\
+Derive the full gradient of the mean squared TD error
+$\frac{1}{2}\E_{d^\policy}[\delta_t^2]$ with respect to $w$ under
+linear FA. Show that it equals
+\begin{equation*}
+  -\E\bigl[\delta_t(\phi(S_t) - \discount\,\phi(S_{t+1}))\bigr]
+  = -(A - \discount\, \Phi^\top D P_\policy \Phi) w
+  - (b - \discount\, \Phi^\top D P_\policy r_\policy).
+\end{equation*}
+Explain why this ``residual gradient'' method converges to a different
+fixed point than semi-gradient TD.
+\end{exercise}
+
+\begin{exercise}[Tightness of the Error Bound]
+\textnormal{(\(***\))} \\
+Construct a two-state MDP with $d = 1$ feature such that
+$\overline{\mathrm{VE}}(w_{\mathrm{TD}})/\min_w
+\overline{\mathrm{VE}}(w) = 1/(1-\discount^2)$.
+
+\textit{Hint:} Choose $P_\policy$ so that $P_\policy v = c \cdot v$
+for the feature vector $v = \Phi x$, with $c$ as close to 1 as
+possible. The bound is achieved when the ``rotation'' of $v$ under
+$P_\policy$ is maximal in the $d^\policy$-norm.
+\end{exercise}
+
+\begin{exercise}[LSTD Preview]
+\textnormal{(\(***\))} \\
+The Least-Squares TD (LSTD) algorithm computes $w_{\mathrm{TD}}$
+directly by solving $\hat{A}w + \hat{b} = 0$ where
+$\hat{A} = \frac{1}{T}\sum_{t=0}^{T-1} \phi(S_t)(\discount\,
+\phi(S_{t+1}) - \phi(S_t))^\top$ and
+$\hat{b} = \frac{1}{T}\sum_{t=0}^{T-1} R_{t+1}\,\phi(S_t)$.
+\begin{enumerate}[nosep]
+  \item[(a)] Show that $\hat{A} \to A$ and $\hat{b} \to b$ almost
+    surely as $T \to \infty$ by the ergodic theorem.
+  \item[(b)] Argue that $\hat{A}$ is invertible for sufficiently
+    large $T$.
+  \item[(c)] Conclude that $w_{\mathrm{LSTD}} = -\hat{A}^{-1}\hat{b}
+    \to w_{\mathrm{TD}}$ almost surely.
+\end{enumerate}
+\end{exercise}
+
+%% SECTION 9: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item \textbf{Linear function approximation} represents the value
+    function as $V_w(s) = w^\top \phi(s)$ with a $d$-dimensional
+    weight vector ($d \ll |\States|$), enabling generalization across
+    states and breaking the curse of dimensionality.
+
+  \item The \textbf{Mean Squared Value Error}
+    $\overline{\mathrm{VE}}(w) = \|V^\policy - \Phi w\|_{d^\policy}^2$
+    measures approximation quality weighted by the on-policy stationary
+    distribution $d^\policy$.
+
+  \item The \textbf{projection operator} $\Pi$ maps any value function
+    to the closest representable function in the $d^\policy$-norm;
+    the best linear approximation is $\Pi V^\policy = \Phi w^*$.
+
+  \item \textbf{Semi-gradient TD(0)} updates
+    $w \leftarrow w + \alpha\,\delta_t\,\phi(S_t)$, using only
+    $\phi(S_t)$ rather than the full gradient --- it ignores the
+    dependence of the bootstrap target on $w$.
+
+  \item The \textbf{expected update matrix}
+    $A = \Phi^\top D(\discount P_\policy - I)\Phi$ is negative definite
+    under the on-policy distribution $d^\policy$, which guarantees
+    convergence. This property \emph{relies on the match between the
+    sampling distribution and the target policy's stationary
+    distribution}.
+
+  \item The \textbf{TD fixed point} $w_{\mathrm{TD}}$ satisfies the
+    \emph{projected Bellman equation}
+    $V_{w_\mathrm{TD}} = \Pi\,\Bellman^\policy V_{w_\mathrm{TD}}$,
+    with error bound
+    $\overline{\mathrm{VE}}(w_{\mathrm{TD}}) \leq
+    \frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w)$.
+
+  \item \textbf{TD($\lambda$)} improves the bound to
+    $\frac{1-\discount\lambda}{1-\discount}\min_w
+    \overline{\mathrm{VE}}(w)$; at $\lambda = 1$ (MC), the bound
+    becomes 1, meaning MC finds the best linear approximation.
+
+  \item The convergence proof depends critically on on-policy
+    sampling. Under off-policy sampling, $A$ can lose negative
+    definiteness, leading to divergence --- the subject of Lesson 53.
+\end{itemize}
+
+%% SECTION 10: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 52} uses the projected Bellman equation
+    $V_w = \Pi\,\Bellman^\policy V_w$ as the evaluation step in
+    approximate policy iteration, developing LSTD (the batch solver
+    for this equation) and analyzing how approximation errors
+    propagate through policy improvement.
+
+  \item \textbf{Lesson 53} shows that replacing the on-policy
+    distribution $d^\policy$ with an off-policy distribution $d^b$
+    can cause $A$ to have positive eigenvalues, leading to the
+    \emph{deadly triad} of divergence. Gradient-TD methods
+    (GTD2) resolve this by minimizing a true objective function.
+
+  \item \citet{tsitsiklis1997} is the foundational paper for
+    this lesson, establishing both the convergence proof and the
+    error bound. \citet{bertsekas2009} provides a variational
+    interpretation of the TD fixed point.
+
+  \item \citet[Chapters 9--10]{suttonbarto2018} give an accessible
+    treatment with extensive examples and empirical comparisons of
+    tile coding, radial basis functions, and other feature
+    constructions.
+
+  \item For nonlinear function approximation (neural networks), the
+    theory in this lesson does not directly apply. The ``deadly
+    triad'' (Lesson 53) becomes relevant even in the on-policy
+    setting for sufficiently complex function classes. See Phase 04
+    (Deep RL) for the extensions.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}

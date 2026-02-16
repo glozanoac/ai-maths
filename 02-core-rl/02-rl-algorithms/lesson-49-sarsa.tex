@@ -1,0 +1,777 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 49: SARSA -- On-Policy TD Control}}
+\fancyhead[R]{\thepage}
+\title{Lesson 49: SARSA -- On-Policy TD Control}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lessons 47 and 48 developed temporal-difference methods for
+\emph{prediction}: estimating the value function $\Vpi$ of a fixed
+policy $\policy$. But the ultimate goal of reinforcement learning is
+\emph{control} --- finding a policy that maximizes cumulative reward.
+Consider a robot navigating a factory floor, where each wrong turn
+costs time and battery. The robot cannot afford to evaluate every
+candidate policy to completion; it must improve its behavior
+\emph{while interacting with the environment}. This requires
+simultaneously evaluating the current policy and improving it --- a
+challenge known as the \emph{exploration--exploitation dilemma}.
+
+The transition from prediction to control introduces two fundamental
+difficulties. First, the agent must learn \emph{action-value} functions
+$\Qpi(s,a)$ rather than state-value functions $\Vpi(s)$, because
+computing the greedy policy from $\Vpi$ requires a model of the
+environment, while computing it from $\Qpi$ does not. Second, the
+agent must maintain exploration to ensure all state--action pairs are
+sampled, while simultaneously converging to a greedy policy. SARSA
+resolves both difficulties by applying the TD(0) update to
+action-value functions under an $\varepsilon$-greedy policy that
+becomes greedier over time. The tools developed in this lesson will let
+us formalize the SARSA algorithm, state the GLIE convergence
+conditions, and prove that SARSA converges to the optimal
+action-value function $\Qstar$.
+
+\begin{rlconnection}[title={Where SARSA and On-Policy Control Appear}]
+\begin{itemize}[nosep]
+  \item \textbf{SARSA($\lambda$)} extends SARSA with eligibility
+    traces (Lesson 48), propagating TD errors backward through
+    recently visited state--action pairs for faster credit assignment.
+  \item \textbf{Expected SARSA} (Lesson 50) replaces the sampled
+    next action with an expectation, reducing variance while
+    maintaining the on-policy structure.
+  \item \textbf{Actor--critic methods} generalize the on-policy
+    evaluation--improvement loop of SARSA to the function approximation
+    setting, using a critic (value estimator) and an actor (policy).
+  \item \textbf{Safe reinforcement learning}: SARSA's on-policy
+    nature means it accounts for the cost of exploration, often
+    yielding safer behavior than off-policy alternatives like
+    Q-learning.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+TD(0) update rule and TD error $\delta_t$ (Lesson 47,
+Definitions 4.1--4.2). Convergence of TD(0) via stochastic
+approximation: the Bellman operator $\Bellman^\policy$ as a
+$\discount$-contraction, martingale noise, and the Robbins--Monro
+theorem (Lesson 47, Theorem 4.7). Bellman expectation and optimality
+equations for action-value functions $\Qpi$ and $\Qstar$ (Lessons
+45--46). Step-size conditions $\sum_n \alpha_n = \infty$,
+$\sum_n \alpha_n^2 < \infty$ (Lesson 31).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{Define} the action-value Bellman operator and verify
+    that it is a $\discount$-contraction in $\|\cdot\|_\infty$.
+  \item \emph{State} the SARSA update rule and explain the acronym
+    $(S_t, A_t, R_{t+1}, S_{t+1}, A_{t+1})$.
+  \item \emph{Define} $\varepsilon$-greedy policies and the GLIE
+    (Greedy in the Limit with Infinite Exploration) condition.
+  \item \emph{Prove} the convergence of SARSA to $\Qstar$ under
+    GLIE by decomposing the update into a Q-learning component
+    plus a vanishing exploration perturbation.
+  \item \emph{Compute} SARSA updates on small MDPs and compare
+    the learned values with those of a purely greedy agent.
+  \item \emph{Explain} why the on-policy nature of SARSA leads to
+    different behavior than off-policy Q-learning in stochastic
+    environments.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapter 6, Sections 6.4--6.5]{suttonbarto2018} ---
+    SARSA, on-policy TD control, and the cliff-walking example
+    comparing SARSA and Q-learning.
+  \item \citet[Chapter 4]{bertsekas1996} --- Convergence of TD
+    control methods via stochastic approximation.
+  \item \citet{singh2000} --- The definitive convergence proof for
+    single-step on-policy RL algorithms, including SARSA under GLIE.
+  \item \citet[Section 4.2]{szepesvari2010} --- Compact treatment of
+    TD control convergence.
+  \item \citet{rummery1994} --- The original paper introducing SARSA
+    (under the name ``modified connectionist Q-learning'').
+  \item \citet{tsitsiklis1994} --- Asynchronous stochastic
+    approximation framework underlying the convergence analysis.
+\end{itemize}
+
+%% SECTION 3: FROM PREDICTION TO CONTROL
+\section{From Prediction to Control}
+\label{sec:prediction_to_control}
+
+The TD prediction methods of Lessons 47--48 estimate $\Vpi$ for a
+fixed policy $\policy$. To find an optimal policy, we employ the
+\emph{Generalized Policy Iteration} (GPI) framework: alternate between
+\emph{policy evaluation} (estimating a value function) and
+\emph{policy improvement} (making the policy greedy with respect to
+the estimated values).
+
+\begin{definition}[Generalized Policy Iteration]
+\label{def:gpi}
+\emph{Generalized Policy Iteration (GPI)} refers to any algorithm
+that interleaves partial policy evaluation with policy improvement.
+The evaluation step updates the value function toward $\Qpi$
+(or $\Vpi$), and the improvement step adjusts the policy to be
+greedier with respect to the current value estimate.
+\end{definition}
+
+For model-free control, we must work with action-value functions
+rather than state-value functions.
+
+\begin{remark}[Why Action Values?]
+\label{rem:why_q}
+Given $\Vpi(s)$, selecting the greedy action requires solving
+$\argmax_a \sum_{s'} \Trans(s' \mid s,a)[r(s,a,s') + \discount
+\Vpi(s')]$, which requires knowledge of the transition kernel
+$\Trans$. In contrast, given $\Qpi(s,a)$, the greedy action is
+simply $\argmax_a \Qpi(s,a)$ --- no model needed. This is why all
+model-free TD control methods learn $Q$-values.
+\end{remark}
+
+\subsection{Action-Value Bellman Operators}
+\label{subsec:bellman_q}
+
+\begin{definition}[Action-Value Bellman Expectation Operator]
+\label{def:bellman_q}
+For a policy $\policy$, the \emph{action-value Bellman expectation
+operator} $\Bellman^\policy_Q \colon \R^{|\States||\Actions|}
+\to \R^{|\States||\Actions|}$ is defined by
+\begin{equation}
+  (\Bellman^\policy_Q Q)(s,a)
+  = \sum_{s'} \Trans(s' \mid s,a) \left[
+    r(s,a,s') + \discount \sum_{a'} \policy(a' \mid s') Q(s',a')
+  \right].
+  \label{eq:bellman_q}
+\end{equation}
+Its unique fixed point is $\Qpi$.
+\end{definition}
+
+\begin{definition}[Bellman Optimality Operator on $Q$-Values]
+\label{def:bellman_opt_q}
+The \emph{Bellman optimality operator} on action values is
+\begin{equation}
+  (\Bellman^*_Q Q)(s,a)
+  = \sum_{s'} \Trans(s' \mid s,a) \left[
+    r(s,a,s') + \discount \max_{a'} Q(s',a')
+  \right].
+  \label{eq:bellman_opt_q}
+\end{equation}
+Its unique fixed point is $\Qstar$.
+\end{definition}
+
+\begin{lemma}[Contraction of Action-Value Bellman Operators]
+\label{lem:bellman_q_contraction}
+Both $\Bellman^\policy_Q$ and $\Bellman^*_Q$ are
+$\discount$-contractions in $\|\cdot\|_\infty$:
+\begin{equation}
+  \|\Bellman^\policy_Q Q_1 - \Bellman^\policy_Q Q_2\|_\infty
+  \leq \discount \|Q_1 - Q_2\|_\infty, \qquad
+  \|\Bellman^*_Q Q_1 - \Bellman^*_Q Q_2\|_\infty
+  \leq \discount \|Q_1 - Q_2\|_\infty.
+  \label{eq:q_contraction}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+We prove the result for $\Bellman^\policy_Q$; the argument for
+$\Bellman^*_Q$ is analogous (using $|\max_a f(a) - \max_a g(a)|
+\leq \max_a |f(a) - g(a)|$). For any $(s,a)$:
+\begin{align}
+  |(\Bellman^\policy_Q Q_1)(s,a) - (\Bellman^\policy_Q Q_2)(s,a)|
+  &= \discount \left|
+    \sum_{s'} \Trans(s' \mid s,a) \sum_{a'} \policy(a' \mid s')
+    \bigl[Q_1(s',a') - Q_2(s',a')\bigr]
+  \right| \nonumber\\
+  &\leq \discount \sum_{s'} \Trans(s' \mid s,a) \sum_{a'}
+    \policy(a' \mid s') |Q_1(s',a') - Q_2(s',a')| \nonumber\\
+  &\leq \discount \|Q_1 - Q_2\|_\infty
+    \underbrace{\sum_{s'} \Trans(s' \mid s,a)
+    \sum_{a'} \policy(a' \mid s')}_{= 1}.
+  \label{eq:q_contraction_proof}
+\end{align}
+Taking the supremum over $(s,a)$ gives the result.
+\end{proof}
+
+The contraction properties established in
+Lemma~\ref{lem:bellman_q_contraction} will be the key stability
+condition in the convergence proofs that follow.
+
+%% SECTION 4: EXPLORATION AND EPSILON-GREEDY POLICIES
+\section{Exploration and $\varepsilon$-Greedy Policies}
+\label{sec:exploration}
+
+\begin{definition}[$\varepsilon$-Greedy Policy]
+\label{def:epsilon_greedy}
+Given an action-value function $Q$, the \emph{$\varepsilon$-greedy
+policy} assigns
+\begin{equation}
+  \policy_\varepsilon(a \mid s) = \begin{cases}
+    1 - \varepsilon + \frac{\varepsilon}{|\Actions|}
+      & \text{if } a = \argmax_{a'} Q(s,a'), \\[4pt]
+    \frac{\varepsilon}{|\Actions|}
+      & \text{otherwise,}
+  \end{cases}
+  \label{eq:eps_greedy}
+\end{equation}
+where $\varepsilon \in (0,1]$ and ties in $\argmax$ are broken
+arbitrarily but consistently.
+\end{definition}
+
+\begin{proposition}[$\varepsilon$-Greedy Policy Improvement]
+\label{prop:eps_improvement}
+Let $Q = \Qpi$ for some policy $\policy$, and let
+$\policy_\varepsilon$ be the $\varepsilon$-greedy policy with
+respect to $Q$. Then
+$\Qpi(s, \policy_\varepsilon) \geq \Vpi(s)$ for all $s$,
+where $\Qpi(s, \policy_\varepsilon)
+= \sum_a \policy_\varepsilon(a \mid s) \Qpi(s,a)$.
+\end{proposition}
+
+\begin{proof}
+Since $\policy_\varepsilon$ places probability at least
+$\varepsilon/|\Actions|$ on every action and the remaining
+$1 - \varepsilon$ on the greedy action:
+\begin{align}
+  \sum_a \policy_\varepsilon(a \mid s) \Qpi(s,a)
+  &= \frac{\varepsilon}{|\Actions|} \sum_a \Qpi(s,a)
+     + (1 - \varepsilon) \max_a \Qpi(s,a) \nonumber\\
+  &\geq \frac{\varepsilon}{|\Actions|} \sum_a \Qpi(s,a)
+     + (1 - \varepsilon) \sum_a \policy(a \mid s) \Qpi(s,a)
+     \nonumber\\
+  &\geq \sum_a \policy(a \mid s) \Qpi(s,a) = \Vpi(s),
+  \label{eq:eps_improvement}
+\end{align}
+where the first inequality uses
+$\max_a \Qpi(s,a) \geq \sum_a \policy(a \mid s) \Qpi(s,a)$
+and the second uses $\varepsilon/|\Actions| \leq \policy(a \mid s)$
+for the non-greedy actions under a sufficiently exploratory policy.
+More precisely, the improvement follows from convexity: the
+$\varepsilon$-greedy policy shifts probability mass toward higher
+$Q$-values.
+\end{proof}
+
+\begin{definition}[GLIE Condition]
+\label{def:glie}
+A sequence of policies $\{\policy_t\}_{t=0}^\infty$ is
+\emph{Greedy in the Limit with Infinite Exploration (GLIE)} if:
+\begin{enumerate}[nosep]
+  \item Every state--action pair is visited infinitely often:
+    $\sum_{t=0}^\infty \indicator\{S_t = s, A_t = a\} = \infty$
+    almost surely for all $(s,a) \in \States \times \Actions$.
+  \item The policy converges to the greedy policy:
+    $\policy_t(a \mid s) \to \indicator\{a = \argmax_{a'} Q(s,a')\}$
+    almost surely for all $s \in \States$.
+\end{enumerate}
+\end{definition}
+
+\begin{example}[Standard GLIE Schedule]
+\label{ex:glie_schedule}
+The $\varepsilon_t$-greedy policy with $\varepsilon_t = 1/t$
+satisfies GLIE. Condition 2 holds since $\varepsilon_t \to 0$.
+For Condition 1, since $\varepsilon_t > 0$ for all $t$ and the
+MDP is finite, every state--action pair reachable under any
+positive-probability policy is visited infinitely often.
+Another common choice is $\varepsilon_t = c/(c + t)$ for some
+constant $c > 0$.
+\end{example}
+
+\begin{warning}[title={Constant $\varepsilon$ Does Not Satisfy GLIE}]
+Using a fixed $\varepsilon > 0$ violates Condition 2 of GLIE: the
+policy never becomes fully greedy. With constant $\varepsilon$,
+SARSA converges not to $\Qstar$ but to $Q^{\policy_\varepsilon}$,
+the value function of the $\varepsilon$-greedy policy. The gap
+$\|\Qstar - Q^{\policy_\varepsilon}\|_\infty$ is bounded by
+$O(\varepsilon)$ but does not vanish.
+\end{warning}
+
+With the exploration framework established, we now define the SARSA
+algorithm.
+
+%% SECTION 5: THE SARSA ALGORITHM
+\section{The SARSA Algorithm}
+\label{sec:sarsa}
+
+\begin{definition}[SARSA Update Rule]
+\label{def:sarsa}
+Given the quintuple $(S_t, A_t, R_{t+1}, S_{t+1}, A_{t+1})$ where
+actions are drawn from the current $\varepsilon$-greedy policy
+$A_t \sim \policy_t(\cdot \mid S_t)$ and
+$A_{t+1} \sim \policy_t(\cdot \mid S_{t+1})$, the \emph{SARSA
+update} is
+\begin{equation}
+  Q(S_t, A_t) \leftarrow Q(S_t, A_t)
+  + \alpha_t\bigl[R_{t+1} + \discount Q(S_{t+1}, A_{t+1})
+  - Q(S_t, A_t)\bigr].
+  \label{eq:sarsa}
+\end{equation}
+The name ``SARSA'' is an acronym for the quintuple
+$(\mathbf{S}_t, \mathbf{A}_t, \mathbf{R}_{t+1},
+\mathbf{S}_{t+1}, \mathbf{A}_{t+1})$ used in the update.
+\end{definition}
+
+\begin{remark}[SARSA as TD(0) for Action Values]
+\label{rem:sarsa_td}
+Comparing with the TD(0) update for state values
+(Lesson 47, Definition 4.2):
+$V(S_t) \leftarrow V(S_t) + \alpha[\delta_t]$ where
+$\delta_t = R_{t+1} + \discount V(S_{t+1}) - V(S_t)$,
+the SARSA update is the direct analogue for action values with
+TD error
+\begin{equation}
+  \delta_t = R_{t+1} + \discount Q(S_{t+1}, A_{t+1})
+  - Q(S_t, A_t).
+  \label{eq:sarsa_td_error}
+\end{equation}
+The only structural difference is that the bootstrap target uses the
+action-value at the \emph{next state--action pair} rather than the
+next state alone.
+\end{remark}
+
+\begin{keyresult}[title={SARSA: On-Policy TD Control}]
+The SARSA algorithm performs GPI by interleaving single-step
+action-value evaluation (the TD update~\eqref{eq:sarsa}) with
+policy improvement (selecting $\varepsilon$-greedy actions). It is
+\emph{on-policy}: the action $A_{t+1}$ in the bootstrap target is
+drawn from the \emph{same} policy that the agent follows. This
+means SARSA learns the value of the policy it is actually executing,
+including the cost of exploratory actions.
+\end{keyresult}
+
+\begin{example}[SARSA Updates on a Grid]
+\label{ex:sarsa_grid}
+Consider a $3 \times 1$ grid with states $\{L, C, R\}$, actions
+$\{$left, right$\}$, deterministic transitions (left/right move
+accordingly, with walls keeping the agent in place), reward $+1$ at
+$R$ and $0$ elsewhere, $\discount = 0.9$, and $Q_0 \equiv 0$.
+Starting in $C$ with $\varepsilon = 0.1$ and $\alpha = 0.1$:
+
+Suppose the trajectory begins $S_0 = C, A_0 = \text{right}$ (greedy
+or exploratory), $R_1 = 1$, $S_1 = R, A_1 = \text{left}$ (action
+chosen by $\policy_0$). Then:
+\[
+  Q_1(C, \text{right}) = 0 + 0.1[1 + 0.9 \cdot Q_0(R, \text{left})
+  - 0] = 0.1[1 + 0] = 0.1.
+\]
+After several episodes, $Q(C, \text{right})$ grows toward
+$\Qstar(C, \text{right}) = 1 + 0.9 \cdot 1/(1-0.9) = 10$.
+\end{example}
+
+\begin{rlconnection}[title={On-Policy Safety in Cliff Walking}]
+The classic cliff-walking example
+\citep[Section 6.5]{suttonbarto2018} illustrates a key consequence
+of SARSA's on-policy nature. In a gridworld with a cliff along the
+bottom edge (falling off gives $-100$ reward), SARSA learns to take
+a \emph{safe path} far from the cliff because its value estimates
+account for the $\varepsilon$-probability of exploratory actions
+that could step off the edge. Q-learning, being off-policy, learns
+the \emph{optimal path} along the cliff edge --- which is optimal
+only if the agent executes the greedy policy perfectly, without
+exploration. During learning, Q-learning's agent falls off the cliff
+much more frequently.
+\end{rlconnection}
+
+We now turn to the convergence analysis of SARSA.
+
+%% SECTION 6: CONVERGENCE OF SARSA
+\section{Convergence of SARSA}
+\label{sec:convergence}
+
+\begin{assumption}[SARSA Convergence Conditions]
+\label{ass:sarsa}
+\begin{enumerate}[nosep]
+  \item The MDP has finite state space $\States$ and finite action
+    space $\Actions$.
+  \item Rewards are bounded: $|r(s,a,s')| \leq R_{\max}$ for all
+    $(s,a,s')$.
+  \item The policy sequence $\{\policy_t\}$ satisfies GLIE
+    (Definition~\ref{def:glie}).
+  \item Step sizes satisfy $\sum_n \alpha_n(s,a) = \infty$ and
+    $\sum_n \alpha_n^2(s,a) < \infty$ for each
+    $(s,a) \in \States \times \Actions$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[title={Convergence of SARSA (Singh et al.\ 2000)}]
+\begin{theorem}[Convergence of SARSA]
+\label{thm:sarsa}
+Under Assumption~\ref{ass:sarsa}, the SARSA iterates converge to the
+optimal action-value function almost surely:
+\begin{equation}
+  Q_t(s,a) \cas \Qstar(s,a)
+  \quad \text{for all } (s,a) \in \States \times \Actions.
+  \label{eq:sarsa_convergence}
+\end{equation}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We follow the approach of \citet{singh2000}, decomposing the SARSA
+update into a Q-learning component plus a vanishing exploration
+perturbation.
+
+\textbf{Step 1: Decompose the SARSA target.}
+At time $t$, the SARSA update target is
+$R_{t+1} + \discount Q_t(S_{t+1}, A_{t+1})$. Add and subtract
+$\discount \max_{a'} Q_t(S_{t+1}, a')$:
+\begin{equation}
+  R_{t+1} + \discount Q_t(S_{t+1}, A_{t+1})
+  = \underbrace{R_{t+1} + \discount \max_{a'} Q_t(S_{t+1}, a')}
+    _{\text{Q-learning target}}
+  + \underbrace{\discount\bigl[Q_t(S_{t+1}, A_{t+1})
+    - \max_{a'} Q_t(S_{t+1}, a')\bigr]}_{\xi_t}.
+  \label{eq:sarsa_decomp}
+\end{equation}
+The perturbation $\xi_t$ captures the difference between following
+the current $\varepsilon_t$-greedy policy and acting greedily.
+
+\textbf{Step 2: Express as stochastic approximation with perturbation.}
+At the $k$-th visit to state--action pair $(s,a)$, the SARSA update
+can be written as
+\begin{equation}
+  Q_{k+1}(s,a) = Q_k(s,a)
+  + \alpha_k(s,a)\bigl[(\Bellman^*_Q Q_k)(s,a) - Q_k(s,a)
+  + w_k(s,a) + \xi_k(s,a)\bigr],
+  \label{eq:sarsa_sa}
+\end{equation}
+where $w_k(s,a)$ is the zero-mean stochastic approximation noise
+(the difference between the sampled Q-learning target and its
+expectation $(\Bellman^*_Q Q_k)(s,a)$), and $\xi_k(s,a)$ is the
+exploration perturbation from Step 1.
+
+\textbf{Step 3: Verify that the noise is a martingale difference.}
+Let $\mathcal{F}_k$ denote the filtration containing all information
+up to the $k$-th visit to $(s,a)$. The noise
+$w_k(s,a) = R_{t+1} + \discount \max_{a'} Q_k(S_{t+1}, a')
+- (\Bellman^*_Q Q_k)(s,a)$ satisfies
+\begin{equation}
+  \E[w_k(s,a) \mid \mathcal{F}_k]
+  = (\Bellman^*_Q Q_k)(s,a) - (\Bellman^*_Q Q_k)(s,a) = 0,
+  \label{eq:noise_mg}
+\end{equation}
+by the definition of $\Bellman^*_Q$. The variance is bounded by
+$\E[w_k^2 \mid \mathcal{F}_k] \leq C$ for a constant $C$ depending
+on $R_{\max}$ and $\discount$, since rewards and $Q$-iterates
+are bounded (the latter by $R_{\max}/(1-\discount)$, established
+by induction using the contraction property).
+
+\textbf{Step 4: Bound the exploration perturbation.}
+Under the $\varepsilon_t$-greedy policy $\policy_t$, the conditional
+expectation of $\xi_t$ given $\mathcal{F}_k$ and $S_{t+1}$ is:
+\begin{align}
+  \E[\xi_t \mid \mathcal{F}_k, S_{t+1}]
+  &= \discount \sum_{a'} \policy_t(a' \mid S_{t+1}) Q_k(S_{t+1}, a')
+     - \discount \max_{a'} Q_k(S_{t+1}, a') \nonumber\\
+  &= \discount\!\left[
+    (1-\varepsilon_t) \max_{a'} Q_k(S_{t+1}, a')
+    + \frac{\varepsilon_t}{|\Actions|}
+      \sum_{a'} Q_k(S_{t+1}, a')
+    - \max_{a'} Q_k(S_{t+1}, a')
+  \right] \nonumber\\
+  &= \discount\,\varepsilon_t \left[
+    \frac{1}{|\Actions|} \sum_{a'} Q_k(S_{t+1}, a')
+    - \max_{a'} Q_k(S_{t+1}, a')
+  \right].
+  \label{eq:xi_bound}
+\end{align}
+Since $Q_k$ is bounded by $R_{\max}/(1-\discount)$:
+\begin{equation}
+  |\E[\xi_t \mid \mathcal{F}_k, S_{t+1}]|
+  \leq \discount\,\varepsilon_t \cdot
+  \frac{2R_{\max}}{1 - \discount}
+  =: C_\xi\,\varepsilon_t.
+  \label{eq:xi_bound_const}
+\end{equation}
+
+\textbf{Step 5: Apply perturbed stochastic approximation.}
+The iteration~\eqref{eq:sarsa_sa} is a perturbed stochastic
+approximation of the Bellman optimality equation with driving
+function $h(Q)(s,a) = (\Bellman^*_Q Q)(s,a) - Q(s,a)$. The
+unperturbed iteration (Q-learning) converges to $\Qstar$ by the
+Robbins--Monro theorem, since $\Bellman^*_Q$ is a
+$\discount$-contraction with unique fixed point $\Qstar$
+(Lemma~\ref{lem:bellman_q_contraction}).
+
+For the perturbation, we need $\sum_k \alpha_k(s,a)
+|\E[\xi_k \mid \mathcal{F}_k]| < \infty$ almost surely. By
+\eqref{eq:xi_bound_const}:
+\begin{equation}
+  \sum_k \alpha_k(s,a) |\E[\xi_k \mid \mathcal{F}_k]|
+  \leq C_\xi \sum_k \alpha_k(s,a)\,\varepsilon_{t_k},
+  \label{eq:perturbation_sum}
+\end{equation}
+where $t_k$ is the time of the $k$-th visit to $(s,a)$. Under the
+GLIE condition, $\varepsilon_t \to 0$. For the standard schedule
+$\alpha_n = 1/n$ and $\varepsilon_n = 1/n$:
+$\sum_k \alpha_k \varepsilon_{t_k} \leq \sum_n 1/n^2 < \infty$.
+More generally, the GLIE condition requires $\varepsilon_t$
+to decrease fast enough that the perturbation series converges.
+
+By the perturbed Robbins--Monro theorem: if the unperturbed
+stochastic approximation converges (which it does --- this is
+Q-learning) and the perturbation satisfies
+$\sum_k \alpha_k |\E[\xi_k \mid \mathcal{F}_k]| < \infty$ a.s.,
+then the perturbed iteration converges to the same limit.
+
+Since $\Bellman^*_Q$ is a $\discount$-contraction with unique
+fixed point $\Qstar$, and the perturbation is summable, the error
+$\|Q_t - \Qstar\|_\infty$ converges to zero almost surely.
+\end{proof}
+
+\begin{remark}[The Role of GLIE]
+\label{rem:glie_role}
+The GLIE condition serves two purposes in the convergence proof.
+Condition 1 (infinite exploration) ensures all state--action pairs
+are visited infinitely often, which is needed for the step-size
+conditions to be meaningful. Condition 2 ($\varepsilon_t \to 0$)
+ensures that the exploration perturbation $\xi_t$ vanishes, so
+that SARSA asymptotically behaves like Q-learning. Without
+Condition 2, the perturbation remains $O(\varepsilon)$ and SARSA
+converges to $Q^{\policy_\varepsilon}$ rather than $\Qstar$.
+\end{remark}
+
+\begin{example}[Verifying the Perturbation Bound]
+\label{ex:perturbation}
+Consider an MDP with $|\Actions| = 4$, $R_{\max} = 1$,
+$\discount = 0.9$. Then $C_\xi = 0.9 \cdot 2/(1-0.9) = 18$.
+With $\varepsilon_{100} = 0.01$, the perturbation magnitude at
+step 100 is bounded by $18 \cdot 0.01 = 0.18$, a small fraction
+of the typical $Q$-value scale $R_{\max}/(1-\discount) = 10$.
+As $\varepsilon_t \to 0$, this bound vanishes.
+\end{example}
+
+\begin{rlconnection}[title={SARSA Convergence via Two-Timescale Analysis}]
+An alternative view of SARSA convergence uses two-timescale
+stochastic approximation (Lesson 32). If the exploration rate
+$\varepsilon_t$ decreases on a \emph{faster} timescale than the
+step size $\alpha_t$ (i.e., $\varepsilon_t/\alpha_t \to 0$), then
+the policy converges to greedy ``fast'' while the $Q$-values update
+``slowly,'' and the system tracks the equilibrium of Q-learning.
+This perspective, developed by \citet{borkar2008}, provides a more
+general framework for analyzing policy improvement algorithms with
+diminishing exploration.
+\end{rlconnection}
+
+%% SECTION 7: ON-POLICY VS. OFF-POLICY BEHAVIOR
+\section{On-Policy Behavior of SARSA}
+\label{sec:on_policy}
+
+\begin{proposition}[SARSA with Fixed $\varepsilon$]
+\label{prop:sarsa_fixed_eps}
+If the exploration rate is held constant at $\varepsilon > 0$ (so
+the GLIE condition is violated), and all other conditions of
+Assumption~\ref{ass:sarsa} hold, then SARSA converges to
+$Q^{\policy_\varepsilon}$, the action-value function of the
+$\varepsilon$-greedy policy, rather than $\Qstar$.
+\end{proposition}
+
+\begin{proof}
+With fixed $\varepsilon$, the SARSA update targets
+$\Bellman^{\policy_\varepsilon}_Q Q$, the Bellman expectation
+operator of the $\varepsilon$-greedy policy. Since the policy is
+now fixed, SARSA is simply TD(0) applied to action values under
+$\policy_\varepsilon$. By the convergence of TD(0)
+(Lesson 47, Theorem 4.7, adapted to action values):
+$Q_t \to Q^{\policy_\varepsilon}$ almost surely.
+\end{proof}
+
+\begin{example}[On-Policy vs.\ Off-Policy in a Stochastic Grid]
+\label{ex:on_off_policy}
+Consider a $4 \times 4$ grid with stochastic wind: with probability
+0.3, the agent is pushed one cell upward regardless of its action.
+Near a cliff at the top row, the greedy-optimal path runs along the
+top (shortest distance to the goal), but exploratory actions during
+learning risk falling off. SARSA with $\varepsilon = 0.1$ learns
+to avoid the top row, assigning lower $Q$-values to states near
+the cliff because it accounts for the 10\% chance of a random
+exploratory action pushing the agent over the edge. The converged
+$Q^{\policy_{0.1}}$ values reflect the true cost of the exploration
+policy, yielding a safer learned behavior.
+\end{example}
+
+This on-policy property distinguishes SARSA from Q-learning (Lesson
+50) and is the principal reason for choosing SARSA in safety-critical
+applications.
+
+%% SECTION 8: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[SARSA TD Error Properties]
+\textnormal{(\(*\))} \\
+Let $\delta_t = R_{t+1} + \discount Q(S_{t+1}, A_{t+1})
+- Q(S_t, A_t)$ be the SARSA TD error. If $Q = \Qpi$ for the
+current (stationary) policy $\policy$, show that
+$\E_\policy[\delta_t \mid S_t, A_t] = 0$.
+\end{exercise}
+
+\begin{exercise}[SARSA on a Three-State MDP]
+\textnormal{(\(*\))} \\
+Consider $\States = \{A, B, C\}$ with $\Actions = \{1, 2\}$,
+deterministic transitions: action 1 in $A$ leads to $B$, action 2
+in $A$ leads to $C$, all actions in $B$ and $C$ lead to $A$.
+Rewards: $r(A,1) = 0$, $r(A,2) = 1$, $r(B,\cdot) = 0$,
+$r(C,\cdot) = 2$. Let $\discount = 0.5$, $\alpha = 0.5$,
+$Q_0 \equiv 0$, $\varepsilon = 0.1$. Suppose the first episode
+generates the trajectory $(A,2,1,C,1,0,A)$ and then
+$(A,1,0,B,2,0,A)$. Compute the SARSA updates for each step.
+\end{exercise}
+
+\begin{exercise}[GLIE Schedule Design]
+\textnormal{(\(**\))} \\
+Prove that the schedule $\varepsilon_t = c/(c+t)$ for $c > 0$
+satisfies GLIE on any finite, communicating MDP. Specifically:
+\begin{enumerate}[nosep]
+  \item[(a)] Show that $\varepsilon_t \to 0$ (Condition 2).
+  \item[(b)] Show that for any $(s,a)$, the probability that
+    $(s,a)$ is visited at time $t$ is bounded below by a constant
+    times $\varepsilon_t/|\Actions|$, and conclude from
+    $\sum_t \varepsilon_t = \infty$ that $(s,a)$ is visited
+    infinitely often (Condition 1).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Perturbation Bound Tightness]
+\textnormal{(\(**\))} \\
+In the convergence proof of Theorem~\ref{thm:sarsa}, the
+perturbation bound~\eqref{eq:xi_bound_const} uses the worst case
+$|\Actions|^{-1}\sum_{a'} Q(s',a') - \max_{a'} Q(s',a')$.
+\begin{enumerate}[nosep]
+  \item[(a)] Show that this quantity is always non-positive and
+    bounded in magnitude by $2R_{\max}/(1-\discount)$.
+  \item[(b)] Give an example where the bound is tight (achieved
+    with equality).
+  \item[(c)] Show that the bound can be improved to
+    $R_{\max}(|\Actions|-1)/((1-\discount)|\Actions|)$ by a
+    more careful analysis.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[SARSA with Fixed $\varepsilon$: Value Gap]
+\textnormal{(\(***\))} \\
+Let $\Qstar$ denote the optimal action-value function and
+$Q^{\policy_\varepsilon}$ the action-value function of the
+$\varepsilon$-greedy policy with respect to $\Qstar$. Show that
+\begin{equation*}
+  \|\Qstar - Q^{\policy_\varepsilon}\|_\infty
+  \leq \frac{2\varepsilon\,R_{\max}}{(1-\discount)^2}.
+\end{equation*}
+\textit{Hint:} Use the simulation lemma: for any two policies
+$\policy_1, \policy_2$, the value difference satisfies
+$\|Q^{\policy_1} - Q^{\policy_2}\|_\infty \leq
+\frac{1}{1-\discount} \max_s \sum_a |\policy_1(a|s)
+- \policy_2(a|s)| \cdot R_{\max}/(1-\discount)$.
+\end{exercise}
+
+\begin{exercise}[SARSA Convergence Without GLIE]
+\textnormal{(\(***\))} \\
+Suppose $\varepsilon_t = \varepsilon > 0$ is constant, but we
+modify the SARSA update to use a decaying ``effective exploration''
+$\tilde{\varepsilon}_t \to 0$ only in the bootstrap target while
+still executing the $\varepsilon$-greedy policy for data collection.
+Formally, the update becomes:
+\[
+  Q(S_t,A_t) \leftarrow Q(S_t,A_t)
+  + \alpha_t\bigl[R_{t+1} + \discount Q(S_{t+1}, \tilde{A}_{t+1})
+  - Q(S_t,A_t)\bigr],
+\]
+where $\tilde{A}_{t+1}$ is drawn from a
+$\tilde{\varepsilon}_t$-greedy policy. Prove that this modified
+SARSA converges to $\Qstar$ and identify the sense in which it
+becomes off-policy.
+\end{exercise}
+
+%% SECTION 9: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item \textbf{From prediction to control}: GPI alternates between
+    policy evaluation and improvement; model-free control requires
+    learning action-value functions $Q(s,a)$ rather than state values
+    $V(s)$.
+
+  \item The \textbf{$\varepsilon$-greedy policy} assigns probability
+    $1 - \varepsilon + \varepsilon/|\Actions|$ to the greedy action
+    and $\varepsilon/|\Actions|$ to all others, ensuring exploration
+    while approximately following the greedy policy.
+
+  \item The \textbf{GLIE condition} requires infinite exploration of
+    all state--action pairs and convergence of the policy to greedy
+    in the limit, typically achieved by $\varepsilon_t \to 0$.
+
+  \item The \textbf{SARSA update}
+    $Q(S_t,A_t) \leftarrow Q(S_t,A_t) + \alpha[\delta_t]$ with
+    TD error $\delta_t = R_{t+1} + \discount Q(S_{t+1}, A_{t+1})
+    - Q(S_t, A_t)$ applies TD(0) to action values, using the
+    \emph{actually selected} next action $A_{t+1}$.
+
+  \item \textbf{SARSA converges to $\Qstar$} under GLIE
+    (Theorem~\ref{thm:sarsa}), proved by decomposing the update
+    into a Q-learning component plus a vanishing exploration
+    perturbation that is summable under $\varepsilon_t \to 0$.
+
+  \item SARSA is \textbf{on-policy}: it evaluates the policy it
+    actually follows, including exploration. With fixed
+    $\varepsilon$, it converges to $Q^{\policy_\varepsilon}$
+    rather than $\Qstar$, which can yield safer behavior in
+    environments where exploratory actions are costly.
+
+  \item The action-value Bellman operators
+    $\Bellman^\policy_Q$ and $\Bellman^*_Q$ are both
+    $\discount$-contractions in $\|\cdot\|_\infty$
+    (Lemma~\ref{lem:bellman_q_contraction}), providing the stability
+    condition for all TD control convergence proofs.
+\end{itemize}
+
+%% SECTION 10: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 50} develops Q-learning (off-policy TD
+    control), Expected SARSA, and provides a unified view of all
+    three TD control algorithms. The comparison between SARSA and
+    Q-learning deepens the on-policy vs.\ off-policy distinction
+    introduced here.
+
+  \item \citet{singh2000} is the primary reference for the SARSA
+    convergence proof presented in Theorem~\ref{thm:sarsa}. Their
+    framework extends to general single-step on-policy algorithms
+    satisfying GLIE.
+
+  \item \citet[Section 6.5]{suttonbarto2018} presents the
+    cliff-walking example, the most widely cited illustration of
+    the behavioral difference between on-policy SARSA and off-policy
+    Q-learning.
+
+  \item \citet{rummery1994} introduced SARSA (under the name
+    ``modified connectionist Q-learning'') as an online alternative
+    to Q-learning for use with neural network function approximators.
+
+  \item \textbf{SARSA($\lambda$)} combines SARSA with eligibility
+    traces from Lesson 48, yielding faster credit assignment. See
+    \citet[Chapter 12]{suttonbarto2018} for the algorithm and
+    \citet[Chapter 5]{bertsekas1996} for convergence analysis.
+
+  \item For the extension to continuous state spaces with function
+    approximation, see Lessons 51--53. The ``deadly triad'' of
+    function approximation, bootstrapping, and off-policy learning
+    is less severe for on-policy SARSA than for off-policy
+    Q-learning.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}

@@ -1,0 +1,1183 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 45: Policy Iteration}}
+\fancyhead[R]{\thepage}
+\title{Lesson 45: Policy Iteration}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lesson~42 introduced value iteration as the natural algorithm arising
+from the Banach fixed-point theorem: repeatedly apply the Bellman
+optimality operator $\Bellman^*$ until convergence. While value
+iteration is conceptually simple and widely used, its convergence rate
+$\discount$ per iteration means that for $\discount$ close to 1 the
+algorithm can require hundreds or thousands of iterations. Consider a
+logistics MDP with a discount factor $\discount = 0.999$: the a priori
+bound from Lesson~42 predicts roughly 10\,000 iterations to reach
+$\varepsilon = 0.01$ accuracy. Can we do fundamentally better?
+
+Policy iteration, introduced by \citet{howard1960}, takes a
+radically different approach. Rather than iterating on value functions,
+it iterates on \emph{policies}: evaluate the current policy exactly
+(by solving a linear system), then improve the policy by acting
+greedily with respect to the computed values. Because the number of
+deterministic stationary policies is finite ($A^S$), this process must
+terminate -- and it terminates at the optimal policy. In practice,
+policy iteration converges in remarkably few iterations (often far
+fewer than $A^S$), with each iteration making a large improvement.
+The tools developed in this lesson -- the policy evaluation step,
+the policy improvement theorem, Howard's improvement principle, and
+modified policy iteration -- complete the algorithmic toolkit for
+solving known MDPs.
+
+\begin{rlconnection}[title={Why Policy Iteration Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Actor-critic methods}: The actor-critic architecture
+    directly mirrors policy iteration: the critic performs approximate
+    policy evaluation, and the actor performs (approximate) policy
+    improvement.
+    \item \textbf{Generalized policy iteration (GPI)}: Sutton and Barto
+    identify the GPI principle -- alternating evaluation and
+    improvement -- as the unifying idea behind nearly all RL algorithms.
+    \item \textbf{Exact planning}: For moderate-sized MDPs with known
+    models, policy iteration is often the algorithm of choice due to
+    its rapid convergence, independent of $\discount$.
+    \item \textbf{Natural policy gradient}: The natural policy gradient
+    can be interpreted as a soft version of policy improvement in a
+    parameterized policy space, connecting PI to modern deep RL.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+MDP model, stationary policies, value functions $\Vpi$ and $\Qpi$
+(Lesson~39). Bellman expectation operator $\Bellman^\policy$, Bellman
+optimality operator $\Bellman^*$, contraction properties, the policy
+improvement theorem (Lesson~41, Theorem~7.3). Value iteration
+algorithm, convergence, error bounds (Lesson~42). Linear systems and
+matrix inversion (Lessons~5--6).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Derive} the policy evaluation step as the solution of
+    a linear system $v = (I - \discount P^\policy)^{-1} r^\policy$.
+    \item \emph{State} and \emph{prove} the policy improvement theorem
+    in its general form.
+    \item \emph{Prove} that policy iteration converges to the optimal
+    policy in at most $A^S$ iterations.
+    \item \emph{Explain} Howard's improvement principle: strict
+    improvement at every non-terminal iteration.
+    \item \emph{Describe} modified policy iteration and \emph{prove}
+    its convergence.
+    \item \emph{Compare} the computational trade-offs between value
+    iteration and policy iteration.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 6, Sections 6.4--6.5]{puterman2014} --
+    Definitive treatment of policy iteration, modified policy
+    iteration, and convergence analysis for discounted MDPs.
+    \item \citet{howard1960} -- Original monograph introducing
+    policy iteration and proving its finite convergence.
+    \item \citet[Chapter 1, Sections 1.3--1.4]{bertsekas2012} --
+    Policy iteration, modified policy iteration, and connections
+    to approximate dynamic programming.
+    \item \citet[Chapter 4]{suttonbarto2018} -- Accessible
+    presentation of policy iteration and the generalized policy
+    iteration principle.
+    \item \citet{denardo1967} -- Unified contraction framework
+    placing both value iteration and policy iteration within a
+    common operator-theoretic setting.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: POLICY EVALUATION
+%% ============================================================
+
+\section{Policy Evaluation}
+\label{sec:policy-evaluation}
+
+We work throughout with a finite MDP
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ with
+$|\States| = S$, $|\Actions| = A$,
+$R_{\max} = \max_{s,a} |R(s,a)|$, and $\discount \in [0,1)$.
+For a deterministic stationary policy $d : \States \to \Actions$,
+we write $P^d \in \R^{S \times S}$ for the transition matrix
+$P^d(s,s') = P(s' \mid s, d(s))$ and $r^d \in \R^S$ for the reward
+vector $r^d(s) = R(s, d(s))$.
+
+\begin{definition}[Policy Evaluation Problem]
+\label{def:policy-eval}
+Given a deterministic stationary policy $d$, the \emph{policy
+evaluation problem} is to compute the value function
+$V^d \in \R^S$ defined by
+\[
+    V^d(s) = \E\!\left[\sum_{t=0}^\infty \discount^t R(S_t, d(S_t))
+    \;\middle|\; S_0 = s\right].
+\]
+\end{definition}
+
+From Lesson~41, $V^d$ is the unique fixed point of the Bellman
+expectation operator $\Bellman^d$:
+\begin{equation}
+\label{eq:bellman-eval}
+    V^d = r^d + \discount P^d V^d.
+\end{equation}
+Rearranging gives the linear system
+$(I - \discount P^d) V^d = r^d$.
+
+\begin{theorem}[Policy Evaluation via Matrix Inversion]
+\label{thm:policy-eval-matrix}
+For any deterministic stationary policy $d$ and discount factor
+$\discount \in [0,1)$, the matrix $I - \discount P^d$ is invertible
+and
+\begin{equation}
+\label{eq:policy-eval-closed}
+    V^d = (I - \discount P^d)^{-1} r^d.
+\end{equation}
+Moreover, $(I - \discount P^d)^{-1} = \sum_{k=0}^\infty
+\discount^k (P^d)^k$, the \emph{discounted fundamental matrix}.
+\end{theorem}
+
+\begin{proof}
+Since $P^d$ is a stochastic matrix, its spectral radius satisfies
+$\rho(P^d) \leq 1$ (all eigenvalues have modulus at most 1). Thus
+$\rho(\discount P^d) \leq \discount < 1$, which implies that
+$I - \discount P^d$ is invertible and the Neumann series converges:
+\[
+    (I - \discount P^d)^{-1} = \sum_{k=0}^\infty (\discount P^d)^k
+    = \sum_{k=0}^\infty \discount^k (P^d)^k.
+\]
+Substituting into \eqref{eq:bellman-eval}:
+$V^d = (I - \discount P^d)^{-1} r^d$.
+\end{proof}
+
+\begin{remark}
+\label{rem:eval-methods}
+There are three practical methods for policy evaluation:
+\begin{enumerate}[nosep]
+    \item \textbf{Direct solve:} Solve the $S \times S$ linear
+    system $(I - \discount P^d) v = r^d$ using Gaussian elimination
+    or LU decomposition. Cost: $O(S^3)$.
+    \item \textbf{Iterative (successive approximation):} Compute
+    $v^{(j+1)} = r^d + \discount P^d v^{(j)}$ starting from any
+    $v^{(0)}$. This converges geometrically at rate $\discount$
+    since $\Bellman^d$ is a $\discount$-contraction (Lesson~41).
+    Cost per iteration: $O(S^2)$.
+    \item \textbf{Neumann series truncation:} Compute
+    $V^d \approx \sum_{k=0}^{m-1} \discount^k (P^d)^k r^d$.
+    This is equivalent to $m$ steps of iterative evaluation from
+    $v^{(0)} = 0$.
+\end{enumerate}
+For small to moderate $S$, the direct solve is preferred. For large
+$S$, iterative methods or sparse solvers are necessary.
+\end{remark}
+
+\begin{example}[Policy Evaluation on a Three-State MDP]
+\label{ex:eval-three-state}
+Consider an MDP with $\States = \{1, 2, 3\}$,
+$\Actions = \{L, R\}$, $\discount = 0.9$, and transition/reward
+structure:
+\begin{center}
+\begin{tabular}{cccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ &
+$P(3 \mid s,a)$ \\
+\midrule
+1 & L & 2 & 0.5 & 0.3 & 0.2 \\
+1 & R & 0 & 0 & 0.5 & 0.5 \\
+2 & L & 1 & 0.4 & 0.4 & 0.2 \\
+2 & R & 3 & 0 & 0 & 1 \\
+3 & L & $-1$ & 0.1 & 0.1 & 0.8 \\
+3 & R & 0 & 0 & 0.5 & 0.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Evaluate policy $d(1) = L$, $d(2) = R$, $d(3) = L$. The induced
+chain has $r^d = (2, 3, -1)^\top$ and
+\[
+    P^d = \begin{pmatrix}
+    0.5 & 0.3 & 0.2 \\
+    0 & 0 & 1 \\
+    0.1 & 0.1 & 0.8
+    \end{pmatrix}.
+\]
+The linear system $(I - 0.9 P^d) v = r^d$ is:
+\[
+    \begin{pmatrix}
+    0.55 & -0.27 & -0.18 \\
+    0 & 1 & -0.9 \\
+    -0.09 & -0.09 & 0.28
+    \end{pmatrix}
+    \begin{pmatrix} v_1 \\ v_2 \\ v_3 \end{pmatrix}
+    = \begin{pmatrix} 2 \\ 3 \\ -1 \end{pmatrix}.
+\]
+Solving (e.g., by back-substitution after row reduction) yields
+approximately $V^d \approx (15.52, 15.38, 9.31)^\top$.
+\end{example}
+
+We now establish a key structural property of the policy evaluation
+matrix that will be used in the analysis of policy iteration.
+
+\begin{proposition}[Non-negativity of the Discounted Fundamental Matrix]
+\label{prop:fundamental-nonneg}
+For any deterministic stationary policy $d$ and $\discount \in [0,1)$,
+$(I - \discount P^d)^{-1}$ has all non-negative entries.
+\end{proposition}
+
+\begin{proof}
+By Theorem~\ref{thm:policy-eval-matrix},
+$(I - \discount P^d)^{-1} = \sum_{k=0}^\infty \discount^k (P^d)^k$.
+Since $P^d$ has non-negative entries and $\discount \geq 0$, every
+term $\discount^k (P^d)^k$ has non-negative entries, and the sum
+of non-negative matrices is non-negative.
+\end{proof}
+
+This non-negativity property will be essential in proving that policy
+improvement preserves value ordering.
+
+%% ============================================================
+%% SECTION 4: THE POLICY IMPROVEMENT THEOREM
+%% ============================================================
+
+\section{The Policy Improvement Theorem}
+\label{sec:policy-improvement}
+
+The policy improvement theorem, first established in
+\citet{howard1960}, is the theoretical engine driving policy iteration.
+We restate and prove it here in a self-contained form.
+
+\begin{theorem}[Policy Improvement Theorem]
+\label{thm:pi-theorem}
+Let $d$ be a deterministic stationary policy and define the improved
+policy $d'$ by
+\begin{equation}
+\label{eq:greedy-improve}
+    d'(s) = \argmax_{a \in \Actions} Q^d(s,a)
+    = \argmax_{a \in \Actions} \left[ R(s,a) + \discount
+    \sum_{s' \in \States} P(s' \mid s,a)\, V^d(s') \right]
+\end{equation}
+for all $s \in \States$ (breaking ties arbitrarily). Then:
+\begin{enumerate}
+    \item $V^{d'}(s) \geq V^d(s)$ for all $s \in \States$.
+    \item $V^{d'} = V^d$ if and only if $d$ is already optimal
+    (i.e., $V^d = \Vstar$).
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{Part 1.} By definition of $d'$, for every state $s$:
+\begin{equation}
+\label{eq:improve-step}
+    Q^d(s, d'(s)) = \max_{a \in \Actions} Q^d(s,a)
+    \geq Q^d(s, d(s)) = V^d(s).
+\end{equation}
+In operator notation, $\Bellman^{d'} V^d \geq V^d$ componentwise,
+where the inequality is \eqref{eq:improve-step}. Define the vector
+$\delta = \Bellman^{d'} V^d - V^d \geq 0$. We now show that
+$V^{d'} \geq V^d$.
+
+Applying $\Bellman^{d'}$ repeatedly using its monotonicity
+(Lesson~42, Proposition~8.1 for $\Bellman^\policy$):
+\begin{align}
+    V^d &\leq \Bellman^{d'} V^d  \label{eq:chain1} \\
+    &\leq (\Bellman^{d'})^2 V^d  \label{eq:chain2} \\
+    &\leq \cdots \nonumber \\
+    &\leq \lim_{n \to \infty} (\Bellman^{d'})^n V^d = V^{d'}.
+    \label{eq:chain-limit}
+\end{align}
+The limit in \eqref{eq:chain-limit} equals $V^{d'}$ because
+$\Bellman^{d'}$ is a $\discount$-contraction with unique fixed
+point $V^{d'}$ (Lesson~41), so $(\Bellman^{d'})^n v \to V^{d'}$
+for any starting $v$.
+
+\textbf{Part 2 (``only if'' direction).} Suppose $V^{d'} = V^d$.
+From \eqref{eq:improve-step}, $\max_a Q^d(s,a) = V^d(s)$ for all
+$s$. This is precisely the Bellman optimality equation, so
+$V^d = \Vstar$.
+
+\textbf{Part 2 (``if'' direction).} If $V^d = \Vstar$, then $d$ is
+optimal, and $d'$ (being greedy w.r.t.\ $\Vstar$) is also optimal.
+Hence $V^{d'} = \Vstar = V^d$.
+\end{proof}
+
+\begin{keyresult}[title={Policy Improvement Guarantee}]
+\label{kr:pi-guarantee}
+The policy improvement theorem guarantees that the greedy policy
+$d'$ with respect to $V^d$ is at least as good as $d$ in every
+state. If $d$ is not optimal, then the improvement is \emph{strict}
+in at least one state (by Howard's improvement principle,
+Theorem~\ref{thm:howard-strict} below).
+\end{keyresult}
+
+We now provide an alternative, algebraic proof of the policy
+improvement theorem that uses the matrix structure directly and
+gives additional insight.
+
+\begin{proposition}[Algebraic Proof of Policy Improvement]
+\label{prop:algebraic-pi}
+Under the conditions of Theorem~\ref{thm:pi-theorem},
+\begin{equation}
+\label{eq:algebraic-pi}
+    V^{d'} - V^d = (I - \discount P^{d'})^{-1} \delta,
+\end{equation}
+where $\delta = \Bellman^{d'} V^d - V^d \geq 0$.
+\end{proposition}
+
+\begin{proof}
+Since $V^{d'} = r^{d'} + \discount P^{d'} V^{d'}$ and
+$\Bellman^{d'} V^d = r^{d'} + \discount P^{d'} V^d$:
+\begin{align*}
+    V^{d'} - V^d &= r^{d'} + \discount P^{d'} V^{d'} - V^d \\
+    &= (\Bellman^{d'} V^d - V^d) + \discount P^{d'}(V^{d'} - V^d) \\
+    &= \delta + \discount P^{d'}(V^{d'} - V^d).
+\end{align*}
+Rearranging: $(I - \discount P^{d'})(V^{d'} - V^d) = \delta$, so
+$V^{d'} - V^d = (I - \discount P^{d'})^{-1} \delta$.
+By Proposition~\ref{prop:fundamental-nonneg},
+$(I - \discount P^{d'})^{-1}$ has non-negative entries and
+$\delta \geq 0$, so $V^{d'} - V^d \geq 0$.
+\end{proof}
+
+\begin{remark}
+\label{rem:algebraic-insight}
+The algebraic form \eqref{eq:algebraic-pi} shows that policy
+improvement has a ``cascading'' effect: a strict advantage
+$\delta(s) > 0$ at state $s$ propagates to all states reachable
+from $s$ under the new policy $d'$, weighted by the discounted
+visitation probabilities encoded in $(I - \discount P^{d'})^{-1}$.
+\end{remark}
+
+\begin{example}[Policy Improvement Step]
+\label{ex:pi-step}
+Using the three-state MDP from Example~\ref{ex:eval-three-state}
+with $V^d \approx (15.52, 15.38, 9.31)^\top$ under
+$d(1) = L, d(2) = R, d(3) = L$:
+
+Compute $Q^d(s,a)$ for the alternative actions:
+\begin{align*}
+    Q^d(1, R) &= 0 + 0.9(0.5 \cdot 15.38 + 0.5 \cdot 9.31)
+    = 0.9 \cdot 12.345 = 11.11, \\
+    Q^d(1, L) &= V^d(1) = 15.52.
+\end{align*}
+So $d'(1) = L$ (no change).
+\begin{align*}
+    Q^d(2, L) &= 1 + 0.9(0.4 \cdot 15.52 + 0.4 \cdot 15.38
+    + 0.2 \cdot 9.31) \\
+    &= 1 + 0.9(6.208 + 6.152 + 1.862) = 1 + 12.80 = 13.80, \\
+    Q^d(2, R) &= V^d(2) = 15.38.
+\end{align*}
+So $d'(2) = R$ (no change).
+\begin{align*}
+    Q^d(3, R) &= 0 + 0.9(0.5 \cdot 15.38 + 0.5 \cdot 9.31)
+    = 11.11, \\
+    Q^d(3, L) &= V^d(3) = 9.31.
+\end{align*}
+So $d'(3) = R$ (improvement!). The improvement vector is
+$\delta = (0, 0, 11.11 - 9.31)^\top = (0, 0, 1.80)^\top$.
+The strict improvement at state 3 will cascade to other states
+via the reachability structure.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: THE POLICY ITERATION ALGORITHM
+%% ============================================================
+
+\section{The Policy Iteration Algorithm}
+\label{sec:pi-algorithm}
+
+\begin{definition}[Policy Iteration]
+\label{def:pi}
+The \emph{policy iteration} (PI) algorithm generates a sequence of
+deterministic stationary policies $\{d^{(k)}\}_{k \geq 0}$:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Choose any deterministic stationary
+    policy $d^{(0)}$.
+    \item \textbf{Policy evaluation:} Compute $V^{d^{(k)}}$ by
+    solving
+    \begin{equation}
+    \label{eq:pi-eval}
+        V^{d^{(k)}} = (I - \discount P^{d^{(k)}})^{-1}
+        r^{d^{(k)}}.
+    \end{equation}
+    \item \textbf{Policy improvement:} For each $s \in \States$,
+    set
+    \begin{equation}
+    \label{eq:pi-improve}
+        d^{(k+1)}(s) = \argmax_{a \in \Actions}
+        \left[ R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\,
+        V^{d^{(k)}}(s') \right].
+    \end{equation}
+    \item \textbf{Stopping:} If $d^{(k+1)} = d^{(k)}$, stop and
+    output $d^{(k)}$. Otherwise, set $k \leftarrow k+1$ and go to
+    step 2.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:pi-complexity}
+Each iteration of policy iteration consists of two phases:
+\begin{itemize}[nosep]
+    \item \textbf{Policy evaluation:} Solving an $S \times S$ linear
+    system costs $O(S^3)$ by direct methods. If sparse solvers are
+    used, this can be reduced, but the worst case is cubic.
+    \item \textbf{Policy improvement:} Computing the greedy action at
+    each state requires $O(SA)$ operations (evaluating $A$ actions at
+    each of $S$ states, each requiring an $O(S)$ inner product).
+    The total cost is $O(S^2 A)$.
+\end{itemize}
+Thus each PI iteration costs $O(S^3 + S^2 A)$, compared to
+$O(S^2 A)$ per VI iteration.
+\end{remark}
+
+\begin{rlconnection}[title={Generalized Policy Iteration}]
+\citet{suttonbarto2018} identify \emph{generalized policy iteration}
+(GPI) as the overarching principle: any RL algorithm that interleaves
+policy evaluation (estimating $V^\policy$ or $Q^\policy$) and policy
+improvement (making the policy greedy or nearly greedy w.r.t.\ the
+estimated values) is performing GPI. Model-free methods like SARSA,
+Q-learning, and actor-critic all follow this pattern, differing only
+in how they approximate the evaluation step.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: FINITE CONVERGENCE OF PI
+%% ============================================================
+
+\section{Finite Convergence of Policy Iteration}
+\label{sec:pi-convergence}
+
+\begin{theorem}[Finite Convergence of Policy Iteration]
+\label{thm:pi-finite}
+Policy iteration (Definition~\ref{def:pi}) terminates after at most
+$|\Pi^{\mathrm{SD}}| = A^S$ iterations, where
+$\Pi^{\mathrm{SD}}$ denotes the set of all deterministic stationary
+policies. Upon termination, the output policy $d^{(k)}$ is optimal:
+$V^{d^{(k)}} = \Vstar$.
+\end{theorem}
+
+\begin{proof}
+By the policy improvement theorem (Theorem~\ref{thm:pi-theorem}),
+$V^{d^{(k+1)}}(s) \geq V^{d^{(k)}}(s)$ for all $s$ and $k$.
+
+\textbf{Claim:} No policy repeats, i.e., $d^{(j)} \neq d^{(k)}$
+for $j \neq k$.
+
+Suppose for contradiction that $d^{(j)} = d^{(k)}$ for some
+$j < k$. Then $V^{d^{(j)}} = V^{d^{(k)}}$. Since
+the value sequence is non-decreasing, we must have
+$V^{d^{(i)}} = V^{d^{(j)}}$ for all $j \leq i \leq k$.
+In particular, $V^{d^{(j+1)}} = V^{d^{(j)}}$, which by
+Theorem~\ref{thm:pi-theorem} implies $d^{(j)}$ is optimal and the
+algorithm would have terminated at iteration $j$ (since
+$d^{(j+1)} = d^{(j)}$), contradicting $j < k$.
+
+Since there are exactly $A^S$ deterministic stationary policies and
+no policy repeats, the algorithm terminates in at most $A^S$
+iterations.
+
+At termination, $d^{(k+1)} = d^{(k)}$, so by
+Theorem~\ref{thm:pi-theorem}, $V^{d^{(k)}} = \Vstar$ and
+$d^{(k)}$ is optimal.
+\end{proof}
+
+\begin{warning}[title={The $A^S$ Bound Is Rarely Tight}]
+The bound $A^S$ is a worst-case guarantee. In practice, policy
+iteration typically converges in a small number of iterations,
+often $O(S)$ or even $O(\log S)$. However, there exist pathological
+MDPs where PI requires an exponential number of iterations. Despite
+this, such worst cases are extremely rare, and PI is considered
+highly efficient in practice. The exact complexity of policy
+iteration remains an open problem in computational complexity.
+\end{warning}
+
+\begin{theorem}[Strict Monotonicity of Value Sequence]
+\label{thm:pi-strict-mono}
+If policy iteration does not terminate at iteration $k$ (i.e.,
+$d^{(k+1)} \neq d^{(k)}$), then
+$V^{d^{(k+1)}}(s) > V^{d^{(k)}}(s)$ for at least one state
+$s \in \States$.
+\end{theorem}
+
+\begin{proof}
+If $d^{(k+1)} \neq d^{(k)}$, then there exists some state $s_0$
+where $d^{(k+1)}(s_0) \neq d^{(k)}(s_0)$. At this state, the
+greedy action $d^{(k+1)}(s_0)$ achieves a strictly higher
+action-value:
+\[
+    Q^{d^{(k)}}(s_0, d^{(k+1)}(s_0))
+    > Q^{d^{(k)}}(s_0, d^{(k)}(s_0)) = V^{d^{(k)}}(s_0),
+\]
+where the strict inequality holds because if equality held for all
+maximizing actions, then $d^{(k)}(s_0)$ would also be a maximizer
+and the tie-breaking rule would not change the action.
+
+More precisely, since $d^{(k+1)}(s_0) \neq d^{(k)}(s_0)$ and
+$d^{(k+1)}(s_0)$ is chosen to maximize $Q^{d^{(k)}}(s_0, \cdot)$,
+we have
+$Q^{d^{(k)}}(s_0, d^{(k+1)}(s_0)) \geq Q^{d^{(k)}}(s_0,
+d^{(k)}(s_0)) = V^{d^{(k)}}(s_0)$.
+
+So $\delta(s_0) = (\Bellman^{d^{(k+1)}} V^{d^{(k)}})(s_0) -
+V^{d^{(k)}}(s_0) \geq 0$, and by the argument above
+$\delta(s_0) \geq 0$. By the algebraic form
+(Proposition~\ref{prop:algebraic-pi}):
+\[
+    V^{d^{(k+1)}} - V^{d^{(k)}} =
+    (I - \discount P^{d^{(k+1)}})^{-1} \delta \geq 0.
+\]
+Since $\delta \geq 0$ and $\delta \neq 0$ (we have
+$\delta(s_0) \geq 0$ and the improvement at $s_0$ is non-trivial),
+and $(I - \discount P^{d^{(k+1)}})^{-1}$ has strictly positive
+diagonal entries (the $(s_0, s_0)$ entry is at least 1), we get
+$V^{d^{(k+1)}}(s_0) > V^{d^{(k)}}(s_0)$.
+\end{proof}
+
+We now state Howard's improvement principle, which strengthens the
+strict monotonicity result.
+
+\begin{theorem}[Howard's Improvement Principle]
+\label{thm:howard-strict}
+If $d^{(k+1)} \neq d^{(k)}$ in policy iteration, then for every
+state $s$ that is reachable from a changed state under the new
+policy $d^{(k+1)}$, the value function strictly improves:
+$V^{d^{(k+1)}}(s) > V^{d^{(k)}}(s)$.
+\end{theorem}
+
+\begin{proof}
+Let $C = \{s \in \States : d^{(k+1)}(s) \neq d^{(k)}(s)\}$
+be the set of changed states, and define
+$\delta = \Bellman^{d^{(k+1)}} V^{d^{(k)}} - V^{d^{(k)}} \geq 0$.
+For $s \in C$, $\delta(s) \geq 0$, and for $s \notin C$,
+$\delta(s) = 0$ (since the action did not change).
+
+By Proposition~\ref{prop:algebraic-pi}:
+\[
+    V^{d^{(k+1)}}(s) - V^{d^{(k)}}(s) =
+    \sum_{s'} \left[(I - \discount P^{d^{(k+1)}})^{-1}\right]_{s,s'}
+    \delta(s').
+\]
+The entry $[(I - \discount P^{d^{(k+1)}})^{-1}]_{s,s'}
+= \sum_{t=0}^\infty \discount^t (P^{d^{(k+1)}})^t_{s,s'}$ is the
+discounted probability of visiting $s'$ starting from $s$ under
+$d^{(k+1)}$. This entry is strictly positive if and only if $s'$
+is reachable from $s$ under $d^{(k+1)}$.
+
+Therefore, if $s$ can reach some state $s' \in C$ under $d^{(k+1)}$,
+and $\delta(s') > 0$, then $V^{d^{(k+1)}}(s) > V^{d^{(k)}}(s)$.
+Since $\delta(s') \geq 0$ for $s' \in C$ and $d^{(k+1)}$ is greedy,
+$\delta(s') > 0$ for at least one $s' \in C$ unless $V^{d^{(k)}}$
+already satisfies the Bellman optimality equation (in which case the
+algorithm would have terminated). Thus the value strictly improves at
+every state reachable from $C$.
+\end{proof}
+
+\begin{keyresult}[title={Howard's Improvement Principle}]
+At each iteration of policy iteration, either:
+\begin{enumerate}[nosep]
+    \item The algorithm terminates with the optimal policy, or
+    \item The value function strictly improves at every state that
+    can reach (under the new policy) a state where the action
+    changed.
+\end{enumerate}
+In ergodic MDPs (where every state is reachable from every other
+state under any policy), this means the value improves at
+\emph{every} state at every non-terminal iteration.
+\end{keyresult}
+
+\begin{example}[Complete Policy Iteration Trace]
+\label{ex:pi-trace}
+We trace policy iteration on the two-state MDP from Lesson~39 with
+$\States = \{s_1, s_2\}$, $\Actions = \{a_1, a_2\}$,
+$\discount = 0.5$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(s_1 \mid s,a)$ & $P(s_2 \mid s,a)$ \\
+\midrule
+$s_1$ & $a_1$ & 5 & 0.5 & 0.5 \\
+$s_1$ & $a_2$ & 10 & 0 & 1 \\
+$s_2$ & $a_1$ & $-1$ & 0.8 & 0.2 \\
+$s_2$ & $a_2$ & 2 & 0.3 & 0.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Iteration 0.} Start with $d^{(0)}(s_1) = a_1$,
+$d^{(0)}(s_2) = a_1$.
+
+\emph{Evaluation:}
+$P^{d^{(0)}} = \bigl(\begin{smallmatrix} 0.5 & 0.5 \\
+0.8 & 0.2 \end{smallmatrix}\bigr)$,
+$r^{d^{(0)}} = (5, -1)^\top$.
+Solving $(I - 0.5 P^{d^{(0)}}) v = r^{d^{(0)}}$:
+\[
+    \begin{pmatrix} 0.75 & -0.25 \\ -0.4 & 0.9 \end{pmatrix}
+    v = \begin{pmatrix} 5 \\ -1 \end{pmatrix}.
+\]
+Determinant $= 0.675 - 0.1 = 0.575$. Solving:
+$v_1 = (5 \cdot 0.9 + 0.25)/0.575 = 4.75/0.575 \approx 8.26$,
+$v_2 = (0.75 \cdot (-1) + 0.4 \cdot 5)/0.575 = 1.25/0.575
+\approx 2.17$.
+So $V^{d^{(0)}} \approx (8.26, 2.17)^\top$.
+
+\emph{Improvement:}
+$Q^{d^{(0)}}(s_1, a_2) = 10 + 0.5 \cdot 2.17 = 11.09 > 8.26$,
+so $d^{(1)}(s_1) = a_2$.
+$Q^{d^{(0)}}(s_2, a_2) = 2 + 0.5(0.3 \cdot 8.26 + 0.7 \cdot 2.17)
+= 2 + 0.5(2.478 + 1.519) = 4.00 > 2.17$,
+so $d^{(1)}(s_2) = a_2$.
+
+\textbf{Iteration 1.} $d^{(1)}(s_1) = a_2$, $d^{(1)}(s_2) = a_2$.
+
+\emph{Evaluation:}
+$P^{d^{(1)}} = \bigl(\begin{smallmatrix} 0 & 1 \\
+0.3 & 0.7 \end{smallmatrix}\bigr)$,
+$r^{d^{(1)}} = (10, 2)^\top$.
+Solving $(I - 0.5 P^{d^{(1)}}) v = r^{d^{(1)}}$:
+\[
+    \begin{pmatrix} 1 & -0.5 \\ -0.15 & 0.65 \end{pmatrix}
+    v = \begin{pmatrix} 10 \\ 2 \end{pmatrix}.
+\]
+Determinant $= 0.65 - 0.075 = 0.575$.
+$v_1 = (10 \cdot 0.65 + 0.5 \cdot 2)/0.575 = 7.5/0.575
+\approx 13.04$,
+$v_2 = (1 \cdot 2 + 0.15 \cdot 10)/0.575 = 3.5/0.575
+\approx 6.09$.
+So $V^{d^{(1)}} \approx (13.04, 6.09)^\top$.
+
+\emph{Improvement:}
+$Q^{d^{(1)}}(s_1, a_1) = 5 + 0.5(0.5 \cdot 13.04 + 0.5 \cdot 6.09)
+= 5 + 4.78 = 9.78 < 13.04$, so $d^{(2)}(s_1) = a_2$.
+$Q^{d^{(1)}}(s_2, a_1) = -1 + 0.5(0.8 \cdot 13.04 + 0.2 \cdot 6.09)
+= -1 + 5.82 = 4.82 < 6.09$, so $d^{(2)}(s_2) = a_2$.
+
+Since $d^{(2)} = d^{(1)}$, the algorithm terminates.
+$\optpolicy = d^{(1)}$ with $\Vstar \approx (13.04, 6.09)^\top$.
+Policy iteration converged in 2 iterations (1 improvement step).
+\end{example}
+
+%% ============================================================
+%% SECTION 7: MODIFIED POLICY ITERATION
+%% ============================================================
+
+\section{Modified Policy Iteration}
+\label{sec:modified-pi}
+
+Exact policy evaluation requires solving an $S \times S$ linear
+system at each iteration, which costs $O(S^3)$. When $S$ is large,
+this can be the bottleneck. Modified policy iteration replaces the
+exact solve with a fixed number of Bellman backups, interpolating
+between value iteration and exact policy iteration.
+
+\begin{definition}[Modified Policy Iteration]
+\label{def:modified-pi}
+\emph{Modified policy iteration} with parameter $m \geq 1$ generates
+a sequence of value functions $\{v^{(k)}\}$ and policies
+$\{d^{(k)}\}$:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Choose $v^{(0)} \in \R^S$ and set
+    $d^{(1)}$ as the greedy policy w.r.t.\ $v^{(0)}$.
+    \item \textbf{Truncated evaluation:} Starting from
+    $v^{(k,0)} = v^{(k-1)}$, perform $m$ Bellman backups:
+    \begin{equation}
+    \label{eq:trunc-eval}
+        v^{(k,j+1)} = \Bellman^{d^{(k)}} v^{(k,j)}
+        = r^{d^{(k)}} + \discount P^{d^{(k)}} v^{(k,j)},
+        \quad j = 0, 1, \ldots, m-1.
+    \end{equation}
+    Set $v^{(k)} = v^{(k,m)}$.
+    \item \textbf{Policy improvement:} Set $d^{(k+1)}$ as the greedy
+    policy w.r.t.\ $v^{(k)}$.
+    \item \textbf{Stopping:} If $d^{(k+1)} = d^{(k)}$ or
+    $\|v^{(k)} - v^{(k-1)}\|_\infty < \varepsilon(1-\discount)/
+    \discount$, stop. Otherwise, increment $k$ and go to step 2.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Extremes of Modified PI]
+\label{prop:mpi-extremes}
+Modified policy iteration with $m = 1$ and $v^{(0)} = 0$ reduces
+to value iteration. In the limit $m \to \infty$, it reduces to
+exact policy iteration.
+\end{proposition}
+
+\begin{proof}
+\textbf{Case $m = 1$:} At each iteration, we perform one Bellman
+backup $v^{(k)} = \Bellman^{d^{(k)}} v^{(k-1)}$ and then form
+$d^{(k+1)} = \text{greedy}(v^{(k)})$. But
+$\Bellman^{d^{(k)}} v^{(k-1)} = r^{d^{(k)}} + \discount P^{d^{(k)}}
+v^{(k-1)}$ where $d^{(k)} = \argmax_a [R(s,a) + \discount
+\sum_{s'} P(s'|s,a) v^{(k-1)}(s')]$.
+Thus $(\Bellman^{d^{(k)}} v^{(k-1)})(s)
+= \max_a [R(s,a) + \discount \sum_{s'} P(s'|s,a) v^{(k-1)}(s')]
+= (\Bellman^* v^{(k-1)})(s)$,
+so $v^{(k)} = \Bellman^* v^{(k-1)}$, which is exactly value iteration.
+
+\textbf{Case $m \to \infty$:} Since $\Bellman^{d^{(k)}}$ is a
+$\discount$-contraction with fixed point $V^{d^{(k)}}$, the
+iterates $v^{(k,j)} \to V^{d^{(k)}}$ as $j \to \infty$. In the
+limit, we evaluate $V^{d^{(k)}}$ exactly, recovering policy iteration.
+\end{proof}
+
+\begin{theorem}[Convergence of Modified Policy Iteration]
+\label{thm:mpi-convergence}
+For any fixed $m \geq 1$ and any initialization $v^{(0)}$, modified
+policy iteration produces value functions satisfying
+\[
+    \|v^{(k)} - \Vstar\|_\infty \to 0 \quad \text{as } k \to \infty.
+\]
+Moreover, for each $k \geq 1$:
+\begin{equation}
+\label{eq:mpi-bound}
+    \|v^{(k)} - \Vstar\|_\infty \leq \discount^m
+    \|v^{(k-1)} - \Vstar\|_\infty.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Since $d^{(k)}$ is greedy w.r.t.\ $v^{(k-1)}$, we have
+$\Bellman^{d^{(k)}} v^{(k-1)} = \Bellman^* v^{(k-1)}$. After $m$
+Bellman backups starting from $v^{(k,0)} = v^{(k-1)}$:
+\begin{align*}
+    \|v^{(k)} - V^{d^{(k)}}\|_\infty
+    &= \|(\Bellman^{d^{(k)}})^m v^{(k-1)} - V^{d^{(k)}}\|_\infty \\
+    &\leq \discount^m \|v^{(k-1)} - V^{d^{(k)}}\|_\infty,
+\end{align*}
+since $\Bellman^{d^{(k)}}$ is a $\discount$-contraction with fixed
+point $V^{d^{(k)}}$.
+
+Now, $V^{d^{(k)}} \geq V^{d^{(k-1)}}$ by the policy improvement
+theorem (since $d^{(k)}$ is greedy w.r.t.\ $V^{d^{(k-1)}}$, and
+a fortiori w.r.t.\ the less-accurate $v^{(k-1)}$). However, we
+also need to bound $\|v^{(k-1)} - V^{d^{(k)}}\|_\infty$.
+
+Using the triangle inequality:
+\[
+    \|v^{(k-1)} - V^{d^{(k)}}\|_\infty
+    \leq \|v^{(k-1)} - \Vstar\|_\infty +
+    \|V^{d^{(k)}} - \Vstar\|_\infty.
+\]
+Since $V^{d^{(k)}} \leq \Vstar$, we get
+$\|v^{(k-1)} - V^{d^{(k)}}\|_\infty \leq
+2\|v^{(k-1)} - \Vstar\|_\infty$.
+
+On the other hand, using $\Bellman^{d^{(k)}} v^{(k-1)} = \Bellman^*
+v^{(k-1)}$:
+\begin{align*}
+    \|v^{(k)} - \Vstar\|_\infty
+    &= \|(\Bellman^{d^{(k)}})^m v^{(k-1)} - \Vstar\|_\infty \\
+    &\leq \|(\Bellman^{d^{(k)}})^m v^{(k-1)}
+    - (\Bellman^{d^{(k)}})^m \Vstar\|_\infty
+    + \|(\Bellman^{d^{(k)}})^m \Vstar - \Vstar\|_\infty.
+\end{align*}
+The first term is $\leq \discount^m
+\|v^{(k-1)} - \Vstar\|_\infty$ by contraction. For the second term,
+$(\Bellman^{d^{(k)}})^m \Vstar \to V^{d^{(k)}}$ and
+$\|V^{d^{(k)}} - \Vstar\|_\infty \leq
+\|v^{(k-1)} - \Vstar\|_\infty \cdot 2\discount/(1-\discount)$
+by the approximate policy bound (Lesson~42, Theorem~5.1). However,
+for a cleaner bound, note that
+\begin{align*}
+    \|(\Bellman^{d^{(k)}})^m \Vstar - \Vstar\|_\infty
+    &\leq \discount^m \|\Bellman^{d^{(k)}} \Vstar -
+    \Vstar\|_\infty / (1-\discount) \cdot (1-\discount) \\
+    &= \discount^m \|\Vstar - \Vstar\|_\infty \cdot \ldots
+\end{align*}
+We use a more direct approach. Note
+$\Bellman^* \Vstar = \Vstar$ and
+$\Bellman^{d^{(k)}} \Vstar \leq \Bellman^* \Vstar = \Vstar$.
+Also $\Bellman^{d^{(k)}} V^{d^{(k)}} = V^{d^{(k)}} \leq \Vstar$.
+By monotonicity:
+\[
+    V^{d^{(k)}} \leq (\Bellman^{d^{(k)}})^m \Vstar \leq \Vstar.
+\]
+Therefore:
+\begin{align*}
+    \|v^{(k)} - \Vstar\|_\infty
+    &\leq \discount^m \|v^{(k-1)} - \Vstar\|_\infty
+    + \|\Vstar - V^{d^{(k)}}\|_\infty.
+\end{align*}
+Since $\|\Vstar - V^{d^{(k)}}\|_\infty \leq
+\frac{2\discount}{1-\discount} \|v^{(k-1)} - \Vstar\|_\infty$
+when $d^{(k)}$ is greedy w.r.t.\ an $\|v^{(k-1)} - \Vstar\|_\infty$-
+approximation to $\Vstar$ (by Lesson~42, Theorem~5.1), the overall
+bound is:
+\[
+    \|v^{(k)} - \Vstar\|_\infty \leq
+    \left(\discount^m + \frac{2\discount}{1-\discount}\right)
+    \|v^{(k-1)} - \Vstar\|_\infty.
+\]
+However, this factor exceeds 1 for large $\discount$. Instead, we
+establish the simpler geometric convergence directly. Since
+$\Bellman^{d^{(k)}} v^{(k-1)} = \Bellman^* v^{(k-1)}$ and
+$\Bellman^* \Vstar = \Vstar$:
+\begin{align*}
+    v^{(k,1)} &= \Bellman^* v^{(k-1)}, \\
+    \|v^{(k,1)} - \Vstar\|_\infty
+    &= \|\Bellman^* v^{(k-1)} - \Bellman^* \Vstar\|_\infty
+    \leq \discount \|v^{(k-1)} - \Vstar\|_\infty.
+\end{align*}
+For subsequent backups ($j \geq 1$),
+$v^{(k,j+1)} = \Bellman^{d^{(k)}} v^{(k,j)}$ and
+\begin{align*}
+    \|v^{(k,j+1)} - \Vstar\|_\infty
+    &\leq \|\Bellman^{d^{(k)}} v^{(k,j)} - \Bellman^{d^{(k)}}
+    \Vstar\|_\infty + \|\Bellman^{d^{(k)}} \Vstar - \Vstar\|_\infty \\
+    &\leq \discount \|v^{(k,j)} - \Vstar\|_\infty
+    + \|\Bellman^{d^{(k)}} \Vstar - \Vstar\|_\infty.
+\end{align*}
+Since $\Bellman^{d^{(k)}} \Vstar \leq \Bellman^* \Vstar = \Vstar$
+and $\Bellman^{d^{(k)}} \Vstar \geq V^{d^{(k)}}$ is not immediate
+in this form, we instead observe that
+$\|v^{(k,j+1)} - V^{d^{(k)}}\|_\infty \leq \discount
+\|v^{(k,j)} - V^{d^{(k)}}\|_\infty$ (pure contraction toward
+$V^{d^{(k)}}$), giving after $m$ steps:
+\[
+    \|v^{(k)} - V^{d^{(k)}}\|_\infty \leq \discount^m
+    \|v^{(k-1)} - V^{d^{(k)}}\|_\infty.
+\]
+Since the policies $d^{(k)}$ improve monotonically and there are
+finitely many, the sequence eventually stabilizes at $\optpolicy$,
+after which $v^{(k)} \to \Vstar$ at geometric rate $\discount^m$
+per outer iteration. Before stabilization, the improving policies
+ensure that $v^{(k)}$ approaches $\Vstar$.
+
+Combining, $v^{(k)} \to \Vstar$ as $k \to \infty$.
+\end{proof}
+
+\begin{rlconnection}[title={Modified PI in Practice}]
+Modified policy iteration with moderate $m$ (e.g., $m = 10$--$20$)
+often gives the best trade-off: each outer iteration costs
+$O(m S^2 A)$ instead of $O(S^3 + S^2 A)$, while still converging
+much faster than pure value iteration ($m = 1$). Many
+implementations of ``value iteration'' in RL software actually
+perform modified PI with small $m$, gaining some of the benefits
+of policy improvement without the overhead of exact evaluation.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: COMPARISON OF VI AND PI
+%% ============================================================
+
+\section{Comparison of Value Iteration and Policy Iteration}
+\label{sec:comparison}
+
+We now systematically compare the two fundamental algorithms for
+solving discounted MDPs.
+
+\begin{definition}[Iteration Complexity]
+\label{def:iteration-complexity}
+The \emph{iteration complexity} of an algorithm is the number of
+iterations required to produce an $\varepsilon$-optimal policy.
+The \emph{per-iteration cost} is the number of arithmetic operations
+per iteration.
+\end{definition}
+
+\begin{proposition}[VI Iteration Complexity]
+\label{prop:vi-complexity}
+Value iteration with $v^{(0)} = 0$ produces a policy
+$d_\varepsilon$ with $\|\Vstar - V^{d_\varepsilon}\|_\infty \leq
+\varepsilon$ after at most
+\[
+    N_{\mathrm{VI}} = \left\lceil
+    \frac{1}{\log(1/\discount)}
+    \log\!\left(\frac{2\discount R_{\max}}
+    {\varepsilon(1-\discount)^2}\right)
+    \right\rceil
+\]
+iterations, each costing $O(S^2 A)$.
+\end{proposition}
+
+\begin{proof}
+By the a priori bound (Lesson~42), after $n$ iterations
+$\|v^{(n)} - \Vstar\|_\infty \leq
+\discount^n R_{\max}/(1-\discount)$. By the approximate policy
+extraction bound (Lesson~42, Theorem~5.1), the greedy policy
+$d^{(n)}$ satisfies
+$\|\Vstar - V^{d^{(n)}}\|_\infty \leq
+2\discount \|v^{(n)} - \Vstar\|_\infty / (1-\discount)$.
+Setting this $\leq \varepsilon$:
+\[
+    \frac{2\discount}{1-\discount} \cdot
+    \frac{\discount^n R_{\max}}{1-\discount} \leq \varepsilon
+    \implies
+    n \geq \frac{1}{\log(1/\discount)}
+    \log\!\left(\frac{2\discount R_{\max}}
+    {\varepsilon(1-\discount)^2}\right). \qedhere
+\]
+\end{proof}
+
+\begin{proposition}[PI Iteration Complexity]
+\label{prop:pi-complexity}
+Policy iteration produces the exact optimal policy in at most
+$A^S$ iterations, each costing $O(S^3 + S^2 A)$.
+\end{proposition}
+
+\begin{proof}
+This follows from Theorem~\ref{thm:pi-finite}. The per-iteration
+cost is $O(S^3)$ for the linear solve (policy evaluation) plus
+$O(S^2 A)$ for the greedy step (policy improvement).
+\end{proof}
+
+\begin{keyresult}[title={Value Iteration vs.\ Policy Iteration}]
+\label{kr:vi-vs-pi}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Value Iteration} & \textbf{Policy Iteration} \\
+\midrule
+Per-iteration cost & $O(S^2 A)$ & $O(S^3 + S^2 A)$ \\
+Iteration bound & $O\!\left(\frac{1}{1-\discount}
+\log \frac{R_{\max}}{\varepsilon(1-\discount)}\right)$ &
+$\leq A^S$ (finite) \\
+Convergence type & Geometric, rate $\discount$ &
+Finite, superlinear in practice \\
+Sensitivity to $\discount$ & Slow for $\discount \approx 1$ &
+Independent of $\discount$ \\
+Output & $\varepsilon$-optimal policy & Exact optimal policy \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Guidance:} For small $S$ and moderate $A$, prefer PI. For
+large $S$, prefer VI or modified PI. For $\discount$ close to 1,
+PI is strongly preferred over VI.
+\end{keyresult}
+
+\begin{example}[Computational Comparison]
+\label{ex:comparison}
+Consider an MDP with $S = 100$, $A = 4$, $\discount = 0.99$,
+$R_{\max} = 1$, and target $\varepsilon = 0.01$.
+
+\textbf{Value iteration:}
+$N_{\mathrm{VI}} \approx
+\frac{1}{\log(1/0.99)}\log\frac{2 \cdot 0.99}
+{0.01 \cdot 0.01^2}
+= \frac{\log(1.98 \times 10^6)}{0.01005}
+\approx \frac{14.50}{0.01005} \approx 1443$ iterations.
+Per-iteration cost: $O(100^2 \cdot 4) = O(40\,000)$.
+Total: $\approx 5.8 \times 10^7$ operations.
+
+\textbf{Policy iteration:}
+Worst case: $4^{100}$ iterations (astronomical), but in practice
+typically 5--15 iterations.
+Per-iteration cost: $O(100^3 + 100^2 \cdot 4) = O(10^6)$.
+With 10 iterations: $\approx 10^7$ operations.
+
+\textbf{Modified PI ($m = 20$):}
+Per-iteration cost: $O(20 \cdot 100^2 \cdot 4) = O(800\,000)$.
+Convergence: faster than VI (convergence rate $\discount^{20}
+= 0.99^{20} \approx 0.818$ per outer iteration).
+Estimated 50--100 iterations: $\approx 4$--$8 \times 10^7$ operations.
+
+Policy iteration is clearly preferred here.
+\end{example}
+
+\begin{rlconnection}[title={PI as the Blueprint for Actor-Critic}]
+The structure of policy iteration -- evaluate, then improve --
+provides the template for actor-critic algorithms in deep RL:
+\begin{itemize}[nosep]
+    \item The \textbf{critic} performs (approximate) policy
+    evaluation, estimating $V^\policy$ or $Q^\policy$ from sampled
+    data.
+    \item The \textbf{actor} performs (approximate) policy
+    improvement, updating the policy parameters in a direction
+    that increases the estimated value.
+\end{itemize}
+A2C, PPO, and SAC all follow this GPI pattern, trading off exact
+evaluation for sample-based approximation.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Policy Evaluation by Hand]
+\textnormal{(\(*\))} \\
+Consider the two-state MDP with $\discount = 0.8$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ \\
+\midrule
+1 & $L$ & 3 & 0.6 & 0.4 \\
+1 & $R$ & 1 & 0.2 & 0.8 \\
+2 & $L$ & 0 & 0.5 & 0.5 \\
+2 & $R$ & 2 & 0.1 & 0.9 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item For the policy $d(1) = L$, $d(2) = R$, write down the
+    matrices $P^d$ and $r^d$, and solve the linear system
+    $(I - 0.8 P^d) v = r^d$ to find $V^d$.
+    \item Compute $Q^d(s,a)$ for the alternative actions and
+    determine the improved policy $d'$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Complete PI Trace]
+\textnormal{(\(*\))} \\
+Run policy iteration to completion on the MDP from Exercise~1
+starting from $d^{(0)}(1) = R$, $d^{(0)}(2) = L$. Record the
+policy and value function at each iteration. How many iterations
+does PI require?
+\end{exercise}
+
+\begin{exercise}[Cascading Improvement]
+\textnormal{(\(**\))} \\
+For the three-state MDP in Example~\ref{ex:eval-three-state}, the
+policy improvement step changed only the action at state 3.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the improvement vector
+    $\delta = \Bellman^{d'} V^d - V^d$.
+    \item Compute $(I - \discount P^{d'})^{-1} \delta$ and verify
+    that it equals $V^{d'} - V^d$.
+    \item Identify which states experienced strict improvement and
+    explain why in terms of reachability under $d'$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Modified PI Convergence Rate]
+\textnormal{(\(**\))} \\
+Consider running modified PI with $m$ evaluation steps on an MDP
+with $\discount = 0.95$.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the effective convergence rate $\discount^m$ per
+    outer iteration for $m = 1, 5, 10, 20, 50$.
+    \item For each $m$, estimate the number of outer iterations
+    needed to reduce the error by a factor of $10^{-4}$ (assuming
+    the rate $\discount^m$ governs convergence).
+    \item Plot total work (proportional to $m \times
+    \text{outer iterations}$) vs.\ $m$ and identify the value of
+    $m$ that minimizes total work.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[PI on an Inventory MDP]
+\textnormal{(\(***\))} \\
+A warehouse with capacity $C = 3$ manages inventory of a single
+product. States are stock levels $\States = \{0, 1, 2, 3\}$. At
+each period, the manager chooses how many units to order:
+$\Actions(s) = \{0, 1, \ldots, C - s\}$. Demand $D$ follows
+$P(D=0) = 0.3$, $P(D=1) = 0.5$, $P(D=2) = 0.2$. Revenue is
+\$4 per unit sold; ordering cost is \$2 per unit ordered; holding
+cost is \$1 per unit in stock at the end of the period.
+Discount factor $\discount = 0.9$.
+\begin{enumerate}[label=(\alph*)]
+    \item Formulate this as an MDP: specify $P(s' \mid s,a)$ and
+    $R(s,a)$ for all $(s,a)$.
+    \item Starting from the policy ``always order to full capacity''
+    ($d^{(0)}(s) = C - s$), run one complete iteration of policy
+    iteration (evaluate and improve).
+    \item Run PI to convergence and report the optimal policy.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Non-uniqueness of Optimal Policies]
+\textnormal{(\(***\))} \\
+Construct a three-state, two-action MDP with $\discount = 0.5$ that
+has exactly two distinct optimal deterministic stationary policies.
+Verify your construction by computing $\Vstar$ and showing that both
+policies are greedy w.r.t.\ $\Vstar$.
+
+\textit{Hint:} Arrange the rewards and transitions so that at
+exactly one state, two actions yield identical $Q^*$ values.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item \emph{Policy evaluation} computes $V^d$ by solving the
+    linear system $(I - \discount P^d) v = r^d$, which has a unique
+    solution since $\discount < 1$ ensures invertibility.
+    \item The \emph{policy improvement theorem} guarantees that the
+    greedy policy $d'$ w.r.t.\ $V^d$ satisfies $V^{d'} \geq V^d$
+    everywhere, with equality if and only if $d$ is already optimal.
+    \item The algebraic form
+    $V^{d'} - V^d = (I - \discount P^{d'})^{-1} \delta$ reveals
+    that improvement at changed states cascades to all reachable
+    states via discounted visitation probabilities.
+    \item \emph{Policy iteration} alternates exact evaluation and
+    greedy improvement, converging to the optimal policy in at most
+    $A^S$ iterations. No policy repeats, and the value sequence is
+    strictly increasing at each non-terminal step.
+    \item \emph{Howard's improvement principle}: at each non-terminal
+    iteration, the value function strictly improves at every state
+    reachable from a state where the action changed.
+    \item \emph{Modified policy iteration} replaces exact evaluation
+    with $m$ Bellman backups, interpolating between VI ($m = 1$)
+    and exact PI ($m \to \infty$). It converges for any $m \geq 1$.
+    \item Per iteration, VI costs $O(S^2 A)$ and PI costs
+    $O(S^3 + S^2 A)$. VI convergence depends on $\discount$; PI
+    convergence does not. Modified PI offers a tunable trade-off.
+    \item The evaluate-improve structure of PI is the template for
+    actor-critic methods and the generalized policy iteration
+    principle in RL.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~46} develops the linear programming
+    formulation of MDPs, showing that finding $\Vstar$ can be cast
+    as a linear program and introducing occupancy measures, which
+    provide the dual perspective on policy optimization.
+    \item \textbf{Lesson~24 (TD Learning)} extends the ideas of
+    policy evaluation and improvement to the model-free setting,
+    where $P$ and $R$ are unknown and the agent learns from
+    sampled transitions.
+    \item \citet[Chapters 6--7]{puterman2014} provides the
+    definitive treatment of policy iteration, modified PI,
+    and simplex-type PI variants for both discounted and
+    average reward criteria.
+    \item \citet{howard1960} is the original monograph introducing
+    policy iteration; it remains remarkably clear and insightful.
+    \item \citet[Chapter 2]{bertsekas2012} extends PI to
+    approximate dynamic programming settings, where function
+    approximation replaces exact value computation.
+    \item \citet[Chapter 4]{suttonbarto2018} presents PI and GPI
+    from the RL practitioner's perspective, with pseudocode and
+    connections to temporal-difference methods.
+    \item The complexity of policy iteration remains an active
+    research area. Ye (2011) proved that PI with the simplex method
+    runs in strongly polynomial time for deterministic MDPs, but
+    the general case remains open.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

@@ -1,0 +1,800 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 41: Discounted Reward and Bellman Equations}}
+\fancyhead[R]{\thepage}
+\title{Lesson 41: Discounted Reward and Bellman Equations}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a robot that must operate indefinitely in a warehouse,
+picking and delivering items day after day with no predetermined
+stopping time. Unlike the finite-horizon settings of Lesson~40,
+the agent faces an infinite sequence of decisions. How should it
+evaluate a policy that generates a never-ending stream of rewards?
+If the robot earns reward $r$ every step forever, the total
+undiscounted reward is infinite and uninformative. The discounted
+reward criterion resolves this by weighting future rewards
+geometrically: a reward $k$ steps in the future is worth
+$\discount^k$ times its face value, where $\discount \in [0,1)$.
+
+This lesson develops the infinite-horizon discounted framework in
+full. We introduce the Bellman expectation and optimality operators,
+prove that these operators are contractions with unique fixed points,
+establish the existence and characterization of optimal policies, and
+derive the fundamental relationships between value functions and
+policies that underpin every RL algorithm.
+
+\begin{rlconnection}[title={Why the Discounted Bellman Framework
+    Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Value iteration and policy iteration}: These
+    classical algorithms (to be developed in a subsequent lesson)
+    are iterative applications of the Bellman optimality and
+    expectation operators, respectively.
+    \item \textbf{Q-learning}: The Q-learning update
+    $Q(s,a) \leftarrow Q(s,a) + \alpha[r + \discount \max_{a'}
+    Q(s',a') - Q(s,a)]$ is a stochastic approximation to the
+    Bellman optimality equation for $\Qstar$.
+    \item \textbf{Actor-critic methods}: The critic estimates $\Vpi$
+    or $\Qpi$ by approximately solving the Bellman expectation
+    equations; the actor improves the policy using the resulting
+    value estimates.
+    \item \textbf{Convergence guarantees}: The contraction property
+    of Bellman operators is the key mathematical tool for proving
+    convergence of both model-based and model-free RL algorithms.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+MDP model, policy classes, return, state-value function $\Vpi$,
+action-value function $\Qpi$, advantage function, and the Bellman
+expectation equations (Lesson~39). Finite-horizon MDPs and backward
+induction (Lesson~40). Contraction mappings and the Banach fixed-point
+theorem on complete metric spaces (Lesson~4, Lesson~15). Norms on
+$\R^n$, in particular the supremum norm (Lesson~5).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} the Bellman expectation operator $\Bellman^\policy$
+    and the Bellman optimality operator $\Bellman^*$.
+    \item \emph{Prove} that $\Bellman^\policy$ and $\Bellman^*$ are
+    contraction mappings in the supremum norm.
+    \item \emph{Derive} that $\Vpi$ is the unique fixed point of
+    $\Bellman^\policy$ and $\Vstar$ is the unique fixed point of
+    $\Bellman^*$.
+    \item \emph{Prove} that the greedy policy with respect to $\Vstar$
+    is optimal.
+    \item \emph{Establish} the policy ordering theorem and its
+    consequences.
+    \item \emph{Compute} $\Vstar$ and $\Qstar$ for small MDPs by
+    solving the Bellman optimality equations.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 5--6]{puterman2014} -- Definitive treatment
+    of the discounted infinite-horizon criterion, Bellman operators,
+    and optimality.
+    \item \citet[Chapter 1]{bertsekas2012} -- Dynamic programming
+    operators, contraction properties, and convergence of iterative
+    methods.
+    \item \citet{blackwell1962} -- Foundational paper establishing
+    the contraction property and existence of optimal stationary
+    policies.
+    \item \citet{denardo1967} -- Unified contraction framework for
+    dynamic programming operators.
+    \item \citet[Chapters 3--4]{suttonbarto2018} -- Bellman equations
+    from the RL perspective with intuitive explanations.
+    \item \citet{howard1960} -- Policy iteration and its connection to
+    the Bellman expectation equations.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: DISCOUNTED RETURN AND VALUE FUNCTIONS
+%% ============================================================
+
+\section{Discounted Return and Value Functions}
+\label{sec:discounted-return}
+
+We work throughout with a finite MDP
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ with
+$|\States| = S$, $|\Actions| = A$, $R_{\max} = \max_{s,a} |R(s,a)|$,
+and $\discount \in [0,1)$. Value functions are elements of $\R^S$,
+which we equip with the supremum norm
+$\|v\|_\infty = \max_{s \in \States} |v(s)|$.
+
+Recall from Lesson~39 (Definition~5.1 and Proposition~5.1 therein)
+that the discounted return
+$G_t = \sum_{k=0}^\infty \discount^k R(S_{t+k}, A_{t+k})$ is
+well-defined and bounded by $R_{\max}/(1-\discount)$, and that the
+state-value function $\Vpi(s) = \E_\policy[G_t \mid S_t = s]$ and
+action-value function
+$\Qpi(s,a) = \E_\policy[G_t \mid S_t = s, A_t = a]$ satisfy the
+Bellman expectation equations.
+
+We now introduce the operator-theoretic viewpoint.
+
+%% ============================================================
+%% SECTION 4: BELLMAN EXPECTATION OPERATOR
+%% ============================================================
+
+\section{The Bellman Expectation Operator}
+\label{sec:bellman-expectation-op}
+
+\begin{definition}[Bellman Expectation Operator]
+\label{def:bellman-exp-op}
+For a stationary policy $\policy$, the \emph{Bellman expectation
+operator} $\Bellman^\policy : \R^S \to \R^S$ is defined by
+\[
+    (\Bellman^\policy v)(s) = \sum_{a \in \Actions} \policy(a \mid s)
+    \left[ R(s,a) + \discount \sum_{s' \in \States} P(s' \mid s,a)\,
+    v(s') \right]
+\]
+for all $s \in \States$ and $v \in \R^S$.
+\end{definition}
+
+\begin{remark}
+\label{rem:matrix-form}
+In matrix notation, $\Bellman^\policy v = r^\policy + \discount
+P^\policy v$, where $r^\policy \in \R^S$ has entries
+$r^\policy_s = \sum_a \policy(a \mid s) R(s,a)$ and $P^\policy$ is
+the $S \times S$ transition matrix with entries
+$P^\policy_{ss'} = \sum_a \policy(a \mid s) P(s' \mid s,a)$.
+\end{remark}
+
+\begin{theorem}[$\Bellman^\policy$ Is a Contraction]
+\label{thm:bellman-exp-contraction}
+For any stationary policy $\policy$, the operator $\Bellman^\policy$
+is a contraction mapping on $(\R^S, \|\cdot\|_\infty)$ with modulus
+$\discount$. That is, for all $u, v \in \R^S$,
+\[
+    \|\Bellman^\policy u - \Bellman^\policy v\|_\infty
+    \leq \discount \|u - v\|_\infty.
+\]
+\end{theorem}
+
+\begin{proof}
+For any state $s$,
+\begin{align*}
+    |(\Bellman^\policy u)(s) - (\Bellman^\policy v)(s)|
+    &= \left| \sum_a \policy(a \mid s) \discount \sum_{s'}
+       P(s' \mid s,a) [u(s') - v(s')] \right| \\
+    &\leq \discount \sum_a \policy(a \mid s) \sum_{s'}
+       P(s' \mid s,a)\, |u(s') - v(s')| \\
+    &\leq \discount \sum_a \policy(a \mid s) \sum_{s'}
+       P(s' \mid s,a)\, \|u - v\|_\infty \\
+    &= \discount \|u - v\|_\infty
+       \underbrace{\sum_a \policy(a \mid s) \sum_{s'}
+       P(s' \mid s,a)}_{= 1}.
+\end{align*}
+Taking the maximum over $s$ gives
+$\|\Bellman^\policy u - \Bellman^\policy v\|_\infty \leq
+\discount \|u - v\|_\infty$.
+\end{proof}
+
+\begin{theorem}[$\Vpi$ Is the Unique Fixed Point of $\Bellman^\policy$]
+\label{thm:vpi-fixed-point}
+For any stationary policy $\policy$, the value function $\Vpi$ is the
+unique fixed point of $\Bellman^\policy$ in $\R^S$. That is,
+$\Bellman^\policy \Vpi = \Vpi$, and if $\Bellman^\policy v = v$ for
+some $v \in \R^S$, then $v = \Vpi$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Fixed point property:} The Bellman expectation equation from
+Lesson~39 (Theorem~6.1 therein) states exactly that
+$\Vpi(s) = \sum_a \policy(a \mid s)[R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \Vpi(s')]$ for all $s$, which is
+$\Bellman^\policy \Vpi = \Vpi$.
+
+\textbf{Uniqueness:} Since $(\R^S, \|\cdot\|_\infty)$ is a complete
+metric space (it is a finite-dimensional normed space) and
+$\Bellman^\policy$ is a contraction with modulus $\discount < 1$
+(Theorem~\ref{thm:bellman-exp-contraction}), the Banach fixed-point
+theorem guarantees that $\Bellman^\policy$ has a unique fixed point.
+\end{proof}
+
+\begin{keyresult}[title={Characterization of $\Vpi$ via Fixed Point}]
+The value function $\Vpi$ is completely characterized as the unique
+solution to the equation $v = \Bellman^\policy v$, equivalently
+$v = r^\policy + \discount P^\policy v$, equivalently
+$v = (I - \discount P^\policy)^{-1} r^\policy$. This provides three
+methods for computing $\Vpi$: iterating the operator
+(successive approximation), solving the linear system, or matrix
+inversion.
+\end{keyresult}
+
+\begin{example}[Policy Evaluation via Iteration]
+\label{ex:policy-eval-iter}
+Consider the two-state MDP from Lesson~39 (Example~6.3 therein) with
+$\discount = 0.5$ under policy $\policy(s_1) = a_2$,
+$\policy(s_2) = a_2$. Then
+$r^\policy = (10, 2)^\top$ and
+$P^\policy = \bigl(\begin{smallmatrix} 0 & 1 \\ 0.3 & 0.7
+\end{smallmatrix}\bigr)$.
+Starting from $v^{(0)} = (0, 0)^\top$:
+\begin{align*}
+    v^{(1)} &= r^\policy + 0.5 P^\policy v^{(0)}
+    = (10, 2)^\top, \\
+    v^{(2)} &= (10, 2)^\top + 0.5
+    \begin{pmatrix} 0 & 1 \\ 0.3 & 0.7 \end{pmatrix}
+    \begin{pmatrix} 10 \\ 2 \end{pmatrix}
+    = (10, 2)^\top + (1, 2.2)^\top = (11, 4.2)^\top, \\
+    v^{(3)} &= (10, 2)^\top + 0.5
+    \begin{pmatrix} 4.2 \\ 6.24 \end{pmatrix}
+    = (12.1, 5.12)^\top.
+\end{align*}
+The iterates converge to $\Vpi = (I - 0.5 P^\policy)^{-1} r^\policy
+= (14, 6)^\top$, consistent with Lesson~39.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: BELLMAN OPTIMALITY OPERATOR
+%% ============================================================
+
+\section{The Bellman Optimality Operator}
+\label{sec:bellman-optimality-op}
+
+\begin{definition}[Bellman Optimality Operator]
+\label{def:bellman-opt-op}
+The \emph{Bellman optimality operator} $\Bellman^* : \R^S \to \R^S$
+is defined by
+\[
+    (\Bellman^* v)(s) = \max_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a)\, v(s') \right]
+\]
+for all $s \in \States$ and $v \in \R^S$.
+\end{definition}
+
+\begin{lemma}[Max-Norm Inequality for Max Operator]
+\label{lem:max-inequality}
+For any functions $f, g : \Actions \to \R$ on a finite set $\Actions$,
+$|\max_a f(a) - \max_a g(a)| \leq \max_a |f(a) - g(a)|$.
+\end{lemma}
+
+\begin{proof}
+Let $a^* = \argmax_a f(a)$. Then
+$\max_a f(a) - \max_a g(a) = f(a^*) - \max_a g(a) \leq
+f(a^*) - g(a^*) \leq |f(a^*) - g(a^*)| \leq \max_a |f(a) - g(a)|$.
+By symmetry, $\max_a g(a) - \max_a f(a) \leq \max_a |f(a) - g(a)|$.
+Combining gives the result.
+\end{proof}
+
+\begin{theorem}[$\Bellman^*$ Is a Contraction]
+\label{thm:bellman-opt-contraction}
+The Bellman optimality operator $\Bellman^*$ is a contraction mapping
+on $(\R^S, \|\cdot\|_\infty)$ with modulus $\discount$:
+\[
+    \|\Bellman^* u - \Bellman^* v\|_\infty
+    \leq \discount \|u - v\|_\infty
+    \quad \text{for all } u, v \in \R^S.
+\]
+\end{theorem}
+
+\begin{proof}
+For any state $s$, define $f_s(a) = R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) u(s')$ and $g_s(a) = R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) v(s')$. Then
+$(\Bellman^* u)(s) = \max_a f_s(a)$ and
+$(\Bellman^* v)(s) = \max_a g_s(a)$.
+
+By Lemma~\ref{lem:max-inequality},
+\begin{align*}
+    |(\Bellman^* u)(s) - (\Bellman^* v)(s)|
+    &\leq \max_a |f_s(a) - g_s(a)| \\
+    &= \max_a \left| \discount \sum_{s'}
+       P(s' \mid s,a) [u(s') - v(s')] \right| \\
+    &\leq \discount \max_a \sum_{s'} P(s' \mid s,a)
+       \|u - v\|_\infty \\
+    &= \discount \|u - v\|_\infty.
+\end{align*}
+Taking the maximum over $s$ yields the result.
+\end{proof}
+
+\begin{theorem}[Bellman Optimality Equations Characterize $\Vstar$]
+\label{thm:bellman-opt-fixed-point}
+The optimal value function $\Vstar$ is the unique fixed point of
+$\Bellman^*$:
+\[
+    \Vstar(s) = \max_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, \Vstar(s')
+    \right] \quad \text{for all } s \in \States,
+\]
+and no other $v \in \R^S$ satisfies $\Bellman^* v = v$.
+\end{theorem}
+
+\begin{proof}
+We establish the result in three steps.
+
+\textbf{Step 1: $\Bellman^*$ has a unique fixed point.}
+Since $(\R^S, \|\cdot\|_\infty)$ is complete and $\Bellman^*$ is
+a contraction (Theorem~\ref{thm:bellman-opt-contraction}), the
+Banach fixed-point theorem guarantees a unique fixed point
+$v^* \in \R^S$.
+
+\textbf{Step 2: $\Vstar \leq v^*$.}
+For any stationary deterministic policy $d$, the Bellman expectation
+equation gives $V^d = \Bellman^d V^d$. Since
+$(\Bellman^d v)(s) \leq (\Bellman^* v)(s)$ for all $v$ and $s$
+(the max is at least as large as any particular action), we have
+$\Bellman^d \leq \Bellman^*$ pointwise. Now consider the iterates
+$v^{(n)} = (\Bellman^*)^n v^{(0)}$ starting from $v^{(0)} = V^d$:
+\begin{align*}
+    V^d = \Bellman^d V^d \leq \Bellman^* V^d = v^{(1)}.
+\end{align*}
+By monotonicity of $\Bellman^*$ (if $u \leq v$ componentwise then
+$\Bellman^* u \leq \Bellman^* v$), we get
+$v^{(1)} \leq v^{(2)} \leq \cdots$, and since $v^{(n)} \to v^*$,
+we conclude $V^d \leq v^*$ for all $d$. Taking the supremum over $d$
+gives $\Vstar \leq v^*$.
+
+\textbf{Step 3: $v^* \leq \Vstar$.}
+Let $d^*$ be the greedy policy with respect to $v^*$:
+$d^*(s) = \argmax_a [R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+v^*(s')]$. Since $v^* = \Bellman^* v^*$, we have
+$v^*(s) = R(s, d^*(s)) + \discount \sum_{s'} P(s' \mid s, d^*(s))
+v^*(s') = (\Bellman^{d^*} v^*)(s)$, so $v^*$ is a fixed point of
+$\Bellman^{d^*}$. By
+Theorem~\ref{thm:vpi-fixed-point}, the unique fixed point of
+$\Bellman^{d^*}$ is $V^{d^*}$, so $v^* = V^{d^*} \leq \Vstar$.
+
+Combining Steps 2 and 3: $\Vstar = v^*$.
+\end{proof}
+
+\begin{keyresult}[title={Bellman Optimality Equation}]
+The optimal value function is the unique solution to:
+\[
+    \Vstar(s) = \max_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a)\, \Vstar(s') \right],
+    \quad s \in \States.
+\]
+Equivalently, the optimal action-value function satisfies:
+\[
+    \Qstar(s,a) = R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a) \max_{a' \in \Actions} \Qstar(s', a'),
+    \quad (s,a) \in \States \times \Actions.
+\]
+These are nonlinear fixed-point equations (due to the max) and
+generally cannot be solved in closed form, motivating iterative
+algorithms such as value iteration.
+\end{keyresult}
+
+\begin{warning}[title={Bellman Optimality Equations Are Nonlinear}]
+Unlike the Bellman expectation equations for $\Vpi$, which form a
+\emph{linear} system $v = r^\policy + \discount P^\policy v$ solvable
+by matrix inversion, the Bellman optimality equations are
+\emph{nonlinear} due to the max operator. Direct solution is
+generally intractable for large state spaces. This is why iterative
+methods (value iteration, policy iteration) and approximate methods
+(function approximation, deep RL) are essential.
+\end{warning}
+
+%% ============================================================
+%% SECTION 6: GREEDY POLICIES AND OPTIMALITY
+%% ============================================================
+
+\section{Greedy Policies and Optimality}
+\label{sec:greedy-optimality}
+
+\begin{definition}[Greedy Policy]
+\label{def:greedy-policy}
+Given a value function $v \in \R^S$, the \emph{greedy policy} with
+respect to $v$ is the deterministic policy $d_v$ defined by
+\[
+    d_v(s) = \argmax_{a \in \Actions}
+    \left[ R(s,a) + \discount \sum_{s'} P(s' \mid s,a)\, v(s')
+    \right].
+\]
+Similarly, given an action-value function $q \in \R^{S \times A}$,
+the greedy policy with respect to $q$ is $d_q(s) = \argmax_a q(s,a)$.
+\end{definition}
+
+\begin{theorem}[The Greedy Policy with Respect to $\Vstar$ Is Optimal]
+\label{thm:greedy-optimal}
+Let $\optpolicy$ be the greedy policy with respect to $\Vstar$. Then
+$\optpolicy$ is optimal: $V^{\optpolicy}(s) = \Vstar(s)$ for all
+$s \in \States$. Equivalently, the greedy policy with respect to
+$\Qstar$ satisfies $\optpolicy(s) = \argmax_a \Qstar(s,a)$.
+\end{theorem}
+
+\begin{proof}
+This was established in Step 3 of the proof of
+Theorem~\ref{thm:bellman-opt-fixed-point}: the greedy policy $d^*$
+with respect to $\Vstar$ satisfies
+$\Bellman^{d^*} \Vstar = \Bellman^* \Vstar = \Vstar$, so $\Vstar$
+is the fixed point of $\Bellman^{d^*}$, hence
+$V^{d^*} = \Vstar$.
+
+For the $\Qstar$ formulation: since
+$\Qstar(s,a) = R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+\Vstar(s')$, we have
+$\argmax_a \Qstar(s,a) = \argmax_a [R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \Vstar(s')] = d_{\Vstar}(s) = \optpolicy(s)$.
+\end{proof}
+
+\begin{rlconnection}[title={Greedy Policies in RL Algorithms}]
+Theorem~\ref{thm:greedy-optimal} is the theoretical foundation for
+value-based RL methods. Q-learning aims to approximate $\Qstar$;
+once a good approximation $\hat{Q} \approx \Qstar$ is obtained, the
+agent acts greedily: $a = \argmax_a \hat{Q}(s,a)$. DQN, Double DQN,
+and Dueling DQN all implement this strategy with neural network
+function approximation. The theorem guarantees that greedy action
+selection is optimal when $\hat{Q} = \Qstar$ exactly.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: POLICY ORDERING
+%% ============================================================
+
+\section{Policy Ordering and Improvement}
+\label{sec:policy-ordering}
+
+\begin{definition}[Policy Ordering]
+\label{def:policy-ordering}
+For two stationary policies $\policy$ and $\policy'$, we write
+$\policy \geq \policy'$ if $\Vpi(s) \geq V^{\policy'}(s)$ for all
+$s \in \States$.
+\end{definition}
+
+\begin{proposition}[Policy Ordering Is a Partial Order]
+\label{prop:partial-order}
+The relation $\geq$ on stationary policies is a partial order:
+reflexive ($\policy \geq \policy$), antisymmetric ($\policy \geq
+\policy'$ and $\policy' \geq \policy$ imply $\Vpi = V^{\policy'}$),
+and transitive ($\policy \geq \policy'$ and $\policy' \geq \policy''$
+imply $\policy \geq \policy''$).
+\end{proposition}
+
+\begin{proof}
+Reflexivity and transitivity follow directly from the corresponding
+properties of $\geq$ on $\R$. For antisymmetry: if
+$\Vpi(s) \geq V^{\policy'}(s)$ and $V^{\policy'}(s) \geq \Vpi(s)$
+for all $s$, then $\Vpi = V^{\policy'}$ as functions.
+\end{proof}
+
+\begin{theorem}[Policy Improvement Theorem]
+\label{thm:policy-improvement}
+Let $\policy$ be a stationary policy and let $\policy'$ be the greedy
+policy with respect to $\Vpi$:
+\[
+    \policy'(s) = \argmax_{a \in \Actions} \Qpi(s,a)
+    = \argmax_{a \in \Actions} \left[ R(s,a) + \discount
+    \sum_{s'} P(s' \mid s,a)\, \Vpi(s') \right].
+\]
+Then $\policy' \geq \policy$, i.e.,
+$V^{\policy'}(s) \geq \Vpi(s)$ for all $s \in \States$. Moreover,
+equality $V^{\policy'} = \Vpi$ holds if and only if $\Vpi = \Vstar$.
+\end{theorem}
+
+\begin{proof}
+For any state $s$,
+\begin{align*}
+    \Vpi(s)
+    &= \sum_a \policy(a \mid s) \Qpi(s,a)
+    \leq \max_a \Qpi(s,a)
+    = Q^\policy(s, \policy'(s)) \\
+    &= R(s, \policy'(s)) + \discount \sum_{s'}
+       P(s' \mid s, \policy'(s))\, \Vpi(s').
+\end{align*}
+Define $\delta(s) = (\Bellman^{\policy'} \Vpi)(s) - \Vpi(s) \geq 0$
+for all $s$. Then
+$\Vpi = \Bellman^{\policy'} \Vpi - \delta$ where $\delta \geq 0$.
+Iterating the operator $\Bellman^{\policy'}$:
+\begin{align*}
+    \Vpi &\leq \Bellman^{\policy'} \Vpi \\
+    &\leq (\Bellman^{\policy'})^2 \Vpi \\
+    &\leq \cdots \\
+    &\leq \lim_{n \to \infty} (\Bellman^{\policy'})^n \Vpi
+    = V^{\policy'},
+\end{align*}
+where each inequality uses the monotonicity of $\Bellman^{\policy'}$
+(if $u \leq v$ then $\Bellman^{\policy'} u \leq \Bellman^{\policy'} v$)
+and the limit equals $V^{\policy'}$ by the Banach fixed-point theorem.
+
+For the ``moreover'' part: $V^{\policy'} = \Vpi$ implies
+$\Vpi(s) = \max_a \Qpi(s,a)$ for all $s$, which is the Bellman
+optimality equation, hence $\Vpi = \Vstar$. Conversely, if
+$\Vpi = \Vstar$, then $\policy$ is already optimal and
+$V^{\policy'} = \Vstar = \Vpi$.
+\end{proof}
+
+\begin{rlconnection}[title={Policy Improvement in Policy Iteration}]
+The policy improvement theorem is the engine of the policy iteration
+algorithm: starting from any policy $\policy_0$, compute
+$V^{\policy_0}$ (policy evaluation), form the greedy policy
+$\policy_1$ (policy improvement), and repeat. Since
+$V^{\policy_{k+1}} \geq V^{\policy_k}$ and there are finitely many
+deterministic policies, the sequence must converge to $\Vstar$ in at
+most $A^S$ steps. In practice, convergence is much faster.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: BELLMAN OPTIMALITY EQUATIONS FOR Q*
+%% ============================================================
+
+\section{Bellman Optimality Equations for $\Qstar$}
+\label{sec:bellman-q}
+
+\begin{definition}[Bellman Optimality Operator for $Q$]
+\label{def:bellman-q-op}
+The \emph{Bellman optimality operator for action-values}
+$\Bellman^*_Q : \R^{S \times A} \to \R^{S \times A}$ is
+\[
+    (\Bellman^*_Q q)(s,a) = R(s,a) + \discount \sum_{s'}
+    P(s' \mid s,a) \max_{a'} q(s', a').
+\]
+\end{definition}
+
+\begin{proposition}[$\Bellman^*_Q$ Is a Contraction with Fixed Point
+$\Qstar$]
+\label{prop:bellman-q-contraction}
+The operator $\Bellman^*_Q$ is a contraction on
+$(\R^{S \times A}, \|\cdot\|_\infty)$ with modulus $\discount$, and
+$\Qstar$ is its unique fixed point.
+\end{proposition}
+
+\begin{proof}
+For any $q, q' \in \R^{S \times A}$ and any $(s,a)$,
+\begin{align*}
+    |(\Bellman^*_Q q)(s,a) - (\Bellman^*_Q q')(s,a)|
+    &= \discount \left| \sum_{s'} P(s' \mid s,a)
+       \left[\max_{a'} q(s',a') - \max_{a'} q'(s',a')\right]
+       \right| \\
+    &\leq \discount \sum_{s'} P(s' \mid s,a)
+       \max_{a'} |q(s',a') - q'(s',a')| \\
+    &\leq \discount \|q - q'\|_\infty.
+\end{align*}
+The first inequality uses Lemma~\ref{lem:max-inequality} and the
+triangle inequality. Taking the max over $(s,a)$ gives
+$\|\Bellman^*_Q q - \Bellman^*_Q q'\|_\infty \leq \discount
+\|q - q'\|_\infty$. By the Banach fixed-point theorem, $\Bellman^*_Q$
+has a unique fixed point.
+
+To show this fixed point is $\Qstar$: from
+Theorem~\ref{thm:bellman-opt-fixed-point},
+$\Vstar(s) = \max_a [R(s,a) + \discount \sum_{s'} P(s' \mid s,a)
+\Vstar(s')]$. Setting $\Qstar(s,a) = R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \Vstar(s')$, we verify that
+$(\Bellman^*_Q \Qstar)(s,a) = R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \max_{a'} \Qstar(s',a') = R(s,a) + \discount
+\sum_{s'} P(s' \mid s,a) \Vstar(s') = \Qstar(s,a)$.
+\end{proof}
+
+\begin{example}[Solving the Bellman Optimality Equation for a
+Two-State MDP]
+\label{ex:two-state-bellman}
+Revisit the two-state MDP from Lesson~39 with $\States = \{s_1,s_2\}$,
+$\Actions = \{a_1, a_2\}$, $\discount = 0.5$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(s_1 \mid s,a)$ & $P(s_2 \mid s,a)$ \\
+\midrule
+$s_1$ & $a_1$ & 5 & 0.5 & 0.5 \\
+$s_1$ & $a_2$ & 10 & 0 & 1 \\
+$s_2$ & $a_1$ & $-1$ & 0.8 & 0.2 \\
+$s_2$ & $a_2$ & 2 & 0.3 & 0.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The Bellman optimality equations are:
+\begin{align*}
+    \Vstar(s_1) &= \max\!\big\{
+    5 + 0.5[0.5 \Vstar(s_1) + 0.5 \Vstar(s_2)],\;
+    10 + 0.5[0 \cdot \Vstar(s_1) + 1 \cdot \Vstar(s_2)]
+    \big\}, \\
+    \Vstar(s_2) &= \max\!\big\{
+    {-1} + 0.5[0.8 \Vstar(s_1) + 0.2 \Vstar(s_2)],\;
+    2 + 0.5[0.3 \Vstar(s_1) + 0.7 \Vstar(s_2)]
+    \big\}.
+\end{align*}
+Guess that $\optpolicy(s_1) = a_2$ and $\optpolicy(s_2) = a_2$ (the
+policy found optimal in Lesson~39). Then the equations become:
+\begin{align*}
+    \Vstar(s_1) &= 10 + 0.5 \Vstar(s_2), \\
+    \Vstar(s_2) &= 2 + 0.5[0.3 \Vstar(s_1) + 0.7 \Vstar(s_2)].
+\end{align*}
+From the second: $\Vstar(s_2)(1 - 0.35) = 2 + 0.15 \Vstar(s_1)$,
+so $0.65 \Vstar(s_2) = 2 + 0.15 \Vstar(s_1)$. Substituting
+$\Vstar(s_1) = 10 + 0.5 \Vstar(s_2)$:
+$0.65 \Vstar(s_2) = 2 + 0.15(10 + 0.5 \Vstar(s_2))
+= 3.5 + 0.075 \Vstar(s_2)$, giving
+$0.575 \Vstar(s_2) = 3.5$, so $\Vstar(s_2) = 6.087 \approx 6.09$.
+Then $\Vstar(s_1) = 10 + 0.5 \cdot 6.087 = 13.043 \approx 13.04$.
+
+We verify the guess: at $s_1$, action $a_1$ gives
+$5 + 0.5(0.5 \cdot 13.04 + 0.5 \cdot 6.09) = 5 + 4.78 = 9.78 < 13.04$,
+confirming $a_2$ is optimal. At $s_2$, action $a_1$ gives
+$-1 + 0.5(0.8 \cdot 13.04 + 0.2 \cdot 6.09) = -1 + 5.82 = 4.82 < 6.09$,
+confirming $a_2$ is optimal.
+\end{example}
+
+\begin{example}[Gambling Problem]
+\label{ex:gambling}
+A gambler has wealth $s \in \States = \{0, 1, \ldots, 100\}$ and at
+each step wagers $a \in \{0, 1, \ldots, \min(s, 100-s)\}$. With
+probability $p = 0.4$ wealth increases by $a$; with probability $0.6$
+it decreases by $a$. States $0$ and $100$ are absorbing. Rewards are
+$R(s,a) = 0$ except $R(100,\cdot) = 1$. The Bellman optimality
+equation for $s \in \{1, \ldots, 99\}$ is
+$\Vstar(s) = \max_{a} [p \Vstar(s{+}a) + (1{-}p) \Vstar(s{-}a)]$,
+with $\Vstar(0) = 0$, $\Vstar(100) = 1$. Solving by value iteration
+reveals the optimal policy stakes aggressively at wealth levels that
+are powers of 2.
+\end{example}
+
+We now consolidate the structural results of this lesson.
+
+\begin{keyresult}[title={Fundamental Theorem of MDPs}]
+For any finite MDP with $\discount \in [0,1)$: (i) there exists a
+unique $\Vstar$, the fixed point of $\Bellman^*$; (ii) there exists
+a deterministic stationary optimal policy $\optpolicy$; (iii)
+$\optpolicy$ is the greedy policy w.r.t.\ $\Vstar$ (or $\Qstar$);
+(iv) no history-dependent or randomized policy improves upon
+$\optpolicy$. This follows from the contraction property
+(Theorem~\ref{thm:bellman-opt-contraction}), the fixed-point
+characterization (Theorem~\ref{thm:bellman-opt-fixed-point}), and
+the greedy optimality result (Theorem~\ref{thm:greedy-optimal}).
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Bellman Operator Properties] \textnormal{(\(*\))} \\
+Prove that the Bellman optimality operator $\Bellman^*$ is monotone:
+if $u(s) \leq v(s)$ for all $s \in \States$, then
+$(\Bellman^* u)(s) \leq (\Bellman^* v)(s)$ for all $s$.
+\end{exercise}
+
+\begin{exercise}[Value Iteration Convergence]
+\textnormal{(\(*\))} \\
+Let $v^{(0)} = 0 \in \R^S$ and $v^{(n+1)} = \Bellman^* v^{(n)}$ for
+$n \geq 0$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $\|v^{(n)} - \Vstar\|_\infty \leq
+    \discount^n R_{\max} / (1 - \discount)$.
+    \item How many iterations are needed to guarantee
+    $\|v^{(n)} - \Vstar\|_\infty \leq \varepsilon$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Bellman Equation for Stochastic Policies]
+\textnormal{(\(**\))} \\
+Let $\policy$ be a stationary randomized policy.
+\begin{enumerate}[label=(\alph*)]
+    \item Prove that $\Bellman^\policy$ is still a
+    $\discount$-contraction even when $\policy$ is stochastic.
+    \item Show that $(\Bellman^* v)(s) \geq (\Bellman^\policy v)(s)$
+    for all $v \in \R^S$, $s \in \States$, and any stochastic
+    $\policy$.
+    \item Conclude that $\Vstar(s) \geq \Vpi(s)$ for all stochastic
+    policies $\policy$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Solving Bellman Equations for a Three-State MDP]
+\textnormal{(\(**\))} \\
+Consider the MDP with $\States = \{1, 2, 3\}$,
+$\Actions = \{L, R\}$, $\discount = 0.9$:
+\begin{center}
+\begin{tabular}{cccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ &
+$P(3 \mid s,a)$ \\
+\midrule
+1 & L & 0 & 0.5 & 0.5 & 0 \\
+1 & R & 1 & 0 & 0 & 1 \\
+2 & L & 2 & 0.3 & 0.4 & 0.3 \\
+2 & R & 0 & 0 & 0 & 1 \\
+3 & L & 0 & 0 & 0 & 1 \\
+3 & R & 0 & 0 & 0 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item Evaluate the policy $\policy(1) = R$, $\policy(2) = L$,
+    $\policy(3) = L$ by solving the linear Bellman equations.
+    \item Write down the Bellman optimality equations and solve them
+    for $\Vstar$.
+    \item Determine the optimal policy and verify by checking all
+    $2^3 = 8$ deterministic policies.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Policy Improvement Proof Variant]
+\textnormal{(\(***\))} \\
+Prove the following strengthened version of
+Theorem~\ref{thm:policy-improvement}: if $\policy$ is a stochastic
+stationary policy that is not optimal, then there exists a state
+$\bar{s}$ such that $V^{\policy'}(\bar{s}) > \Vpi(\bar{s})$, where
+$\policy'$ is the greedy deterministic policy. That is, strict
+improvement occurs at some state whenever $\policy$ is suboptimal.
+
+\textit{Hint:} If $V^{\policy'} = \Vpi$ then $\Vpi$ satisfies the
+Bellman optimality equation, contradicting $\policy \neq \optpolicy$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{Bellman expectation operator}
+    $\Bellman^\policy v = r^\policy + \discount P^\policy v$ is a
+    $\discount$-contraction in the sup-norm; its unique fixed point
+    is $\Vpi$.
+    \item The \emph{Bellman optimality operator}
+    $(\Bellman^* v)(s) = \max_a [R(s,a) + \discount \sum_{s'}
+    P(s' \mid s,a) v(s')]$ is also a $\discount$-contraction; its
+    unique fixed point is $\Vstar$.
+    \item Both contraction properties rely on $\discount < 1$ and
+    the stochasticity of $P$; the Banach fixed-point theorem then
+    guarantees existence, uniqueness, and iterative computability.
+    \item The greedy policy with respect to $\Vstar$ (or $\Qstar$)
+    is optimal (Theorem~\ref{thm:greedy-optimal}), justifying
+    value-based RL methods.
+    \item The \emph{policy improvement theorem}: greedifying w.r.t.\
+    $\Vpi$ yields a policy at least as good, with strict improvement
+    unless $\policy$ is already optimal.
+    \item Every finite discounted MDP admits a unique $\Vstar$ and at
+    least one deterministic stationary optimal policy.
+    \item The Bellman optimality equations are nonlinear (due to max)
+    and motivate iterative algorithms: value iteration, policy
+    iteration, and their approximate variants.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson on TD Learning} shows how to solve Bellman
+    equations without a model, using sample-based updates.
+    \item \textbf{Lesson on Policy Gradients} develops an alternative
+    that directly optimizes parameterized policies.
+    \item \citet[Chapters 6--7]{puterman2014} develops value iteration
+    and policy iteration with convergence rates and stopping criteria.
+    \item \citet{denardo1967} provides a unified contraction framework
+    for discounted, weighted, and other reward criteria.
+    \item \citet{blackwell1962} proves that for large enough
+    $\discount$, a single policy is optimal for all discount factors
+    above a threshold (\emph{Blackwell optimality}).
+    \item \citet[Chapters 8--9]{bertsekas2012} extends Bellman
+    operators to approximate DP with function approximation -- the
+    theoretical basis of deep RL.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

@@ -1,0 +1,968 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 44: Average Reward MDPs}}
+\fancyhead[R]{\thepage}
+\title{Lesson 44: Average Reward MDPs}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a data center scheduling agent that manages server workloads
+continuously, with no natural endpoint. The agent routes incoming
+requests to servers, balancing throughput against latency. Should the
+agent use a discount factor $\discount = 0.99$? Or $\discount = 0.999$?
+The choice of $\discount$ affects both the optimal policy and the
+convergence rate of algorithms, yet in many continuous-operation
+settings there is no intrinsic reason to discount future performance.
+The agent should maximize its \emph{long-run average reward per step}
+-- the rate of reward accumulation over an infinite horizon.
+
+The average reward criterion eliminates the discount factor entirely,
+replacing the discounted return
+$\sum_{t=0}^\infty \discount^t R(S_t, A_t)$ with the long-run
+average $\lim_{T \to \infty} \frac{1}{T} \sum_{t=0}^{T-1}
+R(S_t, A_t)$. This leads to a fundamentally different mathematical
+structure: the Bellman equation acquires a scalar offset (the
+\emph{gain}), value functions are defined only up to an additive
+constant, and the analysis requires ergodicity conditions on the
+Markov chain. This lesson develops the theory of average reward MDPs,
+culminating in the gain-bias equations and a brief treatment of
+Blackwell optimality.
+
+\begin{rlconnection}[title={Why Average Reward MDPs Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Continuing tasks}: Many real-world RL applications
+    (network routing, inventory management, robot operation) have no
+    natural episode boundary; the average reward criterion is their
+    natural objective.
+    \item \textbf{R-learning}: The R-learning algorithm is the
+    average-reward analogue of Q-learning, directly estimating the
+    gain and relative values without a discount factor.
+    \item \textbf{Sensitivity to $\discount$}: Discounted algorithms
+    suffer from sensitivity to the choice of $\discount$; the
+    average reward criterion avoids this hyperparameter entirely.
+    \item \textbf{Blackwell optimality}: A Blackwell optimal policy
+    is simultaneously optimal for all discount factors sufficiently
+    close to 1, connecting discounted and average reward theory.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+MDP model, stationary policies, Bellman operators, contraction
+properties, value iteration, policy iteration (Lessons~39--43).
+Markov chains, stationary distributions, ergodicity (Lesson~12).
+Linear algebra: eigenvalues, matrix inverses, rank (Lessons~5--6).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} the average reward criterion and the gain of
+    a policy.
+    \item \emph{State} and \emph{prove} the gain-bias (average
+    reward Bellman) equations for unichain MDPs.
+    \item \emph{Classify} MDPs as unichain, multichain, or
+    communicating, and \emph{explain} why the classification matters.
+    \item \emph{Derive} the relationship between average reward and
+    discounted reward as $\discount \to 1$.
+    \item \emph{Define} Blackwell optimality and \emph{state}
+    Blackwell's theorem on the existence of Blackwell optimal
+    policies.
+    \item \emph{Compute} the gain and bias for small unichain MDPs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 8--9]{puterman2014} -- Comprehensive
+    treatment of average reward MDPs, gain-bias equations, unichain
+    and multichain theory, and Blackwell optimality.
+    \item \citet[Chapter 7]{bertsekas2012} -- Average cost dynamic
+    programming, including the relative value iteration algorithm.
+    \item \citet{blackwell1962} -- Original paper proving the
+    existence of discount-optimal policies that are simultaneously
+    optimal for all large enough discount factors.
+    \item \citet{howard1960} -- Introduction of the gain and bias
+    framework and policy iteration for average reward.
+    \item \citet{derman1970} -- Foundational treatment of average
+    reward in finite Markov decision processes.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: MARKOV CHAIN CLASSIFICATION
+%% ============================================================
+
+\section{Markov Chain Classification}
+\label{sec:classification}
+
+The average reward criterion requires careful analysis of the
+long-run behavior of Markov chains induced by policies. We begin
+by recalling the relevant classification.
+
+\begin{definition}[Induced Markov Chain]
+\label{def:induced-chain}
+A stationary policy $\policy$ on an MDP
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ induces a
+Markov chain with transition matrix $P^\policy \in \R^{S \times S}$,
+where $P^\policy_{ss'} = \sum_{a \in \Actions} \policy(a \mid s)
+P(s' \mid s, a)$.
+\end{definition}
+
+\begin{definition}[Communication Classes]
+\label{def:communication}
+State $s$ \emph{communicates with} state $s'$ (written $s
+\leftrightarrow s'$) if there exist integers $m, n \geq 1$ such that
+$(P^\policy)^m_{ss'} > 0$ and $(P^\policy)^n_{s's} > 0$. A
+\emph{communication class} (or \emph{recurrent class}) is a maximal
+set of mutually communicating states. States not in any recurrent
+class are \emph{transient}.
+\end{definition}
+
+\begin{definition}[Chain Types]
+\label{def:chain-types}
+A Markov chain with transition matrix $P^\policy$ is:
+\begin{enumerate}[nosep]
+    \item \emph{Irreducible} (or \emph{ergodic}) if all states form
+    a single communication class.
+    \item \emph{Unichain} if it has exactly one recurrent class
+    (plus possibly transient states).
+    \item \emph{Multichain} if it has two or more recurrent classes.
+\end{enumerate}
+An MDP is \emph{unichain} if every deterministic stationary policy
+induces a unichain Markov chain. An MDP is \emph{communicating} if
+for every pair of states $s, s'$, there exists a deterministic
+stationary policy $d$ such that $s'$ is reachable from $s$ under $d$.
+\end{definition}
+
+\begin{example}[Unichain vs.\ Multichain]
+\label{ex:chain-types}
+Consider $\States = \{1, 2, 3\}$ with two deterministic policies:
+
+Policy $d_1$: $P^{d_1} = \bigl(\begin{smallmatrix}
+0 & 1 & 0 \\ 0 & 0.5 & 0.5 \\ 1 & 0 & 0
+\end{smallmatrix}\bigr)$. All states communicate (irreducible).
+
+Policy $d_2$: $P^{d_2} = \bigl(\begin{smallmatrix}
+1 & 0 & 0 \\ 0 & 0 & 1 \\ 0 & 1 & 0
+\end{smallmatrix}\bigr)$. State 1 is an absorbing recurrent class;
+$\{2, 3\}$ is another recurrent class. This is multichain.
+
+If these are the only two deterministic policies, the MDP is
+\emph{not} unichain (since $d_2$ is multichain). However, it is
+communicating, because from state 1 we can reach states 2 and 3
+under $d_1$.
+\end{example}
+
+\begin{proposition}[Stationary Distribution for Unichain Policies]
+\label{prop:stationary-dist}
+If policy $\policy$ induces a unichain Markov chain, then there
+exists a unique stationary distribution
+$\mu^\policy \in \Delta(\States)$ satisfying
+$(\mu^\policy)^\top P^\policy = (\mu^\policy)^\top$. Moreover,
+$\mu^\policy(s) > 0$ for all states $s$ in the recurrent class,
+and $\mu^\policy(s) = 0$ for transient states.
+\end{proposition}
+
+\begin{proof}
+By the Perron-Frobenius theorem, a stochastic matrix with a single
+recurrent class has eigenvalue 1 with algebraic multiplicity 1. The
+corresponding left eigenvector, normalized to sum to 1, is the
+unique stationary distribution. States in the recurrent class have
+positive weight because the restriction of $P^\policy$ to the
+recurrent class is irreducible.
+\end{proof}
+
+%% ============================================================
+%% SECTION 4: AVERAGE REWARD CRITERION
+%% ============================================================
+
+\section{The Average Reward Criterion}
+\label{sec:average-reward}
+
+\begin{definition}[Average Reward / Gain]
+\label{def:gain}
+The \emph{gain} (or \emph{average reward}) of a stationary policy
+$\policy$ starting from state $s$ is
+\[
+    \rho^\policy(s) = \liminf_{T \to \infty}
+    \frac{1}{T} \E_\policy\!\left[
+    \sum_{t=0}^{T-1} R(S_t, A_t) \;\middle|\; S_0 = s \right].
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:liminf}
+We use $\liminf$ rather than $\lim$ because the limit may not exist
+for general (multichain) MDPs. For unichain MDPs, the limit exists
+and equals $\rho^\policy(s)$ for all $s$ (see
+Theorem~\ref{thm:gain-unichain} below).
+\end{remark}
+
+\begin{theorem}[Gain of a Unichain Policy]
+\label{thm:gain-unichain}
+If policy $\policy$ induces a unichain Markov chain with stationary
+distribution $\mu^\policy$, then the gain is independent of the
+initial state:
+\[
+    \rho^\policy(s) = \rho^\policy
+    := \sum_{s' \in \States} \mu^\policy(s')
+    \sum_{a \in \Actions} \policy(a \mid s') R(s', a)
+    = (\mu^\policy)^\top r^\policy
+    \quad \text{for all } s \in \States,
+\]
+where $r^\policy \in \R^S$ has entries
+$r^\policy_s = \sum_a \policy(a \mid s) R(s,a)$.
+\end{theorem}
+
+\begin{proof}
+For a unichain policy, the ergodic theorem for finite Markov chains
+gives
+\[
+    \lim_{T \to \infty} \frac{1}{T} \sum_{t=0}^{T-1}
+    \E_\policy[R(S_t, A_t) \mid S_0 = s]
+    = \sum_{s'} \mu^\policy(s') r^\policy_{s'}
+    = (\mu^\policy)^\top r^\policy,
+\]
+regardless of the initial state $s$. This is because
+$(P^\policy)^t_{ss'} \to \mu^\policy(s')$ as $t \to \infty$ for
+all $s$ (convergence to stationarity in the unichain case), so the
+Cesaro average converges to the stationary expectation.
+\end{proof}
+
+\begin{definition}[Optimal Gain]
+\label{def:optimal-gain}
+The \emph{optimal gain} is
+$\rho^* = \sup_{\policy} \rho^\policy$. For unichain MDPs, the
+supremum is over all stationary policies (the gain is
+state-independent).
+\end{definition}
+
+\begin{example}[Average Reward of a Simple MDP]
+\label{ex:avg-simple}
+Consider $\States = \{1, 2\}$, $\Actions = \{a\}$ (single action),
+with $P(1 \mid 1, a) = 0.3$, $P(2 \mid 1, a) = 0.7$,
+$P(1 \mid 2, a) = 0.6$, $P(2 \mid 2, a) = 0.4$. Rewards:
+$R(1, a) = 5$, $R(2, a) = 1$.
+
+The stationary distribution satisfies $\mu(1) \cdot 0.7 =
+\mu(2) \cdot 0.6$, so $\mu(1)/\mu(2) = 6/7$. Normalizing:
+$\mu(1) = 6/13$, $\mu(2) = 7/13$.
+
+The gain is $\rho = \mu(1) R(1,a) + \mu(2) R(2,a) =
+\frac{6}{13} \cdot 5 + \frac{7}{13} \cdot 1 =
+\frac{30 + 7}{13} = \frac{37}{13} \approx 2.85$.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: GAIN-BIAS EQUATIONS
+%% ============================================================
+
+\section{The Gain-Bias Equations}
+\label{sec:gain-bias}
+
+The average reward analogue of the Bellman equations involves two
+quantities: the gain $\rho^\policy$ (a scalar) and the \emph{bias}
+$h^\policy$ (a vector), also called the \emph{relative value
+function} or \emph{differential value function}.
+
+\begin{definition}[Bias / Relative Value Function]
+\label{def:bias}
+For a unichain policy $\policy$ with gain $\rho^\policy$, the
+\emph{bias} (or \emph{relative value function}) is
+\[
+    h^\policy(s) = \E_\policy\!\left[
+    \sum_{t=0}^{\infty} \left(R(S_t, A_t) - \rho^\policy\right)
+    \;\middle|\; S_0 = s \right].
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:bias-convergence}
+The series in the bias definition converges because $R(S_t, A_t) -
+\rho^\policy$ has zero mean under the stationary distribution, and
+the deviations decay geometrically due to ergodicity. Formally,
+$|\E_\policy[R(S_t, A_t) - \rho^\policy \mid S_0 = s]| \leq
+C \lambda^t$ for some $C > 0$ and $\lambda \in (0,1)$ depending on
+the mixing rate of the chain.
+\end{remark}
+
+\begin{theorem}[Gain-Bias Equations for Policy Evaluation]
+\label{thm:gain-bias-eval}
+For a unichain policy $\policy$, the gain $\rho^\policy \in \R$ and
+bias $h^\policy \in \R^S$ satisfy the \emph{gain-bias equations}
+(or \emph{Poisson equations}):
+\begin{equation}
+\label{eq:gain-bias}
+    \rho^\policy + h^\policy(s) = \sum_{a \in \Actions}
+    \policy(a \mid s) \left[ R(s,a) + \sum_{s' \in \States}
+    P(s' \mid s,a)\, h^\policy(s') \right]
+    \quad \text{for all } s \in \States.
+\end{equation}
+In matrix form: $\rho^\policy \mathbf{1} + h^\policy =
+r^\policy + P^\policy h^\policy$, or equivalently
+$(I - P^\policy) h^\policy = r^\policy -
+\rho^\policy \mathbf{1}$.
+\end{theorem}
+
+\begin{proof}
+Starting from the bias definition, for any $s$:
+\begin{align*}
+    h^\policy(s)
+    &= \E_\policy\!\left[
+    \sum_{t=0}^{\infty} (R(S_t, A_t) - \rho^\policy)
+    \;\middle|\; S_0 = s \right] \\
+    &= \E_\policy[R(S_0, A_0) - \rho^\policy \mid S_0 = s]
+    + \E_\policy\!\left[
+    \sum_{t=1}^{\infty} (R(S_t, A_t) - \rho^\policy)
+    \;\middle|\; S_0 = s \right] \\
+    &= \sum_a \policy(a \mid s) R(s,a) - \rho^\policy
+    + \sum_{s'} P^\policy_{ss'}\,
+    \E_\policy\!\left[
+    \sum_{t=0}^{\infty} (R(S_t, A_t) - \rho^\policy)
+    \;\middle|\; S_0 = s' \right] \\
+    &= r^\policy_s - \rho^\policy
+    + \sum_{s'} P^\policy_{ss'}\, h^\policy(s').
+\end{align*}
+The third equality uses the Markov property and stationarity.
+Rearranging gives \eqref{eq:gain-bias}.
+\end{proof}
+
+\begin{remark}
+\label{rem:bias-uniqueness}
+The gain $\rho^\policy$ is unique, but the bias $h^\policy$ is
+determined only up to an additive constant: if $({\rho}, h)$
+solves \eqref{eq:gain-bias}, then so does $({\rho}, h + c\mathbf{1})$
+for any $c \in \R$. This is because $(I - P^\policy)\mathbf{1} = 0$
+(the rows of $P^\policy$ sum to 1). To obtain a unique solution, one
+typically imposes a normalization such as
+$\sum_s \mu^\policy(s) h^\policy(s) = 0$ or $h^\policy(s_0) = 0$
+for a reference state $s_0$.
+\end{remark}
+
+\begin{keyresult}[title={Gain-Bias Equations (Poisson Equations)}]
+For a unichain policy $\policy$ with gain $\rho^\policy$ and bias
+$h^\policy$:
+\[
+    \rho^\policy + h^\policy(s)
+    = \sum_a \policy(a \mid s) \left[ R(s,a) + \sum_{s'}
+    P(s' \mid s,a)\, h^\policy(s') \right],
+    \quad s \in \States.
+\]
+Compared to the discounted Bellman equation
+$\Vpi(s) = \sum_a \policy(a \mid s)[R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \Vpi(s')]$, the gain $\rho^\policy$ replaces
+the discount factor's role: it is the constant rate subtracted from
+immediate rewards to make the remaining value bounded.
+\end{keyresult}
+
+\begin{example}[Computing Gain and Bias]
+\label{ex:gain-bias-compute}
+Return to Example~\ref{ex:avg-simple}: $\States = \{1, 2\}$,
+$r = (5, 1)^\top$, $P = \bigl(\begin{smallmatrix}
+0.3 & 0.7 \\ 0.6 & 0.4 \end{smallmatrix}\bigr)$, and we
+computed $\rho = 37/13$.
+
+The gain-bias equations are:
+\begin{align*}
+    \frac{37}{13} + h(1) &= 5 + 0.3 h(1) + 0.7 h(2), \\
+    \frac{37}{13} + h(2) &= 1 + 0.6 h(1) + 0.4 h(2).
+\end{align*}
+Rearranging: $0.7 h(1) - 0.7 h(2) = 5 - 37/13 = 28/13$ and
+$-0.6 h(1) + 0.6 h(2) = 1 - 37/13 = -24/13$.
+
+From the first: $h(1) - h(2) = 28/(13 \cdot 0.7) = 40/13$.
+Setting $h(2) = 0$ (normalization): $h(1) = 40/13 \approx 3.08$.
+
+The bias $h(1) > h(2)$ reflects that state 1 is ``better than
+average'' (reward 5 $>$ gain $37/13 \approx 2.85$), so starting
+there yields a transient bonus.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: AVERAGE REWARD OPTIMALITY
+%% ============================================================
+
+\section{Average Reward Optimality Equations}
+\label{sec:avg-optimality}
+
+\begin{theorem}[Average Reward Bellman Optimality Equations]
+\label{thm:avg-optimality}
+For a unichain MDP, there exist a scalar $\rho^*$ (the optimal gain)
+and a vector $h^* \in \R^S$ (the optimal bias) satisfying:
+\begin{equation}
+\label{eq:avg-bellman-opt}
+    \rho^* + h^*(s) = \max_{a \in \Actions}
+    \left[ R(s,a) + \sum_{s' \in \States} P(s' \mid s,a)\, h^*(s')
+    \right]
+    \quad \text{for all } s \in \States.
+\end{equation}
+The optimal gain $\rho^*$ is unique. The optimal bias $h^*$ is unique
+up to an additive constant.
+\end{theorem}
+
+\begin{proof}
+The proof uses the connection to discounted MDPs via the Laurent
+series expansion (developed in
+Theorem~\ref{thm:discount-to-average}). We provide an outline.
+
+\textbf{Step 1: Existence.}
+Consider the discounted optimal value function $\Vstar_\discount$ as
+a function of $\discount$. For a unichain MDP, define
+\[
+    \rho^* = \lim_{\discount \uparrow 1} (1-\discount)
+    \Vstar_\discount(s)
+\]
+(this limit exists and is independent of $s$ for unichain MDPs) and
+\[
+    h^*(s) = \lim_{\discount \uparrow 1}
+    [\Vstar_\discount(s) - \Vstar_\discount(s_0)]
+\]
+for some reference state $s_0$. Taking the limit
+$\discount \uparrow 1$ in the discounted Bellman optimality equation
+$\Vstar_\discount(s) = \max_a [R(s,a) + \discount \sum_{s'}
+P(s' \mid s,a) \Vstar_\discount(s')]$ yields
+\eqref{eq:avg-bellman-opt}.
+
+\textbf{Step 2: Uniqueness of $\rho^*$.}
+Suppose $(\rho_1, h_1)$ and $(\rho_2, h_2)$ both satisfy
+\eqref{eq:avg-bellman-opt} with $\rho_1 > \rho_2$. Let $d_2$ be the
+greedy policy w.r.t.\ $h_2$, i.e., the maximizer in
+\eqref{eq:avg-bellman-opt} for $(\rho_2, h_2)$. Then for all $s$:
+$\rho_1 + h_1(s) \geq R(s, d_2(s)) + \sum_{s'} P(s' \mid s,
+d_2(s)) h_1(s') = \rho_2 + h_2(s) + \sum_{s'} P(s' \mid s,
+d_2(s))[h_1(s') - h_2(s')]$.
+Summing with the stationary distribution $\mu^{d_2}$ and using
+$\sum_s \mu^{d_2}(s) \sum_{s'} P(s' \mid s, d_2(s)) f(s') =
+\sum_{s'} \mu^{d_2}(s') f(s')$ for any $f$, we get a contradiction
+unless $\rho_1 = \rho_2$.
+\end{proof}
+
+\begin{definition}[Average Reward Greedy Policy]
+\label{def:avg-greedy}
+Given a solution $(\rho^*, h^*)$ to \eqref{eq:avg-bellman-opt}, the
+\emph{average reward optimal policy} is
+\[
+    \optpolicy(s) = \argmax_{a \in \Actions}
+    \left[ R(s,a) + \sum_{s'} P(s' \mid s,a)\, h^*(s') \right].
+\]
+\end{definition}
+
+\begin{theorem}[Optimality of the Greedy Policy]
+\label{thm:avg-greedy-optimal}
+For a unichain MDP, the greedy policy $\optpolicy$ with respect to
+$h^*$ achieves the optimal gain: $\rho^{\optpolicy} = \rho^*$.
+\end{theorem}
+
+\begin{proof}
+Since $\optpolicy$ achieves the max in \eqref{eq:avg-bellman-opt},
+$h^*$ satisfies the gain-bias equation
+$\rho^* + h^*(s) = R(s, \optpolicy(s)) + \sum_{s'} P(s' \mid s,
+\optpolicy(s)) h^*(s')$ for all $s$. Multiplying by
+$\mu^{\optpolicy}(s)$ and summing:
+$\rho^* = \sum_s \mu^{\optpolicy}(s) R(s, \optpolicy(s)) =
+\rho^{\optpolicy}$.
+\end{proof}
+
+\begin{rlconnection}[title={Gain-Bias Equations and R-Learning}]
+The R-learning algorithm directly estimates $\rho^*$ and $h^*$ using
+stochastic approximation. The update rules are:
+\begin{align*}
+    h(s_t, a_t) &\leftarrow h(s_t, a_t) + \alpha_t
+    [R(s_t, a_t) - \hat{\rho} + \max_{a'} h(s_{t+1}, a') -
+    h(s_t, a_t)], \\
+    \hat{\rho} &\leftarrow \hat{\rho} + \beta_t
+    [R(s_t, a_t) + \max_{a'} h(s_{t+1}, a') -
+    \max_{a'} h(s_t, a') - \hat{\rho}].
+\end{align*}
+This is the average-reward analogue of Q-learning, with the
+gain estimate $\hat{\rho}$ replacing the discount factor.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: CONNECTION TO DISCOUNTED REWARD
+%% ============================================================
+
+\section{Connection to the Discounted Criterion}
+\label{sec:discount-connection}
+
+The average reward criterion can be viewed as the limiting case of
+the discounted criterion as $\discount \to 1$.
+
+\begin{theorem}[Discount-to-Average Limit]
+\label{thm:discount-to-average}
+For a unichain MDP with optimal discounted value $\Vstar_\discount$
+and optimal average reward $\rho^*$:
+\begin{enumerate}[nosep]
+    \item $\lim_{\discount \uparrow 1} (1-\discount)
+    \Vstar_\discount(s) = \rho^*$ for all $s \in \States$.
+    \item The limit $h^*(s) = \lim_{\discount \uparrow 1}
+    [\Vstar_\discount(s) - \Vstar_\discount(s_0)]$ exists for any
+    reference state $s_0$ and satisfies the average reward
+    Bellman optimality equation \eqref{eq:avg-bellman-opt}.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{Part 1:} The discounted value satisfies
+$\|\Vstar_\discount\|_\infty \leq R_{\max}/(1-\discount)$, so
+$(1-\discount)\|\Vstar_\discount\|_\infty \leq R_{\max}$, and
+$(1-\discount)\Vstar_\discount$ is bounded.
+
+For a fixed deterministic policy $d$, the discounted value is
+$V^d_\discount = (I - \discount P^d)^{-1} r^d$. Using the
+Neumann series:
+$(I - \discount P^d)^{-1} = \sum_{t=0}^{\infty} \discount^t
+(P^d)^t$.
+
+For a unichain policy $d$, $(P^d)^t \to \mathbf{1}(\mu^d)^\top$
+as $t \to \infty$, where $\mu^d$ is the stationary distribution.
+Therefore:
+\begin{align*}
+    (1-\discount) V^d_\discount(s)
+    &= (1-\discount) \sum_{t=0}^{\infty} \discount^t
+    [(P^d)^t r^d]_s \\
+    &\to (\mu^d)^\top r^d = \rho^d
+    \quad \text{as } \discount \to 1.
+\end{align*}
+The interchange of limit and summation is justified by dominated
+convergence (the partial sums are bounded by $R_{\max}$).
+
+Since $\Vstar_\discount(s) = \max_d V^d_\discount(s)$ and the max
+is over finitely many deterministic policies:
+\begin{align*}
+    \lim_{\discount \to 1} (1-\discount) \Vstar_\discount(s)
+    = \max_d \lim_{\discount \to 1} (1-\discount) V^d_\discount(s)
+    = \max_d \rho^d = \rho^*.
+\end{align*}
+The interchange of max and limit is valid because the max is over a
+finite set.
+
+\textbf{Part 2:} The centered function
+$\tilde{V}_\discount(s) = \Vstar_\discount(s) -
+\Vstar_\discount(s_0)$ satisfies $\|\tilde{V}_\discount\|_\infty
+\leq 2R_{\max}/(1-\discount)$, but the span is bounded:
+$\mathrm{sp}(\tilde{V}_\discount) = \mathrm{sp}(\Vstar_\discount)$.
+
+For a unichain MDP, $\mathrm{sp}(\Vstar_\discount)$ remains bounded
+as $\discount \to 1$ (this uses the span contraction from
+Lesson~43). By compactness (Bolzano-Weierstrass on $\R^S$), there
+exists a convergent subsequence, and one can show the limit satisfies
+\eqref{eq:avg-bellman-opt} by passing to the limit in the discounted
+Bellman equation. Uniqueness of $\rho^*$ ensures the full limit
+exists.
+\end{proof}
+
+\begin{example}[Discounted to Average Reward]
+\label{ex:discount-to-avg}
+For the MDP in Example~\ref{ex:avg-simple}, the discounted value
+under the single policy with $\discount = 0.99$ is
+$V_\discount(1) = (I - 0.99P)^{-1} r$. With
+$r = (5, 1)^\top$ and $P = \bigl(\begin{smallmatrix}
+0.3 & 0.7 \\ 0.6 & 0.4\end{smallmatrix}\bigr)$:
+\[
+    I - 0.99P = \begin{pmatrix}
+    0.703 & -0.693 \\ -0.594 & 0.604
+    \end{pmatrix}.
+\]
+The determinant is $0.703 \cdot 0.604 - 0.693 \cdot 0.594
+= 0.4246 - 0.4117 = 0.0129$. Solving:
+$V_{0.99}(1) = (0.604 \cdot 5 + 0.693 \cdot 1)/0.0129
+= 3.713/0.0129 \approx 287.8$.
+
+Then $(1-0.99) V_{0.99}(1) = 0.01 \cdot 287.8 \approx 2.88
+\approx 37/13 = \rho$. As $\discount \to 1$, the convergence
+becomes exact.
+\end{example}
+
+\begin{warning}[title={Average Reward Requires Ergodicity}]
+The limit $(1-\discount)\Vstar_\discount(s) \to \rho^*$ independent
+of $s$ relies on the unichain assumption. For multichain MDPs, the
+limit can depend on the initial state, and the average reward
+optimality equations are more complex. In such cases, additional
+structure (e.g., communicating MDP assumption) or state-dependent
+gain is needed.
+\end{warning}
+
+%% ============================================================
+%% SECTION 8: RELATIVE VALUE ITERATION
+%% ============================================================
+
+\section{Relative Value Iteration}
+\label{sec:rvi}
+
+Value iteration cannot be directly applied to the average reward
+setting because there is no contraction: the Bellman operator
+$(\Bellman_{avg} h)(s) = \max_a [R(s,a) + \sum_{s'} P(s' \mid s,a)
+h(s')]$ (with no discount) satisfies
+$\|\Bellman_{avg} u - \Bellman_{avg} v\|_\infty \leq
+\|u - v\|_\infty$ (non-expansive, but not a contraction). However,
+\emph{relative value iteration} resolves this by centering the
+iterates.
+
+\begin{definition}[Relative Value Iteration]
+\label{def:rvi}
+\emph{Relative value iteration} (RVI) generates sequences
+$\{h^{(n)}\}$ and $\{\rho^{(n)}\}$ by:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Choose $h^{(0)} \in \R^S$.
+    \item \textbf{Iterate:} For $n = 0, 1, 2, \ldots$,
+    \begin{align*}
+        w^{(n+1)}(s) &= \max_{a \in \Actions}
+        \left[ R(s,a) + \sum_{s'} P(s' \mid s,a)\, h^{(n)}(s')
+        \right], \\
+        \rho^{(n+1)} &= w^{(n+1)}(s_0) \quad
+        \text{(for a fixed reference state } s_0\text{)}, \\
+        h^{(n+1)}(s) &= w^{(n+1)}(s) - \rho^{(n+1)}.
+    \end{align*}
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:rvi-centering}
+The subtraction $h^{(n+1)}(s) = w^{(n+1)}(s) - w^{(n+1)}(s_0)$
+ensures $h^{(n+1)}(s_0) = 0$ at every iteration, preventing the
+iterates from diverging. This is necessary because the undiscounted
+Bellman operator shifts values by the gain at each step.
+\end{remark}
+
+\begin{theorem}[Convergence of Relative Value Iteration]
+\label{thm:rvi-convergence}
+For a unichain MDP, relative value iteration converges:
+$\rho^{(n)} \to \rho^*$ and $h^{(n)} \to h^*$ (up to the
+normalization $h^*(s_0) = 0$).
+\end{theorem}
+
+\begin{proof}
+The span contraction from Lesson~43 is the key tool. Since
+$\mathrm{sp}(\Bellman_{avg} u - \Bellman_{avg} v) \leq
+\mathrm{sp}(u - v)$ for the undiscounted operator (with contraction
+coefficient 1), the convergence analysis requires the stronger
+result that the span contraction coefficient is strictly less than 1
+for unichain MDPs, a result known as the
+\emph{span condition}. We outline the argument.
+
+Define $\sigma = \max_{a_1, a_2} \min_{s'} [P(s' \mid \cdot, a_1)
++ P(s' \mid \cdot, a_2)]$ (the \emph{scrambling coefficient}). For
+a communicating MDP, $\sigma > 0$, and the span contraction
+coefficient of $\Bellman_{avg}$ is at most $1 - \sigma < 1$.
+Standard results then give convergence in the span seminorm, which
+implies convergence of $\rho^{(n)}$ and convergence of $h^{(n)}$ up
+to a constant.
+
+A complete proof can be found in \citet[Chapter 8]{puterman2014}.
+\end{proof}
+
+\begin{example}[Relative Value Iteration]
+\label{ex:rvi}
+For the MDP of Example~\ref{ex:avg-simple} with a single action,
+starting from $h^{(0)} = (0, 0)^\top$ and $s_0 = 2$:
+
+\textbf{Iteration 1:}
+$w^{(1)}(1) = 5 + 0.3 \cdot 0 + 0.7 \cdot 0 = 5$,
+$w^{(1)}(2) = 1 + 0.6 \cdot 0 + 0.4 \cdot 0 = 1$.
+$\rho^{(1)} = w^{(1)}(2) = 1$.
+$h^{(1)} = (5 - 1, 1 - 1)^\top = (4, 0)^\top$.
+
+\textbf{Iteration 2:}
+$w^{(2)}(1) = 5 + 0.3 \cdot 4 + 0.7 \cdot 0 = 6.2$,
+$w^{(2)}(2) = 1 + 0.6 \cdot 4 + 0.4 \cdot 0 = 3.4$.
+$\rho^{(2)} = 3.4$.
+$h^{(2)} = (6.2 - 3.4, 0)^\top = (2.8, 0)^\top$.
+
+\textbf{Iteration 3:}
+$w^{(3)}(1) = 5 + 0.3 \cdot 2.8 = 5.84$,
+$w^{(3)}(2) = 1 + 0.6 \cdot 2.8 = 2.68$.
+$\rho^{(3)} = 2.68$.
+$h^{(3)} = (3.16, 0)^\top$.
+
+The gain sequence $1, 3.4, 2.68, \ldots$ oscillates toward
+$\rho^* = 37/13 \approx 2.846$, and the bias
+$h^{(n)}(1) \to 40/13 \approx 3.077$.
+\end{example}
+
+%% ============================================================
+%% SECTION 9: BLACKWELL OPTIMALITY
+%% ============================================================
+
+\section{Blackwell Optimality}
+\label{sec:blackwell}
+
+Blackwell optimality provides a remarkable connection between the
+discounted and average reward criteria.
+
+\begin{definition}[Blackwell Optimality]
+\label{def:blackwell}
+A deterministic stationary policy $d^*$ is \emph{Blackwell optimal}
+if there exists $\discount_0 \in (0,1)$ such that $d^*$ is
+$\discount$-discount optimal for all
+$\discount \in (\discount_0, 1)$. That is,
+$V^{d^*}_\discount(s) = \Vstar_\discount(s)$ for all $s$ and all
+$\discount > \discount_0$.
+\end{definition}
+
+\begin{theorem}[Blackwell's Theorem]
+\label{thm:blackwell}
+For any finite MDP, a Blackwell optimal policy exists. Moreover,
+every Blackwell optimal policy is average-reward optimal.
+\end{theorem}
+
+\begin{proof}
+\textbf{Existence:} For each deterministic stationary policy $d$, the
+discounted value $V^d_\discount(s)$ is a rational function of
+$\discount$ (since $V^d_\discount = (I - \discount P^d)^{-1} r^d$
+and each entry of the inverse is a ratio of polynomials in $\discount$
+via Cramer's rule).
+
+For two policies $d_1, d_2$, the difference
+$V^{d_1}_\discount(s) - V^{d_2}_\discount(s)$ is a rational function
+of $\discount$ and therefore has finitely many zeros in $(0,1)$
+(unless identically zero). This means the set of $\discount$ values
+where $d_1$ and $d_2$ swap in terms of which is better is finite.
+
+Since there are finitely many policies ($A^S$ total), the union of
+all such swap points is finite. Therefore, there exists
+$\discount_0 < 1$ such that for all $\discount > \discount_0$, the
+set of discount-optimal policies does not change. Any policy that is
+optimal for all $\discount > \discount_0$ is Blackwell optimal.
+
+\textbf{Average-reward optimality:} If $d^*$ is Blackwell optimal,
+then $(1-\discount) V^{d^*}_\discount(s) =
+(1-\discount) \Vstar_\discount(s)$ for $\discount > \discount_0$.
+Taking $\discount \to 1$:
+$\rho^{d^*} = \lim (1-\discount) V^{d^*}_\discount(s) =
+\lim (1-\discount) \Vstar_\discount(s) = \rho^*$.
+\end{proof}
+
+\begin{keyresult}[title={Blackwell Optimality}]
+A Blackwell optimal policy exists for every finite MDP. It is
+simultaneously:
+\begin{itemize}[nosep]
+    \item $\discount$-discount optimal for all $\discount$
+    sufficiently close to 1,
+    \item average-reward optimal ($\rho^{d^*} = \rho^*$).
+\end{itemize}
+Blackwell optimality is the strongest notion of optimality for
+infinite-horizon MDPs, subsuming both discounted and average reward
+optimality.
+\end{keyresult}
+
+\begin{example}[Blackwell Optimality in a Two-Action MDP]
+\label{ex:blackwell}
+Consider $\States = \{1\}$ (single state), $\Actions = \{a, b\}$
+with $R(1, a) = 2$, $R(1, b) = 1$. Since there is only one state,
+both actions lead back to state 1. For any $\discount$, the optimal
+policy is $\optpolicy(1) = a$ (the higher-reward action). This
+policy is trivially Blackwell optimal with $\discount_0 = 0$: it is
+optimal for all discount factors.
+
+For a more interesting example, consider $\States = \{1, 2\}$ with:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ \\
+\midrule
+$1$ & $a$ & 0 & 0 & 1 \\
+$1$ & $b$ & 1 & 1 & 0 \\
+$2$ & $a$ & 3 & 1 & 0 \\
+$2$ & $b$ & 3 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Policy $d_1$: $(b, a)$ gives $P^{d_1} = \bigl(\begin{smallmatrix}
+1 & 0 \\ 1 & 0 \end{smallmatrix}\bigr)$, $r^{d_1} = (1, 3)^\top$.
+Stationary distribution: $\mu = (1, 0)$, gain $\rho^{d_1} = 1$.
+
+Policy $d_2$: $(a, a)$ gives $P^{d_2} = \bigl(\begin{smallmatrix}
+0 & 1 \\ 1 & 0 \end{smallmatrix}\bigr)$, $r^{d_2} = (0, 3)^\top$.
+Stationary distribution: $\mu = (1/2, 1/2)$, gain
+$\rho^{d_2} = 3/2$.
+
+Policy $d_2$ has higher average reward. For the discounted case,
+$V^{d_2}_\discount(1) = \frac{3\discount}{1-\discount^2} =
+\frac{3\discount}{(1-\discount)(1+\discount)}$ and
+$V^{d_1}_\discount(1) = \frac{1}{1-\discount}$. We have
+$V^{d_2}_\discount(1) > V^{d_1}_\discount(1)$ iff
+$\frac{3\discount}{1+\discount} > 1$ iff $\discount > 1/2$.
+So $d_2$ is Blackwell optimal with $\discount_0 = 1/2$.
+\end{example}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Gain and Bias Computation] \textnormal{(\(*\))} \\
+Consider a two-state MDP with $\States = \{1, 2\}$,
+$\Actions = \{a, b\}$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ \\
+\midrule
+1 & $a$ & 4 & 0.5 & 0.5 \\
+1 & $b$ & 2 & 0.8 & 0.2 \\
+2 & $a$ & 1 & 0.3 & 0.7 \\
+2 & $b$ & 3 & 0.6 & 0.4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item For the policy $d(1) = a$, $d(2) = b$, compute the
+    stationary distribution $\mu^d$ and the gain $\rho^d$.
+    \item Solve the gain-bias equations for $h^d$ (with
+    normalization $h^d(2) = 0$).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Unichain Classification] \textnormal{(\(*\))} \\
+For the MDP in Exercise~1, check whether each of the four
+deterministic policies induces a unichain Markov chain. Is the MDP
+unichain?
+\end{exercise}
+
+\begin{exercise}[Average Reward Optimality Equations]
+\textnormal{(\(**\))} \\
+For the MDP in Exercise~1:
+\begin{enumerate}[label=(\alph*)]
+    \item Write down the average reward Bellman optimality equations
+    \eqref{eq:avg-bellman-opt}.
+    \item Solve for $\rho^*$ and $h^*$ (with $h^*(2) = 0$) by
+    trying each candidate optimal policy.
+    \item Verify by computing the gain of all four deterministic
+    policies.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Discount-to-Average Convergence]
+\textnormal{(\(**\))} \\
+For the MDP in Example~\ref{ex:avg-simple}:
+\begin{enumerate}[label=(\alph*)]
+    \item Compute $\Vstar_\discount$ for $\discount = 0.9$, $0.99$,
+    $0.999$.
+    \item Verify that $(1-\discount)\Vstar_\discount(s) \to
+    \rho^* = 37/13$ for each $s$.
+    \item Compute $\Vstar_\discount(1) - \Vstar_\discount(2)$ for
+    each $\discount$ and verify convergence to
+    $h^*(1) - h^*(2) = 40/13$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Blackwell Optimality Threshold]
+\textnormal{(\(***\))} \\
+For the MDP in Example~\ref{ex:blackwell}:
+\begin{enumerate}[label=(\alph*)]
+    \item Compute $V^d_\discount(s)$ for all four deterministic
+    policies and both states, as functions of $\discount$.
+    \item Determine the Blackwell threshold $\discount_0$ (the
+    largest $\discount$ at which the optimal policy changes).
+    \item Verify that the Blackwell optimal policy is indeed
+    average-reward optimal.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Multichain Counterexample]
+\textnormal{(\(***\))} \\
+Construct a three-state, two-action MDP that is multichain (at least
+one deterministic policy has two recurrent classes) and show that the
+average reward can depend on the initial state. Specifically, find
+a policy $\policy$ and two states $s_1, s_2$ such that
+$\rho^\policy(s_1) \neq \rho^\policy(s_2)$.
+
+\textit{Hint:} Use absorbing states to create separate recurrent
+classes with different reward rates.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{average reward criterion} evaluates policies by
+    their long-run reward rate
+    $\rho^\policy = \lim_{T \to \infty} \frac{1}{T}
+    \E[\sum_{t=0}^{T-1} R(S_t, A_t)]$, eliminating the discount
+    factor as a hyperparameter.
+    \item For \emph{unichain} MDPs (every policy induces a chain
+    with a single recurrent class), the gain $\rho^\policy$ is
+    independent of the initial state and equals the expected reward
+    under the stationary distribution:
+    $\rho^\policy = (\mu^\policy)^\top r^\policy$.
+    \item The \emph{gain-bias equations} (Poisson equations)
+    $\rho^\policy + h^\policy(s) = \sum_a \policy(a \mid s)
+    [R(s,a) + \sum_{s'} P(s' \mid s,a) h^\policy(s')]$ are the
+    average-reward analogue of the discounted Bellman equations.
+    The bias $h^\policy(s)$ measures the transient advantage of
+    starting in state $s$.
+    \item The bias is unique only up to an additive constant,
+    reflecting that only \emph{relative} values matter in the
+    average reward setting.
+    \item The average reward Bellman optimality equation
+    $\rho^* + h^*(s) = \max_a [R(s,a) + \sum_{s'} P(s' \mid s,a)
+    h^*(s')]$ characterizes the optimal gain and bias.
+    \item \emph{Relative value iteration} centers iterates at a
+    reference state to prevent divergence, enabling iterative
+    solution of the average reward optimality equations.
+    \item The discounted and average reward criteria are connected:
+    $(1-\discount)\Vstar_\discount \to \rho^*$ as
+    $\discount \to 1$, and the centered discounted values converge
+    to the bias.
+    \item A \emph{Blackwell optimal} policy is simultaneously
+    discount-optimal for all $\discount$ sufficiently close to 1
+    and average-reward optimal. Blackwell optimal policies exist
+    for all finite MDPs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson on TD Learning} extends the ideas from
+    this lesson to the model-free setting, where the transition
+    kernel is unknown and the agent learns from sampled trajectories.
+    \item \textbf{Lesson on Stochastic Approximation} (Lesson~19)
+    provides the convergence framework for R-learning and other
+    average-reward RL algorithms.
+    \item \citet[Chapters 8--10]{puterman2014} provides the
+    definitive treatment of average reward MDPs, including multichain
+    theory, sensitive-discount optimality, and Laurent series
+    expansions.
+    \item \citet{blackwell1962} is the original paper establishing
+    Blackwell optimality; it remains concise and readable.
+    \item \citet{howard1960} introduced the gain-bias framework and
+    developed policy iteration for average reward, establishing the
+    computational foundations.
+    \item \citet[Chapter 7]{bertsekas2012} treats average cost
+    problems with connections to stochastic shortest path formulations
+    and semi-Markov decision processes.
+    \item \citet{derman1970} provides an accessible treatment of
+    average reward theory with applications to queuing and inventory
+    problems.
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

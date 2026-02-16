@@ -1,0 +1,805 @@
+% lesson-57-actor-critic-and-gae.tex
+% Phase 02, Subdomain: Policy Gradient
+% Topic: Actor-Critic Architecture and Generalized Advantage Estimation
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 57: Actor-Critic and GAE}}
+\fancyhead[R]{\thepage}
+\title{Lesson 57: Actor-Critic and Generalized Advantage Estimation}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+REINFORCE (Lesson 55) uses the complete return $G_t = \sum_{k=0}^{T-t-1}
+\discount^k r(S_{t+k}, A_{t+k})$ to estimate the advantage, yielding an
+unbiased but high-variance gradient. At the other extreme, a one-step
+temporal difference (TD) error $\delta_t = r(S_t, A_t) + \discount
+\hat{V}(S_{t+1}) - \hat{V}(S_t)$ provides a low-variance but biased
+estimate of the advantage. Both are limiting cases of a family of
+estimators parameterized by a tradeoff parameter $\lambda \in [0,1]$.
+Can we find the optimal point in this family?
+
+This is exactly the question addressed by \emph{Generalized Advantage
+Estimation} (GAE) of \citet{schulman2015}. GAE defines a
+$\lambda$-weighted exponential average of multi-step advantage estimates,
+analogous to $\operatorname{TD}(\lambda)$ in value estimation (Lesson 24),
+but applied to the advantage function. The resulting estimator
+$\hat{A}^{\mathrm{GAE}(\discount,\lambda)}_t$ provides a smooth knob
+between bias and variance: $\lambda = 0$ gives the one-step TD
+advantage (low variance, high bias), $\lambda = 1$ gives the Monte
+Carlo advantage (high variance, zero bias). The tools developed here
+form the backbone of modern policy gradient implementations including
+PPO \citep{schulman2017} and A3C \citep{mnih2016}.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{A2C/A3C} \citep{mnih2016}: Uses actor-critic with
+    $n$-step returns; GAE generalizes this to $\lambda$-weighted
+    multi-step returns.
+  \item \textbf{PPO} \citep{schulman2017}: Uses GAE to estimate
+    advantages within the clipped surrogate objective, with $\lambda
+    = 0.95$ as a common default.
+  \item \textbf{Natural actor-critic} \citep{peters2008}: The critic
+    estimates the advantage using compatible features; GAE provides an
+    alternative estimation strategy.
+  \item \textbf{TRPO} \citep{schulman2015trpo}: The original GAE paper
+    combines GAE with trust-region optimization for policy updates.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+The reader must know the policy gradient theorem (Lesson 54, Theorem 5.1),
+the advantage function $A^\policy(s,a) = \Qpi(s,a) - \Vpi(s)$ and its
+role in policy gradients (Lesson 55, Definition 4.3 and Proposition 4.5),
+REINFORCE with baseline (Lesson 55, Section 4), and the compatible
+function approximation theorem (Lesson 54, Theorem 8.2). From the
+temporal difference methods lesson (Lesson 24), familiarity with
+$\operatorname{TD}(\lambda)$, eligibility traces, and the bias-variance
+tradeoff in bootstrapping is assumed. The natural policy gradient
+(Lesson 56) provides useful context but is not strictly required.
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \textbf{Define} the actor-critic architecture and explain the
+    roles of the actor (policy) and critic (value function).
+  \item \textbf{Prove} that the one-step TD error $\delta_t$ is an
+    unbiased estimate of the advantage $A^\policy(S_t, A_t)$
+    when $\hat{V} = \Vpi$.
+  \item \textbf{Derive} the $n$-step advantage estimator and analyze
+    its bias and variance properties.
+  \item \textbf{Derive} Generalized Advantage Estimation as an
+    exponentially weighted average of $n$-step estimators.
+  \item \textbf{Analyze} the bias-variance tradeoff of GAE as a
+    function of $\lambda$.
+  \item \textbf{Compute} GAE for concrete value function estimates
+    on simple MDPs.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet{schulman2015} -- The GAE paper; derives the
+    $\lambda$-weighted advantage estimator with bias-variance analysis.
+  \item \citet[Chapter 13]{suttonbarto2018} -- Actor-critic methods,
+    including one-step actor-critic and eligibility traces.
+  \item \citet{konda2003} -- Rigorous two-timescale convergence analysis
+    of actor-critic algorithms.
+  \item \citet{mnih2016} -- A3C: asynchronous actor-critic with
+    $n$-step returns in deep RL.
+  \item \citet{schulman2017} -- PPO: practical use of GAE in
+    large-scale policy optimization.
+  \item \citet{bhatnagar2009} -- Convergence of natural actor-critic
+    with TD-based critics.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 3: The Actor-Critic Architecture
+%% ========================================================================
+\section{The Actor-Critic Architecture}
+
+Actor-critic methods maintain two components: a parameterized policy
+(the actor) and a learned value function (the critic). The critic
+provides low-variance estimates of the advantage, which the actor uses
+to compute policy gradient updates.
+
+\begin{definition}[Actor-Critic Components]
+\label{def:actor-critic}
+An \emph{actor-critic} system consists of:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Actor:} a parameterized policy $\policy_\theta(a \mid s)$
+    with parameters $\theta \in \R^d$.
+  \item \textbf{Critic:} a parameterized value function $\hat{V}_w(s)$
+    with parameters $w \in \R^m$, serving as an approximation to
+    $\Vpi(s)$.
+\end{enumerate}
+The actor is updated via policy gradient ascent using advantage
+estimates provided by the critic. The critic is updated to minimize the
+value prediction error, typically via temporal difference learning.
+\end{definition}
+
+\begin{definition}[One-Step Actor-Critic Update]
+\label{def:one-step-ac}
+At each time step $t$, given the transition $(S_t, A_t, R_{t+1}, S_{t+1})$:
+\begin{enumerate}[label=\arabic*.]
+  \item Compute the TD error: $\delta_t = R_{t+1} + \discount\,
+    \hat{V}_w(S_{t+1}) - \hat{V}_w(S_t)$.
+  \item Update the critic: $w \leftarrow w + \beta\, \delta_t\,
+    \nabla_w \hat{V}_w(S_t)$.
+  \item Update the actor: $\theta \leftarrow \theta + \alpha\,
+    \discount^t\, \delta_t\, \nabla_\theta \log
+    \policy_\theta(A_t \mid S_t)$.
+\end{enumerate}
+\end{definition}
+
+\begin{rlconnection}
+The one-step actor-critic is the simplest actor-critic algorithm. It
+replaces the full return $G_t$ in REINFORCE with the TD error $\delta_t$,
+which uses bootstrapping through $\hat{V}_w(S_{t+1})$. This introduces
+bias (since $\hat{V}_w \neq \Vpi$ in general) but dramatically reduces
+variance, since $\delta_t$ depends only on a single transition rather
+than the entire trajectory. The two-timescale design (with step sizes
+$\beta \gg \alpha$) allows the critic to track the value function of the
+slowly changing actor.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 4: The TD Error as Advantage Estimate
+%% ========================================================================
+\section{The TD Error as Advantage Estimate}
+
+The temporal difference error provides a natural connection between
+value function learning and advantage estimation.
+
+\begin{definition}[Temporal Difference Error]
+\label{def:td-error}
+Given a value function estimate $\hat{V}$, the \emph{TD error} at
+time $t$ is
+\[
+  \delta_t^{\hat{V}} = r(S_t, A_t) + \discount\, \hat{V}(S_{t+1})
+  - \hat{V}(S_t).
+\]
+When $\hat{V} = \Vpi$, we write $\delta_t^\policy$ and call it the
+\emph{true TD error}.
+\end{definition}
+
+\begin{theorem}[TD Error as Unbiased Advantage Estimate]
+\label{thm:td-advantage}
+When $\hat{V} = \Vpi$, the TD error is an unbiased estimate of the
+advantage:
+\[
+  \E[\delta_t^\policy \mid S_t = s, A_t = a] = A^\policy(s, a).
+\]
+\end{theorem}
+
+\begin{proof}
+By definition and the Bellman equation:
+\begin{align*}
+  \E[\delta_t^\policy \mid S_t = s, A_t = a]
+  &= \E[r(s,a) + \discount\, \Vpi(S_{t+1}) - \Vpi(s) \mid S_t = s, A_t = a] \\
+  &= r(s,a) + \discount \sum_{s'} \Trans(s' \mid s, a)\, \Vpi(s') - \Vpi(s) \\
+  &= \Qpi(s,a) - \Vpi(s) = A^\policy(s,a),
+\end{align*}
+where we used $\Qpi(s,a) = r(s,a) + \discount \sum_{s'} \Trans(s' \mid s,a)\,
+\Vpi(s')$.
+\end{proof}
+
+\begin{keyresult}[title={TD Error and the Advantage Function}]
+The one-step TD error $\delta_t^\policy = r(S_t, A_t) + \discount\,
+\Vpi(S_{t+1}) - \Vpi(S_t)$ provides an unbiased, single-sample estimate
+of $A^\policy(S_t, A_t)$ when the true value function is used. When an
+approximate value function $\hat{V}_w$ is used instead, the estimate
+becomes biased, with bias proportional to the value function
+approximation error.
+\end{keyresult}
+
+\begin{proposition}[Bias from Value Function Approximation]
+\label{prop:td-bias}
+When $\hat{V}_w \neq \Vpi$, the TD error satisfies
+\[
+  \E[\delta_t^{\hat{V}_w} \mid S_t = s, A_t = a]
+  = A^\policy(s,a) + \discount \sum_{s'} \Trans(s' \mid s,a)\,
+  \bigl(\hat{V}_w(s') - \Vpi(s')\bigr) - \bigl(\hat{V}_w(s) - \Vpi(s)\bigr).
+\]
+The bias depends on the value function errors at $s$ and at the
+successor states.
+\end{proposition}
+
+\begin{proof}
+Adding and subtracting $\Vpi$: $\E[\delta_t^{\hat{V}_w} \mid s, a]
+= \underbrace{r(s,a) + \discount \E[\Vpi(S_{t+1})] - \Vpi(s)}_{A^\policy(s,a)}
++ \discount \E[\hat{V}_w(S_{t+1}) - \Vpi(S_{t+1})]
+- (\hat{V}_w(s) - \Vpi(s))$.
+\end{proof}
+
+\begin{warning}[title={Bias Cannot Be Eliminated by Baseline Invariance}]
+Baseline invariance (Lesson 54, Proposition 7.1) guarantees that
+subtracting $\Vpi(s)$ from $\Qpi(s,a)$ does not bias the gradient.
+However, when the TD target $r + \discount \hat{V}_w(S_{t+1})$ replaces
+$\Qpi$, the bootstrapping introduces bias that \emph{cannot} be removed
+by baseline subtraction. This is fundamentally different from the
+baseline effect: the bias comes from using $\hat{V}_w(S_{t+1})$ to
+estimate future rewards, not from subtracting $\hat{V}_w(S_t)$.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 5: Multi-Step Advantage Estimators
+%% ========================================================================
+\section{Multi-Step Advantage Estimators}
+
+We now generalize the one-step TD advantage to $n$-step estimators,
+forming a family that interpolates between the TD(0) and Monte Carlo
+extremes.
+
+\begin{definition}[$n$-Step Advantage Estimator]
+\label{def:n-step-advantage}
+The \emph{$n$-step advantage estimator} at time $t$ is
+\[
+  \hat{A}_t^{(n)} = \sum_{k=0}^{n-1} \discount^k\, r(S_{t+k}, A_{t+k})
+  + \discount^n\, \hat{V}(S_{t+n}) - \hat{V}(S_t)
+  = -\hat{V}(S_t) + \sum_{k=0}^{n-1} \discount^k\, r(S_{t+k}, A_{t+k})
+  + \discount^n\, \hat{V}(S_{t+n}).
+\]
+For $n = 1$, this recovers the TD error: $\hat{A}_t^{(1)} = \delta_t^{\hat{V}}$.
+As $n \to \infty$ (for episodic tasks, $n = T - t$), this becomes the
+Monte Carlo advantage: $\hat{A}_t^{(\infty)} = G_t - \hat{V}(S_t)$.
+\end{definition}
+
+\begin{proposition}[$n$-Step Estimator via TD Errors]
+\label{prop:n-step-td}
+The $n$-step advantage estimator can be written as a sum of discounted
+TD errors:
+\[
+  \hat{A}_t^{(n)} = \sum_{k=0}^{n-1} \discount^k\, \delta_{t+k}^{\hat{V}}.
+\]
+\end{proposition}
+
+\begin{proof}
+Expanding the TD errors:
+\begin{align*}
+  \sum_{k=0}^{n-1} \discount^k\, \delta_{t+k}
+  &= \sum_{k=0}^{n-1} \discount^k\, \bigl[r(S_{t+k}, A_{t+k})
+    + \discount\, \hat{V}(S_{t+k+1}) - \hat{V}(S_{t+k})\bigr] \\
+  &= \sum_{k=0}^{n-1} \discount^k\, r(S_{t+k}, A_{t+k})
+    + \sum_{k=0}^{n-1} \discount^{k+1}\, \hat{V}(S_{t+k+1})
+    - \sum_{k=0}^{n-1} \discount^k\, \hat{V}(S_{t+k}).
+\end{align*}
+The last two sums telescope: writing them out,
+\begin{align*}
+  &\bigl[\discount\, \hat{V}(S_{t+1}) + \discount^2\, \hat{V}(S_{t+2})
+    + \cdots + \discount^n\, \hat{V}(S_{t+n})\bigr] \\
+  &\quad - \bigl[\hat{V}(S_t) + \discount\, \hat{V}(S_{t+1})
+    + \cdots + \discount^{n-1}\, \hat{V}(S_{t+n-1})\bigr]
+  = \discount^n\, \hat{V}(S_{t+n}) - \hat{V}(S_t).
+\end{align*}
+Therefore $\sum_{k=0}^{n-1} \discount^k \delta_{t+k} =
+\sum_{k=0}^{n-1} \discount^k r(S_{t+k}, A_{t+k}) + \discount^n
+\hat{V}(S_{t+n}) - \hat{V}(S_t) = \hat{A}_t^{(n)}$.
+\end{proof}
+
+\begin{theorem}[Bias-Variance of $n$-Step Estimators]
+\label{thm:n-step-bias-var}
+Assume $\hat{V} = \Vpi + \epsilon$ where $\epsilon(s)$ is the
+approximation error. Conditioning on $S_t = s$, $A_t = a$:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Bias:}
+    $\E[\hat{A}_t^{(n)} \mid s, a] = A^\policy(s,a) + O(\discount^n\,
+    \|\epsilon\|_\infty)$.
+  \item \textbf{Variance:} The variance of $\hat{A}_t^{(n)}$ increases
+    with $n$ because more random transitions are included.
+\end{enumerate}
+Larger $n$ reduces bias (the bootstrapped value $\hat{V}(S_{t+n})$
+contributes less due to the $\discount^n$ discount) but increases
+variance (more stochastic transitions are summed).
+\end{theorem}
+
+\begin{proof}
+(i) Writing $\hat{V} = \Vpi + \epsilon$, the expectation of the
+$n$-step estimator decomposes into $A^\policy(s,a)$ (from the true
+values) plus error terms $\discount^n \E[\epsilon(S_{t+n})] -
+\epsilon(s) = O(\|\epsilon\|_\infty)$, with the $\discount^n$ factor
+shrinking as $n$ grows.
+
+(ii) Each additional term in $\hat{A}_t^{(n)} = \sum_{k=0}^{n-1}
+\discount^k \delta_{t+k}$ adds variance from the randomness of
+$S_{t+k+1}$, so total variance is non-decreasing in $n$.
+\end{proof}
+
+\begin{example}[Comparing 1-Step and $\infty$-Step]
+\label{ex:chain-mdp}
+Consider a deterministic chain $S_0 \to S_1 \to \cdots \to S_T$ with
+$r_t = 0$ for $t < T-1$, $r_{T-1} = 1$, $\discount = 1$, $\Vpi(S_t) = 1$,
+and $\hat{V}(S_t) = 0.9$. The 1-step estimate $\hat{A}_0^{(1)} =
+0 + 0.9 - 0.9 = 0$ misses the advantage (local errors cancel). The MC
+estimate $\hat{A}_0^{(\infty)} = 1 - 0.9 = 0.1$ correctly identifies
+positive advantage but carries full trajectory variance.
+\end{example}
+
+%% ========================================================================
+%% SECTION 6: Generalized Advantage Estimation
+%% ========================================================================
+\section{Generalized Advantage Estimation}
+
+GAE provides a principled way to interpolate between the $n$-step
+estimators by taking an exponentially weighted average.
+
+\begin{definition}[Generalized Advantage Estimation]
+\label{def:gae}
+The \emph{Generalized Advantage Estimator} $\operatorname{GAE}(\discount,
+\lambda)$ at time $t$ is the exponentially weighted average of $n$-step
+advantage estimators:
+\[
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}
+  = (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1}\, \hat{A}_t^{(n)},
+\]
+where $\lambda \in [0,1]$ controls the bias-variance tradeoff.
+\end{definition}
+
+\begin{theorem}[GAE as Discounted Sum of TD Errors]
+\label{thm:gae-td}
+The GAE estimator admits the simple closed-form expression
+\[
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}
+  = \sum_{k=0}^{\infty} (\discount\lambda)^k\, \delta_{t+k}^{\hat{V}}.
+\]
+For episodic tasks terminating at time $T$:
+\[
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}
+  = \sum_{k=0}^{T-t-1} (\discount\lambda)^k\, \delta_{t+k}^{\hat{V}}.
+\]
+\end{theorem}
+
+\begin{proof}
+Substituting $\hat{A}_t^{(n)} = \sum_{k=0}^{n-1} \discount^k\,
+\delta_{t+k}$ (Proposition~\ref{prop:n-step-td}) into the GAE definition:
+\begin{align*}
+  \hat{A}_t^{\mathrm{GAE}}
+  &= (1-\lambda) \sum_{n=1}^{\infty} \lambda^{n-1}
+    \sum_{k=0}^{n-1} \discount^k\, \delta_{t+k} \\
+  &= (1-\lambda) \sum_{k=0}^{\infty} \discount^k\, \delta_{t+k}
+    \sum_{n=k+1}^{\infty} \lambda^{n-1},
+\end{align*}
+where we swapped the order of summation (justified by absolute
+convergence, since $|\delta_{t+k}| \leq R_{\max}/(1-\discount)$ and
+$\discount\lambda < 1$). The inner sum is:
+\[
+  \sum_{n=k+1}^{\infty} \lambda^{n-1}
+  = \lambda^k \sum_{j=0}^{\infty} \lambda^j
+  = \frac{\lambda^k}{1 - \lambda}.
+\]
+Therefore:
+\[
+  \hat{A}_t^{\mathrm{GAE}}
+  = (1-\lambda) \sum_{k=0}^{\infty} \discount^k\, \delta_{t+k}\,
+  \frac{\lambda^k}{1-\lambda}
+  = \sum_{k=0}^{\infty} (\discount\lambda)^k\, \delta_{t+k}. \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[title={Generalized Advantage Estimation}]
+\[
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}
+  = \sum_{k=0}^{\infty} (\discount\lambda)^k\, \delta_{t+k}^{\hat{V}},
+\]
+where $\delta_{t+k}^{\hat{V}} = r(S_{t+k}, A_{t+k}) + \discount\,
+\hat{V}(S_{t+k+1}) - \hat{V}(S_{t+k})$. The parameter $\lambda$
+interpolates between:
+\begin{itemize}
+  \item $\lambda = 0$: $\hat{A}_t^{\mathrm{GAE}} = \delta_t^{\hat{V}}$
+    (one-step TD advantage; low variance, high bias).
+  \item $\lambda = 1$: $\hat{A}_t^{\mathrm{GAE}} = \sum_{k=0}^{\infty}
+    \discount^k \delta_{t+k} = G_t - \hat{V}(S_t)$ (Monte Carlo
+    advantage; zero bias when $\hat{V} = \Vpi$, high variance).
+\end{itemize}
+\end{keyresult}
+
+\begin{remark}[Recursive Computation of GAE]
+\label{rem:recursive-gae}
+In practice, GAE is computed recursively backward through the trajectory:
+\[
+  \hat{A}_{T-1}^{\mathrm{GAE}} = \delta_{T-1}, \qquad
+  \hat{A}_t^{\mathrm{GAE}} = \delta_t + \discount\lambda\,
+  \hat{A}_{t+1}^{\mathrm{GAE}} \quad \text{for } t = T-2, \ldots, 0.
+\]
+This follows directly from the geometric series structure and costs
+$O(T)$ time for an episode of length $T$.
+\end{remark}
+
+%% ========================================================================
+%% SECTION 7: Bias-Variance Analysis of GAE
+%% ========================================================================
+\section{Bias-Variance Analysis of GAE}
+
+We now formally analyze the bias and variance of GAE as a function of
+$\lambda$.
+
+\begin{theorem}[Bias of GAE]
+\label{thm:gae-bias}
+Let $\hat{V} = \Vpi + \epsilon$ where $\epsilon : \States \to \R$ is
+the value function approximation error. Then:
+\[
+  \E\!\left[\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)} \mid S_t = s, A_t = a\right]
+  = A^\policy(s,a) + \sum_{k=0}^{\infty} (\discount\lambda)^k\,
+  b_{t+k}(s,a),
+\]
+where $b_{t+k}$ represents the bias contribution from the $k$-th TD
+error, satisfying $|b_{t+k}(s,a)| \leq (1 + \discount)\|\epsilon\|_\infty$.
+\end{theorem}
+
+\begin{proof}
+By Proposition~\ref{prop:td-bias}, each TD error has bias
+$\E[\delta_{t+k}^{\hat{V}} \mid S_{t+k}, A_{t+k}] = A^\policy +
+\discount\, \E[\epsilon(S_{t+k+1})] - \epsilon(S_{t+k})$. Summing with
+weights $(\discount\lambda)^k$ and taking iterated expectations gives
+$\E[\hat{A}_t^{\mathrm{GAE}} \mid s, a] = A^\policy(s,a) +
+\text{bias terms}$. For $\lambda < 1$, the total bias is bounded by
+$(1+\discount)\|\epsilon\|_\infty / (1-\discount\lambda)$.
+\end{proof}
+
+\begin{corollary}[Unbiasedness at $\lambda = 1$]
+\label{cor:gae-unbiased}
+When $\hat{V} = \Vpi$ (i.e., $\epsilon = 0$),
+$\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}$ is an unbiased estimate
+of $A^\policy(S_t, A_t)$ for \emph{all} $\lambda \in [0,1]$. When
+$\hat{V} \neq \Vpi$, the estimator is unbiased only at $\lambda = 1$
+(the Monte Carlo case).
+\end{corollary}
+
+\begin{proof}
+When $\epsilon = 0$, each TD error $\delta_{t+k}^\policy$ satisfies
+$\E[\delta_{t+k}^\policy \mid S_{t+k}, A_{t+k}] = A^\policy(S_{t+k},
+A_{t+k})$ by Theorem~\ref{thm:td-advantage}. For $\lambda = 1$,
+$\hat{A}_t^{\mathrm{GAE}(\discount,1)} = \sum_{k=0}^\infty \discount^k
+\delta_{t+k} = G_t - \hat{V}(S_t) = G_t - \Vpi(S_t)$, which is an
+unbiased estimate of $\Qpi(S_t, A_t) - \Vpi(S_t) = A^\policy(S_t, A_t)$
+by Lemma 3.2 of Lesson 55.
+
+For $\lambda < 1$ and $\epsilon \neq 0$, the bias is
+$O(\|\epsilon\|_\infty / (1 - \discount\lambda)) \neq 0$ in general.
+\end{proof}
+
+\begin{theorem}[Variance of GAE]
+\label{thm:gae-variance}
+Consider the simplified setting where the TD errors
+$\delta_0, \delta_1, \ldots$ are uncorrelated (which holds when $\hat{V}
+= \Vpi$ and the MDP is such that each $\delta_t$ depends only on the
+local transition). Then the variance of GAE is:
+\[
+  \Var\!\left(\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}\right)
+  = \sum_{k=0}^{\infty} (\discount\lambda)^{2k}\,
+  \Var(\delta_{t+k}^\policy).
+\]
+If additionally $\Var(\delta_{t+k}^\policy) \leq \sigma_\delta^2$ for
+all $k$, then
+\[
+  \Var\!\left(\hat{A}_t^{\mathrm{GAE}}\right)
+  \leq \frac{\sigma_\delta^2}{1 - \discount^2 \lambda^2}.
+\]
+\end{theorem}
+
+\begin{proof}
+Under the uncorrelatedness assumption:
+\begin{align*}
+  \Var\!\left(\sum_{k=0}^\infty (\discount\lambda)^k \delta_{t+k}\right)
+  &= \sum_{k=0}^\infty (\discount\lambda)^{2k}\, \Var(\delta_{t+k}).
+\end{align*}
+Bounding each $\Var(\delta_{t+k}) \leq \sigma_\delta^2$ and summing the
+geometric series gives the result.
+\end{proof}
+
+\begin{rlconnection}
+The bias-variance tradeoff is the central design choice in GAE:
+\begin{itemize}
+  \item \textbf{Small $\lambda$} (e.g., $\lambda = 0$): Variance
+    $\approx \sigma_\delta^2$, bias $\approx
+    (1+\discount)\|\epsilon\|_\infty / (1-\discount\lambda)$. Good when
+    the critic is accurate ($\|\epsilon\|$ small).
+  \item \textbf{Large $\lambda$} (e.g., $\lambda = 0.95$): Variance
+    $\approx \sigma_\delta^2 / (1-\discount^2\lambda^2)$, bias is
+    small even with inaccurate critic. This is the typical choice in
+    practice (PPO uses $\lambda = 0.95$ by default).
+  \item \textbf{$\lambda = 1$}: Zero bias, maximum variance. Equivalent
+    to REINFORCE with baseline.
+\end{itemize}
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 8: The GAE Policy Gradient
+%% ========================================================================
+\section{The GAE Policy Gradient}
+
+We now state the policy gradient estimator that uses GAE advantages
+and analyze its properties.
+
+\begin{definition}[GAE Policy Gradient Estimator]
+\label{def:gae-pg}
+Given a trajectory $(S_0, A_0, R_1, \ldots, S_{T-1}, A_{T-1}, R_T)$
+collected under $\policy_\theta$, the \emph{GAE policy gradient
+estimator} is
+\[
+  \hat{g}^{\mathrm{GAE}} = \sum_{t=0}^{T-1}
+  \nabla_\theta \log \policy_\theta(A_t \mid S_t)\,
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}.
+\]
+\end{definition}
+
+\begin{proposition}[Bias of the GAE Policy Gradient]
+\label{prop:gae-pg-bias}
+When $\hat{V} = \Vpi$, $\hat{g}^{\mathrm{GAE}}$ is unbiased for all
+$\lambda$ (by Corollary~\ref{cor:gae-unbiased}). When $\hat{V} \neq
+\Vpi$ and $\lambda < 1$, the estimator is biased
+(Theorem~\ref{thm:gae-bias}). When $\lambda = 1$,
+$\hat{A}_t^{\mathrm{GAE}} = G_t - \hat{V}(S_t)$ and $\hat{V}(S_t)$
+acts as a state-dependent baseline, so the estimator is unbiased by
+baseline invariance (Lesson 54, Proposition 7.1) regardless of $\hat{V}$.
+\end{proposition}
+
+\begin{example}[GAE Computation on a Simple Trajectory]
+\label{ex:gae-computation}
+Consider a trajectory of length $T = 4$ with $\discount = 0.99$,
+$\lambda = 0.95$, and the following data:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$t$ & $r_t$ & $\hat{V}(S_t)$ & $\hat{V}(S_{t+1})$ & $\delta_t$ \\
+\midrule
+0 & 1.0 & 10.0 & 8.0 & $1.0 + 0.99 \times 8.0 - 10.0 = -1.08$ \\
+1 & 2.0 & 8.0 & 6.0 & $2.0 + 0.99 \times 6.0 - 8.0 = -0.06$ \\
+2 & 3.0 & 6.0 & 5.0 & $3.0 + 0.99 \times 5.0 - 6.0 = 1.95$ \\
+3 & 4.0 & 5.0 & 0.0 & $4.0 + 0.99 \times 0.0 - 5.0 = -1.00$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Computing GAE recursively backward (Remark~\ref{rem:recursive-gae})
+with $\discount\lambda = 0.99 \times 0.95 = 0.9405$:
+\begin{align*}
+  \hat{A}_3^{\mathrm{GAE}} &= \delta_3 = -1.00, \\
+  \hat{A}_2^{\mathrm{GAE}} &= \delta_2 + 0.9405 \times (-1.00)
+    = 1.95 - 0.94 = 1.01, \\
+  \hat{A}_1^{\mathrm{GAE}} &= \delta_1 + 0.9405 \times 1.01
+    = -0.06 + 0.95 = 0.89, \\
+  \hat{A}_0^{\mathrm{GAE}} &= \delta_0 + 0.9405 \times 0.89
+    = -1.08 + 0.84 = -0.24.
+\end{align*}
+
+For comparison, with $\lambda = 0$ (TD-only): $\hat{A}_t = \delta_t$,
+so $\hat{A}_0 = -1.08$. With $\lambda = 1$ (Monte Carlo):
+$\hat{A}_0 = (1 + 0.99 \times 2 + 0.99^2 \times 3 + 0.99^3 \times 4)
+- 10.0 = 9.80 - 10.0 = -0.20$. The GAE estimate ($-0.24$) lies between
+the TD ($-1.08$) and MC ($-0.20$) values, as expected.
+\end{example}
+
+%% ========================================================================
+%% SECTION 9: Two-Timescale Convergence of Actor-Critic
+%% ========================================================================
+\section{Two-Timescale Convergence of Actor-Critic}
+
+\begin{assumption}[Two-Timescale Step Sizes]
+\label{assump:two-timescale}
+The actor step sizes $\{\alpha_k\}$ and critic step sizes $\{\beta_k\}$
+satisfy: (i) $\sum_k \alpha_k = \sum_k \beta_k = \infty$ and
+$\sum_k \alpha_k^2, \sum_k \beta_k^2 < \infty$; (ii)
+$\alpha_k / \beta_k \to 0$ (the actor updates on a slower timescale).
+\end{assumption}
+
+\begin{theorem}[Two-Timescale Convergence]
+\label{thm:two-timescale}
+Under Assumption~\ref{assump:two-timescale} and standard regularity
+conditions (Lipschitz gradients, bounded iterates, ergodicity), the
+critic $w_k$ converges to $w^*(\theta)$ (the TD fixed point) and the
+actor $\theta_k$ converges to a stationary point of $J(\theta)$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Since $\alpha_k / \beta_k \to 0$, the critic sees the actor as
+approximately constant and converges by standard TD theory (Lesson 24).
+The actor then uses approximately correct gradient estimates. The
+formal proof \citep{konda2003} uses the ODE method: coupled stochastic
+iterations track a pair of ODEs, with the fast ODE (critic) converging
+on the slow timescale of the actor.
+\end{proof}
+
+\begin{rlconnection}
+In practice, the strict two-timescale requirement is often relaxed.
+PPO and A3C use shared neural network layers for actor and critic, with
+the critic loss coefficient (e.g., $c_v = 0.5$) implicitly controlling
+the timescale ratio.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 10: GAE with Policy Gradient Methods
+%% ========================================================================
+\section{GAE with Policy Gradient Methods}
+
+GAE can be combined with any policy gradient method by replacing
+the advantage estimate. The vanilla policy gradient with GAE uses:
+\[
+  \theta_{k+1} = \theta_k + \alpha \sum_{t=0}^{T-1}
+  \nabla_\theta \log \policy_{\theta_k}(A_t \mid S_t)\,
+  \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}.
+\]
+The natural policy gradient with GAE (Lesson 56) instead uses
+$\theta_{k+1} = \theta_k + \alpha\, F(\theta_k)^{-1} \hat{g}$
+where $\hat{g}$ is the GAE gradient estimate above.
+
+\begin{example}[Effect of $\lambda$ on Credit Assignment]
+\label{ex:lambda-effect}
+In a grid-world with sparse rewards ($+1$ at the goal, $0$ elsewhere):
+$\lambda = 0$ provides signal only one step from the goal (slow
+learning); $\lambda = 1$ propagates reward to all visited states
+(fast but noisy); $\lambda = 0.95$ propagates $\sim 20$ effective
+steps, balancing speed and stability.
+\end{example}
+
+\begin{warning}[title={Two Discount Parameters in GAE}]
+GAE has \emph{two} discount-like parameters: $\discount$ (the MDP
+discount defining the objective) and $\lambda$ (controlling the
+bias-variance tradeoff). Setting $\lambda = 0.95$ with $\discount =
+0.99$ gives an effective estimation discount of $\discount\lambda =
+0.9405$. A common mistake is to confuse the two or set both to 1.
+\end{warning}
+
+%% ========================================================================
+%% SECTION 11: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[TD Error Properties]
+\textnormal{(\(*\))} \\
+  For an MDP with $\States = \{s_1, s_2\}$, $\Actions = \{a\}$
+  (single action), deterministic transitions $s_1 \to s_2 \to s_1$,
+  rewards $r(s_1, a) = 2$, $r(s_2, a) = 0$, and $\discount = 0.9$:
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute $\Vpi(s_1)$ and $\Vpi(s_2)$ exactly.
+    \item Verify that $\E[\delta_t^\policy \mid S_t = s_i]$ equals zero
+      for both states (since there is only one action, the advantage is
+      zero).
+    \item If $\hat{V}(s_1) = 9$ and $\hat{V}(s_2) = 8$, compute the
+      TD errors and the bias at each state.
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[GAE Recursive Computation]
+\textnormal{(\(*\))} \\
+  Verify the recursive formula $\hat{A}_t^{\mathrm{GAE}} = \delta_t
+  + \discount\lambda\, \hat{A}_{t+1}^{\mathrm{GAE}}$ by expanding
+  the closed-form expression from Theorem~\ref{thm:gae-td}. Then
+  compute $\hat{A}_t^{\mathrm{GAE}}$ for $t = 0,1,2$ on the trajectory
+  $(r_0, r_1, r_2) = (1, 0, 5)$ with $\hat{V}(S_0) = 3$,
+  $\hat{V}(S_1) = 2$, $\hat{V}(S_2) = 6$, $\hat{V}(S_3) = 0$ (terminal),
+  $\discount = 0.99$, $\lambda = 0.9$.
+\end{exercise}
+
+\begin{exercise}[Bias-Variance Comparison]
+\textnormal{(\(**\))} \\
+  Consider a two-state MDP where $S_{t+1} \sim
+  \mathrm{Bernoulli}(0.5)$ independently, with $r(s, a) = s$ (the
+  reward equals the state, treating $s \in \{0, 1\}$) and
+  $\discount = 0.9$. Suppose $\hat{V}(0) = \hat{V}(1) = 0.5$ and
+  $\Vpi(0) = \Vpi(1) = 5.0$.
+  \begin{enumerate}[label=(\alph*)]
+    \item Compute $\E[\hat{A}_0^{(1)}]$ and $\Var(\hat{A}_0^{(1)})$
+      exactly.
+    \item Compute $\E[\hat{A}_0^{(2)}]$ and show that the bias decreases
+      with $n$.
+    \item For $\lambda = 0.5$, compute $\E[\hat{A}_0^{\mathrm{GAE}}]$
+      and compare with parts (a) and (b).
+  \end{enumerate}
+\end{exercise}
+
+\begin{exercise}[$\lambda$-Return Equivalence]
+\textnormal{(\(**\))} \\
+  The \emph{$\lambda$-return} from TD($\lambda$) is defined as
+  $G_t^\lambda = (1-\lambda) \sum_{n=1}^{\infty} \lambda^{n-1}\,
+  G_t^{(n)}$ where $G_t^{(n)} = \sum_{k=0}^{n-1} \discount^k\,
+  r_{t+k} + \discount^n\, \hat{V}(S_{t+n})$. Show that
+  \[
+    \hat{A}_t^{\mathrm{GAE}(\discount,\lambda)} = G_t^\lambda - \hat{V}(S_t),
+  \]
+  establishing that GAE is equivalent to using the $\lambda$-return as
+  the target for the advantage, with $\hat{V}(S_t)$ as the baseline.
+\end{exercise}
+
+\begin{exercise}[Optimal $\lambda$ Selection]
+\textnormal{(\(***\))} \\
+  Consider the idealized setting where $\hat{V}(s) = \Vpi(s) +
+  \epsilon$ with $\epsilon$ a constant (uniform bias). Show that in
+  this case, the bias of $\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)}$
+  is $\epsilon(\discount\lambda - 1)/(1 - \discount\lambda)$ for
+  $\lambda < 1$ and zero for $\lambda = 1$. Then derive the
+  mean-squared error $\mathrm{MSE} = \mathrm{bias}^2 + \mathrm{variance}$
+  as a function of $\lambda$ (using the variance bound from
+  Theorem~\ref{thm:gae-variance}) and find the $\lambda^*$ that
+  minimizes it as a function of $\epsilon$ and $\sigma_\delta$.
+
+  \textit{Hint:} The MSE-optimal $\lambda$ balances
+  $\partial(\mathrm{bias}^2)/\partial\lambda$ against
+  $\partial(\mathrm{variance})/\partial\lambda$.
+\end{exercise}
+
+%% ========================================================================
+%% SECTION 12: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item The \textbf{actor-critic architecture} separates policy
+    optimization (actor) from value function estimation (critic),
+    allowing the critic to provide low-variance advantage estimates
+    through bootstrapping.
+
+  \item The \textbf{TD error} $\delta_t = r_t + \discount \hat{V}(S_{t+1})
+    - \hat{V}(S_t)$ is an unbiased estimate of the advantage
+    $A^\policy(S_t, A_t)$ when $\hat{V} = \Vpi$, but introduces bias
+    when $\hat{V} \neq \Vpi$.
+
+  \item The \textbf{$n$-step advantage estimator} $\hat{A}_t^{(n)} =
+    \sum_{k=0}^{n-1} \discount^k \delta_{t+k}$ interpolates between
+    the TD error ($n=1$) and the Monte Carlo advantage ($n=\infty$),
+    with increasing $n$ reducing bias but increasing variance.
+
+  \item \textbf{Generalized Advantage Estimation} defines
+    $\hat{A}_t^{\mathrm{GAE}(\discount,\lambda)} = \sum_{k=0}^\infty
+    (\discount\lambda)^k \delta_{t+k}$, providing a smooth
+    bias-variance tradeoff via $\lambda \in [0,1]$.
+
+  \item At $\lambda = 0$, GAE reduces to the one-step \textbf{TD
+    advantage} (low variance, high bias). At $\lambda = 1$, it becomes
+    the \textbf{Monte Carlo advantage} (zero bias, high variance).
+    Typical implementations use $\lambda = 0.95$.
+
+  \item GAE is equivalent to using the \textbf{$\lambda$-return}
+    $G_t^\lambda$ as the advantage target with the value function as
+    baseline, connecting policy gradient methods to the
+    $\operatorname{TD}(\lambda)$ framework.
+
+  \item \textbf{Two-timescale convergence}: When the critic learns
+    faster than the actor ($\alpha_k / \beta_k \to 0$), the coupled
+    system converges to a stationary point of $J(\theta)$.
+
+  \item GAE can be combined with \textbf{any policy gradient method}
+    (vanilla, natural, trust-region) by replacing the advantage
+    estimate in the gradient expression.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 13: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 58} synthesizes policy gradient theory from
+    Lessons 54--57, connecting to trust-region methods of Phase 04.
+
+  \item \citet{schulman2015} provides experiments showing the effect of
+    $\lambda$ on learning speed across continuous control benchmarks.
+
+  \item \citet{konda2003} gives the definitive two-timescale convergence
+    proof for actor-critic methods.
+
+  \item \citet{mnih2016} demonstrates $n$-step actor-critic in A3C
+    with asynchronous parallel workers.
+
+  \item \citet{schulman2017} uses GAE within PPO, showing $\lambda =
+    0.95$--$0.99$ works well across continuous control tasks.
+
+  \item \citet[Chapter 12]{suttonbarto2018} develops
+    $\operatorname{TD}(\lambda)$, from which GAE draws inspiration.
+\end{itemize}
+
+\bibliography{pg-refs}
+
+\end{document}

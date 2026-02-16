@@ -1,0 +1,1076 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 46: LP Formulation and Occupancy Measures}}
+\fancyhead[R]{\thepage}
+\title{Lesson 46: LP Formulation and Occupancy Measures}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lessons~42 and~45 developed two iterative algorithms for solving
+discounted MDPs: value iteration and policy iteration. Both are
+efficient and widely used, but they share a common limitation --
+they cannot easily accommodate \emph{constraints}. Consider a
+robot navigation MDP where the agent must reach a goal while
+keeping the expected number of visits to dangerous states below a
+threshold, or an energy management system that must minimize cost
+subject to an average emission constraint. These constrained
+optimization problems cannot be directly formulated as standard
+Bellman equations.
+
+Linear programming provides an alternative, fundamentally different
+approach to MDPs. Rather than iterating on value functions or
+policies, we cast the MDP as a linear program whose optimal solution
+\emph{is} the optimal value function. The dual of this LP introduces
+\emph{occupancy measures} -- probability distributions over
+state-action pairs that encode how often each pair is visited under
+a policy. The one-to-one correspondence between stationary policies
+and occupancy measures transforms policy optimization into
+optimization over a convex polytope, enabling the incorporation of
+linear constraints naturally. This lesson develops the LP formulation,
+the duality theory, and the occupancy measure framework, culminating
+in the connection to constrained MDPs and inverse RL.
+
+\begin{rlconnection}[title={Why the LP Formulation Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Constrained MDPs}: Adding linear constraints on
+    occupancy measures directly handles safety constraints, resource
+    budgets, and fairness requirements -- a key capability for
+    real-world RL deployment.
+    \item \textbf{Inverse RL}: The occupancy measure framework
+    underpins inverse reinforcement learning, where the goal is to
+    recover a reward function from observed expert behavior by
+    matching occupancy measures.
+    \item \textbf{Apprenticeship learning}: \citet{altman1999} and
+    subsequent work on apprenticeship learning formulate imitation
+    as matching the feature expectations (linear functions of
+    occupancy measures) between the learner and the expert.
+    \item \textbf{Convex optimization perspective}: The LP
+    formulation reveals that MDP solving is a convex optimization
+    problem, connecting RL theory to the rich toolkit of convex
+    analysis (Lesson~17) and duality (Lesson~18).
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+MDP model, policies, value functions (Lesson~39). Bellman optimality
+equations, the Bellman optimality operator $\Bellman^*$ (Lesson~41).
+Value iteration (Lesson~42) and policy iteration (Lesson~45).
+Linear programming basics: primal/dual LPs, strong duality, basic
+feasible solutions, vertices of polytopes (Lesson~18 or equivalent
+background in convex optimization).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Derive} the primal LP formulation of a discounted
+    MDP and \emph{prove} that its optimal solution equals $\Vstar$.
+    \item \emph{Define} occupancy measures and \emph{prove} the
+    flow conservation constraints they satisfy.
+    \item \emph{Establish} the one-to-one correspondence between
+    stationary policies and occupancy measures.
+    \item \emph{Prove} LP strong duality for the MDP primal-dual pair.
+    \item \emph{Formulate} constrained MDPs as linear programs with
+    additional constraints on occupancy measures.
+    \item \emph{Explain} how occupancy measures connect to inverse
+    RL and apprenticeship learning.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 6, Sections 6.9--6.10]{puterman2014} --
+    Definitive treatment of the LP formulation of discounted MDPs,
+    occupancy measures, and duality.
+    \item \citet{manne1960} -- Original paper formulating MDPs as
+    linear programs, establishing the connection between value
+    functions and LP solutions.
+    \item \citet{altman1999} -- Comprehensive treatment of
+    constrained MDPs, including the LP approach and Lagrangian
+    relaxation methods.
+    \item \citet[Chapter 1]{bertsekas2012} -- LP formulation in
+    the context of dynamic programming and optimal control.
+    \item \citet{derman1970} -- Early treatment of the LP approach
+    to MDPs with applications to operations research.
+    \item \citet[Chapter 6]{suttonbarto2018} -- Discussion of the
+    relationship between value functions, policies, and optimization.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE PRIMAL LP
+%% ============================================================
+
+\section{The Primal Linear Program}
+\label{sec:primal-lp}
+
+We work with a finite MDP
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ with
+$|\States| = S$, $|\Actions| = A$, and $\discount \in [0,1)$.
+The key insight is that the Bellman optimality equation
+$v(s) = \max_a [R(s,a) + \discount \sum_{s'} P(s'|s,a) v(s')]$
+can be relaxed into a system of linear inequalities.
+
+\begin{definition}[Bellman Feasibility]
+\label{def:bellman-feasible}
+A vector $v \in \R^S$ is \emph{Bellman superharmonic} (or
+\emph{Bellman feasible}) if
+\begin{equation}
+\label{eq:bellman-ineq}
+    v(s) \geq R(s,a) + \discount \sum_{s' \in \States}
+    P(s' \mid s,a)\, v(s') \quad
+    \text{for all } s \in \States, \; a \in \Actions.
+\end{equation}
+\end{definition}
+
+\begin{lemma}[$\Vstar$ Is the Smallest Bellman Superharmonic Vector]
+\label{lem:vstar-smallest}
+The optimal value function $\Vstar$ satisfies the Bellman
+feasibility constraints \eqref{eq:bellman-ineq}. Moreover, if
+$v \in \R^S$ satisfies \eqref{eq:bellman-ineq}, then
+$v(s) \geq \Vstar(s)$ for all $s$.
+\end{lemma}
+
+\begin{proof}
+$\Vstar$ satisfies \eqref{eq:bellman-ineq} with equality at the
+maximizing action: $\Vstar(s) = \max_a [R(s,a) + \discount \sum_{s'}
+P(s'|s,a) \Vstar(s')] \geq R(s,a) + \discount \sum_{s'} P(s'|s,a)
+\Vstar(s')$ for all $a$.
+
+Now suppose $v$ satisfies \eqref{eq:bellman-ineq}. Then for all $s$:
+\[
+    v(s) \geq \max_{a \in \Actions} \left[ R(s,a) + \discount
+    \sum_{s'} P(s'|s,a)\, v(s') \right] = (\Bellman^* v)(s).
+\]
+So $v \geq \Bellman^* v$. By the monotonicity of $\Bellman^*$
+(Lesson~42, Proposition~8.1):
+$\Bellman^* v \geq (\Bellman^*)^2 v \geq \cdots$. Wait -- this
+goes the wrong direction. Let us argue more carefully.
+
+From $v \geq \Bellman^* v$, by monotonicity of $\Bellman^*$:
+$\Bellman^* v \geq (\Bellman^*)^2 v$. So
+$v \geq \Bellman^* v \geq (\Bellman^*)^2 v \geq \cdots$
+The sequence $\{(\Bellman^*)^n v\}$ is non-increasing. Since
+$(\Bellman^*)^n v \to \Vstar$ by the Banach fixed-point theorem
+(Lesson~42, Theorem~4.1), we get $v \geq \Vstar$.
+\end{proof}
+
+Lemma~\ref{lem:vstar-smallest} shows that $\Vstar$ minimizes any
+objective that sums $v(s)$ with positive weights over the Bellman
+feasible set. This motivates the primal LP.
+
+\begin{definition}[Primal LP for Discounted MDPs]
+\label{def:primal-lp}
+Let $\alpha \in \R^S$ be any vector with $\alpha(s) > 0$ for all
+$s$ and $\sum_s \alpha(s) = 1$ (an initial state distribution).
+The \emph{primal LP} is:
+\begin{equation}
+\label{eq:primal-lp}
+\begin{aligned}
+    \text{minimize} \quad & c^\top v = \sum_{s \in \States}
+    \alpha(s)\, v(s) \\
+    \text{subject to} \quad & v(s) \geq R(s,a) + \discount
+    \sum_{s'} P(s' \mid s,a)\, v(s'), \quad
+    \forall\, s \in \States,\; a \in \Actions, \\
+    & v \in \R^S.
+\end{aligned}
+\end{equation}
+This LP has $S$ decision variables and $SA$ inequality constraints.
+\end{definition}
+
+\begin{theorem}[Primal LP Solves the MDP]
+\label{thm:primal-optimal}
+The optimal value of the primal LP \eqref{eq:primal-lp} equals
+$\sum_s \alpha(s) \Vstar(s)$, and the unique optimal solution is
+$v^* = \Vstar$.
+\end{theorem}
+
+\begin{proof}
+By Lemma~\ref{lem:vstar-smallest}, $\Vstar$ is feasible and
+$v \geq \Vstar$ for every feasible $v$. Since $\alpha(s) > 0$
+for all $s$:
+\[
+    \sum_s \alpha(s) v(s) \geq \sum_s \alpha(s) \Vstar(s)
+\]
+for every feasible $v$, with equality if and only if $v = \Vstar$
+(since $\alpha(s) > 0$ and $v(s) \geq \Vstar(s)$ imply that
+equality of the sums requires $v(s) = \Vstar(s)$ for all $s$).
+Therefore $\Vstar$ is the unique minimizer.
+\end{proof}
+
+\begin{keyresult}[title={MDP as a Linear Program}]
+\label{kr:mdp-lp}
+Finding the optimal value function $\Vstar$ of a discounted MDP
+is equivalent to solving the linear program \eqref{eq:primal-lp}.
+The LP has $S$ variables and $SA$ constraints. Once $\Vstar$ is
+obtained, the optimal policy is recovered by identifying which
+constraints are active (tight) at each state: $\optpolicy(s) =
+\argmax_a [R(s,a) + \discount \sum_{s'} P(s'|s,a) \Vstar(s')]$.
+\end{keyresult}
+
+\begin{remark}
+\label{rem:alpha-choice}
+The choice of $\alpha$ does not affect the optimal \emph{solution}
+$v^* = \Vstar$ (which is unique by Lemma~\ref{lem:vstar-smallest}),
+only the optimal \emph{value} $\alpha^\top \Vstar$. Any strictly
+positive $\alpha$ works. The uniform distribution
+$\alpha(s) = 1/S$ is a common default.
+\end{remark}
+
+\begin{example}[Primal LP for a Two-State MDP]
+\label{ex:primal-two-state}
+Consider the two-state MDP with $\States = \{1, 2\}$,
+$\Actions = \{a_1, a_2\}$, $\discount = 0.5$:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1 \mid s,a)$ & $P(2 \mid s,a)$ \\
+\midrule
+1 & $a_1$ & 5 & 0.5 & 0.5 \\
+1 & $a_2$ & 10 & 0 & 1 \\
+2 & $a_1$ & $-1$ & 0.8 & 0.2 \\
+2 & $a_2$ & 2 & 0.3 & 0.7 \\
+\bottomrule
+\end{tabular}
+\end{center}
+With $\alpha = (0.5, 0.5)^\top$, the primal LP is:
+\begin{align*}
+    \min \quad & 0.5\, v_1 + 0.5\, v_2 \\
+    \text{s.t.} \quad
+    & v_1 \geq 5 + 0.5(0.5\, v_1 + 0.5\, v_2) \\
+    & v_1 \geq 10 + 0.5(0 \cdot v_1 + 1 \cdot v_2) \\
+    & v_2 \geq -1 + 0.5(0.8\, v_1 + 0.2\, v_2) \\
+    & v_2 \geq 2 + 0.5(0.3\, v_1 + 0.7\, v_2)
+\end{align*}
+Simplifying:
+\begin{align*}
+    0.75\, v_1 - 0.25\, v_2 &\geq 5, \\
+    v_1 - 0.5\, v_2 &\geq 10, \\
+    -0.4\, v_1 + 0.9\, v_2 &\geq -1, \\
+    -0.15\, v_1 + 0.65\, v_2 &\geq 2.
+\end{align*}
+From Lessons~41--42, $\Vstar \approx (13.04, 6.09)^\top$, achieved by
+$\optpolicy(1) = a_2$, $\optpolicy(2) = a_2$. One can verify that
+$\Vstar$ satisfies all four constraints, with the second and fourth
+constraints tight (corresponding to the optimal actions).
+\end{example}
+
+\begin{warning}[title={LP Size and Practical Considerations}]
+The primal LP has $S$ variables and $SA$ constraints. For modern LP
+solvers, problems with up to $10^5$--$10^6$ variables and constraints
+are tractable. However, for very large MDPs ($S > 10^6$), specialized
+algorithms (value iteration, policy iteration) are more practical.
+The LP formulation is most valuable for its theoretical insights
+(duality, occupancy measures, constrained MDPs) rather than as a
+computational workhorse.
+\end{warning}
+
+%% ============================================================
+%% SECTION 4: THE DUAL LP AND OCCUPANCY MEASURES
+%% ============================================================
+
+\section{The Dual LP and Occupancy Measures}
+\label{sec:dual-lp}
+
+We now derive the dual of the primal LP \eqref{eq:primal-lp} and
+show that it has a beautiful probabilistic interpretation in terms
+of occupancy measures.
+
+\begin{theorem}[Dual LP for Discounted MDPs]
+\label{thm:dual-lp}
+The dual of the primal LP \eqref{eq:primal-lp} is:
+\begin{equation}
+\label{eq:dual-lp}
+\begin{aligned}
+    \text{maximize} \quad & \sum_{s,a} R(s,a)\, x(s,a) \\
+    \text{subject to} \quad & \sum_{a \in \Actions} x(s,a)
+    = \alpha(s) + \discount \sum_{s',a'} P(s \mid s',a')\,
+    x(s',a'), \quad \forall\, s \in \States, \\
+    & x(s,a) \geq 0, \quad \forall\, s \in \States,\;
+    a \in \Actions.
+\end{aligned}
+\end{equation}
+This LP has $SA$ decision variables $x(s,a)$ and $S$ equality
+constraints (plus $SA$ non-negativity constraints).
+\end{theorem}
+
+\begin{proof}
+Rewrite the primal constraints as: for all $(s,a)$,
+\[
+    v(s) - \discount \sum_{s'} P(s'|s,a) v(s') \geq R(s,a).
+\]
+In matrix form with $v \in \R^S$: $(I - \discount P_a^\top) v \geq
+r_a$ for each action $a$, where $P_a$ is the $S \times S$ matrix
+with entries $P_a(s,s') = P(s'|s,a) \indicator[a]$.
+More precisely, we associate a dual variable $x(s,a) \geq 0$
+with each constraint. The Lagrangian is:
+\begin{align*}
+    L(v, x) &= \sum_s \alpha(s) v(s) - \sum_{s,a} x(s,a)
+    \left[ v(s) - R(s,a) - \discount \sum_{s'} P(s'|s,a) v(s')
+    \right] \\
+    &= \sum_s v(s) \left[ \alpha(s) - \sum_a x(s,a)
+    + \discount \sum_{s',a'} P(s|s',a') x(s',a') \right]
+    + \sum_{s,a} R(s,a) x(s,a).
+\end{align*}
+For the dual to be bounded ($\inf_v L(v,x) > -\infty$), the
+coefficient of each $v(s)$ must be zero:
+\[
+    \sum_a x(s,a) = \alpha(s) + \discount \sum_{s',a'}
+    P(s|s',a') x(s',a'), \quad \forall\, s.
+\]
+Under this constraint, $L(v,x) = \sum_{s,a} R(s,a) x(s,a)$, which
+we maximize. This gives the dual LP \eqref{eq:dual-lp}.
+\end{proof}
+
+\begin{definition}[Occupancy Measure]
+\label{def:occupancy}
+For a stationary policy $\policy$ and initial distribution $\alpha$,
+the \emph{(discounted) occupancy measure} is
+\begin{equation}
+\label{eq:occupancy-def}
+    x^\policy(s,a) = (1 - \discount) \sum_{t=0}^\infty \discount^t
+    \Prob^\policy_\alpha(S_t = s, A_t = a),
+\end{equation}
+where $\Prob^\policy_\alpha$ denotes the probability under policy
+$\policy$ with initial distribution $S_0 \sim \alpha$.
+\end{definition}
+
+\begin{remark}
+\label{rem:normalization}
+The normalization factor $(1-\discount)$ ensures that $x^\policy$
+is a probability distribution: $\sum_{s,a} x^\policy(s,a) = 1$.
+Some references omit the $(1-\discount)$ factor, in which case
+$\sum_{s,a} x^\policy(s,a) = 1/(1-\discount)$. We adopt the
+normalized convention.
+\end{remark}
+
+Without the normalization factor, define
+$\tilde{x}^\policy(s,a) = \sum_{t=0}^\infty \discount^t
+\Prob^\policy_\alpha(S_t = s, A_t = a)$, so that
+$x^\policy = (1-\discount) \tilde{x}^\policy$. We will show that
+$\tilde{x}^\policy$ is a feasible solution of the dual LP
+\eqref{eq:dual-lp} (after appropriate rescaling).
+
+\begin{proposition}[Occupancy Measures as Dual Feasible Points]
+\label{prop:occupancy-feasible}
+For any stationary policy $\policy$, the unnormalized occupancy
+measure $\tilde{x}^\policy(s,a) = \sum_{t=0}^\infty \discount^t
+\Prob^\policy_\alpha(S_t = s, A_t = a)$ satisfies the dual
+constraints \eqref{eq:dual-lp}.
+\end{proposition}
+
+\begin{proof}
+Clearly $\tilde{x}^\policy(s,a) \geq 0$. For the flow constraint,
+define the state occupancy $\tilde{\mu}^\policy(s) = \sum_a
+\tilde{x}^\policy(s,a) = \sum_{t=0}^\infty \discount^t
+\Prob^\policy_\alpha(S_t = s)$. We need to show:
+\[
+    \tilde{\mu}^\policy(s) = \alpha(s) + \discount
+    \sum_{s',a'} P(s|s',a') \tilde{x}^\policy(s',a').
+\]
+The left side is:
+\begin{align*}
+    \tilde{\mu}^\policy(s) &= \Prob_\alpha(S_0 = s) +
+    \sum_{t=1}^\infty \discount^t \Prob^\policy_\alpha(S_t = s) \\
+    &= \alpha(s) + \discount \sum_{t=0}^\infty \discount^t
+    \sum_{s',a'} P(s|s',a') \Prob^\policy_\alpha(S_t = s',
+    A_t = a') \\
+    &= \alpha(s) + \discount \sum_{s',a'} P(s|s',a')
+    \tilde{x}^\policy(s',a'),
+\end{align*}
+where the second equality uses the Markov property:
+$\Prob^\policy_\alpha(S_{t+1} = s) = \sum_{s',a'} P(s|s',a')
+\Prob^\policy_\alpha(S_t = s', A_t = a')$.
+\end{proof}
+
+\begin{proposition}[Dual Objective Equals Policy Value]
+\label{prop:dual-value}
+The dual objective evaluated at $\tilde{x}^\policy$ equals the
+expected discounted return under $\policy$:
+\[
+    \sum_{s,a} R(s,a) \tilde{x}^\policy(s,a)
+    = \sum_s \alpha(s) \Vpi(s).
+\]
+\end{proposition}
+
+\begin{proof}
+\begin{align*}
+    \sum_{s,a} R(s,a) \tilde{x}^\policy(s,a)
+    &= \sum_{s,a} R(s,a) \sum_{t=0}^\infty \discount^t
+    \Prob^\policy_\alpha(S_t = s, A_t = a) \\
+    &= \sum_{t=0}^\infty \discount^t \sum_{s,a} R(s,a)
+    \Prob^\policy_\alpha(S_t = s, A_t = a) \\
+    &= \sum_{t=0}^\infty \discount^t
+    \E^\policy_\alpha[R(S_t, A_t)] \\
+    &= \E^\policy_\alpha\!\left[\sum_{t=0}^\infty
+    \discount^t R(S_t, A_t)\right]
+    = \sum_s \alpha(s) \Vpi(s). \qedhere
+\end{align*}
+\end{proof}
+
+%% ============================================================
+%% SECTION 5: PROPERTIES OF OCCUPANCY MEASURES
+%% ============================================================
+
+\section{Properties of Occupancy Measures}
+\label{sec:occupancy-properties}
+
+\begin{theorem}[Characterization of the Occupancy Polytope]
+\label{thm:occupancy-polytope}
+Define the \emph{occupancy polytope}
+\begin{equation}
+\label{eq:occupancy-set}
+    \mathcal{X}_\alpha = \left\{ x \in \R^{SA}_{\geq 0} :
+    \sum_a x(s,a) = \alpha(s) + \discount \sum_{s',a'}
+    P(s|s',a') x(s',a'), \;\; \forall\, s \in \States \right\}.
+\end{equation}
+Then:
+\begin{enumerate}
+    \item $\mathcal{X}_\alpha$ is a non-empty bounded convex
+    polytope.
+    \item $\sum_{s,a} x(s,a) = 1/(1-\discount)$ for every
+    $x \in \mathcal{X}_\alpha$.
+    \item The map $\policy \mapsto \tilde{x}^\policy$ is a
+    bijection between stationary policies and $\mathcal{X}_\alpha$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{Part 1.} Non-emptiness: $\tilde{x}^\policy \in
+\mathcal{X}_\alpha$ for any stationary policy $\policy$
+(Proposition~\ref{prop:occupancy-feasible}). Convexity:
+$\mathcal{X}_\alpha$ is defined by linear equalities and
+non-negativity constraints, hence it is a polyhedron. Boundedness:
+summing the flow constraints over $s$:
+\[
+    \sum_{s,a} x(s,a) = 1 + \discount \sum_{s,a} x(s,a),
+\]
+so $\sum_{s,a} x(s,a) = 1/(1-\discount)$. This proves Part 2 and
+also implies boundedness (each $x(s,a) \leq 1/(1-\discount)$).
+
+\textbf{Part 3 (surjectivity).} Given $x \in \mathcal{X}_\alpha$,
+define $\mu(s) = \sum_a x(s,a)$ and the policy
+\begin{equation}
+\label{eq:policy-from-occupancy}
+    \policy_x(a|s) = \begin{cases}
+    x(s,a) / \mu(s) & \text{if } \mu(s) > 0, \\
+    1/|\Actions| & \text{if } \mu(s) = 0.
+    \end{cases}
+\end{equation}
+We need to show that $\tilde{x}^{\policy_x} = x$. Let
+$y = \tilde{x}^{\policy_x}$. Define $\nu(s) = \sum_a y(s,a)$.
+Then $y(s,a) = \policy_x(a|s) \nu(s)$ and
+$\nu(s) = \alpha(s) + \discount \sum_{s'} P(s|s', \policy_x(s'))
+\nu(s')$. Similarly, $x(s,a) = \policy_x(a|s) \mu(s)$ by
+construction and $\mu(s) = \alpha(s) + \discount \sum_{s',a'}
+P(s|s',a') x(s',a') = \alpha(s) + \discount \sum_{s'}
+P(s|s', \policy_x(s')) \mu(s')$. So both $\mu$ and $\nu$ satisfy
+the same linear system
+$\mu = \alpha + \discount (P^{\policy_x})^\top \mu$, i.e.,
+$(I - \discount (P^{\policy_x})^\top) \mu = \alpha$. Since
+$\discount < 1$, this system has a unique solution
+(Lesson~45, Theorem~\ref{thm:policy-eval-matrix} applies to the
+transpose), so $\mu = \nu$ and hence $x = y$.
+
+\textbf{Part 3 (injectivity).} If $\tilde{x}^{\policy_1} =
+\tilde{x}^{\policy_2}$, then by \eqref{eq:policy-from-occupancy},
+$\policy_1(a|s) = \tilde{x}^{\policy_1}(s,a) / \mu(s) =
+\tilde{x}^{\policy_2}(s,a) / \mu(s) = \policy_2(a|s)$ for all
+$s$ with $\mu(s) > 0$. For states with $\mu(s) = 0$ (never
+visited), the policies may differ, but they yield the same
+occupancy measure.
+\end{proof}
+
+\begin{keyresult}[title={Policy-Occupancy Correspondence}]
+\label{kr:correspondence}
+There is a one-to-one correspondence between stationary policies
+and points in the occupancy polytope $\mathcal{X}_\alpha$:
+\[
+    \policy \;\longleftrightarrow\; \tilde{x}^\policy, \qquad
+    \policy_x(a|s) = \frac{x(s,a)}{\sum_{a'} x(s,a')}.
+\]
+Deterministic policies correspond to vertices of
+$\mathcal{X}_\alpha$, and the optimal policy corresponds to the
+vertex that maximizes the linear objective
+$\sum_{s,a} R(s,a) x(s,a)$.
+\end{keyresult}
+
+\begin{proposition}[Deterministic Policies Are Vertices]
+\label{prop:vertices}
+The vertices (extreme points) of $\mathcal{X}_\alpha$ are
+precisely the occupancy measures of deterministic stationary policies.
+\end{proposition}
+
+\begin{proof}
+$\mathcal{X}_\alpha$ is a polytope in $\R^{SA}$ defined by $S$
+equality constraints and $SA$ non-negativity constraints. A vertex
+(basic feasible solution) has exactly $SA - S = S(A-1)$ active
+non-negativity constraints, meaning that for each state $s$,
+exactly $A - 1$ of the variables $\{x(s,a)\}_{a \in \Actions}$
+are zero. Hence exactly one action per state has $x(s,a) > 0$,
+which corresponds to a deterministic policy.
+
+Conversely, for a deterministic policy $d$, the occupancy measure
+$\tilde{x}^d(s,a) = 0$ for $a \neq d(s)$, giving exactly
+$S(A-1)$ active non-negativity constraints. The remaining $S$
+variables $\{\tilde{x}^d(s, d(s))\}_{s \in \States}$ are
+uniquely determined by the $S$ flow constraints (since the linear
+system is non-singular). Thus $\tilde{x}^d$ is a basic feasible
+solution, hence a vertex.
+\end{proof}
+
+\begin{example}[Occupancy Measures for the Two-State MDP]
+\label{ex:occupancy-two-state}
+Consider the two-state MDP from Example~\ref{ex:primal-two-state}
+with $\discount = 0.5$ and $\alpha = (0.5, 0.5)^\top$.
+
+For the optimal policy $d^*(1) = a_2$, $d^*(2) = a_2$, the
+transition matrix is $P^{d^*} = \bigl(\begin{smallmatrix}
+0 & 1 \\ 0.3 & 0.7 \end{smallmatrix}\bigr)$. The unnormalized
+state occupancy satisfies $(I - 0.5 (P^{d^*})^\top) \mu = \alpha$:
+\[
+    \begin{pmatrix} 1 & -0.15 \\ -0.5 & 0.65 \end{pmatrix}
+    \mu = \begin{pmatrix} 0.5 \\ 0.5 \end{pmatrix}.
+\]
+Determinant $= 0.65 - 0.075 = 0.575$.
+$\mu_1 = (0.5 \cdot 0.65 + 0.15 \cdot 0.5)/0.575
+= 0.4/0.575 \approx 0.696$,
+$\mu_2 = (1 \cdot 0.5 + 0.5 \cdot 0.5)/0.575
+= 0.75/0.575 \approx 1.304$.
+Check: $\mu_1 + \mu_2 = 2 = 1/(1-0.5)$. Correct.
+
+The occupancy measure is $\tilde{x}^{d^*}(1, a_2) = 0.696$,
+$\tilde{x}^{d^*}(2, a_2) = 1.304$, and
+$\tilde{x}^{d^*}(s, a_1) = 0$ for both states (deterministic
+policy).
+
+The dual objective is $10 \cdot 0.696 + 2 \cdot 1.304 = 9.57$,
+which should equal $\alpha^\top \Vstar = 0.5 \cdot 13.04 +
+0.5 \cdot 6.09 = 9.57$. Confirmed.
+
+The normalized occupancy is $x^{d^*} = (1-0.5) \tilde{x}^{d^*}$:
+$x^{d^*}(1, a_2) = 0.348$, $x^{d^*}(2, a_2) = 0.652$. This is a
+probability distribution summing to 1, representing the long-run
+discounted frequency of visiting each state-action pair.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: LP STRONG DUALITY
+%% ============================================================
+
+\section{LP Strong Duality}
+\label{sec:strong-duality}
+
+\begin{theorem}[Strong Duality for the MDP LP]
+\label{thm:strong-duality}
+The primal LP \eqref{eq:primal-lp} and dual LP \eqref{eq:dual-lp}
+satisfy strong duality:
+\begin{equation}
+\label{eq:strong-duality}
+    \min_{v \text{ feasible}} \sum_s \alpha(s) v(s)
+    = \max_{x \in \mathcal{X}_\alpha} \sum_{s,a} R(s,a) x(s,a)
+    = \sum_s \alpha(s) \Vstar(s).
+\end{equation}
+The unique primal optimum is $v^* = \Vstar$. The dual optimum is
+$x^* = \tilde{x}^{\optpolicy}$, the unnormalized occupancy measure
+of any optimal policy $\optpolicy$.
+\end{theorem}
+
+\begin{proof}
+Both the primal and dual are feasible: the primal is feasible at
+$\Vstar$ and the dual is feasible at $\tilde{x}^\policy$ for any
+$\policy$. Both are bounded: the primal is bounded below (by the
+dual objective at any feasible $x$) and the dual is bounded above
+(by the primal objective at $\Vstar$). By the LP strong duality
+theorem (which applies to any LP pair where both are feasible and
+bounded), the optimal values are equal.
+
+By Theorem~\ref{thm:primal-optimal}, the primal optimum is
+$\Vstar$. By Proposition~\ref{prop:dual-value}, the dual objective
+at $\tilde{x}^{\optpolicy}$ equals $\sum_s \alpha(s) \Vstar(s)$,
+which is the primal optimal value. Hence
+$\tilde{x}^{\optpolicy}$ is dual optimal.
+\end{proof}
+
+\begin{remark}
+\label{rem:complementary-slackness}
+Complementary slackness gives additional insight. At the optimal
+pair $(\Vstar, \tilde{x}^{\optpolicy})$:
+\begin{itemize}[nosep]
+    \item For each $(s,a)$: either $\tilde{x}^{\optpolicy}(s,a) = 0$
+    or the constraint $\Vstar(s) = R(s,a) + \discount \sum_{s'}
+    P(s'|s,a) \Vstar(s')$ is tight.
+    \item This means the optimal policy only assigns positive
+    probability to actions that are optimal (achieve the maximum in
+    the Bellman equation) -- consistent with the greedy policy
+    characterization.
+\end{itemize}
+\end{remark}
+
+\begin{rlconnection}[title={LP Duality and Reward Shaping}]
+The LP duality framework provides a principled way to understand
+reward shaping. A potential-based shaping function
+$\Phi : \States \to \R$ modifies the reward to
+$\tilde{R}(s,a,s') = R(s,a) + \discount \Phi(s') - \Phi(s)$. In
+the LP framework, this corresponds to translating the primal
+variable $v \mapsto v - \Phi$, which shifts the constraints but
+does not change the optimal policy. The occupancy measures (dual
+variables) remain unchanged -- confirming that potential-based
+shaping preserves the optimal policy, a result known as Ng's
+reward shaping theorem.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: CONSTRAINED MDPs
+%% ============================================================
+
+\section{Constrained MDPs}
+\label{sec:cmdp}
+
+The LP formulation naturally accommodates constraints on the agent's
+behavior, leading to constrained MDPs (CMDPs).
+
+\begin{definition}[Constrained MDP]
+\label{def:cmdp}
+A \emph{constrained MDP} (CMDP) extends a standard MDP with $K$
+auxiliary cost functions $C_k : \States \times \Actions \to \R$
+($k = 1, \ldots, K$) and corresponding bounds $b_k$. The goal is:
+\begin{equation}
+\label{eq:cmdp}
+    \max_\policy \sum_s \alpha(s) \Vpi(s) \quad
+    \text{subject to} \quad
+    \sum_s \alpha(s) V^\policy_{C_k}(s) \leq b_k, \quad
+    k = 1, \ldots, K,
+\end{equation}
+where $V^\policy_{C_k}(s) = \E^\policy[\sum_{t=0}^\infty
+\discount^t C_k(S_t, A_t) \mid S_0 = s]$ is the expected
+discounted cost under cost function $C_k$.
+\end{definition}
+
+The key observation is that $\sum_s \alpha(s) V^\policy_{C_k}(s) =
+\sum_{s,a} C_k(s,a) \tilde{x}^\policy(s,a)$ by the same argument
+as Proposition~\ref{prop:dual-value}. Therefore, the CMDP can be
+written entirely in terms of occupancy measures.
+
+\begin{theorem}[LP Formulation of CMDPs]
+\label{thm:cmdp-lp}
+The constrained MDP \eqref{eq:cmdp} is equivalent to the linear
+program:
+\begin{equation}
+\label{eq:cmdp-lp}
+\begin{aligned}
+    \text{maximize} \quad & \sum_{s,a} R(s,a)\, x(s,a) \\
+    \text{subject to} \quad & \sum_a x(s,a) = \alpha(s) +
+    \discount \sum_{s',a'} P(s|s',a') x(s',a'), \quad
+    \forall\, s, \\
+    & \sum_{s,a} C_k(s,a)\, x(s,a) \leq b_k, \quad
+    k = 1, \ldots, K, \\
+    & x(s,a) \geq 0, \quad \forall\, s, a.
+\end{aligned}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By the policy-occupancy correspondence
+(Theorem~\ref{thm:occupancy-polytope}), optimizing over stationary
+policies is equivalent to optimizing over $\mathcal{X}_\alpha$.
+The objective $\sum_s \alpha(s) \Vpi(s) = \sum_{s,a} R(s,a)
+\tilde{x}^\policy(s,a)$ and the constraints
+$\sum_s \alpha(s) V^\policy_{C_k}(s) = \sum_{s,a} C_k(s,a)
+\tilde{x}^\policy(s,a) \leq b_k$ are all linear in
+$\tilde{x}^\policy$. Replacing $\tilde{x}^\policy$ by the
+free variable $x \in \mathcal{X}_\alpha$ yields \eqref{eq:cmdp-lp}.
+\end{proof}
+
+\begin{keyresult}[title={Constrained MDPs via Linear Programming}]
+\label{kr:cmdp}
+Any finite constrained MDP with $K$ linear cost constraints can be
+solved as a linear program with $SA$ variables and $S + K$ equality/
+inequality constraints (plus non-negativity). The optimal policy may
+be \emph{stochastic} -- it randomizes over at most $K + 1$ actions
+at each state (since the LP optimum can lie on a face of dimension
+at most $K$ above the unconstrained vertex).
+\end{keyresult}
+
+\begin{remark}
+\label{rem:randomization}
+In the unconstrained case ($K = 0$), the LP optimum is a vertex
+of $\mathcal{X}_\alpha$, corresponding to a deterministic policy.
+With $K$ constraints, the optimum may lie in the interior of a
+face, requiring a mixture of at most $K + 1$ deterministic policies.
+This is a fundamental result: constraints can force optimal policies
+to be stochastic.
+\end{remark}
+
+\begin{example}[Constrained Two-State MDP]
+\label{ex:cmdp}
+Consider the two-state MDP from Example~\ref{ex:primal-two-state}
+with an additional safety cost $C(s,a)$ representing the probability
+of triggering an alarm:
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$s$ & $a$ & $C(s,a)$ \\
+\midrule
+1 & $a_1$ & 0.1 \\
+1 & $a_2$ & 0.5 \\
+2 & $a_1$ & 0.2 \\
+2 & $a_2$ & 0.3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+We require the expected discounted alarm cost to be at most $b = 0.6$:
+$\sum_{s,a} C(s,a) \tilde{x}(s,a) \leq 0.6$.
+
+The unconstrained optimum uses $d^*(1) = a_2$, $d^*(2) = a_2$ with
+$\tilde{x}^{d^*}(1, a_2) \approx 0.696$ and
+$\tilde{x}^{d^*}(2, a_2) \approx 1.304$. The alarm cost is
+$0.5 \cdot 0.696 + 0.3 \cdot 1.304 = 0.348 + 0.391 = 0.739 > 0.6$.
+The constraint is violated, so the unconstrained optimal policy is
+infeasible.
+
+The constrained LP adds the constraint
+$0.1\, x(1,a_1) + 0.5\, x(1,a_2) + 0.2\, x(2,a_1) +
+0.3\, x(2,a_2) \leq 0.6$. Solving this modified LP yields a
+stochastic policy that randomizes between $a_1$ and $a_2$ at
+one or both states.
+\end{example}
+
+\begin{rlconnection}[title={Constrained MDPs in Safe RL}]
+The CMDP framework is the theoretical foundation for \emph{safe RL},
+where agents must satisfy safety or resource constraints:
+\begin{itemize}[nosep]
+    \item \textbf{Constrained Policy Optimization (CPO)} solves
+    an approximate CMDP at each iteration using trust-region
+    methods combined with Lagrangian relaxation.
+    \item \textbf{Lagrangian relaxation}: The CMDP can be relaxed
+    by introducing multipliers $\lambda_k \geq 0$ for each
+    constraint, yielding the unconstrained problem
+    $\max_\policy [\sum_s \alpha(s) \Vpi(s) - \sum_k \lambda_k
+    (\sum_s \alpha(s) V^\policy_{C_k}(s) - b_k)]$. Under strong
+    duality (which holds for CMDPs), the saddle-point problem
+    $\max_\policy \min_{\lambda \geq 0}$ yields the CMDP solution.
+    \item \textbf{Primal-dual algorithms}: Practical safe RL
+    algorithms alternate between policy updates and dual variable
+    updates, implementing a stochastic primal-dual method on the
+    CMDP Lagrangian.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: CONNECTION TO INVERSE RL
+%% ============================================================
+
+\section{Connection to Inverse RL and Apprenticeship Learning}
+\label{sec:inverse-rl}
+
+The occupancy measure framework provides a natural bridge to
+\emph{inverse reinforcement learning} (IRL), where the goal is
+to learn a reward function from observed expert behavior.
+
+\begin{definition}[Feature Expectations]
+\label{def:feature-expectations}
+Given a feature map $\phi : \States \times \Actions \to \R^d$, the
+\emph{feature expectation} of a policy $\policy$ is
+\begin{equation}
+\label{eq:feature-expect}
+    \bar{\phi}^\policy = \sum_{s,a} \phi(s,a)\,
+    \tilde{x}^\policy(s,a) = \E^\policy_\alpha\!\left[
+    \sum_{t=0}^\infty \discount^t \phi(S_t, A_t)\right].
+\end{equation}
+\end{definition}
+
+\begin{proposition}[Linear Reward and Feature Expectations]
+\label{prop:linear-reward}
+If the reward function is linear in features,
+$R(s,a) = w^\top \phi(s,a)$ for some weight vector $w \in \R^d$,
+then
+\[
+    \sum_s \alpha(s) \Vpi(s) = w^\top \bar{\phi}^\policy.
+\]
+\end{proposition}
+
+\begin{proof}
+Direct computation:
+$\sum_s \alpha(s) \Vpi(s) = \sum_{s,a} R(s,a)
+\tilde{x}^\policy(s,a) = \sum_{s,a} w^\top \phi(s,a)
+\tilde{x}^\policy(s,a) = w^\top \bar{\phi}^\policy$.
+\end{proof}
+
+\begin{remark}
+\label{rem:irl-connection}
+In inverse RL, we observe an expert policy $\policy_E$ (through
+demonstrations) and wish to find a reward function $R$ under which
+$\policy_E$ is optimal. If $R(s,a) = w^\top \phi(s,a)$, then
+$\policy_E$ is optimal iff $w^\top \bar{\phi}^{\policy_E} \geq
+w^\top \bar{\phi}^\policy$ for all $\policy$. Equivalently, the
+expert's feature expectation $\bar{\phi}^{\policy_E}$ must lie on
+the boundary of the set $\{\bar{\phi}^\policy : \policy \text{
+stationary}\}$ in the direction $w$.
+
+This geometric view leads to algorithms that find $w$ by searching
+for a hyperplane separating $\bar{\phi}^{\policy_E}$ from the
+feature expectations of other policies -- the basis of
+\emph{apprenticeship learning} and \emph{maximum margin IRL}.
+\end{remark}
+
+\begin{example}[Feature Matching in IRL]
+\label{ex:irl}
+Consider a grid-world MDP with features
+$\phi(s,a) = (\indicator[\text{$s$ is near obstacle}],
+\indicator[\text{$s$ is at goal}], 1)^\top$. An expert
+demonstrates trajectories, from which we estimate
+$\bar{\phi}^{\policy_E} \approx (0.1, 0.8, 5.0)^\top$.
+
+An apprenticeship learning algorithm seeks a policy $\policy$
+whose feature expectations $\bar{\phi}^\policy$ are close to
+$\bar{\phi}^{\policy_E}$. In the occupancy measure framework,
+this is:
+\[
+    \min_{x \in \mathcal{X}_\alpha}
+    \left\|\sum_{s,a} \phi(s,a) x(s,a) - \bar{\phi}^{\policy_E}
+    \right\|_2^2.
+\]
+This is a quadratic program over the occupancy polytope, which is
+tractable and yields a policy that approximately matches the
+expert's behavior.
+\end{example}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Primal LP Construction]
+\textnormal{(\(*\))} \\
+Consider the MDP with $\States = \{1, 2, 3\}$,
+$\Actions = \{a, b\}$, $\discount = 0.9$:
+\begin{center}
+\begin{tabular}{cccccc}
+\toprule
+$s$ & $a$ & $R(s,a)$ & $P(1|s,a)$ & $P(2|s,a)$ & $P(3|s,a)$ \\
+\midrule
+1 & $a$ & 2 & 0.5 & 0.3 & 0.2 \\
+1 & $b$ & 0 & 0 & 0.5 & 0.5 \\
+2 & $a$ & 1 & 0.4 & 0.4 & 0.2 \\
+2 & $b$ & 3 & 0 & 0 & 1 \\
+3 & $a$ & $-1$ & 0.1 & 0.1 & 0.8 \\
+3 & $b$ & 0 & 0 & 0.5 & 0.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item Write out the primal LP with $\alpha = (1/3, 1/3, 1/3)$.
+    \item For each deterministic policy, compute its value function
+    and verify that the optimal one solves the LP.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Occupancy Measure Computation]
+\textnormal{(\(*\))} \\
+For the two-state MDP in Example~\ref{ex:primal-two-state} with
+$\alpha = (0.5, 0.5)$:
+\begin{enumerate}[label=(\alph*)]
+    \item Compute the unnormalized occupancy measure
+    $\tilde{x}^d$ for the policy $d(1) = a_1$, $d(2) = a_2$.
+    \item Verify the flow conservation constraints.
+    \item Compute the dual objective and compare with
+    $\alpha^\top V^d$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Vertices of the Occupancy Polytope]
+\textnormal{(\(**\))} \\
+For a two-state, two-action MDP with $\discount = 0.5$ and
+$\alpha = (0.5, 0.5)$:
+\begin{enumerate}[label=(\alph*)]
+    \item How many vertices does $\mathcal{X}_\alpha$ have?
+    \item Write out the four flow conservation constraints
+    (two equalities, four non-negativity constraints).
+    \item Enumerate all vertices by solving the linear system with
+    each combination of two zero variables.
+    \item Identify which vertex corresponds to which deterministic
+    policy.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[CMDP with a Budget Constraint]
+\textnormal{(\(**\))} \\
+Consider the MDP from Exercise~1 with an additional fuel cost
+$C(s,a)$: $C(1,a) = 1$, $C(1,b) = 3$, $C(2,a) = 2$,
+$C(2,b) = 1$, $C(3,a) = 0$, $C(3,b) = 2$. The budget is
+$b = 3$.
+\begin{enumerate}[label=(\alph*)]
+    \item Write the CMDP as an LP.
+    \item Check whether the unconstrained optimal policy satisfies
+    the fuel constraint.
+    \item If not, describe qualitatively how the constrained
+    optimal policy differs from the unconstrained one.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Stochastic Policies from CMDPs]
+\textnormal{(\(***\))} \\
+Prove that for a CMDP with $K$ cost constraints, the optimal policy
+randomizes over at most $K + 1$ actions at each state.
+
+\textit{Hint:} Use the fact that the optimal solution of an LP lies
+on a face of the feasible polytope, and count the number of
+additional constraints (beyond the original $SA$ non-negativity
+constraints) that can become active.
+\end{exercise}
+
+\begin{exercise}[Feature Expectations and IRL]
+\textnormal{(\(***\))} \\
+Consider a three-state, two-action MDP with features
+$\phi(s,a) \in \R^2$. An expert policy $\policy_E$ has feature
+expectation $\bar{\phi}^{\policy_E} = (3.0, 1.5)^\top$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $\bar{\phi}^\policy$ is a linear function of
+    the occupancy measure $\tilde{x}^\policy$.
+    \item Prove that the set
+    $\mathcal{F} = \{\bar{\phi}^\policy : \policy \text{ stationary}\}$
+    is a convex polytope whose vertices correspond to deterministic
+    policies.
+    \item Explain geometrically why there always exists a weight
+    vector $w$ such that $\policy_E$ is optimal for the reward
+    $R(s,a) = w^\top \phi(s,a)$, provided $\bar{\phi}^{\policy_E}$
+    lies on the boundary of $\mathcal{F}$.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{primal LP} formulation casts finding $\Vstar$ as
+    minimizing $\alpha^\top v$ subject to the Bellman feasibility
+    constraints $v(s) \geq R(s,a) + \discount \sum_{s'} P(s'|s,a)
+    v(s')$ for all $(s,a)$. The unique optimal solution is $\Vstar$.
+    \item The \emph{dual LP} introduces occupancy measure variables
+    $x(s,a) \geq 0$ and maximizes $\sum_{s,a} R(s,a) x(s,a)$
+    subject to flow conservation constraints. The optimal dual
+    solution is the occupancy measure of the optimal policy.
+    \item \emph{Occupancy measures}
+    $x^\policy(s,a) = (1-\discount) \sum_t \discount^t
+    \Prob^\policy(S_t = s, A_t = a)$ encode the discounted
+    visitation frequencies. They satisfy flow conservation, sum to
+    1 (when normalized), and are non-negative.
+    \item There is a \emph{one-to-one correspondence} between
+    stationary policies and points in the occupancy polytope:
+    $\policy(a|s) = x(s,a) / \sum_{a'} x(s,a')$.
+    Deterministic policies correspond to vertices.
+    \item \emph{LP strong duality} holds: the primal and dual
+    optimal values are equal. Complementary slackness confirms that
+    optimal occupancy measures concentrate on optimal actions.
+    \item \emph{Constrained MDPs} are naturally handled by adding
+    linear constraints $\sum_{s,a} C_k(s,a) x(s,a) \leq b_k$ to
+    the dual LP. The optimal constrained policy may be stochastic,
+    randomizing over at most $K + 1$ actions.
+    \item \emph{Feature expectations} $\bar{\phi}^\policy =
+    \sum_{s,a} \phi(s,a) \tilde{x}^\policy(s,a)$ provide the
+    foundation for inverse RL and apprenticeship learning, where
+    policy optimization is reduced to matching feature statistics.
+\end{itemize}
+
+Since this is the final lesson in the MDP subdomain, we provide a
+summary of all eight MDP lessons.
+
+\begin{center}
+\begin{tabular}{clp{6.5cm}}
+\toprule
+\textbf{Lesson} & \textbf{Title} & \textbf{Key Results} \\
+\midrule
+39 & MDP Model and Policies &
+    MDP tuple $(\States, \Actions, P, R, \discount)$; policy
+    classes (Markov, stationary, deterministic); value functions
+    $\Vpi$, $\Qpi$; Bellman expectation equations \\[4pt]
+40 & Finite-Horizon MDPs &
+    Backward induction; time-dependent optimal policy; dynamic
+    programming principle \\[4pt]
+41 & Discounted Reward and Bellman Equations &
+    Bellman operators $\Bellman^\policy$, $\Bellman^*$;
+    $\discount$-contraction; unique fixed points $\Vpi$, $\Vstar$;
+    policy improvement theorem; greedy optimality \\[4pt]
+42 & Contraction and Value Iteration &
+    VI algorithm $v^{(n+1)} = \Bellman^* v^{(n)}$; geometric
+    convergence at rate $\discount$; a priori/a posteriori bounds;
+    approximate policy extraction \\[4pt]
+43 & VI Error Bounds and Monotonicity &
+    Span seminorm bounds; monotone VI sequences; improved stopping
+    criteria; early policy convergence \\[4pt]
+44 & Average Reward MDPs &
+    Gain-bias equations; unichain theory; relative value iteration;
+    $\discount \to 1$ limit; Blackwell optimality \\[4pt]
+45 & Policy Iteration &
+    Policy evaluation ($O(S^3)$ solve); policy improvement theorem;
+    Howard's improvement; finite convergence ($\leq A^S$); modified
+    PI; VI vs.\ PI comparison \\[4pt]
+46 & LP Formulation and Occupancy Measures &
+    Primal/dual LP; occupancy measures; policy-occupancy
+    correspondence; strong duality; constrained MDPs; inverse
+    RL connection \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~24 (TD Learning)} extends the MDP theory
+    developed in Lessons~39--46 to the model-free setting, where
+    the transition kernel $P$ and reward function $R$ are unknown.
+    \item \textbf{Lesson~25 (Policy Gradient)} develops policy
+    optimization methods that parameterize the policy directly,
+    using gradient ascent on the expected return. The occupancy
+    measure perspective provides an alternative derivation of the
+    policy gradient theorem.
+    \item \citet[Chapters 6 and 8--9]{puterman2014} provides the
+    definitive treatment of LP formulations for both discounted and
+    average reward MDPs, including multichain theory and sensitivity
+    analysis.
+    \item \citet{manne1960} is the original paper establishing the
+    LP formulation; it is concise and elegant.
+    \item \citet{altman1999} is the standard reference for
+    constrained MDPs, covering LP methods, Lagrangian duality,
+    sensitivity analysis, and applications.
+    \item \citet{derman1970} provides an early treatment with
+    applications to inventory and queuing problems.
+    \item Ng and Russell (2000) introduced inverse RL from the
+    occupancy measure perspective; Abbeel and Ng (2004) developed
+    apprenticeship learning via feature expectation matching.
+    These works directly build on the LP/occupancy framework of
+    this lesson.
+    \item For connections to convex optimization, see the treatment
+    of LP duality in Lesson~18 (Convex Optimization and Duality).
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

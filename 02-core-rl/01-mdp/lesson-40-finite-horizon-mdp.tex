@@ -1,0 +1,720 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 40: Finite-Horizon MDPs}}
+\fancyhead[R]{\thepage}
+\title{Lesson 40: Finite-Horizon MDPs}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a Mars rover that must plan a sequence of scientific
+measurements over a mission of exactly $T = 30$ days. Each day the
+rover observes its current location and instrument status (state),
+selects a measurement action (drill, photograph, traverse, charge
+battery), and receives a scientific value reward. The mission has a
+fixed terminal time: after day 30, no further actions are possible.
+Should the rover adopt the same strategy on day 1 as on day 29? On
+the last day it should exploit the best remaining measurement, while
+on early days it may invest in traversal to reach high-value
+locations. The finite horizon fundamentally changes the structure of
+optimal decision-making -- the best action depends not only on the
+current state but also on how much time remains.
+
+The finite-horizon MDP formulation captures this temporal structure.
+Its analysis via backward induction yields the first practical
+algorithm for computing optimal policies, and the principle of
+optimality that emerges underpins all of dynamic programming.
+
+\begin{rlconnection}[title={Why Finite-Horizon MDPs Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Episodic RL}: Most RL benchmarks (CartPole,
+    Atari, board games) are episodic with a finite horizon; the
+    finite-horizon MDP is their theoretical model.
+    \item \textbf{Model-based planning}: Backward induction is the
+    prototype for model-based methods such as MuZero's tree search.
+    \item \textbf{Batch RL and offline planning}: Finite-horizon
+    problems arise in clinical trials, inventory management, and
+    resource allocation where the planning horizon is fixed.
+    \item \textbf{Foundation for infinite-horizon theory}: The
+    infinite-horizon discounted MDP (Lesson~41) is derived by taking
+    $T \to \infty$; understanding the finite case clarifies the
+    limiting argument.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+MDP model, policy classes (history-dependent, Markov, stationary,
+deterministic), return, state-value function, action-value function,
+and the Bellman expectation equations (Lesson~39). Conditional
+expectation and the tower property (Lessons~9--12). Finite induction
+and basic proof techniques.
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} a finite-horizon MDP and its time-dependent
+    value functions.
+    \item \emph{Derive} the finite-horizon Bellman optimality
+    equations via the principle of optimality.
+    \item \emph{Prove} the existence of a deterministic Markov
+    optimal policy for finite-horizon MDPs.
+    \item \emph{Apply} backward induction to compute optimal policies
+    for small examples.
+    \item \emph{Analyze} the computational complexity of backward
+    induction.
+    \item \emph{Compare} finite-horizon and infinite-horizon MDP
+    formulations and identify when each applies.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 4]{puterman2014} -- Comprehensive treatment
+    of finite-horizon MDPs, optimality equations, and backward
+    induction.
+    \item \citet[Chapter 1, Sections 1.2--1.3]{bertsekas2012} --
+    Dynamic programming and the principle of optimality, with
+    finite-horizon formulation.
+    \item \citet[Chapter 3]{suttonbarto2018} -- Episodic tasks and
+    returns with finite horizons.
+    \item \citet{howard1960} -- Historical introduction of dynamic
+    programming for Markov processes.
+    \item \citet{bertsekas1996} -- Neuro-dynamic programming treatment
+    of finite-horizon problems and approximate methods.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: FINITE-HORIZON MDP FORMULATION
+%% ============================================================
+
+\section{Finite-Horizon MDP Formulation}
+\label{sec:formulation}
+
+\begin{definition}[Finite-Horizon MDP]
+\label{def:finite-horizon-mdp}
+A \emph{finite-horizon MDP} is a tuple
+$\mathcal{M} = (\States, \Actions, P, R, T)$ where:
+\begin{enumerate}[nosep]
+    \item $\States$ is a finite state space with $|\States| = S$.
+    \item $\Actions$ is a finite action space with $|\Actions| = A$.
+    \item $P : \States \times \Actions \times \States \to [0,1]$ is
+    the transition kernel (possibly time-dependent:
+    $P_t(s' \mid s, a)$).
+    \item $R : \States \times \Actions \to \R$ is the reward function
+    (possibly time-dependent: $R_t(s,a)$), with an optional terminal
+    reward $R_T : \States \to \R$.
+    \item $T \in \N$ is the \emph{horizon} (number of decision
+    stages).
+\end{enumerate}
+The agent acts at stages $t = 0, 1, \ldots, T-1$ and the process
+terminates at stage $T$.
+\end{definition}
+
+\begin{remark}
+\label{rem:time-homogeneous}
+When $P_t = P$ and $R_t = R$ for all $t$, the finite-horizon MDP is
+\emph{time-homogeneous}. Despite time-homogeneous dynamics, the
+optimal policy is generally time-dependent because the number of
+remaining stages affects the optimal action.
+\end{remark}
+
+\begin{definition}[Finite-Horizon Return]
+\label{def:finite-return}
+The \emph{finite-horizon return} from stage $t$ is
+\[
+    G_t = \sum_{k=0}^{T-1-t} R_{t+k}(S_{t+k}, A_{t+k}) + R_T(S_T),
+\]
+where $R_T(S_T)$ is the terminal reward. When no discounting is used
+(as is typical for finite-horizon problems), the return is the total
+undiscounted reward. A discounted variant uses
+$G_t = \sum_{k=0}^{T-1-t} \discount^k R_{t+k}(S_{t+k}, A_{t+k})
++ \discount^{T-t} R_T(S_T)$.
+\end{definition}
+
+\begin{definition}[Time-Dependent Markov Policy]
+\label{def:td-policy}
+A \emph{time-dependent Markov policy} for a finite-horizon MDP is a
+sequence $\policy = (\policy_0, \policy_1, \ldots, \policy_{T-1})$
+where each $\policy_t : \States \to \Delta(\Actions)$ maps states to
+action distributions. A \emph{time-dependent deterministic policy}
+is a sequence $d = (d_0, d_1, \ldots, d_{T-1})$ where each
+$d_t : \States \to \Actions$. The set of all such policies is
+$\Pi^{\mathrm{MD}}_T$ and $\Pi^{\mathrm{DD}}_T$, respectively.
+\end{definition}
+
+\begin{definition}[Finite-Horizon Value Functions]
+\label{def:fh-value}
+For a time-dependent Markov policy $\policy$, the \emph{value
+function at stage $t$} is
+\[
+    V_t^\policy(s) = \E_\policy\!\left[\, G_t \mid S_t = s \,\right]
+    = \E_\policy\!\left[\,
+    \sum_{k=0}^{T-1-t} R_{t+k}(S_{t+k}, A_{t+k}) + R_T(S_T)
+    \;\middle|\; S_t = s \,\right].
+\]
+The \emph{optimal value function at stage $t$} is
+$V_t^*(s) = \sup_{\policy \in \Pi^{\mathrm{MD}}_T} V_t^\policy(s)$.
+Similarly, the \emph{action-value function at stage $t$} is
+\[
+    Q_t^\policy(s,a) = \E_\policy\!\left[\, G_t \mid S_t = s,\,
+    A_t = a \,\right].
+\]
+\end{definition}
+
+\begin{warning}[title={Finite-Horizon Value Functions Are
+    Time-Dependent}]
+Unlike the infinite-horizon discounted setting where $\Vpi(s)$ is
+time-independent under a stationary policy, the finite-horizon value
+$V_t^\policy(s)$ depends on $t$ even for time-homogeneous dynamics.
+The value of being in state $s$ with 20 steps remaining is generally
+different from being in state $s$ with 2 steps remaining. Failing to
+index value functions by time is a common source of errors.
+\end{warning}
+
+%% ============================================================
+%% SECTION 4: PRINCIPLE OF OPTIMALITY AND BELLMAN EQUATIONS
+%% ============================================================
+
+\section{The Principle of Optimality and Bellman Equations}
+\label{sec:principle-optimality}
+
+The principle of optimality, due to Bellman, is the foundational
+insight that enables dynamic programming.
+
+\begin{theorem}[Principle of Optimality]
+\label{thm:principle-optimality}
+Let $\policy^* = (d_0^*, d_1^*, \ldots, d_{T-1}^*)$ be an optimal
+policy for the finite-horizon MDP. Then for any stage $t$ and state
+$s$, the ``tail policy'' $(d_t^*, d_{t+1}^*, \ldots, d_{T-1}^*)$ is
+optimal for the sub-problem starting at stage $t$ in state $s$.
+Formally,
+\[
+    V_t^*(s)
+    = \E_{\policy^*}\!\left[\, G_t \mid S_t = s \,\right]
+    = \E_{(d_t^*, \ldots, d_{T-1}^*)}\!\left[\, G_t \mid S_t = s
+    \,\right].
+\]
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that the tail policy
+$(d_t^*, \ldots, d_{T-1}^*)$ is not optimal from stage $t$ at some
+state $\bar{s}$. Then there exists a policy
+$\hat{\policy} = (\hat{d}_t, \ldots, \hat{d}_{T-1})$ with
+$V_t^{\hat{\policy}}(\bar{s}) > V_t^{(d_t^*, \ldots,
+d_{T-1}^*)}(\bar{s})$. Define a new full policy $\tilde{\policy}$ by
+\[
+    \tilde{\policy} = (d_0^*, \ldots, d_{t-1}^*, \hat{d}_t, \ldots,
+    \hat{d}_{T-1}).
+\]
+By the Markov property, policies before stage $t$ affect only the
+probability of reaching $\bar{s}$ at stage $t$, not the conditional
+value from $\bar{s}$ onward. Therefore,
+$V_0^{\tilde{\policy}}(s_0) \geq V_0^{\policy^*}(s_0)$ with strict
+inequality when there is positive probability of reaching $\bar{s}$
+at stage $t$. This contradicts the optimality of $\policy^*$.
+\end{proof}
+
+\begin{theorem}[Finite-Horizon Bellman Optimality Equations]
+\label{thm:fh-bellman}
+The optimal value functions satisfy the backward recursion:
+\begin{enumerate}[nosep]
+    \item \textbf{Boundary condition:} $V_T^*(s) = R_T(s)$ for all
+    $s \in \States$.
+    \item \textbf{Recursion:} For $t = T-1, T-2, \ldots, 0$ and all
+    $s \in \States$,
+    \begin{equation}
+    \label{eq:fh-bellman}
+        V_t^*(s) = \max_{a \in \Actions} \left[ R_t(s,a)
+        + \sum_{s' \in \States} P_t(s' \mid s,a)\, V_{t+1}^*(s')
+        \right].
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+We prove this by backward induction on $t$.
+
+\textbf{Base case} ($t = T$): At the terminal stage no actions are
+taken, so $V_T^*(s) = R_T(s)$ by definition.
+
+\textbf{Inductive step}: Assume $V_{t+1}^*$ satisfies the optimality
+equation. For any policy $\policy$ and state $s$,
+\begin{align*}
+    V_t^\policy(s)
+    &= \E_\policy[R_t(S_t, A_t) + G_{t+1} \mid S_t = s] \\
+    &= \sum_{a} \policy_t(a \mid s) \left[ R_t(s,a)
+       + \sum_{s'} P_t(s' \mid s,a)\,
+       V_{t+1}^{\policy^{(t+1)}}(s') \right],
+\end{align*}
+where $\policy^{(t+1)} = (\policy_{t+1}, \ldots, \policy_{T-1})$ is
+the tail policy. By the inductive hypothesis,
+$V_{t+1}^{\policy^{(t+1)}}(s') \leq V_{t+1}^*(s')$ for all $s'$
+and all tail policies. Therefore,
+\begin{align*}
+    V_t^\policy(s)
+    &\leq \sum_{a} \policy_t(a \mid s) \left[ R_t(s,a)
+       + \sum_{s'} P_t(s' \mid s,a)\, V_{t+1}^*(s') \right] \\
+    &\leq \max_{a \in \Actions} \left[ R_t(s,a)
+       + \sum_{s'} P_t(s' \mid s,a)\, V_{t+1}^*(s') \right],
+\end{align*}
+where the second inequality uses
+$\sum_a \policy_t(a \mid s) f(a) \leq \max_a f(a)$. This upper
+bound is achieved by the deterministic policy
+$d_t^*(s) = \argmax_{a \in \Actions} [R_t(s,a) + \sum_{s'}
+P_t(s' \mid s,a) V_{t+1}^*(s')]$, which verifies
+\eqref{eq:fh-bellman}.
+\end{proof}
+
+\begin{keyresult}[title={Finite-Horizon Bellman Optimality Recursion}]
+The optimal value functions for a finite-horizon MDP satisfy:
+\begin{align*}
+    V_T^*(s) &= R_T(s), \\
+    V_t^*(s) &= \max_{a \in \Actions} \left[ R_t(s,a) + \sum_{s'}
+    P_t(s' \mid s,a)\, V_{t+1}^*(s') \right],
+    \quad t = T{-}1, \ldots, 0.
+\end{align*}
+The optimal policy is obtained by recording the maximizing action at
+each stage and state: $d_t^*(s) = \argmax_{a} [R_t(s,a) + \sum_{s'}
+P_t(s' \mid s,a) V_{t+1}^*(s')]$.
+\end{keyresult}
+
+%% ============================================================
+%% SECTION 5: BACKWARD INDUCTION
+%% ============================================================
+
+\section{Backward Induction}
+\label{sec:backward-induction}
+
+Backward induction is the algorithmic realization of the Bellman
+optimality recursion. It computes the optimal value function and
+policy by sweeping backward from the terminal stage.
+
+\begin{definition}[Backward Induction Algorithm]
+\label{def:backward-induction}
+Given a finite-horizon MDP $(\States, \Actions, P, R, T)$:
+\begin{enumerate}[nosep]
+    \item \textbf{Initialize:} Set $V_T^*(s) = R_T(s)$ for all
+    $s \in \States$.
+    \item \textbf{Backward sweep:} For $t = T-1, T-2, \ldots, 0$:
+    \begin{enumerate}[nosep]
+        \item For each $s \in \States$, compute
+        $Q_t^*(s,a) = R_t(s,a) + \sum_{s'} P_t(s' \mid s,a)
+        V_{t+1}^*(s')$ for all $a \in \Actions$.
+        \item Set $V_t^*(s) = \max_{a} Q_t^*(s,a)$.
+        \item Record $d_t^*(s) = \argmax_{a} Q_t^*(s,a)$.
+    \end{enumerate}
+    \item \textbf{Output:} Optimal policy
+    $\policy^* = (d_0^*, d_1^*, \ldots, d_{T-1}^*)$ and value
+    functions $V_0^*, V_1^*, \ldots, V_T^*$.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[Existence of Deterministic Markov Optimal Policy]
+\label{thm:fh-det-optimal}
+For any finite-horizon MDP with finite $\States$ and $\Actions$,
+there exists a deterministic Markov policy
+$\policy^* = (d_0^*, \ldots, d_{T-1}^*) \in \Pi^{\mathrm{DD}}_T$
+that is optimal. Moreover, backward induction computes such a policy.
+\end{theorem}
+
+\begin{proof}
+The proof follows directly from the backward induction in
+Theorem~\ref{thm:fh-bellman}. At each stage $t$, the maximizer
+$d_t^*(s) = \argmax_{a} [R_t(s,a) + \sum_{s'} P_t(s' \mid s,a)
+V_{t+1}^*(s')]$ exists because $\Actions$ is finite (the maximum of
+a finite set of real numbers is always attained). The resulting
+policy $\policy^* = (d_0^*, \ldots, d_{T-1}^*)$ is deterministic (a
+single action per state-time pair) and Markov (depends only on the
+current state, not the full history). By
+Theorem~\ref{thm:fh-bellman}, $V_t^{\policy^*}(s) = V_t^*(s)$ for
+all $t$ and $s$.
+\end{proof}
+
+\begin{remark}
+\label{rem:non-stationary}
+The optimal finite-horizon policy is generally \emph{non-stationary}:
+$d_t^* \neq d_{t'}^*$ for $t \neq t'$. This is because the optimal
+action depends on the time remaining $T - t$, not just the current
+state. An agent that follows the same rule at every stage may be
+highly suboptimal.
+\end{remark}
+
+\begin{proposition}[Complexity of Backward Induction]
+\label{prop:complexity}
+Backward induction computes the optimal policy and value function for
+a finite-horizon MDP in $O(S^2 A T)$ arithmetic operations and
+$O(S T)$ space (or $O(S)$ space if only the policy is stored and
+values are overwritten at each stage).
+\end{proposition}
+
+\begin{proof}
+At each stage $t$ and state $s$, computing $Q_t^*(s,a)$ for a single
+action $a$ requires summing over $S$ successor states:
+$\sum_{s'} P_t(s' \mid s,a) V_{t+1}^*(s')$ costs $O(S)$ operations.
+Computing this for all $A$ actions costs $O(SA)$, and finding the
+maximum over $A$ actions costs $O(A)$. Repeating for all $S$ states
+costs $O(S^2 A)$ per stage. Over $T$ stages, the total cost is
+$O(S^2 A T)$. Storing $V_t^*$ for all stages requires $O(ST)$
+space; if only $V_{t+1}^*$ is needed for the current computation,
+$O(S)$ value storage suffices (the policy $d_t^*$ still requires
+$O(ST)$ storage).
+\end{proof}
+
+%% ============================================================
+%% SECTION 6: WORKED EXAMPLES
+%% ============================================================
+
+\section{Worked Examples}
+\label{sec:examples}
+
+\begin{example}[Shortest Path on a Grid]
+\label{ex:shortest-path}
+Consider a $2 \times 3$ grid with states
+$\States = \{(i,j) : i \in \{1,2\},\, j \in \{1,2,3\}\}$ and
+actions $\Actions = \{\text{Right (R)}, \text{Up (U)}\}$. The agent
+starts at $(1,1)$ and must reach $(2,3)$ within $T = 3$ steps.
+Transitions are deterministic: R moves $(i,j) \to (i, j+1)$ if
+$j < 3$, otherwise stay; U moves $(i,j) \to (i+1, j)$ if $i < 2$,
+otherwise stay. The reward is $R_t(s,a) = 0$ for all transitions and
+$R_T(s) = 10 \cdot \indicator\{s = (2,3)\}$.
+
+\textbf{Backward induction:}
+
+Stage $T = 3$: $V_3^*(s) = R_3(s)$, so $V_3^*(2,3) = 10$ and
+$V_3^*(s) = 0$ for all other states.
+
+Stage $t = 2$: For each state $s$ and action $a$,
+$Q_2^*(s,a) = 0 + V_3^*(s')$ where $s'$ is the deterministic
+successor:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$s$ & $Q_2^*(s, \text{R})$ & $Q_2^*(s, \text{U})$ & $V_2^*(s)$ \\
+\midrule
+$(1,1)$ & $V_3^*(1,2) = 0$ & $V_3^*(2,1) = 0$ & $0$ \\
+$(1,2)$ & $V_3^*(1,3) = 0$ & $V_3^*(2,2) = 0$ & $0$ \\
+$(1,3)$ & $V_3^*(1,3) = 0$ & $V_3^*(2,3) = 10$ & $10$ \\
+$(2,1)$ & $V_3^*(2,2) = 0$ & $V_3^*(2,1) = 0$ & $0$ \\
+$(2,2)$ & $V_3^*(2,3) = 10$ & $V_3^*(2,2) = 0$ & $10$ \\
+$(2,3)$ & $V_3^*(2,3) = 10$ & $V_3^*(2,3) = 10$ & $10$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Optimal actions at $t = 2$: $d_2^*(1,3) = \text{U}$,
+$d_2^*(2,2) = \text{R}$.
+
+Stage $t = 1$:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$s$ & $Q_1^*(s, \text{R})$ & $Q_1^*(s, \text{U})$ & $V_1^*(s)$ \\
+\midrule
+$(1,1)$ & $V_2^*(1,2) = 0$ & $V_2^*(2,1) = 0$ & $0$ \\
+$(1,2)$ & $V_2^*(1,3) = 10$ & $V_2^*(2,2) = 10$ & $10$ \\
+$(1,3)$ & $V_2^*(1,3) = 10$ & $V_2^*(2,3) = 10$ & $10$ \\
+$(2,1)$ & $V_2^*(2,2) = 10$ & $V_2^*(2,1) = 0$ & $10$ \\
+$(2,2)$ & $V_2^*(2,3) = 10$ & $V_2^*(2,2) = 10$ & $10$ \\
+$(2,3)$ & $V_2^*(2,3) = 10$ & $V_2^*(2,3) = 10$ & $10$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Stage $t = 0$:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+$s$ & $Q_0^*(s, \text{R})$ & $Q_0^*(s, \text{U})$ & $V_0^*(s)$ \\
+\midrule
+$(1,1)$ & $V_1^*(1,2) = 10$ & $V_1^*(2,1) = 10$ & $10$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+From $(1,1)$, the agent reaches $(2,3)$ in exactly 3 steps via
+either R-R-U, R-U-R, or U-R-R, all achieving reward 10. The
+optimal value is $V_0^*(1,1) = 10$.
+\end{example}
+
+\begin{example}[Optimal Stopping Problem]
+\label{ex:optimal-stopping}
+A gambler receives i.i.d.\ offers $X_1, X_2, \ldots, X_T$ drawn
+uniformly from $\{1, 2, \ldots, N\}$ with $N = 10$ and $T = 3$.
+At each stage $t$, the gambler observes $X_t$ and either accepts
+(stops, receiving reward $X_t$) or rejects (continues to the next
+offer). If no offer is accepted by stage $T$, the gambler receives
+$X_T$ automatically.
+
+We model this as a finite-horizon MDP. The state at stage $t$ is
+$s = X_t \in \{1, \ldots, 10\}$ (the current offer). Actions are
+$\Actions = \{\text{Accept}, \text{Reject}\}$. Accepting in state
+$s$ yields terminal reward $s$ and transitions to an absorbing state
+$s_{\mathrm{done}}$ with $R_T(s_{\mathrm{done}}) = 0$. Rejecting
+transitions to a new random state $s' \sim
+\mathrm{Uniform}\{1,\ldots,10\}$ with zero intermediate reward.
+At stage $T$, the gambler must accept: $R_T(s) = s$.
+
+\textbf{Backward induction:}
+
+$V_3^*(s) = s$ for all $s$.
+
+Stage $t = 2$: $Q_2^*(s, \text{Accept}) = s$;
+$Q_2^*(s, \text{Reject}) = \frac{1}{10}\sum_{s'=1}^{10} V_3^*(s')
+= \frac{1}{10} \cdot 55 = 5.5$.
+So $d_2^*(s) = \text{Accept}$ if $s \geq 6$ and Reject if $s \leq 5$.
+$V_2^*(s) = \max(s, 5.5)$.
+
+Stage $t = 1$:
+$Q_1^*(s, \text{Reject}) = \frac{1}{10}\sum_{s'=1}^{10} V_2^*(s')
+= \frac{1}{10}(5 \times 5.5 + 6 + 7 + 8 + 9 + 10)
+= \frac{1}{10}(27.5 + 40) = 6.75$.
+So $d_1^*(s) = \text{Accept}$ if $s \geq 7$ and Reject if
+$s \leq 6$. The threshold increases at earlier stages because the
+option to wait is more valuable.
+
+Stage $t = 0$:
+$Q_0^*(s, \text{Reject}) = \frac{1}{10}\sum_{s'=1}^{10} V_1^*(s')
+= \frac{1}{10}(6 \times 6.75 + 7 + 8 + 9 + 10)
+= \frac{1}{10}(40.5 + 34) = 7.45$.
+So $d_0^*(s) = \text{Accept}$ if $s \geq 8$ and Reject if
+$s \leq 7$.
+
+The optimal policy is a threshold rule with increasing thresholds as
+time remaining grows: thresholds are $8, 7, 6$ for stages
+$t = 0, 1, 2$. This illustrates the non-stationary nature of
+optimal finite-horizon policies.
+\end{example}
+
+\begin{rlconnection}[title={Optimal Stopping and Real Applications}]
+Optimal stopping problems arise frequently in practice: deciding
+when to stop training a neural network (balancing training cost
+against validation performance), when to deploy a model, or when
+to accept a bid in an auction. The backward induction solution
+reveals that optimal thresholds decrease as the deadline approaches
+-- a principle directly applicable to early stopping strategies
+in deep learning.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: FINITE-HORIZON BELLMAN EXPECTATION EQUATIONS
+%% ============================================================
+
+\section{Finite-Horizon Bellman Expectation Equations}
+\label{sec:fh-bellman-expectation}
+
+For policy evaluation (computing the value of a given policy rather
+than the optimal value), we need the finite-horizon analogue of the
+Bellman expectation equations.
+
+\begin{theorem}[Finite-Horizon Bellman Expectation Equations]
+\label{thm:fh-bellman-expect}
+For a time-dependent Markov policy
+$\policy = (\policy_0, \ldots, \policy_{T-1})$, the value functions
+satisfy:
+\begin{enumerate}[nosep]
+    \item $V_T^\policy(s) = R_T(s)$.
+    \item For $t = T-1, \ldots, 0$:
+    \begin{equation}
+    \label{eq:fh-bellman-expect}
+        V_t^\policy(s) = \sum_{a \in \Actions} \policy_t(a \mid s)
+        \left[ R_t(s,a) + \sum_{s'} P_t(s' \mid s,a)\,
+        V_{t+1}^\policy(s') \right].
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+The boundary condition is immediate: at stage $T$, no actions remain,
+so $V_T^\policy(s) = R_T(s)$. For the recursion, using the return
+decomposition $G_t = R_t(S_t, A_t) + G_{t+1}$:
+\begin{align*}
+    V_t^\policy(s)
+    &= \E_\policy[R_t(S_t, A_t) + G_{t+1} \mid S_t = s] \\
+    &= \sum_a \policy_t(a \mid s)
+       \E_\policy[R_t(s,a) + G_{t+1} \mid S_t = s, A_t = a] \\
+    &= \sum_a \policy_t(a \mid s) \left[ R_t(s,a)
+       + \sum_{s'} P_t(s' \mid s,a)\,
+       \E_\policy[G_{t+1} \mid S_{t+1} = s'] \right] \\
+    &= \sum_a \policy_t(a \mid s) \left[ R_t(s,a)
+       + \sum_{s'} P_t(s' \mid s,a)\, V_{t+1}^\policy(s') \right].
+       \qedhere
+\end{align*}
+\end{proof}
+
+\begin{remark}
+\label{rem:matrix-form-fh}
+In matrix form, defining $P_t^\policy$ and $r_t^\policy$ as in
+Lesson~39 (but now indexed by $t$), the backward recursion becomes
+$v_T^\policy = r_T$ and
+$v_t^\policy = r_t^\policy + P_t^\policy v_{t+1}^\policy$ for
+$t = T-1, \ldots, 0$.
+Unrolling: $v_0^\policy = \sum_{t=0}^{T-1} (\prod_{k=0}^{t-1}
+P_k^\policy) r_t^\policy + (\prod_{k=0}^{T-1} P_k^\policy) r_T$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 8: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Backward Induction Practice] \textnormal{(\(*\))} \\
+Consider a finite-horizon MDP with $\States = \{s_1, s_2\}$,
+$\Actions = \{a_1, a_2\}$, $T = 2$, and time-homogeneous dynamics:
+$P(s_1 \mid s_1, a_1) = 0.7$, $P(s_1 \mid s_1, a_2) = 0.3$,
+$P(s_1 \mid s_2, a_1) = 0.4$, $P(s_1 \mid s_2, a_2) = 0.9$.
+Rewards: $R(s_1, a_1) = 2$, $R(s_1, a_2) = 1$, $R(s_2, a_1) = 0$,
+$R(s_2, a_2) = 3$. Terminal reward: $R_2(s_1) = 5$, $R_2(s_2) = 0$.
+Apply backward induction to find $V_0^*(s)$ and $d_0^*(s)$ for both
+states.
+\end{exercise}
+
+\begin{exercise}[Optimal Stopping Generalization]
+\textnormal{(\(*\))} \\
+Generalize Example~\ref{ex:optimal-stopping} to horizon $T = 4$ with
+offers drawn from $\{1, \ldots, 10\}$. Compute the optimal threshold
+at each stage and the expected value of the optimal policy.
+\end{exercise}
+
+\begin{exercise}[Non-Stationarity of Optimal Policies]
+\textnormal{(\(**\))} \\
+Consider a time-homogeneous finite-horizon MDP with $\States = \{A,
+B, C\}$, $\Actions = \{\text{left}, \text{right}\}$, $T = 4$,
+deterministic transitions:
+\begin{align*}
+    &\text{left from } A \to B, \quad \text{right from } A \to C, \\
+    &\text{left from } B \to A, \quad \text{right from } B \to C, \\
+    &\text{left from } C \to C, \quad \text{right from } C \to C.
+\end{align*}
+Rewards: $R(A, \cdot) = 0$, $R(B, \cdot) = 1$, $R(C, \cdot) = 2$,
+$R_4(s) = 0$.
+\begin{enumerate}[label=(\alph*)]
+    \item Compute $V_t^*(s)$ for all $t$ and $s$.
+    \item Show that the optimal action at state $A$ differs between
+    $t = 0$ and $t = 3$, demonstrating non-stationarity.
+    \item Compare with the infinite-horizon discounted optimal policy
+    for $\discount = 0.9$ (note: $C$ is absorbing, so
+    $\Vstar(C) = R(C,\cdot)/(1-\discount) = 20$).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Complexity Lower Bound] \textnormal{(\(**\))} \\
+Prove that any algorithm computing the optimal value function
+$V_0^*(s)$ for all $s$ in a finite-horizon MDP must read at least
+$\Omega(S A T)$ entries of the transition kernel in the worst case.
+
+\textit{Hint:} Construct two MDPs that differ in a single entry
+$P_t(s' \mid s, a)$ and show that the optimal values differ.
+\end{exercise}
+
+\begin{exercise}[Finite Horizon to Infinite Horizon]
+\textnormal{(\(***\))} \\
+Consider a time-homogeneous finite-horizon MDP with discount factor
+$\discount \in (0,1)$ and zero terminal reward $R_T \equiv 0$. Let
+$V_0^{*,T}(s)$ denote the optimal value at stage $0$ with horizon
+$T$, and let $\Vstar(s)$ denote the optimal value of the
+corresponding infinite-horizon discounted MDP.
+\begin{enumerate}[label=(\alph*)]
+    \item Prove that $V_0^{*,T}(s) \leq V_0^{*,T+1}(s) \leq
+    \Vstar(s)$ for all $T$ and $s$.
+    \item Prove that $\Vstar(s) - V_0^{*,T}(s) \leq \discount^T
+    R_{\max} / (1 - \discount)$.
+    \item Conclude that $V_0^{*,T}(s) \to \Vstar(s)$ as
+    $T \to \infty$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Secretary Problem Variant] \textnormal{(\(***\))} \\
+In the classical secretary problem, the gambler observes only the
+\emph{rank} of each offer relative to those seen so far, not its
+absolute value. Model this as a finite-horizon MDP: define the state
+space (what information is sufficient?), the action space, and the
+transition probabilities. Apply backward induction to derive the
+optimal stopping rule for $T = 4$ candidates and verify that the
+optimal strategy is to reject the first $\lfloor T/e \rfloor = 1$
+candidate and then accept the next candidate that is the best seen
+so far.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 9: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item A finite-horizon MDP $(\States, \Actions, P, R, T)$ models
+    sequential decision problems with a fixed terminal time $T$;
+    actions are taken at stages $t = 0, \ldots, T-1$.
+    \item The value function $V_t^*(s)$ depends on both state and
+    time, reflecting the fundamental non-stationarity of finite-horizon
+    optimal behavior.
+    \item The \emph{principle of optimality} states that any tail of
+    an optimal policy is itself optimal for the corresponding
+    subproblem; this enables the recursive decomposition underlying
+    dynamic programming.
+    \item The finite-horizon Bellman optimality equations give a
+    backward recursion:
+    $V_t^*(s) = \max_a [R_t(s,a) + \sum_{s'} P_t(s' \mid s,a)
+    V_{t+1}^*(s')]$ with boundary $V_T^* = R_T$.
+    \item Backward induction computes the optimal policy and value
+    function in $O(S^2 A T)$ time, which is polynomial in all
+    problem parameters.
+    \item A deterministic Markov (but generally non-stationary)
+    optimal policy always exists for finite-horizon MDPs with finite
+    state and action spaces.
+    \item The optimal stopping problem illustrates how optimal
+    thresholds change with the horizon, a phenomenon absent in the
+    infinite-horizon setting.
+    \item As $T \to \infty$ with discounting, the finite-horizon
+    optimal value converges to the infinite-horizon optimal value,
+    bridging the two formulations.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 10: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~41} develops the infinite-horizon discounted
+    setting: Bellman optimality equations, the contraction property
+    of Bellman operators, and the existence of a single stationary
+    optimal policy.
+    \item \textbf{Lesson on Temporal-Difference Learning} extends the
+    finite-horizon backward induction idea to the model-free setting,
+    where the transition kernel is unknown.
+    \item \citet[Chapter 4]{puterman2014} covers finite-horizon MDPs
+    with state-dependent action sets, randomized policies, and
+    occupancy measures.
+    \item \citet[Chapter 1]{bertsekas2012} presents dynamic programming
+    in the broader context of optimal control, including continuous
+    state spaces and imperfect state information.
+    \item The secretary problem and its many variants are surveyed in
+    Ferguson (1989), ``Who solved the secretary problem?'',
+    \emph{Statistical Science}; the connection to online learning
+    algorithms is developed in Kleinberg (2005).
+\end{itemize}
+
+\bibliography{mdp-refs}
+\end{document}

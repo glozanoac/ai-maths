@@ -1,0 +1,800 @@
+% lesson-54-policy-gradient-theorem.tex
+% Phase 02, Subdomain: Policy Gradient
+% Topic: Policy Gradient Theorem
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 54: Policy Gradient Theorem}}
+\fancyhead[R]{\thepage}
+\title{Lesson 54: Policy Gradient Theorem}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+Consider a robot learning to navigate a continuous environment. The robot
+must choose actions from a continuous action space -- for instance, joint
+torques or wheel velocities -- based on high-dimensional sensory input. A
+value-based approach would require computing
+$\argmax_a Q(s,a)$ over this continuous space at every step, which is
+computationally intractable without further structure. Instead, we would
+like to directly parameterize a policy $\policy_\theta$ -- a mapping from
+states to distributions over actions -- and optimize the parameters $\theta$
+by gradient ascent on the expected cumulative reward. But how do we
+compute the gradient of an expectation that depends on $\theta$ through both
+the action selection and the resulting state distribution? The policy
+gradient theorem, developed in this lesson, provides the answer: a
+remarkably clean expression for $\nabla_\theta J(\theta)$ that avoids
+differentiating through the state transition dynamics.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{REINFORCE} \citep{williams1992}: Uses the policy gradient
+    theorem with sampled returns to form a Monte Carlo gradient estimator.
+  \item \textbf{Actor-critic methods} \citep{konda2003}: Replace the
+    action-value function in the policy gradient with a learned
+    approximation (the critic), reducing variance.
+  \item \textbf{Trust region methods} \citep{schulman2015trpo}: Build on
+    the policy gradient by constraining updates to a KL-divergence ball
+    for stable optimization.
+  \item \textbf{Natural policy gradient} \citep{kakade2002}: Preconditions
+    the policy gradient with the inverse Fisher information matrix, using
+    the score function structure derived here.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+The reader should be familiar with: Markov decision processes (states,
+actions, transition kernel, reward function, discount factor $\discount$),
+value functions $\Vpi(s)$ and $\Qpi(s,a)$, and the Bellman equations
+(Lessons 22--23). From probability theory, we require conditional
+expectation and the law of total expectation (Lesson 11), convergence
+of series and interchange of summation/differentiation under uniform
+convergence (Lesson 4, Theorem 3.2). Basic multivariate calculus
+including gradients and the chain rule (Lesson 3) is assumed throughout.
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \textbf{State} the log-derivative trick and explain why it
+    converts a gradient of an expectation into an expectation of a
+    gradient.
+  \item \textbf{Derive} the policy gradient theorem for the episodic
+    (start-state) setting from first principles.
+  \item \textbf{Prove} the policy gradient theorem for the average-reward
+    setting.
+  \item \textbf{Prove} that subtracting a state-dependent baseline from
+    the action-value function does not bias the policy gradient.
+  \item \textbf{Compute} score functions for softmax and Gaussian policy
+    parameterizations.
+  \item \textbf{Explain} the compatible function approximation condition
+    and its role in actor-critic architectures.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet[Chapter 13]{suttonbarto2018} -- Policy gradient methods
+    with intuitive derivations and algorithmic descriptions.
+  \item \citet{sutton2000} -- The original policy gradient theorem paper;
+    Theorem 1 and the compatible function approximation result.
+  \item \citet{williams1992} -- REINFORCE and the likelihood ratio method
+    for gradient estimation.
+  \item \citet{peters2008} -- Natural actor-critic, connecting policy
+    gradients to information geometry.
+  \item \citet[Chapter 6]{bertsekas1996} -- Gradient-based methods in
+    neuro-dynamic programming, convergence analysis.
+  \item \citet{kakade2002} -- Natural policy gradient derivation and
+    compatible features.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 3: Parameterized Policies and the Performance Objective
+%% ========================================================================
+\section{Parameterized Policies and the Performance Objective}
+
+Throughout this lesson, we work with a Markov decision process
+$(\States, \Actions, \Trans, r, \discount)$ where $\States$ is the state
+space, $\Actions$ is the action space (finite unless stated otherwise),
+$\Trans(s' \mid s, a)$ is the transition kernel, $r(s,a)$ is the
+immediate reward bounded by $|r(s,a)| \leq R_{\max}$, and
+$\discount \in [0,1)$ is the discount factor.
+
+\begin{definition}[Parameterized Policy]
+\label{def:param-policy}
+A \emph{parameterized policy} is a family of stochastic policies
+$\{\policy_\theta : \theta \in \Theta \subseteq \R^d\}$, where for each
+$\theta$, $\policy_\theta(a \mid s)$ defines a probability distribution
+over $\Actions$ for every state $s \in \States$. We assume that
+$\policy_\theta(a \mid s) > 0$ for all $s, a, \theta$ and that
+$\policy_\theta(a \mid s)$ is differentiable with respect to $\theta$.
+\end{definition}
+
+\begin{definition}[Performance Objective -- Start-State Formulation]
+\label{def:objective-start}
+Given a fixed start state $s_0$ (or a distribution $\mu$ over start
+states), the \emph{discounted start-state objective} is
+\[
+  J(\theta) = \Vpi[\theta](s_0)
+  = \E_{\policy_\theta}\!\left[\sum_{t=0}^{\infty} \discount^t\, r(S_t, A_t)
+    \;\middle|\; S_0 = s_0\right],
+\]
+where the expectation is taken over trajectories generated by following
+$\policy_\theta$. When a start distribution $\mu$ is used, we write
+$J(\theta) = \E_{s_0 \sim \mu}[\Vpi[\theta](s_0)]
+= \sum_{s} \mu(s)\, \Vpi[\theta](s)$.
+\end{definition}
+
+\begin{definition}[Discounted State Visitation Distribution]
+\label{def:visitation}
+The \emph{discounted state visitation distribution} under policy
+$\policy_\theta$, starting from state $s_0$ (or distribution $\mu$), is
+\[
+  d^{\policy_\theta}(s) = (1 - \discount) \sum_{t=0}^{\infty}
+  \discount^t\, \Prob(S_t = s \mid S_0 \sim \mu,\, \policy_\theta).
+\]
+The factor $(1 - \discount)$ normalizes $d^{\policy_\theta}$ to a proper
+probability distribution: $\sum_s d^{\policy_\theta}(s) = 1$.
+When the context is clear, we write $d^\policy$ omitting the subscript
+$\theta$.
+\end{definition}
+
+\begin{remark}
+\label{rem:unnormalized}
+Some references (including \citet{sutton2000}) use the
+\emph{unnormalized} visitation distribution
+$\tilde{d}^{\policy}(s) = \sum_{t=0}^{\infty} \discount^t\,
+\Prob(S_t = s \mid s_0, \policy)$, which sums to $1/(1-\discount)$.
+We will state the policy gradient theorem using
+$\tilde{d}^{\policy}$ to match the standard form, noting that the
+normalization constant does not affect gradient ascent since it is
+$\theta$-independent.
+\end{remark}
+
+\begin{definition}[Average-Reward Objective]
+\label{def:objective-avg}
+For continuing tasks, the \emph{average-reward objective} is
+\[
+  J_{\mathrm{avg}}(\theta)
+  = \lim_{T \to \infty} \frac{1}{T}
+    \E_{\policy_\theta}\!\left[\sum_{t=0}^{T-1} r(S_t, A_t)\right]
+  = \sum_{s} d^{\policy_\theta}_{\infty}(s) \sum_{a}
+    \policy_\theta(a \mid s)\, r(s,a),
+\]
+where $d^{\policy_\theta}_{\infty}$ is the stationary distribution of the
+Markov chain induced by $\policy_\theta$ (assumed to exist and be unique).
+\end{definition}
+
+\begin{example}[Softmax Policy]
+\label{ex:softmax-policy}
+For finite $\Actions = \{a_1, \ldots, a_k\}$, define features
+$\phi(s,a) \in \R^d$ and let
+\[
+  \policy_\theta(a \mid s) = \frac{\exp(\theta^\top \phi(s,a))}
+  {\sum_{a'} \exp(\theta^\top \phi(s,a'))}.
+\]
+This is the \emph{softmax policy}. It satisfies
+$\policy_\theta(a \mid s) > 0$ for all $a, s, \theta$, so the
+differentiability assumption in Definition~\ref{def:param-policy} holds.
+\end{example}
+
+\begin{example}[Gaussian Policy]
+\label{ex:gaussian-policy}
+For continuous $\Actions \subseteq \R^m$, a common choice is the
+\emph{Gaussian policy} with state-dependent mean:
+\[
+  \policy_\theta(a \mid s) = \frac{1}{(2\pi\sigma^2)^{m/2}}
+  \exp\!\left(-\frac{\|a - \mu_\theta(s)\|^2}{2\sigma^2}\right),
+\]
+where $\mu_\theta(s) = \theta^\top \phi(s)$ is a linear function of
+state features and $\sigma^2 > 0$ is a fixed variance. Here
+$\theta \in \R^{d \times m}$ and $\phi(s) \in \R^d$.
+\end{example}
+
+We now turn to the fundamental identity that makes policy gradient
+methods possible: the log-derivative trick.
+
+%% ========================================================================
+%% SECTION 4: The Log-Derivative Trick
+%% ========================================================================
+\section{The Log-Derivative Trick}
+
+The central challenge in computing $\nabla_\theta J(\theta)$ is that the
+expectation is taken with respect to a distribution that depends on
+$\theta$. The log-derivative trick (also called the likelihood ratio
+trick or score function method) provides a way to move the gradient
+inside the expectation.
+
+\begin{lemma}[Score Function Identity]
+\label{lem:score}
+Let $p_\theta(x)$ be a parameterized probability distribution over $x$
+with $p_\theta(x) > 0$ for all $x$ in the support, and let $f(x)$ be a
+function independent of $\theta$. Suppose that differentiation and
+summation (or integration) can be interchanged. Then
+\[
+  \nabla_\theta \E_{x \sim p_\theta}[f(x)]
+  = \E_{x \sim p_\theta}\bigl[f(x)\, \nabla_\theta \log p_\theta(x)\bigr].
+\]
+\end{lemma}
+
+\begin{proof}
+For the discrete case (the continuous case is identical with integrals
+replacing sums):
+\begin{align*}
+  \nabla_\theta \E_{x \sim p_\theta}[f(x)]
+  &= \nabla_\theta \sum_{x} p_\theta(x)\, f(x)
+  = \sum_{x} f(x)\, \nabla_\theta p_\theta(x) \\
+  &= \sum_{x} f(x)\, p_\theta(x)\,
+     \frac{\nabla_\theta p_\theta(x)}{p_\theta(x)}
+  = \sum_{x} p_\theta(x)\, f(x)\, \nabla_\theta \log p_\theta(x) \\
+  &= \E_{x \sim p_\theta}\bigl[f(x)\, \nabla_\theta \log p_\theta(x)\bigr].
+\end{align*}
+The key step uses the identity
+$\nabla_\theta \log p_\theta(x) = \nabla_\theta p_\theta(x) / p_\theta(x)$,
+which follows from the chain rule applied to $\log(\cdot)$.
+\end{proof}
+
+\begin{lemma}[Score Function Has Zero Mean]
+\label{lem:score-zero-mean}
+Under the same conditions as Lemma~\ref{lem:score},
+\[
+  \E_{x \sim p_\theta}\bigl[\nabla_\theta \log p_\theta(x)\bigr] = 0.
+\]
+\end{lemma}
+
+\begin{proof}
+Apply Lemma~\ref{lem:score} with $f(x) = 1$:
+\[
+  \E_{x \sim p_\theta}\bigl[\nabla_\theta \log p_\theta(x)\bigr]
+  = \nabla_\theta \E_{x \sim p_\theta}[1]
+  = \nabla_\theta 1 = 0. \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[title={The Log-Derivative Trick}]
+For a parameterized policy $\policy_\theta(a \mid s)$:
+\[
+  \nabla_\theta\, \policy_\theta(a \mid s)
+  = \policy_\theta(a \mid s)\, \nabla_\theta \log \policy_\theta(a \mid s).
+\]
+This identity transforms the gradient of a probability (which may be hard
+to sample from) into an expectation under that same probability, enabling
+Monte Carlo estimation.
+\end{keyresult}
+
+\begin{example}[Score Function for Softmax Policy]
+\label{ex:score-softmax}
+Recall the softmax policy from Example~\ref{ex:softmax-policy}. We have
+$\log \policy_\theta(a \mid s) = \theta^\top \phi(s,a) -
+\log\sum_{a'} \exp(\theta^\top \phi(s,a'))$, so
+\[
+  \nabla_\theta \log \policy_\theta(a \mid s)
+  = \phi(s,a) - \sum_{a'} \policy_\theta(a' \mid s)\, \phi(s,a')
+  = \phi(s,a) - \E_{a' \sim \policy_\theta(\cdot \mid s)}[\phi(s,a')].
+\]
+The score function is the feature vector of the chosen action minus the
+expected feature vector under the current policy.
+\end{example}
+
+\begin{example}[Score Function for Gaussian Policy]
+\label{ex:score-gaussian}
+For the Gaussian policy of Example~\ref{ex:gaussian-policy} with mean
+$\mu_\theta(s) = \theta^\top \phi(s)$ and fixed variance $\sigma^2 I$,
+\[
+  \log \policy_\theta(a \mid s)
+  = -\frac{\|a - \theta^\top \phi(s)\|^2}{2\sigma^2} + \text{const},
+\]
+so the score function is
+\[
+  \nabla_\theta \log \policy_\theta(a \mid s)
+  = \frac{(a - \theta^\top \phi(s))\, \phi(s)^\top}{\sigma^2}.
+\]
+For scalar actions and parameters, this simplifies to
+$\nabla_\theta \log \policy_\theta(a \mid s)
+= \frac{(a - \theta^\top \phi(s))}{\sigma^2}\, \phi(s)$.
+The score is proportional to the ``surprise'' $(a - \mu_\theta(s))$
+weighted by the feature vector.
+\end{example}
+
+With the log-derivative trick established, we are now ready to derive the
+policy gradient theorem.
+
+%% ========================================================================
+%% SECTION 5: The Policy Gradient Theorem (Episodic Setting)
+%% ========================================================================
+\section{The Policy Gradient Theorem (Episodic Setting)}
+
+The policy gradient theorem expresses $\nabla_\theta J(\theta)$ in a form
+that does not require differentiating the state transition dynamics
+$\Trans(s' \mid s, a)$, which may be unknown or complex.
+
+\begin{theorem}[Policy Gradient Theorem -- Episodic Setting]
+\label{thm:pg-episodic}
+Let $J(\theta) = \Vpi[\theta](s_0)$ be the discounted start-state
+objective. Under the differentiability and interchange conditions of
+Definition~\ref{def:param-policy}, we have
+\[
+  \nabla_\theta J(\theta)
+  = \sum_{s \in \States} \tilde{d}^{\policy_\theta}(s)
+    \sum_{a \in \Actions}
+    \nabla_\theta\, \policy_\theta(a \mid s)\, \Qpi[\theta](s,a),
+\]
+where $\tilde{d}^{\policy_\theta}(s) = \sum_{t=0}^{\infty} \discount^t\,
+\Prob(S_t = s \mid s_0, \policy_\theta)$ is the unnormalized discounted
+state visitation. Equivalently, using the log-derivative trick,
+\[
+  \nabla_\theta J(\theta)
+  = \E_{s \sim \tilde{d}^{\policy_\theta},\, a \sim \policy_\theta}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi[\theta](s,a)\bigr].
+\]
+\end{theorem}
+
+\begin{proof}
+We proceed by deriving a recursive formula for $\nabla_\theta \Vpi(s)$
+and then unrolling the recursion.
+
+\textbf{Step 1: Gradient of the value function.}
+Starting from the Bellman equation
+$\Vpi(s) = \sum_a \policy_\theta(a \mid s)\, \Qpi(s,a)$,
+we take the gradient with respect to $\theta$:
+\begin{equation}
+\label{eq:grad-V-step1}
+  \nabla_\theta \Vpi(s)
+  = \sum_a \bigl[\nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a)
+    + \policy_\theta(a \mid s)\, \nabla_\theta \Qpi(s,a)\bigr].
+\end{equation}
+
+\textbf{Step 2: Expanding $\nabla_\theta \Qpi(s,a)$.}
+Since $\Qpi(s,a) = r(s,a) + \discount \sum_{s'} \Trans(s' \mid s,a)\,
+\Vpi(s')$ and neither $r$ nor $\Trans$ depend on $\theta$,
+\begin{equation}
+\label{eq:grad-Q}
+  \nabla_\theta \Qpi(s,a)
+  = \discount \sum_{s'} \Trans(s' \mid s,a)\, \nabla_\theta \Vpi(s').
+\end{equation}
+
+\textbf{Step 3: Substitution and recursion.}
+Substituting \eqref{eq:grad-Q} into \eqref{eq:grad-V-step1}:
+\begin{align}
+  \nabla_\theta \Vpi(s)
+  &= \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a)
+     + \discount \sum_a \policy_\theta(a \mid s) \sum_{s'} \Trans(s' \mid s,a)\,
+       \nabla_\theta \Vpi(s') \nonumber \\
+  &= \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a)
+     + \discount \sum_{s'} \Prob(S_1 = s' \mid S_0 = s, \policy_\theta)\,
+       \nabla_\theta \Vpi(s'). \label{eq:grad-V-recursive}
+\end{align}
+
+\textbf{Step 4: Unrolling the recursion.}
+Define $\psi(s) = \sum_a \nabla_\theta \policy_\theta(a \mid s)\,
+\Qpi(s,a)$. Then \eqref{eq:grad-V-recursive} reads
+$\nabla_\theta \Vpi(s) = \psi(s) + \discount \sum_{s'}
+\Prob^{\policy}(s \to s', 1)\, \nabla_\theta \Vpi(s')$, where
+$\Prob^{\policy}(s \to s', k)$ denotes the probability of reaching $s'$
+from $s$ in $k$ steps under $\policy_\theta$. Unrolling:
+\begin{align*}
+  \nabla_\theta \Vpi(s)
+  &= \psi(s) + \discount \sum_{s'} \Prob^{\policy}(s \to s', 1)\,
+     \bigl[\psi(s') + \discount \sum_{s''} \Prob^{\policy}(s' \to s'', 1)\,
+     \nabla_\theta \Vpi(s'')\bigr] \\
+  &= \psi(s) + \discount \sum_{s'} \Prob^{\policy}(s \to s', 1)\, \psi(s')
+     + \discount^2 \sum_{s''} \Prob^{\policy}(s \to s'', 2)\,
+     \nabla_\theta \Vpi(s'') \\
+  &= \sum_{t=0}^{\infty} \discount^t \sum_{s'}
+     \Prob^{\policy}(s \to s', t)\, \psi(s').
+\end{align*}
+The series converges because $|\psi(s')| \leq
+\|\nabla_\theta \policy_\theta\|_1 \cdot R_{\max}/(1-\discount)$ is
+bounded, and $\sum_{s'} \Prob^{\policy}(s \to s', t) = 1$.
+
+\textbf{Step 5: Evaluating at $s = s_0$.}
+Setting $s = s_0$:
+\begin{align*}
+  \nabla_\theta J(\theta)
+  = \nabla_\theta \Vpi(s_0)
+  &= \sum_{t=0}^{\infty} \discount^t \sum_{s}
+     \Prob(S_t = s \mid S_0 = s_0, \policy_\theta)\,
+     \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a) \\
+  &= \sum_s \underbrace{\left(\sum_{t=0}^{\infty} \discount^t\,
+     \Prob(S_t = s \mid s_0, \policy_\theta)
+     \right)}_{\tilde{d}^{\policy_\theta}(s)}
+     \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a).
+\end{align*}
+
+\textbf{Step 6: Log-derivative form.}
+Applying the identity $\nabla_\theta \policy_\theta(a \mid s) =
+\policy_\theta(a \mid s)\, \nabla_\theta \log \policy_\theta(a \mid s)$
+to the inner sum:
+\[
+  \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a)
+  = \sum_a \policy_\theta(a \mid s)\,
+    \nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi(s,a)
+  = \E_{a \sim \policy_\theta(\cdot \mid s)}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi(s,a)\bigr].
+\]
+Combining with the outer sum yields the expectation form.
+\end{proof}
+
+\begin{keyresult}[title={Policy Gradient Theorem (Sutton et al., 2000)}]
+\[
+  \nabla_\theta J(\theta)
+  = \E_{s \sim d^{\policy_\theta},\, a \sim \policy_\theta}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi[\theta](s,a)\bigr].
+\]
+The gradient of the performance objective equals the expected product of
+the \emph{score function} $\nabla_\theta \log \policy_\theta(a \mid s)$
+and the \emph{action-value function} $\Qpi(s,a)$, weighted by the
+on-policy state distribution. Crucially, the gradient of the transition
+dynamics $\Trans$ does not appear.
+\end{keyresult}
+
+\begin{rlconnection}
+The policy gradient theorem is the foundation of all policy-based RL
+algorithms. The key practical insight is that we can \emph{estimate} the
+gradient from sample trajectories: generate episodes under $\policy_\theta$,
+compute (or estimate) $\Qpi(s_t, a_t)$ for visited state-action pairs,
+and average the products
+$\nabla_\theta \log \policy_\theta(a_t \mid s_t) \cdot \Qpi(s_t, a_t)$
+to obtain a stochastic gradient. This is exactly what REINFORCE and
+actor-critic algorithms do.
+\end{rlconnection}
+
+\begin{warning}[title={Model-Free, Not Assumption-Free}]
+The policy gradient theorem does not require knowledge of $\Trans$, but
+it does require that $\policy_\theta(a \mid s) > 0$ for all $s, a$ (so
+that $\log \policy_\theta$ is well-defined) and that the interchange of
+differentiation and summation is valid. In practice, deterministic policies
+($\policy_\theta(a \mid s) \in \{0,1\}$) require a separate treatment
+(see Lesson 58 on deterministic policy gradients).
+\end{warning}
+
+%% ========================================================================
+%% SECTION 6: The Policy Gradient Theorem (Average-Reward Setting)
+%% ========================================================================
+\section{The Policy Gradient Theorem (Average-Reward Setting)}
+
+For continuing tasks without discounting, we use the average-reward
+objective $J_{\mathrm{avg}}(\theta)$ from Definition~\ref{def:objective-avg}.
+
+\begin{definition}[Differential Value Function]
+\label{def:diff-value}
+The \emph{differential value function} under $\policy_\theta$ is
+\[
+  V^{\policy_\theta}_{\mathrm{diff}}(s)
+  = \E_{\policy_\theta}\!\left[\sum_{t=0}^{\infty}
+    \bigl(r(S_t, A_t) - J_{\mathrm{avg}}(\theta)\bigr)
+    \;\middle|\; S_0 = s\right],
+\]
+and the \emph{differential action-value function} is
+\[
+  Q^{\policy_\theta}_{\mathrm{diff}}(s,a)
+  = r(s,a) - J_{\mathrm{avg}}(\theta)
+    + \sum_{s'} \Trans(s' \mid s,a)\,
+    V^{\policy_\theta}_{\mathrm{diff}}(s').
+\]
+These satisfy the differential Bellman equation:
+$V^{\policy}_{\mathrm{diff}}(s) = \sum_a \policy_\theta(a \mid s)\,
+Q^{\policy}_{\mathrm{diff}}(s,a)$.
+\end{definition}
+
+\begin{assumption}
+\label{assump:ergodic}
+The Markov chain induced by $\policy_\theta$ is ergodic for all $\theta$:
+it is irreducible and aperiodic, so a unique stationary distribution
+$d^{\policy_\theta}_{\infty}$ exists.
+\end{assumption}
+
+\begin{theorem}[Policy Gradient Theorem -- Average-Reward Setting]
+\label{thm:pg-avg}
+Under Assumption~\ref{assump:ergodic}, the gradient of the average-reward
+objective is
+\[
+  \nabla_\theta J_{\mathrm{avg}}(\theta)
+  = \sum_s d^{\policy_\theta}_{\infty}(s)
+    \sum_a \nabla_\theta \policy_\theta(a \mid s)\,
+    Q^{\policy_\theta}_{\mathrm{diff}}(s,a).
+\]
+Equivalently,
+\[
+  \nabla_\theta J_{\mathrm{avg}}(\theta)
+  = \E_{s \sim d^{\policy_\theta}_{\infty},\, a \sim \policy_\theta}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\,
+    Q^{\policy_\theta}_{\mathrm{diff}}(s,a)\bigr].
+\]
+\end{theorem}
+
+\begin{proof}
+We differentiate the stationarity condition and the average-reward
+identity.
+
+\textbf{Step 1.} The average reward satisfies
+$J_{\mathrm{avg}}(\theta) = \sum_s d^{\policy_\theta}_{\infty}(s)
+\sum_a \policy_\theta(a \mid s)\, r(s,a)$. Differentiating:
+\begin{equation}
+\label{eq:avg-grad-start}
+  \nabla_\theta J_{\mathrm{avg}}
+  = \sum_s \bigl[\nabla_\theta d^{\policy_\theta}_{\infty}(s)\bigr]
+    \sum_a \policy_\theta(a \mid s)\, r(s,a)
+  + \sum_s d^{\policy_\theta}_{\infty}(s) \sum_a
+    \nabla_\theta \policy_\theta(a \mid s)\, r(s,a).
+\end{equation}
+
+\textbf{Step 2.} Differentiate the differential Bellman equation
+$\Vpi_{\mathrm{diff}}(s) = \sum_a \policy_\theta(a\mid s)\,
+Q^{\policy}_{\mathrm{diff}}(s,a)$ with respect to $\theta$:
+\[
+  \nabla_\theta \Vpi_{\mathrm{diff}}(s)
+  = \sum_a \nabla_\theta \policy_\theta(a\mid s)\, Q^{\policy}_{\mathrm{diff}}(s,a)
+  + \sum_a \policy_\theta(a\mid s)\, \nabla_\theta Q^{\policy}_{\mathrm{diff}}(s,a).
+\]
+Since $\nabla_\theta Q^{\policy}_{\mathrm{diff}}(s,a)
+= -\nabla_\theta J_{\mathrm{avg}} + \sum_{s'} \Trans(s'\mid s,a)\,
+\nabla_\theta \Vpi_{\mathrm{diff}}(s')$, multiply by
+$d^{\policy}_\infty(s)$, sum over $s$, and use stationarity:
+\[
+  \sum_s d^{\policy}_\infty(s)\, \nabla_\theta \Vpi_{\mathrm{diff}}(s)
+  = \sum_s d^{\policy}_\infty(s) \sum_a \nabla_\theta \policy_\theta(a\mid s)\,
+    Q^{\policy}_{\mathrm{diff}}(s,a)
+  - \nabla_\theta J_{\mathrm{avg}}
+  + \sum_{s'} d^{\policy}_\infty(s')\, \nabla_\theta \Vpi_{\mathrm{diff}}(s').
+\]
+The left side and last term on the right cancel, yielding the result.
+
+The log-derivative form follows by the same argument as in
+Theorem~\ref{thm:pg-episodic}.
+\end{proof}
+
+%% ========================================================================
+%% SECTION 7: Baseline Invariance
+%% ========================================================================
+\section{Baseline Invariance}
+
+A key property of the policy gradient is that we can subtract any
+state-dependent function from $\Qpi$ without introducing bias. This will
+be essential for variance reduction in Lesson 55.
+
+\begin{proposition}[Baseline Invariance]
+\label{prop:baseline}
+For any function $b : \States \to \R$,
+\[
+  \sum_a \nabla_\theta \policy_\theta(a \mid s)\, b(s) = 0
+  \quad \text{for all } s \in \States.
+\]
+Consequently,
+\[
+  \nabla_\theta J(\theta)
+  = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\,
+    \bigl(\Qpi(s,a) - b(s)\bigr)\bigr].
+\]
+\end{proposition}
+
+\begin{proof}
+Since $b(s)$ does not depend on $a$:
+\[
+  \sum_a \nabla_\theta \policy_\theta(a \mid s)\, b(s)
+  = b(s)\, \nabla_\theta \sum_a \policy_\theta(a \mid s)
+  = b(s)\, \nabla_\theta\, 1 = 0.
+\]
+The second statement follows by inserting
+$\Qpi(s,a) - b(s)$ in place of $\Qpi(s,a)$ in the policy gradient
+theorem and noting that the $b(s)$ term vanishes.
+\end{proof}
+
+\begin{rlconnection}
+The most common baseline is $b(s) = \Vpi(s)$, the state-value function.
+This gives the \emph{advantage function}
+$A^{\policy}(s,a) = \Qpi(s,a) - \Vpi(s)$, and the gradient becomes
+\[
+  \nabla_\theta J(\theta) = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, A^{\policy}(s,a)\bigr].
+\]
+Since $A^{\policy}$ has zero mean under $a \sim \policy_\theta(\cdot \mid s)$
+(by definition), this form typically has lower variance than using
+$\Qpi$ directly. This is the foundation of advantage actor-critic methods.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 8: Compatible Function Approximation
+%% ========================================================================
+\section{Compatible Function Approximation}
+
+In practice, $\Qpi(s,a)$ is unknown and must be approximated. A natural
+question is: when does using an approximation $f_w(s,a) \approx \Qpi(s,a)$
+preserve the correctness of the policy gradient? The compatible function
+approximation theorem gives precise conditions.
+
+\begin{definition}[Compatible Features]
+\label{def:compatible}
+A function approximator $f_w(s,a) = w^\top \nabla_\theta \log
+\policy_\theta(a \mid s)$ is said to have \emph{compatible features}
+with the policy $\policy_\theta$.
+\end{definition}
+
+\begin{theorem}[Compatible Function Approximation]
+\label{thm:compatible}
+Suppose $f_w(s,a)$ satisfies:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Compatible features:}
+    $\nabla_w f_w(s,a) = \nabla_\theta \log \policy_\theta(a \mid s)$.
+  \item \textbf{Minimizes projected error:} $w$ minimizes the mean squared
+    error $\E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+    \bigl[(f_w(s,a) - \Qpi(s,a))^2\bigr]$.
+\end{enumerate}
+Then
+\[
+  \nabla_\theta J(\theta)
+  = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+    \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, f_w(s,a)\bigr].
+\]
+That is, using $f_w$ in place of $\Qpi$ gives the exact policy gradient.
+\end{theorem}
+
+\begin{proof}
+Condition (ii) implies that the gradient of the MSE with respect to $w$
+is zero at the optimal $w^*$:
+\[
+  \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_w f_{w^*}(s,a)\, (f_{w^*}(s,a) - \Qpi(s,a))\bigr] = 0.
+\]
+Using condition (i), $\nabla_w f_w(s,a) = \nabla_\theta \log
+\policy_\theta(a \mid s)$, so:
+\[
+  \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+  \bigl[\nabla_\theta \log \policy_\theta(a \mid s)\,
+  (f_{w^*}(s,a) - \Qpi(s,a))\bigr] = 0.
+\]
+This means
+\[
+  \E\bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, f_{w^*}(s,a)\bigr]
+  = \E\bigl[\nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi(s,a)\bigr]
+  = \nabla_\theta J(\theta),
+\]
+where the last equality is the policy gradient theorem.
+\end{proof}
+
+\begin{rlconnection}
+The compatible function approximation theorem justifies actor-critic
+architectures. For a linear approximator
+$f_w(s,a) = w^\top \nabla_\theta \log \policy_\theta(a \mid s)$,
+condition (i) is automatically satisfied. With a baseline, $f_w$ only
+needs to approximate the advantage. The natural actor-critic of
+\citet{peters2008} exploits this by solving for $w$ via least squares,
+then performing a natural gradient step.
+\end{rlconnection}
+
+%% ========================================================================
+%% SECTION 9: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[Score Function Computation] \textnormal{(\(*\))} \\
+  Consider a Bernoulli policy $\policy_\theta(a=1 \mid s) =
+  \sigma(\theta^\top \phi(s))$, where $\sigma(z) = 1/(1+e^{-z})$ is the
+  sigmoid function. Derive the score function
+  $\nabla_\theta \log \policy_\theta(a \mid s)$ for both $a = 1$ and
+  $a = 0$. Verify that
+  $\E_{a \sim \policy_\theta}[\nabla_\theta \log \policy_\theta(a \mid s)] = 0$.
+\end{exercise}
+
+\begin{exercise}[Gaussian Policy with Learnable Variance] \textnormal{(\(*\))} \\
+  Extend Example~\ref{ex:gaussian-policy} to the case where the variance
+  is also parameterized: $\policy_\theta(a \mid s) =
+  \mathcal{N}(a;\, \mu_\theta(s),\, \sigma_\theta^2(s))$ with
+  $\theta = (\theta_\mu, \theta_\sigma)$. Compute the score function
+  $\nabla_\theta \log \policy_\theta(a \mid s)$ with respect to both
+  $\theta_\mu$ and $\theta_\sigma$.
+\end{exercise}
+
+\begin{exercise}[Unrolling the Recursion] \textnormal{(\(**\))} \\
+  In the proof of Theorem~\ref{thm:pg-episodic}, verify the unrolling in
+  Step 4 rigorously. Specifically, show by induction that for all
+  $T \geq 1$:
+  \[
+    \nabla_\theta \Vpi(s) = \sum_{t=0}^{T-1} \discount^t \sum_{s'}
+    \Prob^{\policy}(s \to s', t)\, \psi(s')
+    + \discount^T \sum_{s'} \Prob^{\policy}(s \to s', T)\,
+    \nabla_\theta \Vpi(s'),
+  \]
+  and prove that the remainder term vanishes as $T \to \infty$.
+\end{exercise}
+
+\begin{exercise}[Multiple Start States] \textnormal{(\(**\))} \\
+  Suppose the start state is drawn from a distribution $\mu$ over
+  $\States$. Show that the policy gradient theorem becomes
+  \[
+    \nabla_\theta J(\theta) = \sum_s \tilde{d}^{\policy}_\mu(s)
+    \sum_a \nabla_\theta \policy_\theta(a \mid s)\, \Qpi(s,a),
+  \]
+  where $\tilde{d}^{\policy}_\mu(s) = \sum_{t=0}^{\infty} \discount^t
+  \sum_{s_0} \mu(s_0)\, \Prob(S_t = s \mid S_0 = s_0, \policy)$.
+\end{exercise}
+
+\begin{exercise}[Compatible Approximation for Softmax] \textnormal{(\(***\))} \\
+  For the softmax policy of Example~\ref{ex:softmax-policy}, explicitly
+  construct the compatible function approximator $f_w(s,a)$. Write out
+  the least-squares problem that determines $w^*$, and show that
+  $f_{w^*}$ can be interpreted as a linear approximation to the advantage
+  function $A^{\policy}(s,a)$ in the feature space defined by
+  $\phi(s,a) - \E_{\policy}[\phi(s,\cdot)]$.
+\end{exercise}
+
+%% ========================================================================
+%% SECTION 10: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item The \textbf{log-derivative trick}
+    ($\nabla_\theta p_\theta(x) = p_\theta(x)\, \nabla_\theta \log p_\theta(x)$)
+    converts the gradient of an expectation into an expectation of a
+    gradient-weighted quantity, enabling Monte Carlo estimation.
+
+  \item The \textbf{score function} $\nabla_\theta \log \policy_\theta(a \mid s)$
+    has zero mean under $a \sim \policy_\theta(\cdot \mid s)$ and measures
+    how much the log-probability of an action changes with $\theta$.
+
+  \item The \textbf{policy gradient theorem} states that
+    $\nabla_\theta J(\theta) = \E_{s \sim d^{\policy},\, a \sim \policy_\theta}
+    [\nabla_\theta \log \policy_\theta(a \mid s)\, \Qpi(s,a)]$.
+    It does \emph{not} require differentiating through the transition
+    dynamics.
+
+  \item The theorem holds in both the \textbf{discounted episodic}
+    setting (with the discounted state visitation distribution) and the
+    \textbf{average-reward} setting (with the stationary distribution and
+    differential action-values).
+
+  \item \textbf{Baseline invariance}: subtracting any state-dependent
+    function $b(s)$ from $\Qpi(s,a)$ does not change the expected gradient,
+    providing a mechanism for variance reduction.
+
+  \item The \textbf{compatible function approximation} theorem guarantees
+    that a critic with features matching the policy score yields the exact
+    gradient, justifying actor-critic architectures.
+
+  \item For \textbf{softmax policies}, the score is the feature deviation
+    $\phi(s,a) - \E_\policy[\phi(s,\cdot)]$; for \textbf{Gaussian policies},
+    the score is proportional to $(a - \mu_\theta(s)) \cdot \phi(s) / \sigma^2$.
+\end{itemize}
+
+%% ========================================================================
+%% SECTION 11: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 55} develops the REINFORCE algorithm using sampled
+    returns as unbiased estimates of $\Qpi$, and analyzes baseline
+    subtraction for variance reduction.
+
+  \item \textbf{Lesson 56} (Trust Region Methods) constrains policy
+    updates to a KL-divergence neighborhood, leading to TRPO
+    \citep{schulman2015trpo}.
+
+  \item \citet{kakade2002} introduces the \emph{natural policy gradient},
+    preconditioned by the inverse Fisher information matrix.
+
+  \item \citet{peters2008} connects compatible features to natural
+    gradients in natural actor-critic methods.
+
+  \item \citet[Chapter 6]{bertsekas1996} analyzes gradient-based
+    approximate dynamic programming with convergence guarantees.
+
+  \item \citet[Chapter 2]{kakade2003} treats the regularity conditions
+    for interchanging differentiation and expectation.
+\end{itemize}
+
+\bibliography{pg-refs}
+
+\end{document}

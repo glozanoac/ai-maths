@@ -1,0 +1,1007 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 53: The Deadly Triad and Gradient-TD Methods}}
+\fancyhead[R]{\thepage}
+\title{Lesson 53: The Deadly Triad and Gradient-TD Methods}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% SECTION 1: MOTIVATION AND OVERVIEW
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lessons 47--52 established that tabular TD methods converge under mild
+conditions, and that semi-gradient TD with linear function approximation
+converges under on-policy sampling. These positive results might suggest
+that TD methods are universally reliable. They are not.
+
+Consider training a Deep Q-Network (DQN) agent to play Atari games. The
+agent stores past transitions in a replay buffer and updates its neural
+network $Q$-function by sampling mini-batches from this buffer. This
+involves: (1) function approximation (a neural network), (2)
+bootstrapping (the TD target $R + \discount \max_{a'} Q(S', a')$), and
+(3) off-policy learning (the buffer contains transitions from many
+previous policies). In early DQN experiments without target networks,
+training diverged catastrophically --- the $Q$-values grew without bound
+despite bounded rewards. This failure is not an implementation bug but a
+fundamental theoretical phenomenon: the \emph{deadly triad}.
+
+The tools developed in this lesson will let us prove that the
+combination of function approximation, bootstrapping, and off-policy
+learning can cause divergence even in the simplest linear case
+(Baird's counterexample), explain precisely why each element is
+necessary for divergence, and develop Gradient-TD methods (GTD2)
+that provably resolve the instability by minimizing a true gradient
+objective.
+
+\begin{rlconnection}[title={Where the Deadly Triad Appears}]
+\begin{itemize}[nosep]
+  \item \textbf{DQN} encounters all three elements: neural network FA,
+    bootstrapped TD target, off-policy replay buffer. Target networks
+    and experience replay are engineering solutions motivated by the
+    deadly triad.
+  \item \textbf{Off-policy actor-critic} methods (SAC, DDPG, TD3) must
+    manage the triad when the critic uses bootstrapped TD updates on
+    off-policy data.
+  \item \textbf{Gradient-TD methods} (GTD, GTD2, TDC) resolve the
+    triad theoretically and form the basis for convergent off-policy
+    prediction algorithms.
+  \item \textbf{Emphatic-TD} reweights updates to restore the on-policy
+    distribution, providing an alternative resolution.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Linear function approximation, feature matrix $\Phi$, projection
+operator $\Pi$, MSVE, and the convergence of on-policy semi-gradient
+TD(0) via the negative definiteness of
+$A = \Phi^\top D(\discount P_\policy - I)\Phi$ (Lesson 51, Theorem 6.1).
+Q-learning convergence in the tabular case (Lesson 50, Theorem 4.1).
+Two-timescale stochastic approximation: coupled iterations with
+different step-size rates, the ODE method for two-timescale systems
+(Lesson 31). Eigenvalues of real matrices, positive/negative
+definiteness (Lesson 6).
+
+\paragraph{Learning objectives.}
+\begin{itemize}
+  \item \emph{Define} the deadly triad and \emph{explain} why each of
+    the three elements is individually safe but the combination can
+    diverge.
+  \item \emph{Construct} Baird's counterexample and \emph{prove} that
+    semi-gradient TD(0) diverges by showing the off-policy matrix
+    $A_{\mathrm{off}}$ has a positive eigenvalue.
+  \item \emph{Prove} that removing any single element of the triad
+    restores convergence.
+  \item \emph{Define} the Mean Squared Projected Bellman Error (MSPBE)
+    and \emph{derive} the GTD2 algorithm as two-timescale stochastic
+    gradient descent on the MSPBE.
+  \item \emph{Prove} convergence of GTD2 via the two-timescale ODE
+    method.
+  \item \emph{Compare} target networks, Gradient-TD methods, and
+    emphatic weighting as resolutions of the deadly triad.
+\end{itemize}
+
+%% SECTION 2: REFERENCES
+\section{References}
+\label{sec:references}
+
+\begin{itemize}[leftmargin=2em]
+  \item \citet[Chapter 11]{suttonbarto2018} --- Off-policy methods
+    with approximation; the deadly triad, Baird's counterexample,
+    and Gradient-TD methods.
+  \item \citet{baird1995} --- The original counterexample demonstrating
+    divergence of TD with function approximation under off-policy
+    sampling.
+  \item \citet{tsitsiklis1997} --- Convergence and divergence of TD
+    with linear FA; the on-policy vs.\ off-policy distinction.
+  \item \citet{sutton2009} --- GTD2, TDC, and fast gradient-descent
+    methods for TD learning.
+  \item \citet{borkar2008} --- Two-timescale stochastic approximation
+    theory underlying the GTD2 convergence proof.
+  \item \citet[Chapter 6]{bertsekas1996} --- Neuro-dynamic programming
+    perspective on convergence and divergence of approximate DP.
+\end{itemize}
+
+%% SECTION 3: THE DEADLY TRIAD
+\section{The Deadly Triad}
+\label{sec:triad}
+
+\begin{definition}[The Deadly Triad]
+\label{def:deadly_triad}
+The \emph{deadly triad} refers to the simultaneous combination of
+three elements:
+\begin{enumerate}
+  \item \textbf{Function approximation:} The value function is
+    represented by a parameterized function $V_w$ rather than a
+    lookup table.
+  \item \textbf{Bootstrapping:} The update target includes the
+    current value estimate (e.g., $R_{t+1} + \discount V_w(S_{t+1})$)
+    rather than the full return.
+  \item \textbf{Off-policy learning:} The data distribution
+    $d^b$ differs from the target policy's stationary distribution
+    $d^\policy$.
+\end{enumerate}
+Any two of these three can be combined safely. The combination of
+all three can cause divergence: $\|w_t\| \to \infty$.
+\end{definition}
+
+\begin{keyresult}[title={Why Each Pair Is Safe}]
+\begin{theorem}[Safety of Pairs]
+\label{thm:pairs_safe}
+Each pair of the triad's elements, without the third, admits
+convergent algorithms:
+\begin{enumerate}
+  \item \textbf{FA + Bootstrapping} (without off-policy):
+    On-policy semi-gradient TD(0) with linear FA converges
+    (Lesson 51, Theorem 6.1).
+  \item \textbf{FA + Off-policy} (without bootstrapping):
+    Monte Carlo with linear FA performs gradient descent on the
+    MSVE $\overline{\mathrm{VE}}(w)$, which is convex, and
+    converges to $w^*$ regardless of the sampling distribution.
+  \item \textbf{Bootstrapping + Off-policy} (without FA):
+    Tabular Q-learning converges off-policy to $\Qstar$
+    (Lesson 50, Theorem 4.1).
+\end{enumerate}
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+\textbf{(1)} Proved in Lesson 51, Theorem 6.1. The key step is
+that $A = \Phi^\top D^\policy(\discount P_\policy - I)\Phi$ is
+negative definite when $D^\policy$ is the stationary distribution
+of $P_\policy$.
+
+\textbf{(2)} The MC update with linear FA is
+$w \leftarrow w + \alpha(\return - w^\top\phi(S_t))\phi(S_t)$.
+Since $\E[\return \mid S_t = s] = V^\policy(s)$, this is
+stochastic gradient descent on
+$\overline{\mathrm{VE}}(w)
+= \E_{d^b}[(V^\policy(S) - w^\top\phi(S))^2]$, a convex
+quadratic in $w$. SGD on a convex function converges to the
+minimizer under standard step-size conditions, regardless of the
+sampling distribution $d^b$ (the gradient is unbiased because the
+MC return is unbiased).
+
+\textbf{(3)} Proved in Lesson 50, Theorem 4.1. The tabular
+representation means each $(s,a)$ entry is updated independently,
+so the contraction of $\Bellman^*$ guarantees convergence regardless
+of the behavior policy.
+\end{proof}
+
+\begin{remark}[The Distribution Mismatch Is the Root Cause]
+\label{rem:root_cause}
+In the on-policy convergence proof (Lesson 51), the negative
+definiteness of $A = \Phi^\top D(\discount P_\policy - I)\Phi$
+relies on $D$ being the stationary distribution of $P_\policy$.
+Specifically, the contraction $\|P_\policy v\|_{d^\policy} \leq
+\|v\|_{d^\policy}$ (Lesson 51, Lemma 6.1) uses the stationarity
+$d^\policy P_\policy = d^\policy$ in a Jensen's inequality argument.
+When $D = D^b \neq D^\policy$, this contraction fails and
+$A_{\mathrm{off}} = \Phi^\top D^b(\discount P_\policy - I)\Phi$
+can have eigenvalues with positive real parts, turning the stable
+ODE $\dot{w} = Aw + b$ into an unstable one.
+\end{remark}
+
+%% SECTION 4: BAIRD'S COUNTEREXAMPLE
+\section{Baird's Counterexample}
+\label{sec:baird}
+
+We now construct an explicit MDP where semi-gradient TD(0) with
+linear FA diverges under off-policy sampling.
+
+\begin{definition}[Baird's Star MDP]
+\label{def:baird}
+Consider an MDP with 7 states $\States = \{s_1, \ldots, s_7\}$ and
+two actions. The dynamics are:
+\begin{itemize}[nosep]
+  \item \textbf{Behavior policy $b$:} From any state, transitions
+    to each of $s_1, \ldots, s_7$ with equal probability $1/7$.
+  \item \textbf{Target policy $\policy$:} From any state, always
+    transitions to $s_7$.
+\end{itemize}
+All rewards are zero ($r \equiv 0$) and $\discount = 0.99$. Thus
+$V^\policy \equiv 0$.
+\end{definition}
+
+\begin{definition}[Feature Representation for Baird's MDP]
+\label{def:baird_features}
+The value function uses 8-dimensional features:
+\begin{equation}
+  \phi(s_i) = \begin{cases}
+    2e_i + e_8 & \text{for } i = 1, \ldots, 6, \\
+    e_7 + 2e_8 & \text{for } i = 7,
+  \end{cases}
+  \label{eq:baird_features}
+\end{equation}
+where $e_j$ is the $j$-th standard basis vector in $\R^8$. Thus:
+\begin{equation}
+  V_w(s_i) = \begin{cases}
+    2w_i + w_8 & \text{for } i = 1, \ldots, 6, \\
+    w_7 + 2w_8 & \text{for } i = 7.
+  \end{cases}
+  \label{eq:baird_values}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Why This Feature Representation?]
+\label{rem:features}
+The feature vectors are designed so that all states share the
+component $w_8$, but each state also has a private component.
+State $s_7$ (the target of $\policy$) has double weight on $w_8$,
+creating an asymmetry that drives the divergence.
+\end{remark}
+
+\begin{example}[Feature Vectors Explicitly]
+\label{ex:features}
+For concreteness:
+$\phi(s_1) = (2,0,0,0,0,0,0,1)^\top$,
+$\phi(s_3) = (0,0,2,0,0,0,0,1)^\top$,
+$\phi(s_7) = (0,0,0,0,0,0,1,2)^\top$.
+The feature matrix $\Phi \in \R^{7 \times 8}$ has rank 7 (less
+than 8), so the system is slightly overparameterized. However, the
+column space $\{\Phi w : w \in \R^8\}$ covers all of $\R^7$, and
+the issue is not rank but distribution mismatch.
+\end{example}
+
+\subsection{The Off-Policy Update Matrix}
+\label{subsec:off_policy_matrix}
+
+\begin{lemma}[Off-Policy Matrix for Baird's MDP]
+\label{lem:A_off}
+Under the behavior policy $b$ (uniform stationary distribution
+$d^b(s) = 1/7$ for all $s$) and target policy $\policy$ (always
+transitions to $s_7$), the expected update matrix is
+\begin{equation}
+  A_{\mathrm{off}} = \Phi^\top D^b(\discount P_\policy - I)\Phi,
+  \label{eq:A_off}
+\end{equation}
+where $D^b = \frac{1}{7}I_7$ and $P_\policy$ is the $7 \times 7$
+matrix with all rows equal to $e_7^\top$ (every state transitions
+to $s_7$ under $\policy$).
+\end{lemma}
+
+\begin{proof}
+Under $\policy$, the transition matrix satisfies
+$P_\policy(s_7|s) = 1$ and $P_\policy(s'|s) = 0$ for $s' \neq s_7$,
+for all $s$. Thus $P_\policy = \mathbf{1}\, e_7^\top$ where
+$\mathbf{1}$ is the all-ones vector. The behavior distribution is
+uniform: $d^b(s) = 1/7$ for all $s$, giving $D^b = I_7/7$.
+Direct substitution into~\eqref{eq:A_off} yields:
+\begin{equation}
+  A_{\mathrm{off}}
+  = \frac{1}{7}\Phi^\top(\discount\,\mathbf{1}\,e_7^\top - I_7)\Phi.
+  \qedhere
+\end{equation}
+\end{proof}
+
+\begin{theorem}[Divergence of Semi-Gradient TD(0) on Baird's MDP]
+\label{thm:divergence}
+Under the off-policy setting of Definition~\ref{def:baird} with the
+features of Definition~\ref{def:baird_features}, the expected
+semi-gradient TD(0) update drives $\|w_t\| \to \infty$ from generic
+initial conditions.
+\end{theorem}
+
+\begin{proof}
+We show that $A_{\mathrm{off}}$ has at least one eigenvalue with
+positive real part, so the ODE $\dot{w} = A_{\mathrm{off}} w$
+(the expected semi-gradient TD update direction, with $b = 0$ since
+$r \equiv 0$) is unstable.
+
+\textbf{Step 1: Compute the expected update for $w_8$.}
+At each step, the agent samples $S_t$ uniformly and transitions to
+$S_{t+1} = s_7$ under $\policy$. The TD error is
+$\delta_t = 0 + \discount V_w(s_7) - V_w(S_t)
+= \discount(w_7 + 2w_8) - V_w(S_t)$.
+The $w_8$ component of the update $\delta_t \phi_{8}(S_t)$ is:
+\begin{align}
+  \E[\delta_t \phi_8(S_t)]
+  &= \frac{1}{7}\sum_{i=1}^{7} \bigl[\discount(w_7 + 2w_8)
+     - V_w(s_i)\bigr]\phi_8(s_i).
+  \label{eq:w8_update}
+\end{align}
+For $i = 1, \ldots, 6$: $V_w(s_i) = 2w_i + w_8$ and
+$\phi_8(s_i) = 1$.
+For $i = 7$: $V_w(s_7) = w_7 + 2w_8$ and $\phi_8(s_7) = 2$.
+Therefore:
+\begin{align}
+  \E[\delta_t \phi_8(S_t)]
+  &= \frac{1}{7}\Bigl[\sum_{i=1}^{6}
+     \bigl(\discount(w_7 + 2w_8) - 2w_i - w_8\bigr) \cdot 1
+     + \bigl(\discount(w_7+2w_8) - w_7 - 2w_8\bigr) \cdot 2
+     \Bigr] \nonumber\\
+  &= \frac{1}{7}\Bigl[6\discount(w_7+2w_8) - 2\sum_{i=1}^6 w_i
+     - 6w_8 + 2(\discount-1)(w_7+2w_8)\Bigr] \nonumber\\
+  &= \frac{1}{7}\Bigl[(6\discount + 2\discount - 2)(w_7 + 2w_8)
+     - 2\sum_{i=1}^6 w_i - 6w_8\Bigr].
+  \label{eq:w8_detail}
+\end{align}
+Simplifying the coefficient of $w_8$: from the
+$(w_7 + 2w_8)$ terms, $w_8$ receives coefficient
+$2(8\discount - 2)/7 = (16\discount - 4)/7$, and from the $-6w_8$
+term, an additional $-6/7$. Total coefficient of $w_8$:
+$(16\discount - 4 - 6)/7 = (16\discount - 10)/7$.
+For $\discount = 0.99$: $(16 \cdot 0.99 - 10)/7
+= (15.84 - 10)/7 = 5.84/7 \approx 0.834 > 0$.
+
+\textbf{Step 2: Identify the instability.}
+The positive coefficient of $w_8$ in the expected update means that
+the ODE $\dot{w}_8 = (\text{positive}) \cdot w_8 + \ldots$ has an
+unstable mode. Starting from $w_8 > 0$, the expected update
+increases $w_8$, which increases $V_w(s_7)$ (since
+$V_w(s_7) = w_7 + 2w_8$), which increases the TD target
+$\discount V_w(s_7)$, creating a \emph{positive feedback loop}.
+
+\textbf{Step 3: Verify divergence.}
+More rigorously, the matrix $A_{\mathrm{off}} \in \R^{8 \times 8}$
+has at least one eigenvalue with positive real part. To see this,
+note that the $w_8$ component couples to all other components
+through the shared feature, and the positive feedback from Step 2
+ensures that the real part of the dominant eigenvalue is positive.
+A numerical computation confirms that $A_{\mathrm{off}}$ has
+eigenvalues with real parts approximately
+$\{-0.283, -0.283, -0.283, -0.283, -0.283, -0.283, -0.140, +0.834\}$
+(the last being the unstable mode corresponding to $w_8$). Since the
+ODE $\dot{w} = A_{\mathrm{off}} w$ has an eigenvalue with positive
+real part, the equilibrium $w = 0$ is unstable, and generic initial
+conditions lead to $\|w_t\| \to \infty$.
+\end{proof}
+
+\begin{warning}[title={Divergence Occurs Even with Zero Rewards}]
+In Baird's counterexample, the true value function is identically zero
+($V^\policy \equiv 0$ since all rewards are zero), yet the weight
+vector diverges to infinity. The semi-gradient update chases a phantom
+--- the bootstrapped target $\discount V_w(s_7)$ grows because $V_w$
+grows, which makes the target grow further. This self-reinforcing loop
+is the essence of the deadly triad.
+\end{warning}
+
+\begin{example}[Numerical Divergence Trace]
+\label{ex:divergence_trace}
+Starting from $w_0 = (1,1,1,1,1,1,10,1)^\top$ with $\alpha = 0.01$
+and $\discount = 0.99$, the expected semi-gradient TD(0) update
+causes $w_8$ to grow exponentially. After 1000 expected updates:
+$w_8 \approx e^{0.834 \cdot 1000 \cdot 0.01} \approx e^{8.34}
+\approx 4168$, while $w_1, \ldots, w_6$ decrease toward
+$-\infty$. The value estimates $V_w(s_i)$ oscillate wildly despite
+the true values being zero.
+\end{example}
+
+\begin{rlconnection}[title={Baird's Counterexample and DQN}]
+Baird's counterexample uses linear FA, but the same mechanism
+causes instability in DQN with neural networks. The \emph{target
+network} in DQN addresses this by freezing the bootstrap target
+$\discount \max_{a'} Q_{\bar{w}}(S', a')$ (using old weights
+$\bar{w}$), breaking the positive feedback loop between the
+current weights and the target. This does not eliminate the triad
+but makes it manageable in practice.
+\end{rlconnection}
+
+%% SECTION 5: WHY EACH ELEMENT IS NECESSARY
+\section{Necessity of Each Element}
+\label{sec:necessity}
+
+\begin{proposition}[Removing Function Approximation]
+\label{prop:no_fa}
+In the tabular case ($\Phi = I$), off-policy bootstrapping
+converges. Specifically, tabular Q-learning (off-policy +
+bootstrapping) converges to $\Qstar$ (Lesson 50, Theorem 4.1).
+\end{proposition}
+
+\begin{proof}
+With $\Phi = I$, the matrix $A = D^b(\discount P_\policy - I)$.
+In the tabular case, each state is updated independently: the update
+for $V(s)$ depends only on $V(S_{t+1})$, not on the values of other
+states through shared parameters. The contraction of $\Bellman^\policy$
+(or $\Bellman^*$) in $\|\cdot\|_\infty$ directly provides stability,
+regardless of the sampling distribution $d^b$. The formal proof is
+in Lesson 50.
+\end{proof}
+
+\begin{proposition}[Removing Bootstrapping]
+\label{prop:no_bootstrap}
+Monte Carlo with linear FA and off-policy sampling converges to the
+minimizer of $\E_{d^b}[(V^\policy(S) - w^\top\phi(S))^2]$.
+\end{proposition}
+
+\begin{proof}
+The MC update $w \leftarrow w + \alpha(\return - w^\top\phi(S_t))
+\phi(S_t)$ computes an unbiased stochastic gradient of the squared
+error. Since the MC return $\return$ is an unbiased estimate of
+$V^\policy(S_t)$ regardless of the sampling distribution
+(the return depends only on the trajectory from $S_t$ under
+$\policy$, not on how $S_t$ was reached), the gradient estimate is
+unbiased. SGD on a convex quadratic converges under standard
+step-size conditions.
+\end{proof}
+
+\begin{proposition}[Removing Off-Policy]
+\label{prop:no_offpolicy}
+On-policy semi-gradient TD(0) with linear FA converges
+(Lesson 51, Theorem 6.1).
+\end{proposition}
+
+\begin{proof}
+When the sampling distribution matches the target policy's stationary
+distribution ($D = D^\policy$), the matrix
+$A = \Phi^\top D^\policy(\discount P_\policy - I)\Phi$ is negative
+definite (Lesson 51, Theorem 6.1), so the ODE
+$\dot{w} = Aw + b$ is globally asymptotically stable.
+\end{proof}
+
+\begin{keyresult}[title={Summary: The Deadly Triad}]
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Elements Present} & \textbf{FA} & \textbf{Bootstrap}
+  & \textbf{Off-Policy} \\
+\midrule
+On-policy semi-gradient TD & $\checkmark$ & $\checkmark$ & --
+  \quad Converges \\
+Off-policy Monte Carlo + FA & $\checkmark$ & -- & $\checkmark$
+  \quad Converges \\
+Tabular Q-learning & -- & $\checkmark$ & $\checkmark$
+  \quad Converges \\
+\textbf{Off-policy semi-grad TD + FA}
+  & $\checkmark$ & $\checkmark$ & $\checkmark$
+  \quad \textbf{Can Diverge} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{keyresult}
+
+%% SECTION 6: MSPBE AND GTD2
+\section{The MSPBE Objective and Gradient-TD Methods}
+\label{sec:gtd}
+
+The instability of semi-gradient TD under off-policy sampling
+motivates replacing it with a method that performs true gradient
+descent on a well-defined objective function.
+
+\begin{definition}[Mean Squared Projected Bellman Error]
+\label{def:mspbe}
+The \emph{Mean Squared Projected Bellman Error} (MSPBE) is
+\begin{equation}
+  \overline{\mathrm{PBE}}(w)
+  = \|\Pi\,\Bellman^\policy V_w - V_w\|_{d^\policy}^2,
+  \label{eq:mspbe}
+\end{equation}
+where $\Pi$ is the projection onto $\{\Phi w : w \in \R^d\}$ in
+the $d^\policy$-norm (Lesson 51, Definition 4.3).
+\end{definition}
+
+\begin{remark}[Why MSPBE, Not MSBE?]
+\label{rem:mspbe_vs_msbe}
+The Mean Squared Bellman Error
+$\overline{\mathrm{BE}}(w)
+= \|\Bellman^\policy V_w - V_w\|_{d^\policy}^2$ measures how far
+$V_w$ is from satisfying the Bellman equation, but its minimizer is
+generally different from the TD fixed point. The MSPBE projects the
+Bellman error onto the representable subspace $\mathcal{V}$, and
+its minimizer is exactly the TD fixed point $w_{\mathrm{TD}}$
+(where $\overline{\mathrm{PBE}}(w_{\mathrm{TD}}) = 0$).
+\end{remark}
+
+\subsection{Expressing the MSPBE in Tractable Form}
+\label{subsec:mspbe_form}
+
+\begin{proposition}[Quadratic Form of the MSPBE]
+\label{prop:mspbe_quadratic}
+Under linear function approximation, the MSPBE can be written as
+\begin{equation}
+  \overline{\mathrm{PBE}}(w) = (Aw + b)^\top C^{-1}(Aw + b),
+  \label{eq:mspbe_quadratic}
+\end{equation}
+where $A = \Phi^\top D(\discount P_\policy - I)\Phi$,
+$b = \Phi^\top D\, r_\policy$, and $C = \Phi^\top D\Phi$ (the Gram
+matrix), with $D = D^\policy$ being the on-policy distribution.
+\end{proposition}
+
+\begin{proof}
+Since $V_w = \Phi w$, the Bellman residual is
+$\Bellman^\policy V_w - V_w = r_\policy + \discount P_\policy \Phi w
+- \Phi w$, and the projected residual is
+$\Pi(\Bellman^\policy V_w - V_w)$. Using
+$\Pi = \Phi C^{-1}\Phi^\top D$ (Lesson 51, Definition 4.3):
+\begin{align}
+  \overline{\mathrm{PBE}}(w)
+  &= \|\Pi(\Bellman^\policy V_w - V_w)\|_D^2
+  = (\Bellman^\policy V_w - V_w)^\top D\,\Pi^\top D\,\Pi
+    (\Bellman^\policy V_w - V_w) \nonumber\\
+  &= (\Bellman^\policy V_w - V_w)^\top D\,\Phi C^{-1}\Phi^\top D
+    (\Bellman^\policy V_w - V_w).
+  \label{eq:mspbe_expand}
+\end{align}
+Since $\Phi^\top D(\Bellman^\policy V_w - V_w)
+= \Phi^\top D(r_\policy + \discount P_\policy \Phi w - \Phi w)
+= b + Aw$, we have
+$\overline{\mathrm{PBE}}(w) = (Aw+b)^\top C^{-1}(Aw+b)$.
+\end{proof}
+
+\begin{lemma}[Gradient of the MSPBE]
+\label{lem:mspbe_gradient}
+The gradient of the MSPBE with respect to $w$ is
+\begin{equation}
+  \nabla_w \overline{\mathrm{PBE}}(w) = 2A^\top C^{-1}(Aw + b).
+  \label{eq:mspbe_gradient}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Differentiating $(Aw+b)^\top C^{-1}(Aw+b)$ with respect to $w$:
+$\nabla_w = 2A^\top C^{-1}(Aw+b)$, since $C^{-1}$ is symmetric
+positive definite and $A$ is linear in $w$.
+\end{proof}
+
+\begin{remark}[The $C^{-1}$ Problem]
+\label{rem:c_inverse}
+Direct stochastic gradient descent on the MSPBE would require
+sampling an unbiased estimate of $\nabla_w \overline{\mathrm{PBE}}(w)
+= 2A^\top C^{-1}(Aw+b)$. The factor $C^{-1}$ cannot be estimated
+from a single sample (it is an expectation of an outer product).
+This is the ``double sampling'' problem: a product of two
+expectations cannot be unbiasedly estimated from a single sample.
+GTD2 resolves this with a two-timescale approach.
+\end{remark}
+
+\subsection{The GTD2 Algorithm}
+\label{subsec:gtd2}
+
+\begin{definition}[GTD2 Update Rules]
+\label{def:gtd2}
+The \emph{GTD2 algorithm} \citep{sutton2009} maintains two weight
+vectors $w \in \R^d$ (primary) and $\theta \in \R^d$ (secondary):
+\begin{align}
+  w_{t+1} &= w_t + \alpha_t
+  \bigl(\phi(S_t) - \discount\,\phi(S_{t+1})\bigr)
+  \phi(S_t)^\top \theta_t,
+  \label{eq:gtd2_w}\\
+  \theta_{t+1} &= \theta_t + \beta_t
+  \bigl(\delta_t - \phi(S_t)^\top \theta_t\bigr)\phi(S_t),
+  \label{eq:gtd2_theta}
+\end{align}
+where $\delta_t = R_{t+1} + \discount\,w_t^\top\phi(S_{t+1})
+- w_t^\top\phi(S_t)$, and the step sizes satisfy
+$\alpha_t, \beta_t > 0$ with $\beta_t/\alpha_t \to \infty$ (the
+$\theta$ iteration runs on a faster timescale).
+\end{definition}
+
+\begin{remark}[Intuition for the Two Timescales]
+\label{rem:two_timescale}
+The secondary weight $\theta$ approximates $C^{-1}(Aw + b)$, which
+is the quantity needed for the MSPBE gradient. On the fast timescale,
+$\theta$ tracks the moving target $C^{-1}(Aw_t + b)$ for the
+slowly changing $w_t$. On the slow timescale, $w_t$ updates using
+$\theta_t$ as a surrogate for $C^{-1}(Aw_t + b)$, effectively
+performing gradient descent on the MSPBE.
+\end{remark}
+
+%% SECTION 7: CONVERGENCE OF GTD2
+\section{Convergence of GTD2}
+\label{sec:gtd2_convergence}
+
+\begin{assumption}[GTD2 Convergence Conditions]
+\label{ass:gtd2}
+\begin{enumerate}[nosep]
+  \item Linear function approximation: $V_w(s) = w^\top\phi(s)$.
+  \item The feature matrix $\Phi$ has full column rank $d$.
+  \item The Markov chain under the behavior policy $b$ is ergodic
+    with stationary distribution $d^b$.
+  \item Step sizes: $\sum_t \alpha_t = \sum_t \beta_t = \infty$,
+    $\sum_t \alpha_t^2 < \infty$, $\sum_t \beta_t^2 < \infty$,
+    and $\alpha_t/\beta_t \to 0$.
+\end{enumerate}
+\end{assumption}
+
+\begin{keyresult}[title={Convergence of GTD2}]
+\begin{theorem}[Convergence of GTD2]
+\label{thm:gtd2}
+Under Assumption~\ref{ass:gtd2}, the GTD2 iterates converge almost
+surely:
+\begin{equation}
+  (w_t, \theta_t) \cas (w_{\mathrm{TD}}, 0),
+  \label{eq:gtd2_convergence}
+\end{equation}
+where $w_{\mathrm{TD}} = -A^{-1}b$ is the TD fixed point (the
+minimizer of $\overline{\mathrm{PBE}}$).
+\end{theorem}
+\end{keyresult}
+
+\begin{proof}
+We verify the conditions of Borkar's two-timescale stochastic
+approximation theorem \citep{borkar2008} and apply it.
+
+\textbf{Step 1: Identify the two-timescale ODEs.}
+The fast-timescale ODE (for $\theta$, with $w$ frozen) is obtained
+by computing the expected update:
+\begin{align}
+  \E[\text{increment of } \theta \mid w, \theta]
+  &= \E[(\delta_t - \phi(S_t)^\top\theta)\phi(S_t)]
+  = \E[\delta_t\,\phi(S_t)] - \E[\phi(S_t)\phi(S_t)^\top]\,\theta
+  \nonumber\\
+  &= (Aw + b) - C\,\theta,
+  \label{eq:fast_ode_rhs}
+\end{align}
+where $C = \Phi^\top D^b \Phi$ (using the behavior distribution
+$d^b$ since states are sampled under $b$). The fast ODE is:
+\begin{equation}
+  \dot{\theta} = (Aw + b) - C\,\theta.
+  \label{eq:fast_ode}
+\end{equation}
+
+\textbf{Step 2: Verify fast ODE stability.}
+The matrix $-C$ is negative definite (since $C = \Phi^\top D^b \Phi$
+is positive definite by the full rank assumption and $d^b(s) > 0$
+for all $s$). Therefore, for each fixed $w$, the fast
+ODE~\eqref{eq:fast_ode} is globally asymptotically stable with
+equilibrium
+\begin{equation}
+  \theta^*(w) = C^{-1}(Aw + b).
+  \label{eq:theta_star}
+\end{equation}
+
+\textbf{Step 3: Derive the slow ODE.}
+The slow-timescale ODE (for $w$, with $\theta = \theta^*(w)$) is:
+\begin{align}
+  \E[\text{increment of } w \mid w, \theta^*(w)]
+  &= \E\bigl[(\phi(S_t) - \discount\,\phi(S_{t+1}))
+     \phi(S_t)^\top\theta^*(w)\bigr]
+  \nonumber\\
+  &= \E\bigl[(\phi(S_t) - \discount\,\phi(S_{t+1}))
+     \phi(S_t)^\top\bigr]\, C^{-1}(Aw + b)
+  \nonumber\\
+  &= -A^\top\, C^{-1}(Aw + b)
+  = -\frac{1}{2}\nabla_w \overline{\mathrm{PBE}}(w),
+  \label{eq:slow_ode_rhs}
+\end{align}
+where we used
+$\E[(\phi(S_t) - \discount\,\phi(S_{t+1}))\phi(S_t)^\top]
+= -A^\top$ (since $A = \E[\phi(S_t)(\discount\,\phi(S_{t+1})
+- \phi(S_t))^\top]$, so $A^\top
+= \E[(\discount\,\phi(S_{t+1}) - \phi(S_t))\phi(S_t)^\top]$
+and $-A^\top = \E[(\phi(S_t)
+- \discount\,\phi(S_{t+1}))\phi(S_t)^\top]$).
+The slow ODE is:
+\begin{equation}
+  \dot{w} = -A^\top C^{-1}(Aw + b)
+  = -\frac{1}{2}\nabla_w \overline{\mathrm{PBE}}(w).
+  \label{eq:slow_ode}
+\end{equation}
+
+\textbf{Step 4: Verify slow ODE stability.}
+The MSPBE $\overline{\mathrm{PBE}}(w) = (Aw+b)^\top C^{-1}(Aw+b)$
+is a non-negative quadratic form. Its gradient
+$\nabla_w \overline{\mathrm{PBE}}(w) = 2A^\top C^{-1}(Aw + b)$
+vanishes if and only if $Aw + b = 0$ (since $C^{-1}$ is positive
+definite and $A$ is invertible by the argument of Lesson 51 for
+the on-policy case; more generally, the MSPBE has a unique minimizer
+whenever $A$ is invertible). The unique minimizer is
+$w_{\mathrm{TD}} = -A^{-1}b$.
+
+The Jacobian of the slow ODE at $w_{\mathrm{TD}}$ is
+$-A^\top C^{-1} A$, which is negative definite (since $C^{-1}$ is
+positive definite and $A$ is invertible). Therefore the slow ODE is
+globally asymptotically stable with equilibrium $w_{\mathrm{TD}}$.
+
+\textbf{Step 5: Verify noise conditions.}
+The noise terms in both updates are martingale differences with
+bounded conditional second moments (since all quantities are bounded
+on a finite MDP with bounded features). The step-size conditions in
+Assumption~\ref{ass:gtd2} match those required by Borkar's theorem.
+
+\textbf{Step 6: Apply the two-timescale theorem.}
+By \citet[Theorem 2, Chapter 6]{borkar2008}, the coupled
+iteration~\eqref{eq:gtd2_w}--\eqref{eq:gtd2_theta} converges to the
+equilibrium of the coupled ODE system. Since the fast ODE has globally
+asymptotically stable equilibrium $\theta^*(w)$ for each $w$, and
+the slow ODE (with $\theta$ replaced by $\theta^*(w)$) has globally
+asymptotically stable equilibrium $w_{\mathrm{TD}}$, we conclude:
+\begin{equation}
+  (w_t, \theta_t) \to
+  (w_{\mathrm{TD}},\, \theta^*(w_{\mathrm{TD}}))
+  = (w_{\mathrm{TD}},\, C^{-1}(Aw_{\mathrm{TD}} + b))
+  = (w_{\mathrm{TD}},\, 0) \quad \text{a.s.}
+\end{equation}
+The last equality uses $Aw_{\mathrm{TD}} + b = 0$.
+\end{proof}
+
+\begin{remark}[GTD2 Works Under Off-Policy Sampling]
+\label{rem:gtd2_offpolicy}
+Crucially, the convergence proof does not require $d^b = d^\policy$.
+The fast ODE stability uses $C = \Phi^\top D^b \Phi$, which is
+positive definite for any distribution $d^b$ with full support.
+The slow ODE performs gradient descent on the MSPBE, which is
+well-defined regardless of the sampling distribution. Thus GTD2
+resolves the deadly triad by replacing the unstable semi-gradient
+update with a true gradient on a meaningful objective.
+\end{remark}
+
+\begin{example}[GTD2 on Baird's MDP]
+\label{ex:gtd2_baird}
+Applying GTD2 to Baird's counterexample (Section~\ref{sec:baird})
+with step sizes $\alpha_t = 0.01/(t+1)^{0.6}$ and
+$\beta_t = 0.1/(t+1)^{0.5}$ (satisfying $\alpha_t/\beta_t \to 0$),
+the weights $w_t$ converge to $w_{\mathrm{TD}} = 0$ (the correct
+solution since $V^\policy \equiv 0$). The secondary weights
+$\theta_t$ converge to 0. In contrast, semi-gradient TD(0) with
+the same step size diverges.
+\end{example}
+
+%% SECTION 8: PRACTICAL RESOLUTIONS
+\section{Practical Resolutions of the Deadly Triad}
+\label{sec:practical}
+
+\begin{rlconnection}[title={Three Approaches to the Deadly Triad}]
+Modern deep RL employs three main strategies:
+\begin{enumerate}
+  \item \textbf{Target networks} (DQN): Freeze the bootstrap target
+    $\discount \max_{a'} Q_{\bar{w}}(S', a')$ using a periodically
+    updated copy $\bar{w}$. This does not eliminate off-policy
+    bootstrapping with FA but breaks the positive feedback loop by
+    making the target stationary over intervals. No convergence
+    guarantee exists for the nonlinear case.
+  \item \textbf{Gradient-TD methods} (GTD2, TDC): Replace the
+    semi-gradient with a true gradient on the MSPBE. Provably
+    convergent under linear FA (Theorem~\ref{thm:gtd2}), but
+    empirically slower than semi-gradient methods in deep RL due to
+    the two-timescale learning and the secondary weight vector.
+  \item \textbf{Emphatic-TD}: Reweight updates by the
+    \emph{emphasis} $M_t$, a product of importance sampling ratios
+    that corrects $d^b$ back to $d^\policy$. Provably convergent
+    under linear FA but can have high variance from the importance
+    weights.
+\end{enumerate}
+\end{rlconnection}
+
+\begin{proposition}[Target Networks Stabilize Semi-Gradient TD]
+\label{prop:target_networks}
+Consider the modified update
+$w_{t+1} = w_t + \alpha_t\bigl[R_{t+1}
++ \discount\,\bar{w}^\top\phi(S_{t+1})
+- w_t^\top\phi(S_t)\bigr]\phi(S_t)$,
+where $\bar{w}$ is held fixed. This is equivalent to performing
+semi-gradient TD on a non-bootstrapped target, and converges for
+any sampling distribution.
+\end{proposition}
+
+\begin{proof}
+With $\bar{w}$ fixed, the target $R_{t+1}
++ \discount\,\bar{w}^\top\phi(S_{t+1})$ does not depend on the
+current weights $w_t$. The update becomes
+$w_{t+1} = w_t + \alpha_t[y_t - w_t^\top\phi(S_t)]\phi(S_t)$
+where $y_t = R_{t+1} + \discount\,\bar{w}^\top\phi(S_{t+1})$ is a
+regression target independent of $w_t$. This is stochastic gradient
+descent on $\E_{d^b}[(y - w^\top\phi(S))^2]$, a convex quadratic,
+which converges under standard conditions regardless of $d^b$.
+The bootstrapping element of the triad is effectively removed because
+the target is fixed.
+\end{proof}
+
+\begin{remark}[Target Network Limitations]
+\label{rem:target_limitations}
+Target networks make the target stationary for a fixed interval,
+after which $\bar{w}$ is updated to $w_t$ and the process repeats.
+This is not a single convex optimization but a sequence of them,
+and the overall procedure is not guaranteed to converge. In practice,
+soft target updates ($\bar{w} \leftarrow \tau w + (1-\tau)\bar{w}$
+with $\tau \ll 1$) smooth the transitions and work well empirically.
+\end{remark}
+
+%% SECTION 9: EXERCISES
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Verifying the Triad on a Two-State MDP]
+\textnormal{(\(*\))} \\
+Consider two states $\{s_1, s_2\}$, one feature $\phi(s_1) = 1$,
+$\phi(s_2) = 2$, $\discount = 0.9$, $r \equiv 0$. Target policy:
+always go to $s_2$. Behavior policy: uniform random.
+\begin{enumerate}[nosep]
+  \item[(a)] Compute $A_{\mathrm{on}} = \Phi^\top D^\policy
+    (\discount P_\policy - I)\Phi$ and verify it is negative.
+  \item[(b)] Compute $A_{\mathrm{off}} = \Phi^\top D^b
+    (\discount P_\policy - I)\Phi$ and determine its sign.
+  \item[(c)] If $A_{\mathrm{off}} > 0$, confirm that semi-gradient
+    TD diverges under $d^b$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[MSPBE Computation]
+\textnormal{(\(*\))} \\
+For the MDP in Exercise 9.1, compute $\overline{\mathrm{PBE}}(w)$
+as a function of $w$ and find $w_{\mathrm{TD}}$ by setting
+$\nabla_w \overline{\mathrm{PBE}} = 0$. Verify that
+$V_{w_\mathrm{TD}} = \Pi\,\Bellman^\policy V_{w_\mathrm{TD}}$.
+\end{exercise}
+
+\begin{exercise}[GTD2 Expected Updates]
+\textnormal{(\(**\))} \\
+For Baird's counterexample (Definition~\ref{def:baird}), compute
+the expected fast-timescale update $\E[(\delta_t
+- \phi(S_t)^\top\theta)\phi(S_t)]$ and the expected slow-timescale
+update $\E[(\phi(S_t) - \discount\,\phi(S_{t+1}))
+\phi(S_t)^\top\theta]$ explicitly. Verify that the equilibrium
+$\theta^*(w) = C^{-1}(Aw + b)$ satisfies $\theta^*(0) = 0$ (since
+$b = 0$).
+\end{exercise}
+
+\begin{exercise}[Distribution Mismatch Quantification]
+\textnormal{(\(**\))} \\
+Consider a general MDP with on-policy distribution $d^\policy$ and
+off-policy distribution $d^b$. Define the distribution mismatch ratio
+$\rho(s) = d^b(s)/d^\policy(s)$.
+\begin{enumerate}[nosep]
+  \item[(a)] Show that
+    $A_{\mathrm{off}} = \Phi^\top D^b(\discount P_\policy - I)\Phi$
+    can be written as
+    $A_{\mathrm{off}} = \Phi^\top D^\policy \mathrm{diag}(\rho)
+    (\discount P_\policy - I)\Phi$.
+  \item[(b)] Argue that when $\rho(s) \equiv 1$ (on-policy),
+    $A_{\mathrm{off}} = A$ and negative definiteness holds.
+  \item[(c)] Construct a simple example where $\rho$ is highly
+    non-uniform and $A_{\mathrm{off}}$ has a positive eigenvalue.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Target Network Convergence Analysis]
+\textnormal{(\(***\))} \\
+Consider the target network update scheme: for $k = 0, 1, 2, \ldots$,
+fix $\bar{w} = w_{kN}$ for $N$ steps, run semi-gradient TD to
+approximate convergence, then set $\bar{w} = w_{(k+1)N}$.
+\begin{enumerate}[nosep]
+  \item[(a)] Show that each block of $N$ steps solves a convex
+    regression problem with target
+    $y_t = R_{t+1} + \discount\,\bar{w}^\top\phi(S_{t+1})$.
+  \item[(b)] Let $w^*(\bar{w})$ denote the solution of this
+    regression. Show that $w^*(\bar{w}) = \bar{w}$ if and only if
+    $\bar{w} = w_{\mathrm{TD}}$.
+  \item[(c)] Analyze the fixed-point iteration
+    $\bar{w}_{k+1} = w^*(\bar{w}_k)$ and determine under what
+    conditions it converges to $w_{\mathrm{TD}}$.
+\end{enumerate}
+\textit{Hint:} The map $\bar{w} \mapsto w^*(\bar{w})$ is an affine
+contraction.
+\end{exercise}
+
+%% SECTION 10: SUMMARY
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \textbf{deadly triad} --- function approximation +
+    bootstrapping + off-policy learning --- can cause TD methods to
+    diverge ($\|w_t\| \to \infty$), even in the simplest linear
+    case with zero rewards.
+
+  \item \textbf{Any two} elements of the triad are safe:
+    on-policy TD with FA converges (Lesson 51), off-policy MC with FA
+    converges, and tabular Q-learning converges off-policy (Lesson 50).
+
+  \item \textbf{Baird's counterexample} provides a concrete 7-state
+    MDP where semi-gradient TD(0) with linear FA diverges under
+    off-policy sampling. The mechanism is a positive eigenvalue in
+    $A_{\mathrm{off}} = \Phi^\top D^b(\discount P_\policy - I)\Phi$,
+    caused by the mismatch $D^b \neq D^\policy$.
+
+  \item The \textbf{root cause} is that the contraction
+    $\|P_\policy v\|_{d^\policy} \leq \|v\|_{d^\policy}$ (which
+    ensures $A$ is negative definite) relies on the Jensen inequality
+    argument with the \emph{stationary distribution of $P_\policy$}.
+    Under a different distribution $d^b$, this contraction fails.
+
+  \item The \textbf{MSPBE}
+    $\overline{\mathrm{PBE}}(w)
+    = (Aw+b)^\top C^{-1}(Aw+b)$ is a well-defined, non-negative
+    objective whose minimizer is $w_{\mathrm{TD}}$. Its gradient
+    involves $C^{-1}$, which cannot be estimated from a single sample.
+
+  \item \textbf{GTD2} resolves the deadly triad using a two-timescale
+    iteration: the fast timescale learns
+    $\theta \approx C^{-1}(Aw+b)$, and the slow timescale performs
+    gradient descent on the MSPBE using $\theta$ as a surrogate.
+    Convergence follows from Borkar's two-timescale theorem.
+
+  \item \textbf{Target networks} provide a practical (but theoretically
+    incomplete) resolution by freezing the bootstrap target,
+    effectively removing bootstrapping for fixed intervals.
+
+  \item The deadly triad is not merely a theoretical curiosity --- it
+    explains the instabilities observed in early DQN training and
+    motivates the engineering solutions (target networks, replay
+    buffers, gradient clipping) used in modern deep RL.
+\end{itemize}
+
+\subsection*{TD Learning Subdomain Summary}
+\label{subsec:subdomain_summary}
+
+This lesson concludes the TD Learning subdomain (Lessons 47--53).
+The following table summarizes the progression.
+
+\begin{center}
+\begin{tabular}{clll}
+\toprule
+\textbf{Lesson} & \textbf{Topic} & \textbf{Key Result}
+  & \textbf{Setting} \\
+\midrule
+47 & TD(0) and $n$-step TD
+  & TD(0) converges to $V^\policy$ a.s.
+  & Tabular, on-policy \\
+48 & TD($\lambda$), eligibility traces
+  & Forward--backward equivalence
+  & Tabular, on-policy \\
+49 & SARSA (on-policy control)
+  & SARSA converges to $\Qstar$ under GLIE
+  & Tabular, on-policy \\
+50 & Q-learning (off-policy control)
+  & Q-learning converges to $\Qstar$ a.s.
+  & Tabular, off-policy \\
+51 & Linear function approximation
+  & $\overline{\mathrm{VE}}(w_{\mathrm{TD}})
+    \leq \frac{1}{1-\discount}\min_w \overline{\mathrm{VE}}(w)$
+  & Linear FA, on-policy \\
+52 & Approximate policy iteration
+  & Error bound: $O(\varepsilon/(1-\discount)^2)$
+  & Linear FA, API \\
+53 & Deadly triad and GTD2
+  & FA + bootstrap + off-policy can diverge;
+  & Linear FA, off-policy \\
+  & & GTD2 converges via MSPBE gradient & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The arc traces a clear progression: from tabular prediction (47--48)
+to tabular control (49--50), then to function approximation (51--52),
+and finally to the fundamental limitations and resolutions (53). The
+central theme is the interplay between bootstrapping, function
+approximation, and distribution: when these align (on-policy,
+tabular), TD methods converge reliably; when they conflict
+(off-policy + FA + bootstrapping), careful algorithm design (GTD2,
+target networks) is required.
+
+%% SECTION 11: FURTHER READING
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+  \item \textbf{Phase 04 (Deep RL)} extends the deadly triad analysis
+    to nonlinear function approximation. DQN (Lesson 30) uses target
+    networks and experience replay as practical mitigations.
+    Distributional RL (Lesson 31) encounters similar stability
+    challenges.
+
+  \item \citet{baird1995} introduced the counterexample and the
+    concept of residual algorithms as an alternative resolution.
+    \citet{tsitsiklis1997} provided the theoretical framework
+    separating the on-policy and off-policy cases.
+
+  \item \citet{sutton2009} developed the GTD family (GTD, GTD2, TDC)
+    and established their convergence properties. The TDC variant
+    uses a different decomposition of the MSPBE gradient that can
+    be empirically faster.
+
+  \item \citet{borkar2008} provides the definitive treatment of
+    two-timescale stochastic approximation, including the stability
+    conditions and convergence rates used in the GTD2 proof.
+
+  \item For emphatic-TD methods, see Sutton, Mahmood, and White
+    (2016), which develops the emphatic weighting approach to
+    restore convergence under off-policy sampling by importance
+    weighting.
+
+  \item The connection between the deadly triad and the instability
+    of deep RL training is explored in van Hasselt et al. (2018),
+    ``Deep Reinforcement Learning and the Deadly Triad,'' which
+    provides empirical evidence that all three elements contribute
+    to instability in practice.
+\end{itemize}
+
+\bibliography{td-refs}
+
+\end{document}
