@@ -1,0 +1,1014 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 61: Kernel Methods}}
+\fancyhead[R]{\thepage}
+\title{Lesson 61: Kernel Methods}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider the problem of classifying data points in $\R^2$ that are not
+linearly separable---for instance, points arranged in two concentric
+circles. A linear classifier in $\R^2$ cannot separate them, but
+if we map each point $(x_1, x_2)$ to a higher-dimensional feature
+space via $\feature(x_1, x_2) = (x_1^2, x_2^2, \sqrt{2}\, x_1 x_2)
+\in \R^3$, the classes may become linearly separable. The difficulty
+is that such feature maps can be extremely high-dimensional: a
+degree-$p$ polynomial map on $\R^d$ produces features in
+$\R^{\binom{d+p}{p}}$, which for $d = 1000$ and $p = 5$ exceeds
+$10^{13}$. Computing and storing these feature vectors is infeasible.
+
+The \emph{kernel trick} resolves this: if the learning algorithm
+depends on the data only through inner products
+$\langle \feature(x), \feature(x') \rangle$, we can replace
+this inner product by a kernel function $\kernel(x, x')$ that
+is computable in $O(d)$ time, bypassing the explicit
+feature map entirely. This lesson develops the mathematical
+foundations of kernel methods: the kernel trick, positive definite
+kernels, Mercer's theorem providing the spectral foundation, and
+systematic methods for constructing kernels. The tools developed in
+this lesson will let us build the reproducing kernel Hilbert spaces
+(RKHS) framework in Lesson~62 and connect kernel methods to neural
+network theory.
+
+\begin{rlconnection}[title={Why Kernel Methods Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Support vector machines:} SVMs solve a quadratic
+    program whose objective and constraints depend on the data only
+    through the Gram matrix $K_{ij} = \kernel(x_i, x_j)$. Replacing
+    $\kernel$ with a nonlinear kernel yields nonlinear decision
+    boundaries without modifying the optimization algorithm.
+    \item \textbf{Gaussian processes:} A GP prior is specified by a
+    mean function and a kernel $\kernel(x, x')$. The posterior
+    predictions, uncertainty quantification, and Bayesian optimization
+    acquisitions all flow from kernel evaluations.
+    \item \textbf{Neural tangent kernel (NTK):} In the infinite-width
+    limit, a neural network trained by gradient descent evolves as a
+    linear model in a kernel regime, where the NTK
+    $\Theta(x, x') = \langle \nabla_\theta f_\theta(x),
+    \nabla_\theta f_\theta(x') \rangle$ governs learning dynamics.
+    \item \textbf{Value function approximation:} Kernel-based
+    temporal difference methods (e.g., KLSTD) represent the value
+    function in an RKHS, enabling nonparametric approximation with
+    convergence guarantees.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Inner product spaces and the spectral theorem for compact
+self-adjoint operators (Lesson~7, Lesson~19). $L^2$ spaces and
+integration (Lesson~3, Lesson~5). Basic linear algebra: eigenvalues,
+positive semidefiniteness (Lesson~6). Hypothesis classes and
+empirical risk minimization (Lesson~59). Bias-variance tradeoff
+(Lesson~60).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Explain} the kernel trick and \emph{identify} when
+    an algorithm can be kernelized.
+    \item \emph{Define} positive definite kernels and \emph{prove}
+    that inner-product kernels are positive definite.
+    \item \emph{Prove} closure properties of the class of positive
+    definite kernels (sums, products, limits).
+    \item \emph{State} Mercer's theorem and \emph{derive} the
+    eigenexpansion of a continuous positive definite kernel.
+    \item \emph{Construct} standard kernels (polynomial, Gaussian
+    RBF, Laplacian) and \emph{verify} their positive definiteness.
+    \item \emph{Apply} kernel methods to a concrete classification
+    or regression problem.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 4]{bach2024} -- Kernels, positive definite
+    functions, and Mercer's theorem in the learning theory context.
+    \item \citet[Chapters 2--3]{scholkopf2002} -- Comprehensive
+    treatment of kernels, feature spaces, and the kernel trick for
+    SVMs.
+    \item \citet[Chapters 5--6]{steinwart2008} -- Rigorous treatment
+    of Mercer kernels, RKHS construction, and kernel properties.
+    \item \citet[Chapter 6]{mohri2018} -- Kernel methods from the
+    foundations of machine learning perspective.
+    \item \citet{mercer1909} -- Original paper on the eigenexpansion
+    of positive definite integral kernels.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE KERNEL TRICK
+%% ============================================================
+
+\section{The Kernel Trick}
+\label{sec:kernel-trick}
+
+The kernel trick is a computational strategy: replace explicit
+feature-space computations with evaluations of a kernel function.
+We begin by formalizing the setting.
+
+\begin{definition}[Feature Map]
+\label{def:feature-map}
+Let $\mathcal{X}$ be an input space (typically a subset of $\R^d$)
+and let $\mathcal{V}$ be an inner product space (the \emph{feature
+space}). A \emph{feature map} is any function
+$\feature \colon \mathcal{X} \to \mathcal{V}$.
+\end{definition}
+
+\begin{definition}[Kernel Function]
+\label{def:kernel-function}
+Given a feature map $\feature \colon \mathcal{X} \to \mathcal{V}$,
+the associated \emph{kernel function}
+$\kernel \colon \mathcal{X} \times \mathcal{X} \to \R$ is defined by
+\begin{equation}
+\label{eq:kernel-def}
+\kernel(x, x') = \langle \feature(x), \feature(x') \rangle_{\mathcal{V}}.
+\end{equation}
+\end{definition}
+
+The key observation is that many learning algorithms---including
+ridge regression, support vector machines, and principal component
+analysis---interact with the data $x_1, \ldots, x_n$ only through
+pairwise inner products $\langle \feature(x_i), \feature(x_j)
+\rangle$. If we can evaluate $\kernel(x_i, x_j)$ directly, we
+never need to compute $\feature(x_i)$ explicitly.
+
+\begin{example}[Polynomial Kernel]
+\label{ex:polynomial-kernel}
+Let $\mathcal{X} = \R^d$ and define $\kernel(x, x') = (1 + x^\top
+x')^p$ for a positive integer $p$. We show this is an inner-product
+kernel by exhibiting the feature map for $d = 2$, $p = 2$.
+
+We have $\kernel(x, x') = (1 + x_1 x_1' + x_2 x_2')^2$. Expanding:
+\begin{align*}
+\kernel(x, x') &= 1 + x_1^2 (x_1')^2 + x_2^2 (x_2')^2
+  + 2 x_1 x_1' + 2 x_2 x_2' + 2 x_1 x_2 x_1' x_2' \\
+&= \langle \feature(x), \feature(x') \rangle,
+\end{align*}
+where $\feature(x) = (1, x_1^2, x_2^2, \sqrt{2}\, x_1,
+\sqrt{2}\, x_2, \sqrt{2}\, x_1 x_2) \in \R^6$.
+
+More generally, for $\mathcal{X} = \R^d$ the feature space has
+dimension $\binom{d+p}{p}$, but evaluating $\kernel(x, x')$
+requires only $O(d)$ operations (one inner product plus
+exponentiation).
+\end{example}
+
+\begin{example}[Kernelized Ridge Regression]
+\label{ex:kernel-ridge}
+Standard ridge regression solves
+$\min_{w \in \R^D} \sum_{i=1}^n (y_i - w^\top \feature(x_i))^2
++ \lambda \|w\|^2$
+in the feature space $\R^D$, where $D = \dim(\mathcal{V})$ may be
+very large. Writing $\Phi = [\feature(x_1), \ldots, \feature(x_n)]^\top
+\in \R^{n \times D}$, the solution is $w^* = (\Phi^\top \Phi +
+\lambda I)^{-1} \Phi^\top y$, which requires $O(D^2 n)$ operations.
+
+By the matrix inversion lemma, the prediction at a new point $x$ is
+\[
+f(x) = (w^*)^\top \feature(x) = k_x^\top (K + \lambda I)^{-1} y,
+\]
+where $K_{ij} = \kernel(x_i, x_j)$ is the $n \times n$ Gram matrix
+and $k_x = (\kernel(x_1, x), \ldots, \kernel(x_n, x))^\top$.
+This requires only $O(n^2 d + n^3)$ operations, independent of $D$.
+\end{example}
+
+\begin{proposition}[Kernelization Criterion]
+\label{prop:kernelization}
+An algorithm operating on data $x_1, \ldots, x_n \in \mathcal{X}$
+via a feature map $\feature$ can be kernelized if and only if every
+computation involving the feature vectors $\feature(x_1), \ldots,
+\feature(x_n)$ can be expressed in terms of the entries of the
+Gram matrix $K_{ij} = \langle \feature(x_i), \feature(x_j) \rangle$.
+\end{proposition}
+
+\begin{proof}
+The ``if'' direction is immediate: if all computations reduce to
+entries of $K$, we replace each $K_{ij}$ by $\kernel(x_i, x_j)$.
+
+For the ``only if'' direction, suppose the algorithm requires some
+computation that cannot be expressed through inner products alone.
+Then there exist two feature maps $\feature, \feature'$ with
+$\langle \feature(x_i), \feature(x_j) \rangle = \langle
+\feature'(x_i), \feature'(x_j) \rangle$ for all $i, j$, but the
+algorithm produces different outputs for $\feature$ and $\feature'$.
+Hence the algorithm is not determined by the kernel, and kernelization
+is impossible.
+\end{proof}
+
+\begin{rlconnection}[title={The Kernel Trick in RL}]
+In temporal difference learning with linear function approximation,
+the value function is $\hat{V}(s) = w^\top \feature(s)$. The
+TD(0) update $w \leftarrow w + \alpha \delta_t \feature(s_t)$, where
+$\delta_t = r_t + \gamma w^\top \feature(s_{t+1}) - w^\top
+\feature(s_t)$, involves $\feature$ only through inner products.
+This enables kernel TD methods that represent the value function
+nonparametrically as $\hat{V}(s) = \sum_{i=1}^n \alpha_i
+\kernel(s_i, s)$.
+\end{rlconnection}
+
+The kernel trick transforms the computational challenge from working
+in a high-dimensional feature space to working with an $n \times n$
+matrix, but it raises a fundamental question: which functions
+$\kernel \colon \mathcal{X} \times \mathcal{X} \to \R$ correspond to
+inner products in some feature space? This is answered by the theory
+of positive definite kernels.
+
+%% ============================================================
+%% SECTION 4: POSITIVE DEFINITE KERNELS
+%% ============================================================
+
+\section{Positive Definite Kernels}
+\label{sec:pd-kernels}
+
+The concept of positive definiteness characterizes exactly those
+functions that arise as inner products in some feature space.
+
+\begin{definition}[Positive Definite Kernel]
+\label{def:pd-kernel}
+A function $\kernel \colon \mathcal{X} \times \mathcal{X} \to \R$
+is \emph{positive definite} (pd) if it is symmetric
+($\kernel(x, x') = \kernel(x', x)$ for all $x, x' \in \mathcal{X}$)
+and for every $n \ge 1$, every set of points $\{x_1, \ldots, x_n\}
+\subseteq \mathcal{X}$, and every $\alpha \in \R^n$:
+\begin{equation}
+\label{eq:pd-condition}
+\sum_{i=1}^n \sum_{j=1}^n \alpha_i \alpha_j \kernel(x_i, x_j) \ge 0.
+\end{equation}
+Equivalently, the \emph{Gram matrix} $K \in \R^{n \times n}$ with
+$K_{ij} = \kernel(x_i, x_j)$ is positive semidefinite for every
+finite subset of $\mathcal{X}$.
+\end{definition}
+
+\begin{remark}
+\label{rem:pd-terminology}
+Some authors use ``positive semidefinite kernel'' for the condition
+\eqref{eq:pd-condition} and reserve ``positive definite'' for strict
+inequality when $\alpha \ne 0$ and $x_1, \ldots, x_n$ are distinct.
+We follow the convention of \citet{bach2024} and \citet{scholkopf2002},
+using ``positive definite'' for the condition as stated.
+\end{remark}
+
+\begin{theorem}[Inner-Product Kernels are Positive Definite]
+\label{thm:ip-kernel-pd}
+If $\feature \colon \mathcal{X} \to \mathcal{V}$ is a feature map
+into an inner product space $\mathcal{V}$, then
+$\kernel(x, x') = \langle \feature(x), \feature(x') \rangle$
+is a positive definite kernel.
+\end{theorem}
+
+\begin{proof}
+Let $x_1, \ldots, x_n \in \mathcal{X}$ and $\alpha_1, \ldots,
+\alpha_n \in \R$. Then
+\begin{align*}
+\sum_{i=1}^n \sum_{j=1}^n \alpha_i \alpha_j \kernel(x_i, x_j)
+&= \sum_{i=1}^n \sum_{j=1}^n \alpha_i \alpha_j
+   \langle \feature(x_i), \feature(x_j) \rangle \\
+&= \left\langle \sum_{i=1}^n \alpha_i \feature(x_i),
+   \sum_{j=1}^n \alpha_j \feature(x_j) \right\rangle \\
+&= \left\| \sum_{i=1}^n \alpha_i \feature(x_i) \right\|^2 \ge 0,
+\end{align*}
+where the second equality uses bilinearity of the inner product and
+the last step uses positive definiteness of the norm.
+\end{proof}
+
+The converse also holds: every positive definite kernel arises from
+an inner product in some feature space. This is the content of the
+RKHS construction in Lesson~62 (Aronszajn's theorem).
+
+\begin{keyresult}[title={Characterization of Positive Definite Kernels}]
+A symmetric function $\kernel \colon \mathcal{X} \times \mathcal{X}
+\to \R$ is positive definite if and only if there exists a Hilbert
+space $\mathcal{V}$ and a feature map $\feature \colon \mathcal{X}
+\to \mathcal{V}$ such that $\kernel(x, x') = \langle \feature(x),
+\feature(x') \rangle_{\mathcal{V}}$. The ``if'' direction is
+Theorem~\ref{thm:ip-kernel-pd}; the ``only if'' direction is
+Aronszajn's theorem (Lesson~62, Theorem~3.5).
+\end{keyresult}
+
+We now establish that the class of pd kernels is closed under
+several useful operations.
+
+\begin{theorem}[Closure Properties of PD Kernels]
+\label{thm:pd-closure}
+Let $\kernel_1, \kernel_2$ be positive definite kernels on
+$\mathcal{X} \times \mathcal{X}$. Then the following are also
+positive definite:
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Sum:} $\kernel(x, x') = \kernel_1(x, x') +
+    \kernel_2(x, x')$.
+    \item \textbf{Scalar multiple:} $\kernel(x, x') = c \,
+    \kernel_1(x, x')$ for any $c \ge 0$.
+    \item \textbf{Product:} $\kernel(x, x') = \kernel_1(x, x')
+    \cdot \kernel_2(x, x')$.
+    \item \textbf{Pointwise limit:} If $\kernel_m$ is pd for each
+    $m$ and $\kernel_m(x, x') \to \kernel(x, x')$ for all $x, x'$,
+    then $\kernel$ is pd.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+Let $x_1, \ldots, x_n \in \mathcal{X}$ and $\alpha \in \R^n$. Let
+$K^{(1)}, K^{(2)}$ denote the Gram matrices of $\kernel_1, \kernel_2$.
+
+\textbf{(i) Sum.} The Gram matrix is $K = K^{(1)} + K^{(2)}$.
+Then $\alpha^\top K \alpha = \alpha^\top K^{(1)} \alpha +
+\alpha^\top K^{(2)} \alpha \ge 0 + 0 = 0$.
+
+\textbf{(ii) Scalar multiple.} The Gram matrix is $cK^{(1)}$.
+Then $\alpha^\top (cK^{(1)}) \alpha = c \, \alpha^\top K^{(1)}
+\alpha \ge 0$ since $c \ge 0$.
+
+\textbf{(iii) Product (Schur product theorem).} The Gram matrix
+is the Hadamard (entrywise) product $K = K^{(1)} \circ K^{(2)}$.
+By the spectral theorem, write $K^{(2)} = \sum_{l=1}^n \mu_l
+v_l v_l^\top$ where $\mu_l \ge 0$ (since $K^{(2)} \succeq 0$).
+Then
+\[
+K_{ij} = K^{(1)}_{ij} K^{(2)}_{ij}
+= K^{(1)}_{ij} \sum_{l=1}^n \mu_l (v_l)_i (v_l)_j
+= \sum_{l=1}^n \mu_l (v_l)_i (v_l)_j K^{(1)}_{ij}.
+\]
+Hence $\alpha^\top K \alpha = \sum_{l=1}^n \mu_l
+\sum_{i,j} \alpha_i (v_l)_i K^{(1)}_{ij} \alpha_j (v_l)_j
+= \sum_{l=1}^n \mu_l \, \beta_l^\top K^{(1)} \beta_l$,
+where $\beta_l = (\alpha_1 (v_l)_1, \ldots, \alpha_n (v_l)_n)$.
+Since $K^{(1)} \succeq 0$ and $\mu_l \ge 0$, each term is
+nonneg\-ative, so $\alpha^\top K \alpha \ge 0$.
+
+\textbf{(iv) Pointwise limit.} The Gram matrix $K^{(m)}$ of
+$\kernel_m$ satisfies $\alpha^\top K^{(m)} \alpha \ge 0$ for
+each $m$. Since $K^{(m)}_{ij} \to K_{ij}$ entrywise as
+$m \to \infty$, we obtain $\alpha^\top K \alpha =
+\lim_{m \to \infty} \alpha^\top K^{(m)} \alpha \ge 0$.
+\end{proof}
+
+\begin{example}[Linear Kernel]
+\label{ex:linear-kernel}
+The \emph{linear kernel} on $\R^d$ is $\kernel(x, x') = x^\top x'$.
+This corresponds to the identity feature map $\feature(x) = x$. It
+is pd by Theorem~\ref{thm:ip-kernel-pd}.
+\end{example}
+
+\begin{example}[Polynomial Kernel -- Positive Definiteness]
+\label{ex:poly-kernel-pd}
+The polynomial kernel $\kernel(x, x') = (1 + x^\top x')^p$ for
+$p \in \N$ is pd. To see this, write $\kernel(x, x') =
+\sum_{j=0}^p \binom{p}{j} (x^\top x')^j$. The linear kernel
+$\kernel_0(x, x') = x^\top x'$ is pd by the previous example.
+By closure under products (iii), $(x^\top x')^j$ is pd for
+each $j \ge 1$. The constant function $\kernel(x,x') = 1$ is
+pd (Gram matrix is all-ones, which is psd). By closure under
+sums (i) and scalar multiples (ii), $\kernel$ is pd.
+\end{example}
+
+\begin{example}[Gaussian RBF Kernel]
+\label{ex:gaussian-rbf}
+The \emph{Gaussian radial basis function} (RBF) kernel on $\R^d$ is
+\begin{equation}
+\label{eq:gaussian-kernel}
+\kernel(x, x') = \exp\!\left(-\frac{\|x - x'\|^2}{2\sigma^2}\right),
+\end{equation}
+where $\sigma > 0$ is the \emph{bandwidth} parameter. This is
+perhaps the most widely used kernel in practice. We prove its
+positive definiteness in Section~\ref{sec:kernel-construction}
+(Theorem~\ref{thm:gaussian-pd}).
+\end{example}
+
+\begin{warning}[title={Not Every Symmetric Function is a Kernel}]
+The function $\kernel(x, x') = -\|x - x'\|^2$ is symmetric but
+\emph{not} positive definite. For $n = 2$ points $x_1, x_2$ with
+$\alpha = (1, -1)^\top$: $\alpha^\top K \alpha = -2\|x_1 - x_2\|^2
+< 0$ whenever $x_1 \ne x_2$. One must always verify positive
+definiteness.
+\end{warning}
+
+The closure properties allow us to build a rich algebra of kernels
+from simple building blocks. We next develop the spectral theory of
+positive definite kernels, which reveals their deep structure.
+
+%% ============================================================
+%% SECTION 5: MERCER'S THEOREM
+%% ============================================================
+
+\section{Mercer's Theorem}
+\label{sec:mercer}
+
+Mercer's theorem provides a spectral decomposition for continuous
+positive definite kernels, analogous to the eigendecomposition of
+positive semidefinite matrices. This decomposition is the foundation
+of the canonical feature map and underpins the RKHS construction
+of Lesson~62.
+
+\begin{assumption}[Setting for Mercer's Theorem]
+\label{asm:mercer-setting}
+Let $\mathcal{X}$ be a compact subset of $\R^d$ and let $\mu$ be
+a finite Borel measure on $\mathcal{X}$ with $\supp(\mu) =
+\mathcal{X}$. Let $\kernel \colon \mathcal{X} \times \mathcal{X}
+\to \R$ be continuous.
+\end{assumption}
+
+Under these assumptions, the kernel defines an integral operator.
+
+\begin{definition}[Integral Operator]
+\label{def:integral-operator}
+The \emph{integral operator} $T_\kernel \colon L^2(\mathcal{X}, \mu)
+\to L^2(\mathcal{X}, \mu)$ associated with kernel $\kernel$ is
+\begin{equation}
+\label{eq:integral-operator}
+(T_\kernel f)(x) = \int_{\mathcal{X}} \kernel(x, x') f(x') \,
+d\mu(x').
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Properties of $T_\kernel$]
+\label{lem:integral-op-properties}
+Under Assumption~\ref{asm:mercer-setting}, if $\kernel$ is
+continuous and positive definite, then $T_\kernel$ is:
+\begin{enumerate}[label=(\roman*)]
+    \item a bounded linear operator on $L^2(\mathcal{X}, \mu)$;
+    \item self-adjoint: $\langle T_\kernel f, g \rangle_{L^2} =
+    \langle f, T_\kernel g \rangle_{L^2}$;
+    \item positive: $\langle T_\kernel f, f \rangle_{L^2} \ge 0$
+    for all $f$;
+    \item compact.
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+\textbf{(i)} Since $\kernel$ is continuous on $\mathcal{X} \times
+\mathcal{X}$ and $\mathcal{X}$ is compact, $M :=
+\sup_{x, x'} |\kernel(x, x')| < \infty$. By the Cauchy--Schwarz
+inequality,
+\[
+|(T_\kernel f)(x)| \le \int_{\mathcal{X}} |\kernel(x, x')|
+|f(x')| \, d\mu(x') \le M \|f\|_{L^1} \le M \mu(\mathcal{X})^{1/2}
+\|f\|_{L^2},
+\]
+so $\|T_\kernel f\|_{L^2} \le M \mu(\mathcal{X}) \|f\|_{L^2}$,
+establishing boundedness.
+
+\textbf{(ii)} By symmetry of $\kernel$ and Fubini's theorem:
+\begin{align*}
+\langle T_\kernel f, g \rangle_{L^2}
+&= \int_{\mathcal{X}} \int_{\mathcal{X}} \kernel(x, x') f(x')
+g(x) \, d\mu(x') \, d\mu(x) \\
+&= \int_{\mathcal{X}} f(x') \int_{\mathcal{X}} \kernel(x', x)
+g(x) \, d\mu(x) \, d\mu(x')
+= \langle f, T_\kernel g \rangle_{L^2}.
+\end{align*}
+
+\textbf{(iii)} For positive definiteness, we approximate. For
+$f \in L^2(\mathcal{X}, \mu)$:
+\[
+\langle T_\kernel f, f \rangle_{L^2}
+= \int_{\mathcal{X}} \int_{\mathcal{X}} \kernel(x, x') f(x)
+f(x') \, d\mu(x) \, d\mu(x').
+\]
+This double integral is the continuous analogue of the quadratic
+form $\alpha^\top K \alpha$. To verify nonnegativity, approximate
+$f$ by simple functions $f_n = \sum_{i=1}^{m_n} c_i
+\indicator_{A_i}$. For simple functions, the integral reduces to
+$\sum_{i,j} c_i c_j \int_{A_i} \int_{A_j} \kernel(x, x') \,
+d\mu(x) \, d\mu(x')$. By a discretization argument (partitioning
+each $A_i$ into small sets and applying the pd condition on point
+evaluations), each such sum is nonneg\-ative. Taking limits (using
+dominated convergence), $\langle T_\kernel f, f \rangle_{L^2} \ge 0$.
+
+\textbf{(iv)} Since $\kernel$ is continuous on the compact set
+$\mathcal{X} \times \mathcal{X}$, it is uniformly continuous.
+The family $\{x' \mapsto \kernel(x, x') : x \in \mathcal{X}\}$
+is equicontinuous and uniformly bounded in $L^2$. Therefore
+$T_\kernel$ maps the unit ball to an equicontinuous family, which
+is precompact in $L^2$ by the Arzela--Ascoli theorem. Hence
+$T_\kernel$ is compact.
+\end{proof}
+
+\begin{theorem}[Mercer's Theorem]
+\label{thm:mercer}
+Under Assumption~\ref{asm:mercer-setting}, if $\kernel$ is
+continuous and positive definite, then there exists a sequence
+of eigenfunctions $\{\feature_j\}_{j=1}^\infty$ forming an
+orthonormal basis of $\overline{\mathrm{Range}(T_\kernel)}$ in
+$L^2(\mathcal{X}, \mu)$, with corresponding eigenvalues
+$\lambda_1 \ge \lambda_2 \ge \cdots \ge 0$, such that:
+\begin{equation}
+\label{eq:mercer-expansion}
+\kernel(x, x') = \sum_{j=1}^\infty \lambda_j \, \feature_j(x) \,
+\feature_j(x'),
+\end{equation}
+where the convergence is absolute and uniform on
+$\mathcal{X} \times \mathcal{X}$. Moreover, $T_\kernel \feature_j
+= \lambda_j \feature_j$ and $\sum_{j=1}^\infty \lambda_j =
+\int_{\mathcal{X}} \kernel(x, x) \, d\mu(x) < \infty$.
+\end{theorem}
+
+\begin{proof}
+By Lemma~\ref{lem:integral-op-properties}, $T_\kernel$ is a
+compact, self-adjoint, positive operator on the separable Hilbert
+space $L^2(\mathcal{X}, \mu)$.
+
+\textbf{Step 1: Spectral decomposition.} By the spectral theorem
+for compact self-adjoint operators (Lesson~19), there exists an
+orthonormal system $\{\feature_j\}_{j \ge 1}$ of eigenfunctions
+with eigenvalues $\lambda_1 \ge \lambda_2 \ge \cdots$ satisfying
+$\lambda_j \to 0$, such that
+\[
+T_\kernel f = \sum_{j=1}^\infty \lambda_j \langle f, \feature_j
+\rangle_{L^2} \feature_j
+\]
+for all $f \in L^2(\mathcal{X}, \mu)$. Since $T_\kernel$ is
+positive, all $\lambda_j \ge 0$.
+
+\textbf{Step 2: $L^2$ expansion of the kernel.} Fix $x \in
+\mathcal{X}$ and consider $\kernel_x := \kernel(x, \cdot) \in
+L^2(\mathcal{X}, \mu)$ (this holds since $\kernel$ is bounded
+on the compact set $\mathcal{X} \times \mathcal{X}$). Then
+\[
+(T_\kernel \feature_j)(x) = \int_{\mathcal{X}} \kernel(x, x')
+\feature_j(x') \, d\mu(x') = \lambda_j \feature_j(x).
+\]
+Also, $\langle \kernel_x, \feature_j \rangle_{L^2} =
+\int_{\mathcal{X}} \kernel(x, x') \feature_j(x') \, d\mu(x')
+= \lambda_j \feature_j(x)$. Hence the Fourier expansion of
+$\kernel_x$ in $L^2$ gives
+\[
+\kernel(x, \cdot) = \sum_{j=1}^\infty \langle \kernel_x,
+\feature_j \rangle_{L^2} \feature_j(\cdot)
+= \sum_{j=1}^\infty \lambda_j \feature_j(x) \feature_j(\cdot),
+\]
+with convergence in $L^2(\mathcal{X}, \mu)$. Evaluating at $x'$
+(which requires pointwise convergence, established below) gives
+\eqref{eq:mercer-expansion}.
+
+\textbf{Step 3: Uniform convergence.} Define the partial sums
+$\kernel_N(x, x') = \sum_{j=1}^N \lambda_j \feature_j(x)
+\feature_j(x')$. Since each $\feature_j$ is continuous (as
+$\feature_j = \lambda_j^{-1} T_\kernel \feature_j$ and $T_\kernel$
+maps $L^2$ functions to continuous functions when $\kernel$ is
+continuous), $\kernel_N$ is continuous.
+
+For the diagonal, by Parseval's identity applied to $\kernel_x$:
+\[
+\sum_{j=1}^\infty \lambda_j^2 \feature_j(x)^2
+= \sum_{j=1}^\infty |\langle \kernel_x, \feature_j \rangle_{L^2}|^2
+\le \|\kernel_x\|_{L^2}^2 < \infty.
+\]
+Moreover, $\kernel(x, x) - \kernel_N(x, x) = \sum_{j > N}
+\lambda_j \feature_j(x)^2 \ge 0$ (since $\lambda_j \ge 0$).
+By Dini's theorem, since $\kernel(x,x) - \kernel_N(x,x)$ is a
+decreasing sequence of continuous functions converging pointwise
+to $0$ on the compact set $\mathcal{X}$, the convergence is
+uniform on the diagonal.
+
+For the off-diagonal, by the Cauchy--Schwarz inequality:
+\begin{align*}
+|\kernel(x, x') - \kernel_N(x, x')|
+&= \left| \sum_{j > N} \lambda_j \feature_j(x) \feature_j(x')
+\right| \\
+&\le \left( \sum_{j > N} \lambda_j \feature_j(x)^2 \right)^{1/2}
+\left( \sum_{j > N} \lambda_j \feature_j(x')^2 \right)^{1/2} \\
+&= \sqrt{(\kernel(x,x) - \kernel_N(x,x))(\kernel(x',x') -
+\kernel_N(x',x'))}.
+\end{align*}
+Since the diagonal convergence is uniform, the right side converges
+uniformly to $0$ on $\mathcal{X} \times \mathcal{X}$.
+
+\textbf{Step 4: Trace formula.} Integrating the diagonal:
+$\sum_{j=1}^\infty \lambda_j = \sum_{j=1}^\infty \lambda_j
+\int_{\mathcal{X}} \feature_j(x)^2 \, d\mu(x) =
+\int_{\mathcal{X}} \kernel(x, x) \, d\mu(x) < \infty$,
+using uniform convergence to exchange sum and integral.
+\end{proof}
+
+\begin{keyresult}[title={Mercer's Canonical Feature Map}]
+\label{kr:mercer-feature-map}
+Mercer's theorem provides a \emph{canonical feature map}. Define
+$\Phi \colon \mathcal{X} \to \ell^2$ by
+\[
+\Phi(x) = \bigl(\sqrt{\lambda_1}\, \feature_1(x), \;
+\sqrt{\lambda_2}\, \feature_2(x), \; \ldots \bigr).
+\]
+Then $\langle \Phi(x), \Phi(x') \rangle_{\ell^2} =
+\sum_{j=1}^\infty \lambda_j \feature_j(x) \feature_j(x')
+= \kernel(x, x')$. This is the unique (up to unitary
+equivalence) feature map into a separable Hilbert space.
+\end{keyresult}
+
+\begin{example}[Eigenexpansion of the Gaussian Kernel on {$[0,1]$}]
+\label{ex:gaussian-eigenexpansion}
+Consider the Gaussian kernel $\kernel(x, x') = e^{-(x-x')^2 /
+(2\sigma^2)}$ on $\mathcal{X} = [0,1]$ with Lebesgue measure.
+While no closed-form eigenfunctions exist in general, the
+eigenvalues $\lambda_j$ decay exponentially fast. Specifically,
+for the Gaussian kernel on $\R$ (with Gaussian measure), the
+eigenfunctions are Hermite functions and the eigenvalues satisfy
+$\lambda_j = O(c^j)$ for some $0 < c < 1$ depending on $\sigma$.
+
+For numerical illustration with $\sigma = 0.3$, the first few
+normalized eigenvalues are approximately $\lambda_1 \approx 0.42$,
+$\lambda_2 \approx 0.28$, $\lambda_3 \approx 0.15$,
+$\lambda_4 \approx 0.07$, with rapid decay thereafter. The
+eigenfunctions $\feature_j$ oscillate with increasing frequency,
+analogous to Fourier modes. The rapid eigenvalue decay means
+that a low-rank approximation $\kernel(x, x') \approx
+\sum_{j=1}^J \lambda_j \feature_j(x) \feature_j(x')$ is
+accurate even for moderate $J$.
+\end{example}
+
+\begin{rlconnection}[title={Mercer's Theorem and the NTK}]
+The neural tangent kernel $\Theta(x, x') = \langle
+\nabla_\theta f_\theta(x), \nabla_\theta f_\theta(x') \rangle$
+is positive definite (by Theorem~\ref{thm:ip-kernel-pd} with
+the gradient as feature map). In the infinite-width limit, the
+NTK is deterministic and continuous, so Mercer's theorem applies.
+The eigenvalues of the NTK integral operator determine the
+learning rates of different modes: the network learns eigenfunctions
+with large $\lambda_j$ first (spectral bias), explaining why
+neural networks tend to learn low-frequency patterns before
+high-frequency ones.
+\end{rlconnection}
+
+Mercer's theorem tells us that every continuous pd kernel has a
+spectral decomposition. We now turn to the practical question of
+constructing kernels for specific applications.
+
+%% ============================================================
+%% SECTION 6: KERNEL CONSTRUCTION
+%% ============================================================
+
+\section{Kernel Construction}
+\label{sec:kernel-construction}
+
+We develop systematic methods for building positive definite
+kernels, starting from basic building blocks and using the closure
+properties of Theorem~\ref{thm:pd-closure}.
+
+\subsection{Kernels from Feature Maps}
+
+The most direct construction: choose a feature map $\feature \colon
+\mathcal{X} \to \R^D$ and define $\kernel(x, x') = \feature(x)^\top
+\feature(x')$.
+
+\begin{example}[Bag-of-Words Kernel]
+\label{ex:bow-kernel}
+For text classification, let $\mathcal{X}$ be a set of documents
+and define $\feature(x) \in \R^V$ as the word-count vector (where
+$V$ is the vocabulary size). Then $\kernel(x, x') = \feature(x)^\top
+\feature(x')$ counts the total number of shared word occurrences.
+This is pd by Theorem~\ref{thm:ip-kernel-pd}.
+\end{example}
+
+\subsection{Polynomial Kernels}
+
+We have already shown that $\kernel(x, x') = (1 + x^\top x')^p$ is
+pd (Example~\ref{ex:poly-kernel-pd}). More generally:
+
+\begin{proposition}[General Polynomial Kernel]
+\label{prop:general-poly}
+For $c \ge 0$ and $p \in \N$, the kernel $\kernel(x, x') =
+(c + x^\top x')^p$ on $\R^d$ is positive definite.
+\end{proposition}
+
+\begin{proof}
+The constant kernel $\kernel_c(x, x') = c$ is pd (its Gram matrix
+$cJ_n$, where $J_n$ is the all-ones matrix, is psd since $J_n =
+\mathbf{1}\mathbf{1}^\top$). The linear kernel $\kernel_0(x, x')
+= x^\top x'$ is pd. By closure under sums, $\kernel_c + \kernel_0$
+is pd. By closure under products, $(c + x^\top x')^p$ is pd.
+\end{proof}
+
+\subsection{The Gaussian RBF Kernel}
+
+\begin{theorem}[Positive Definiteness of the Gaussian Kernel]
+\label{thm:gaussian-pd}
+The Gaussian RBF kernel $\kernel(x, x') = \exp(-\|x - x'\|^2 /
+(2\sigma^2))$ is positive definite on $\R^d$ for any $\sigma > 0$.
+\end{theorem}
+
+\begin{proof}
+We proceed in three steps.
+
+\textbf{Step 1.} Expand the squared distance:
+\[
+\kernel(x, x') = \exp\!\left(-\frac{\|x\|^2}{2\sigma^2}\right)
+\exp\!\left(\frac{x^\top x'}{\sigma^2}\right)
+\exp\!\left(-\frac{\|x'\|^2}{2\sigma^2}\right).
+\]
+
+\textbf{Step 2.} Show that $\kernel_0(x, x') = \exp(x^\top x' /
+\sigma^2)$ is pd. Write the Taylor expansion:
+\[
+\exp\!\left(\frac{x^\top x'}{\sigma^2}\right)
+= \sum_{p=0}^\infty \frac{1}{p!} \left(\frac{x^\top x'}{\sigma^2}
+\right)^p
+= \sum_{p=0}^\infty \frac{1}{p! \, \sigma^{2p}} (x^\top x')^p.
+\]
+Each term $(x^\top x')^p$ is pd (as the $p$-fold product of the
+linear kernel). Each coefficient $1/(p! \, \sigma^{2p}) > 0$. Finite
+sums of pd kernels with nonneg\-ative coefficients are pd by
+Theorem~\ref{thm:pd-closure}(i)--(ii). The infinite sum converges
+pointwise, so by Theorem~\ref{thm:pd-closure}(iv), $\kernel_0$ is pd.
+
+\textbf{Step 3.} Define $g(x) = \exp(-\|x\|^2 / (2\sigma^2))$.
+Then $\kernel(x, x') = g(x) \, \kernel_0(x, x') \, g(x')$. For any
+$\alpha \in \R^n$:
+\[
+\sum_{i,j} \alpha_i \alpha_j \kernel(x_i, x_j)
+= \sum_{i,j} (\alpha_i g(x_i))(\alpha_j g(x_j)) \kernel_0(x_i, x_j)
+= \sum_{i,j} \beta_i \beta_j \kernel_0(x_i, x_j) \ge 0,
+\]
+where $\beta_i = \alpha_i g(x_i)$, and the last inequality holds
+because $\kernel_0$ is pd. Hence $\kernel$ is pd.
+\end{proof}
+
+\begin{remark}[Infinite-Dimensional Feature Space]
+\label{rem:gaussian-infinite-dim}
+The Mercer eigenvalues of the Gaussian kernel are all strictly
+positive (the kernel is \emph{strictly} positive definite on any
+finite point set with distinct points). This means the feature
+space is infinite-dimensional---no finite-dimensional feature
+map can reproduce the Gaussian kernel exactly. The power of the
+kernel trick is that we can work with this infinite-dimensional
+feature space implicitly through $O(1)$ kernel evaluations.
+\end{remark}
+
+\subsection{Laplacian Kernel}
+
+\begin{proposition}[Laplacian Kernel]
+\label{prop:laplacian-pd}
+The Laplacian kernel $\kernel(x, x') = \exp(-\|x - x'\|_1 / \sigma)$
+on $\R^d$ is positive definite for $\sigma > 0$.
+\end{proposition}
+
+\begin{proof}
+Since $\|x - x'\|_1 = \sum_{j=1}^d |x_j - x_j'|$, we have
+$\kernel(x, x') = \prod_{j=1}^d \exp(-|x_j - x_j'| / \sigma)$.
+It suffices to show that $\kernel_1(s, t) = \exp(-|s - t| / \sigma)$
+on $\R$ is pd. This follows from the Fourier representation:
+$e^{-|u|/\sigma} = \frac{2/\sigma}{\pi} \int_0^\infty
+\frac{\cos(\omega u)}{1/\sigma^2 + \omega^2} \, d\omega$
+for $u \in \R$. Since each $\cos(\omega(s-t))$ defines a pd kernel
+(being $\langle (\cos \omega s, \sin \omega s),
+(\cos \omega t, \sin \omega t) \rangle$) and we integrate with a
+nonneg\-ative weight, $\kernel_1$ is pd. By closure under products,
+$\kernel$ is pd.
+\end{proof}
+
+\subsection{Operations Preserving Positive Definiteness}
+
+Beyond sums, products, and limits, several other operations preserve
+positive definiteness.
+
+\begin{proposition}[Additional Closure Operations]
+\label{prop:additional-closure}
+Let $\kernel$ be a pd kernel on $\mathcal{X}$.
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Composition with a power series:} If
+    $f(t) = \sum_{p=0}^\infty a_p t^p$ with $a_p \ge 0$ for all $p$
+    and the series converges for $t \ge 0$, then $f \circ \kernel$
+    is pd.
+    \item \textbf{Restriction:} If $\mathcal{Y} \subseteq \mathcal{X}$,
+    then $\kernel|_{\mathcal{Y} \times \mathcal{Y}}$ is pd.
+    \item \textbf{Direct sum:} If $\kernel_1$ is pd on $\mathcal{X}_1$
+    and $\kernel_2$ is pd on $\mathcal{X}_2$, then $\kernel((x_1, x_2),
+    (x_1', x_2')) = \kernel_1(x_1, x_1') + \kernel_2(x_2, x_2')$ is
+    pd on $\mathcal{X}_1 \times \mathcal{X}_2$.
+    \item \textbf{Tensor product:} $\kernel((x_1, x_2), (x_1', x_2'))
+    = \kernel_1(x_1, x_1') \cdot \kernel_2(x_2, x_2')$ is pd on
+    $\mathcal{X}_1 \times \mathcal{X}_2$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(i)} $f(\kernel(x,x')) = \sum_{p=0}^\infty a_p \kernel(x,x')^p$.
+Each $\kernel^p$ is pd (closure under products), $a_p \ge 0$ (closure
+under scalar multiples), partial sums are pd (closure under sums),
+and the pointwise limit is pd (closure under limits).
+
+\textbf{(ii)} The Gram matrix of $\kernel|_\mathcal{Y}$ on points
+$y_1, \ldots, y_n \in \mathcal{Y} \subseteq \mathcal{X}$ is the
+same as the Gram matrix of $\kernel$ on these points, which is psd.
+
+\textbf{(iii)--(iv)} For direct sums: the Gram matrix is
+$K_1 + K_2$ where $K_1, K_2 \succeq 0$. For tensor products:
+the Gram matrix is $K_1 \circ K_2$ (Hadamard product), which is
+psd by the Schur product theorem.
+\end{proof}
+
+\begin{example}[Constructing Kernels by Composition]
+\label{ex:kernel-composition}
+Starting from the linear kernel $\kernel_0(x, x') = x^\top x'$:
+\begin{itemize}
+    \item $\exp(\kernel_0) = \exp(x^\top x')$ is pd by (i) with
+    $f = \exp$.
+    \item $(1 + \kernel_0)^p$ is pd by (i) with
+    $f(t) = (1 + t)^p = \sum_{j=0}^p \binom{p}{j} t^j$.
+    \item $\frac{1}{1 - c \kernel_0}$ for $0 < c < 1/\sup_x \|x\|^2$
+    is pd by (i) with $f(t) = 1/(1 - ct) = \sum_{p=0}^\infty c^p t^p$.
+\end{itemize}
+\end{example}
+
+\begin{warning}[title={Kernel Selection Matters}]
+The choice of kernel encodes prior assumptions about the target
+function's smoothness. The Gaussian kernel with small bandwidth
+$\sigma$ produces very flexible models (low bias, high variance),
+while large $\sigma$ yields smoother models (high bias, low
+variance). The Laplacian kernel produces rougher functions than
+the Gaussian kernel (functions in the Laplacian RKHS are only
+once differentiable, while the Gaussian RKHS contains
+$C^\infty$ functions). Kernel selection should be guided by
+domain knowledge about the target function's regularity.
+\end{warning}
+
+With a rich toolkit for constructing kernels, we are ready to
+develop the Hilbert space of functions associated with each kernel.
+This is the subject of Lesson~62.
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Positive Definiteness Verification]
+\textnormal{(\(*\))} \\
+Let $\kernel(x, x') = \min(x, x')$ for $x, x' \in [0, \infty)$.
+Show that $\kernel$ is positive definite by exhibiting an explicit
+feature map $\feature \colon [0, \infty) \to L^2([0, \infty))$
+such that $\kernel(x, x') = \langle \feature(x), \feature(x')
+\rangle_{L^2}$.
+
+\textit{Hint:} Consider $\feature(x) = \indicator_{[0,x]}$.
+\end{exercise}
+
+\begin{exercise}[Gram Matrix Computation]
+\textnormal{(\(*\))} \\
+For the data points $x_1 = (1, 0)^\top$, $x_2 = (0, 1)^\top$,
+$x_3 = (1, 1)^\top$ in $\R^2$, compute the $3 \times 3$ Gram
+matrix $K$ for:
+\begin{enumerate}[label=(\alph*)]
+    \item the polynomial kernel $\kernel(x, x') = (1 + x^\top x')^2$;
+    \item the Gaussian RBF kernel $\kernel(x, x') = \exp(-\|x - x'\|^2 / 2)$.
+\end{enumerate}
+Verify that both matrices are positive semidefinite by computing
+their eigenvalues.
+\end{exercise}
+
+\begin{exercise}[Closure Under Exponentiation]
+\textnormal{(\(**\))} \\
+Let $\kernel$ be a positive definite kernel on $\mathcal{X}$.
+Prove that for any $c > 0$, the kernel $\kernel_c(x, x') =
+\exp(c \, \kernel(x, x'))$ is positive definite. Use this to give
+an alternative proof that the Gaussian kernel is positive definite.
+
+\textit{Hint:} First show $\exp(c \, x^\top x')$ is pd using the
+Taylor series, then relate the Gaussian kernel to this.
+\end{exercise}
+
+\begin{exercise}[Non-Example: The Distance Kernel]
+\textnormal{(\(**\))} \\
+Show that $\kernel(x, x') = \|x - x'\|$ on $\R^d$ is \emph{not}
+positive definite for $d \ge 1$. Find the smallest $n$ and a
+specific point configuration $\{x_1, \ldots, x_n\} \subset \R$ for
+which the Gram matrix has a negative eigenvalue.
+\end{exercise}
+
+\begin{exercise}[Kernel PCA Feature Extraction]
+\textnormal{(\(**\))} \\
+Given data $x_1, \ldots, x_n \in \R^d$ and a pd kernel $\kernel$,
+the kernel PCA algorithm extracts features from the eigendecomposition
+of the centered Gram matrix $\tilde{K} = HKH$ where $H = I -
+\frac{1}{n}\mathbf{1}\mathbf{1}^\top$ is the centering matrix.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $\tilde{K}$ is positive semidefinite.
+    \item If $\tilde{K} = U \Lambda U^\top$ is the eigendecomposition
+    with $\Lambda = \diag(\mu_1, \ldots, \mu_n)$ and $\mu_1 \ge \cdots
+    \ge \mu_n \ge 0$, show that the $j$-th kernel PCA coordinate of
+    $x_i$ is $\sqrt{\mu_j} \, U_{ij}$.
+    \item Explain why kernel PCA with a Gaussian kernel can separate
+    data that linear PCA cannot.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Random Features Approximation]
+\textnormal{(\(***\))} \\
+\citet{rahimi2008} showed that for shift-invariant kernels
+$\kernel(x, x') = h(x - x')$ on $\R^d$, one can approximate the
+kernel using random features. By Bochner's theorem, $h$ is the
+Fourier transform of a nonneg\-ative measure $\Lambda$:
+$h(\delta) = \int_{\R^d} e^{i \omega^\top \delta} \, d\Lambda(\omega)$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that if $\omega \sim \Lambda / \Lambda(\R^d)$, then
+    $\kernel(x, x') = \Lambda(\R^d) \cdot \E[\cos(\omega^\top x)
+    \cos(\omega^\top x') + \sin(\omega^\top x) \sin(\omega^\top x')]$.
+    \item Define the random feature map $\hat{\feature}(x) =
+    \sqrt{2/D} \, (\cos(\omega_1^\top x), \ldots, \cos(\omega_D^\top x))$
+    where $\omega_1, \ldots, \omega_D \sim \Lambda$ i.i.d. Show that
+    $\E[\hat{\feature}(x)^\top \hat{\feature}(x')] = \kernel(x, x')$.
+    \item Discuss the tradeoff between the number of random features
+    $D$ and the approximation quality. How does this relate to the
+    kernel trick vs.\ explicit feature maps?
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \textbf{kernel trick} replaces inner products in a
+    (possibly infinite-dimensional) feature space with evaluations
+    of a kernel function $\kernel(x, x')$, reducing computation from
+    $O(D)$ in feature dimension to $O(d)$ in input dimension.
+
+    \item A \textbf{positive definite kernel} is a symmetric function
+    whose Gram matrix is positive semidefinite for every finite point
+    set. This is precisely the class of functions that arise as inner
+    products in some feature space.
+
+    \item The class of pd kernels is \textbf{closed under sums,
+    products, scalar multiples, and pointwise limits}
+    (Theorem~\ref{thm:pd-closure}), enabling systematic kernel
+    construction from simple building blocks.
+
+    \item \textbf{Mercer's theorem} provides a spectral decomposition
+    $\kernel(x, x') = \sum_j \lambda_j \feature_j(x) \feature_j(x')$
+    for continuous pd kernels on compact domains, with uniform
+    convergence and nonneg\-ative eigenvalues.
+
+    \item The \textbf{canonical feature map} $\Phi(x) =
+    (\sqrt{\lambda_j} \feature_j(x))_{j \ge 1}$ maps into $\ell^2$
+    and recovers the kernel as an inner product: $\kernel(x, x') =
+    \langle \Phi(x), \Phi(x') \rangle_{\ell^2}$.
+
+    \item The \textbf{Gaussian RBF kernel} $\exp(-\|x - x'\|^2 /
+    (2\sigma^2))$ is positive definite (proved via Taylor expansion
+    of $\exp$), has an infinite-dimensional feature space, and its
+    eigenvalues decay exponentially.
+
+    \item \textbf{Kernel selection} encodes smoothness assumptions:
+    the Gaussian kernel produces $C^\infty$ functions, the Laplacian
+    kernel produces rougher functions, and polynomial kernels
+    constrain the function class to a finite-dimensional space.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson 62} develops the reproducing kernel Hilbert
+    space (RKHS) associated with each pd kernel, establishes the
+    representer theorem, and applies it to kernel ridge regression.
+    The RKHS provides the function space in which kernel methods
+    operate.
+
+    \item \citet{scholkopf2002} provide a comprehensive treatment of
+    kernel methods for machine learning, including support vector
+    machines, kernel PCA, and kernel Fisher discriminant analysis.
+
+    \item \citet{steinwart2008} give a rigorous mathematical
+    treatment of kernels and support vector machines, including
+    universal kernels and approximation properties.
+
+    \item \citet{rahimi2008} introduce random features as a
+    scalable approximation to kernel methods, bridging the gap
+    between explicit feature maps and the kernel trick.
+
+    \item \citet{jacot2018} establish the neural tangent kernel
+    framework, connecting wide neural networks to kernel methods and
+    enabling the analysis of neural network training via kernel theory.
+
+    \item The original paper by \citet{mercer1909} established the
+    eigenexpansion of positive definite integral kernels in the
+    context of integral equations, decades before the machine learning
+    applications. \citet{aronszajn1950} later developed the abstract
+    RKHS theory that unified and generalized Mercer's work.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

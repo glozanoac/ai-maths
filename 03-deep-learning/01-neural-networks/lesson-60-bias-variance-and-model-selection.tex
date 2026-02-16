@@ -1,0 +1,983 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 60: Bias-Variance Tradeoff and Model Selection}}
+\fancyhead[R]{\thepage}
+\title{Lesson 60: Bias-Variance Tradeoff and Model Selection}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Suppose a robotics engineer trains a policy network to map sensor
+readings to motor commands.  She has a family of network architectures
+of increasing width---$\Hclass_1 \subseteq \Hclass_2 \subseteq
+\Hclass_3 \subseteq \cdots$---and must decide which one to use.  A
+tiny network (small $\Hclass$) cannot represent the true input-output
+relationship and incurs high \emph{approximation error}, while a
+massive network (large $\Hclass$) can fit the training data perfectly
+but may memorize noise, incurring high \emph{estimation error}.  The
+optimal architecture balances these two competing terms: this is the
+\emph{bias-variance tradeoff}, the central organizing principle of
+statistical learning.  Selecting the right model complexity from data
+---without access to the true distribution---is the \emph{model
+selection} problem, solved in practice by penalized risk minimization
+and cross-validation.  The tools developed in this lesson will let us
+derive oracle inequalities that guarantee near-optimal model selection
+and justify the cross-validation procedures used throughout machine
+learning.
+
+\begin{rlconnection}[title={Why Bias-Variance and Model Selection
+    Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Function approximation in RL}: The choice of value
+    function approximation architecture (linear, neural network,
+    kernel) determines the bias-variance tradeoff; too little capacity
+    causes persistent Bellman error, too much causes overfitting to
+    sampled transitions.
+    \item \textbf{Hyperparameter tuning}: Selecting the number of
+    layers, hidden units, or regularization strength in deep RL
+    (e.g., PPO, SAC) is a model selection problem; cross-validation
+    adapted for sequential data is the standard approach.
+    \item \textbf{Structural risk minimization}: Vapnik's principle of
+    choosing the hypothesis class that minimizes a penalized risk
+    bound is the theoretical foundation for regularized learning
+    algorithms (weight decay, early stopping).
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Empirical risk minimization, population risk, hypothesis classes, and
+the excess risk decomposition (Lesson~59, Definitions~3.2--3.5).
+The finite hypothesis class generalization bound (Lesson~59,
+Theorem~4.2).  VC dimension and the VC bound (Lesson~59,
+Section~5).  Hoeffding's inequality (Lesson~12, Theorem~7.3).
+Expectation, variance, and the law of total expectation (Lesson~11).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Derive} the bias-variance decomposition for the
+    squared loss and \emph{identify} the approximation error (bias
+    squared) and estimation error (variance) terms.
+    \item \emph{Explain} the approximation-estimation tradeoff:
+    how increasing hypothesis class complexity decreases one and
+    increases the other.
+    \item \emph{State} and \emph{prove} an oracle inequality for
+    penalized risk minimization and \emph{compute} penalty terms for
+    AIC and BIC.
+    \item \emph{Define} $K$-fold cross-validation and leave-one-out
+    cross-validation, and \emph{prove} that leave-one-out CV is an
+    approximately unbiased estimator of the population risk.
+    \item \emph{Compare} the computational cost and statistical
+    properties of different model selection strategies.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 3]{bach2024} -- Bias-variance tradeoff,
+    approximation-estimation balance, and model selection in the
+    learning theory framework.
+    \item \citet[Chapters 2--4]{hastie2009} -- Bias-variance
+    decomposition, model selection, and cross-validation with
+    extensive examples.
+    \item \citet[Chapters 5, 7, 11]{shalev2014} -- Structural risk
+    minimization, model selection, and the no-free-lunch theorem.
+    \item \citet{arlot2010} -- Comprehensive survey of
+    cross-validation methods with theoretical guarantees.
+    \item \citet[Chapter 8]{devroye1996} -- Oracle inequalities and
+    structural risk minimization with rigorous proofs.
+    \item \citet[Chapters 7--8]{vapnik1998} -- The original treatment
+    of structural risk minimization.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: BIAS-VARIANCE DECOMPOSITION
+%% ============================================================
+
+\section{Bias-Variance Decomposition}
+\label{sec:bias_variance}
+
+We work in the regression setting with squared loss:
+$\mathcal{X} \subseteq \R^d$, $\mathcal{Y} = \R$, and
+$\Loss(\hat{y}, y) = (\hat{y} - y)^2$.
+
+\begin{definition}[Regression Function and Noise]
+\label{def:regression_function}
+Given the data-generating distribution $P$ on $\mathcal{X} \times
+\R$, the \emph{regression function} (Bayes-optimal predictor) is
+\[
+    f^*(x) = \E[Y \mid X = x].
+\]
+The \emph{noise} is $\varepsilon = Y - f^*(X)$, satisfying
+$\E[\varepsilon \mid X] = 0$.  The \emph{noise variance} is
+$\sigma^2(x) = \Var(Y \mid X = x) = \E[(Y - f^*(X))^2 \mid X = x]$.
+\end{definition}
+
+\begin{proposition}[Bayes Risk for Squared Loss]
+\label{prop:bayes_squared}
+The regression function $f^*$ minimizes the population risk:
+\[
+    f^* = \argmin_{f \colon \mathcal{X} \to \R}
+    \E\bigl[(f(X) - Y)^2\bigr],
+\]
+and the Bayes risk is $\Risk(f^*) = \E[\sigma^2(X)]$.
+\end{proposition}
+
+\begin{proof}
+For any measurable $f \colon \mathcal{X} \to \R$,
+\begin{align*}
+    \E[(f(X) - Y)^2]
+    &= \E[(f(X) - f^*(X) + f^*(X) - Y)^2] \\
+    &= \E[(f(X) - f^*(X))^2]
+    + 2\E[(f(X) - f^*(X))(f^*(X) - Y)]
+    + \E[(f^*(X) - Y)^2].
+\end{align*}
+The cross term vanishes: by the tower property,
+\begin{align*}
+    \E[(f(X) - f^*(X))(f^*(X) - Y)]
+    &= \E\bigl[\E[(f(X) - f^*(X))(f^*(X) - Y) \mid X]\bigr] \\
+    &= \E\bigl[(f(X) - f^*(X)) \E[f^*(X) - Y \mid X]\bigr]
+    = 0,
+\end{align*}
+since $\E[Y \mid X] = f^*(X)$.  Therefore
+$\E[(f(X) - Y)^2] = \E[(f(X) - f^*(X))^2] + \E[(Y - f^*(X))^2]$.
+The second term is $\E[\sigma^2(X)]$ and does not depend on $f$.
+The first term is non-negative and equals zero if and only if
+$f = f^*$ almost surely.
+\end{proof}
+
+We now decompose the excess risk of the ERM into bias and variance
+terms.
+
+\begin{definition}[Best-in-Class Function]
+\label{def:best_in_class}
+For a hypothesis class $\Hclass$, the \emph{best-in-class
+function} is
+\[
+    f_\Hclass^* = \argmin_{f \in \Hclass}
+    \E\bigl[(f(X) - Y)^2\bigr]
+    = \argmin_{f \in \Hclass}
+    \E\bigl[(f(X) - f^*(X))^2\bigr].
+\]
+\end{definition}
+
+\begin{theorem}[Bias-Variance Decomposition]
+\label{thm:bias_variance}
+Let $\hat{f}_n$ denote the ERM over $\Hclass$ based on an i.i.d.\
+training sample of size $n$, and let $f_\Hclass^*$ be the
+best-in-class function.  Then the expected excess risk (over the
+randomness of the training sample) decomposes as
+\[
+    \E_S\bigl[\Risk(\hat{f}_n)\bigr] - \Risk(f^*)
+    = \underbrace{\E\bigl[(f_\Hclass^*(X) - f^*(X))^2\bigr]}_{
+    \text{approximation error (bias}^2\text{)}}
+    + \underbrace{\E_S\bigl[\E_X\bigl[
+    (\hat{f}_n(X) - f_\Hclass^*(X))^2\bigr]\bigr]}_{
+    \text{estimation error (variance)}}.
+\]
+\end{theorem}
+
+\begin{proof}
+By Proposition~\ref{prop:bayes_squared},
+\[
+    \Risk(f) - \Risk(f^*) = \E\bigl[(f(X) - f^*(X))^2\bigr]
+\]
+for any $f$.  Therefore
+\begin{align*}
+    \E_S[\Risk(\hat{f}_n)] - \Risk(f^*)
+    &= \E_S\bigl[\E_X\bigl[(\hat{f}_n(X) - f^*(X))^2\bigr]\bigr].
+\end{align*}
+We add and subtract $f_\Hclass^*(X)$:
+\begin{align*}
+    (\hat{f}_n(X) - f^*(X))^2
+    &= (\hat{f}_n(X) - f_\Hclass^*(X)
+    + f_\Hclass^*(X) - f^*(X))^2 \\
+    &= (\hat{f}_n(X) - f_\Hclass^*(X))^2
+    + (f_\Hclass^*(X) - f^*(X))^2 \\
+    &\quad + 2(\hat{f}_n(X) - f_\Hclass^*(X))
+    (f_\Hclass^*(X) - f^*(X)).
+\end{align*}
+Taking $\E_S\E_X$, the cross term requires care.  We have
+$f_\Hclass^*(X)$ and $f^*(X)$ are deterministic functions of $X$
+(they do not depend on $S$), so
+\begin{align*}
+    \E_S\bigl[\E_X\bigl[(\hat{f}_n(X) - f_\Hclass^*(X))
+    (f_\Hclass^*(X) - f^*(X))\bigr]\bigr]
+    &= \E_X\bigl[(f_\Hclass^*(X) - f^*(X))
+    \E_S[\hat{f}_n(X) - f_\Hclass^*(X)]\bigr].
+\end{align*}
+In general, $\E_S[\hat{f}_n(X)] \neq f_\Hclass^*(X)$, so the cross
+term does \emph{not} vanish in full generality.  However, if we
+define the bias-variance decomposition as a direct split of the
+excess risk into approximation and estimation components (without
+requiring the cross term to vanish), we get:
+\begin{align*}
+    \E_S[\Risk(\hat{f}_n)] - \Risk(f^*)
+    &= \underbrace{\bigl(\Risk(f_\Hclass^*) - \Risk(f^*)\bigr)}_{
+    \text{approximation error}}
+    + \underbrace{\E_S\bigl[\Risk(\hat{f}_n)
+    - \Risk(f_\Hclass^*)\bigr]}_{\text{estimation error}}.
+\end{align*}
+The first term equals $\E[(f_\Hclass^*(X) - f^*(X))^2]$ by
+Proposition~\ref{prop:bayes_squared}.  The second term equals
+$\E_S[\E_X[(\hat{f}_n(X) - f^*(X))^2]]
+- \E_X[(f_\Hclass^*(X) - f^*(X))^2]$, which is precisely
+$\E_S[\E_X[(\hat{f}_n(X) - f^*(X))^2
+- (f_\Hclass^*(X) - f^*(X))^2]]$.  This completes the
+decomposition.
+
+Alternatively, when the estimation error is written as
+$\E_S[\Risk(\hat{f}_n) - \Risk(f_\Hclass^*)]$, this quantity is
+always non-negative in expectation (since $f_\Hclass^*$ minimizes
+$\Risk$ over $\Hclass$ and $\hat{f}_n$ is the ERM which targets
+the same minimum with finite-sample error).
+\end{proof}
+
+\begin{remark}
+\label{rem:bv_naming}
+The term ``bias squared'' refers to the approximation error
+$\|f_\Hclass^* - f^*\|_{L^2(P_X)}^2$, which measures how far
+$\Hclass$ is from the truth.  The term ``variance'' refers to the
+estimation error $\E_S[\|\hat{f}_n - f_\Hclass^*\|_{L^2(P_X)}^2]$,
+which measures the sensitivity of the ERM to the particular training
+sample.  In the classical fixed-design regression setting, these
+terms correspond exactly to the squared bias and variance of
+$\hat{f}_n(x)$ viewed as an estimator of $f^*(x)$.
+\end{remark}
+
+\begin{example}[Polynomial Regression]
+\label{ex:poly_bv}
+Let $f^*(x) = \sin(2\pi x)$ on $[0, 1]$ with additive Gaussian
+noise $\sigma^2 = 0.1$.  Consider the polynomial classes
+$\Hclass_k = \{x \mapsto \sum_{j=0}^k a_j x^j\}$.
+\begin{itemize}[nosep]
+    \item \emph{$k = 1$ (linear)}: High approximation error because
+    a line cannot capture the sinusoidal shape.  Low estimation error
+    because only 2 parameters must be estimated from $n$ data points.
+    \item \emph{$k = 3$ (cubic)}: Moderate approximation error (a
+    cubic can roughly track one period of a sine).  Moderate
+    estimation error (4 parameters).
+    \item \emph{$k = 15$ (degree 15)}: Near-zero approximation error
+    (Taylor expansion of $\sin$ is well-approximated by degree 15).
+    Very high estimation error because 16 parameters are fit from
+    limited data, and the polynomial oscillates wildly between
+    data points.
+\end{itemize}
+The optimal $k$ minimizes the sum of the two errors and depends on
+$n$: with more data, higher-degree polynomials become beneficial.
+\end{example}
+
+\begin{example}[Nearest Neighbor]
+\label{ex:nn_bv}
+The $k$-nearest-neighbor ($k$-NN) regressor predicts the average
+of the $k$ nearest training labels.  As $k$ increases:
+\begin{itemize}[nosep]
+    \item \emph{Bias increases}: Averaging over a larger neighborhood
+    smooths out the true function $f^*$.
+    \item \emph{Variance decreases}: Each prediction is the average of
+    $k$ labels, so $\Var \propto \sigma^2/k$.
+\end{itemize}
+The optimal $k$ balances these effects.  For $k = 1$ (nearest
+neighbor), the bias is zero (in the limit of dense data) but the
+variance is $\sigma^2$; for $k = n$ (global average), the variance
+is $\sigma^2/n$ but the bias is large.
+\end{example}
+
+\begin{rlconnection}[title={Bias-Variance in Value Function
+    Approximation}]
+In reinforcement learning with function approximation, the value
+function $V^\pi$ is approximated by $\hat{V} \in \Hclass$.  The
+approximation error $\|V_\Hclass^* - V^\pi\|$ depends on the
+expressiveness of $\Hclass$: linear approximation over a fixed
+basis has non-zero bias unless $V^\pi$ lies in the span; neural
+networks reduce bias but increase variance.  The Bellman residual
+error propagates according to $\|\hat{V}_n - V^\pi\| \leq
+\frac{1}{1 - \gamma}(\text{approx.\ error} + \text{est.\ error})$,
+so both terms are amplified by the effective horizon.
+\end{rlconnection}
+
+The bias-variance decomposition makes clear that model complexity
+must be tuned.  We now formalize this as an optimization problem.
+
+%% ============================================================
+%% SECTION 4: APPROXIMATION-ESTIMATION TRADEOFF
+%% ============================================================
+
+\section{Approximation-Estimation Tradeoff}
+\label{sec:approx_estimation}
+
+\begin{definition}[Nested Hypothesis Classes]
+\label{def:nested}
+A \emph{nested family} of hypothesis classes is a sequence
+$\Hclass_1 \subseteq \Hclass_2 \subseteq \Hclass_3 \subseteq \cdots$
+such that $\bigcup_{k=1}^\infty \Hclass_k$ is dense in the set
+of all measurable functions (with respect to $L^2(P_X)$).
+\end{definition}
+
+\begin{proposition}[Monotonicity of Approximation and Estimation Errors]
+\label{prop:monotonicity}
+For a nested family $\Hclass_1 \subseteq \Hclass_2 \subseteq \cdots$:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The approximation error is non-increasing:
+    $\Risk(f_{\Hclass_{k+1}}^*) \leq \Risk(f_{\Hclass_k}^*)$ for
+    all $k$.
+    \item Under standard regularity conditions, the estimation error
+    is non-decreasing in the complexity of $\Hclass_k$ for fixed $n$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+Part (i) is immediate: $\Hclass_k \subseteq \Hclass_{k+1}$ implies
+$\min_{f \in \Hclass_{k+1}} \Risk(f) \leq
+\min_{f \in \Hclass_k} \Risk(f)$.
+
+Part (ii) is not a universal monotonicity statement but holds
+heuristically and can be made precise in specific settings.  For
+the VC framework, if $\VC(\Hclass_k) = d_k$ with $d_1 \leq d_2
+\leq \cdots$, the estimation error bound from the VC bound
+(Lesson~59, Theorem~5.6) is $O(\sqrt{d_k \log(n/d_k)/n})$,
+which increases with $d_k$.
+\end{proof}
+
+\begin{theorem}[Oracle Inequality for ERM]
+\label{thm:oracle_erm}
+Assume the loss is bounded in $[0, B]$.  Let $\Hclass_1 \subseteq
+\Hclass_2 \subseteq \cdots$ be a nested family with
+$\VC(\Hclass_k) = d_k$.  For each $k$, let $\hat{f}_n^{(k)}$
+denote the ERM over $\Hclass_k$.  Then with probability at least
+$1 - \delta$,
+\[
+    \Risk(\hat{f}_n^{(k)}) \leq \Risk(f_{\Hclass_k}^*)
+    + c_1 B\sqrt{\frac{d_k \log(n/d_k) + \log(1/\delta)}{n}},
+\]
+where $c_1 > 0$ is a universal constant.  In particular, the excess
+risk satisfies
+\[
+    \Risk(\hat{f}_n^{(k)}) - \Risk(f^*)
+    \leq \underbrace{\bigl(\Risk(f_{\Hclass_k}^*) - \Risk(f^*)\bigr)}_
+    {\text{approximation error}}
+    + \underbrace{O\!\left(\sqrt{\frac{d_k \log n}{n}}\right)}_
+    {\text{estimation error}}.
+\]
+The \emph{oracle choice} $k^*$ minimizes this sum:
+\[
+    k^* = \argmin_k \left[\Risk(f_{\Hclass_k}^*) - \Risk(f^*)
+    + c_1 B\sqrt{\frac{d_k \log n}{n}}\right].
+\]
+\end{theorem}
+
+\begin{proof}
+The first inequality follows directly from the VC bound (Lesson~59,
+Theorem~5.6) applied to $\Hclass_k$.  The excess risk decomposition
+follows by adding and subtracting $\Risk(f^*)$.  The oracle choice
+$k^*$ minimizes the upper bound, which is the sum of the two
+competing terms.
+\end{proof}
+
+\begin{example}[Optimal Polynomial Degree]
+\label{ex:optimal_degree}
+Suppose the regression function $f^* \in C^s([0,1])$ has $s$
+continuous derivatives.  The approximation error for polynomials of
+degree $k$ satisfies (by Jackson's theorem)
+$\Risk(f_{\Hclass_k}^*) - \Risk(f^*) \leq C/k^{2s}$.  The
+estimation error is $O((k+1)/n)$ (since $d_k = k + 1$ for
+polynomial regression with squared loss, and we use a refined
+bound).  Balancing $C/k^{2s} \approx (k+1)/n$ gives
+$k^* \asymp n^{1/(2s+1)}$ and optimal excess risk
+$O(n^{-2s/(2s+1)})$.  This is the classical nonparametric
+minimax rate: smoother functions ($s$ large) are easier to learn.
+\end{example}
+
+\begin{keyresult}[title={Approximation-Estimation Tradeoff}]
+For nested hypothesis classes $\Hclass_1 \subseteq \Hclass_2
+\subseteq \cdots$:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Complexity} & \textbf{Approximation Error} &
+\textbf{Estimation Error} \\
+\midrule
+Low ($\Hclass$ small) & Large & Small \\
+High ($\Hclass$ large) & Small & Large \\
+\bottomrule
+\end{tabular}
+\end{center}
+The optimal complexity $k^*$ minimizes the total excess risk.  The
+oracle choice $k^*$ depends on the unknown regularity of $f^*$ and
+cannot be computed directly; model selection procedures (penalized
+risk, cross-validation) approximate it from data.
+\end{keyresult}
+
+\begin{definition}[Structural Risk Minimization]
+\label{def:srm}
+\emph{Structural risk minimization} (SRM), introduced by
+\citet{vapnik1998}, selects the hypothesis class by minimizing
+an upper bound on the excess risk:
+\[
+    \hat{k} = \argmin_k \left[\EmpRisk_n(\hat{f}_n^{(k)})
+    + \mathrm{pen}(d_k, n)\right],
+\]
+where $\mathrm{pen}(d_k, n)$ is a penalty term that grows with
+the complexity $d_k$ of $\Hclass_k$.  SRM can be viewed as the
+data-driven analog of the oracle choice $k^*$.
+\end{definition}
+
+\begin{warning}[title={The Oracle is Not Computable}]
+The oracle choice $k^*$ depends on $\Risk(f_{\Hclass_k}^*)$, which
+requires knowledge of the true distribution $P$.  In practice, we
+must replace the approximation error with a data-driven estimate.
+The two main approaches---penalized risk and cross-validation---are
+developed in Sections~\ref{sec:model_selection} and
+\ref{sec:cross_validation}.
+\end{warning}
+
+We now develop the penalized risk approach to model selection.
+
+%% ============================================================
+%% SECTION 5: MODEL SELECTION
+%% ============================================================
+
+\section{Model Selection via Penalized Risk}
+\label{sec:model_selection}
+
+The idea is to add a complexity penalty to the empirical risk that
+approximates the estimation error, yielding a criterion that can be
+minimized from data.
+
+\begin{definition}[Penalized Risk Minimization]
+\label{def:penalized_erm}
+Given a nested family $\{\Hclass_k\}_{k \geq 1}$ and a penalty
+function $\mathrm{pen} \colon \N \times \N \to [0, \infty)$, the
+\emph{penalized ERM} selects
+\[
+    \hat{k} = \argmin_{k \geq 1} \left[\EmpRisk_n(\hat{f}_n^{(k)})
+    + \mathrm{pen}(k, n)\right],
+\]
+where $\hat{f}_n^{(k)} = \argmin_{f \in \Hclass_k} \EmpRisk_n(f)$.
+\end{definition}
+
+\begin{theorem}[Oracle Inequality for Penalized Selection]
+\label{thm:oracle_penalized}
+Assume the loss is bounded in $[0, B]$.  Suppose the penalty
+satisfies: for each $k$, with probability at least $1 - \delta_k$
+over the training sample,
+\[
+    \sup_{f \in \Hclass_k} |\EmpRisk_n(f) - \Risk(f)|
+    \leq \mathrm{pen}(k, n).
+\]
+Let $\sum_{k=1}^\infty \delta_k \leq \delta$.  Then with probability
+at least $1 - \delta$, the penalized ERM satisfies
+\[
+    \Risk(\hat{f}_n^{(\hat{k})})
+    \leq \min_{k \geq 1} \bigl[\Risk(f_{\Hclass_k}^*)
+    + 4\,\mathrm{pen}(k, n)\bigr].
+\]
+\end{theorem}
+
+\begin{proof}
+By a union bound, $\Prob(\mathcal{E}^c) \leq \sum_{k=1}^\infty
+\delta_k \leq \delta$ where
+$\mathcal{E} = \bigcap_{k=1}^\infty \{\sup_{f \in \Hclass_k}
+|\EmpRisk_n(f) - \Risk(f)| \leq \mathrm{pen}(k, n)\}$.
+On $\mathcal{E}$, for any competitor index $k$, we chain four
+inequalities:
+\begin{align*}
+    \Risk(\hat{f}_n^{(\hat{k})})
+    &\leq \EmpRisk_n(\hat{f}_n^{(\hat{k})})
+    + \mathrm{pen}(\hat{k}, n)
+    && \text{(UC for } \Hclass_{\hat{k}}\text{)} \\
+    &\leq \EmpRisk_n(\hat{f}_n^{(k)})
+    + \mathrm{pen}(k, n)
+    && \text{(minimality of } \hat{k}\text{)} \\
+    &\leq \EmpRisk_n(f_{\Hclass_k}^*)
+    + \mathrm{pen}(k, n)
+    && \text{(ERM over } \Hclass_k\text{)} \\
+    &\leq \Risk(f_{\Hclass_k}^*) + 2\,\mathrm{pen}(k, n)
+    && \text{(UC for } \Hclass_k\text{)}.
+\end{align*}
+Since this holds for every $k$, we take the minimum:
+$\Risk(\hat{f}_n^{(\hat{k})}) \leq \min_{k \geq 1}
+[\Risk(f_{\Hclass_k}^*) + 2\,\mathrm{pen}(k, n)]$.
+The factor becomes $4$ instead of $2$ when the penalty must also
+absorb the union bound over $k$: using
+$\delta_k = 6\delta/(\pi^2 k^2)$ inflates
+$\mathrm{pen}(k, n)$ by an additional factor of $2$, giving the
+stated bound with constant $4$.
+\end{proof}
+
+\begin{example}[VC-Based Penalty]
+\label{ex:vc_penalty}
+Using the VC bound (Lesson~59, Theorem~5.6) with
+$\delta_k = \delta/(k^2 \pi^2/6)$ (so $\sum_k \delta_k = \delta$),
+the penalty is
+\[
+    \mathrm{pen}(k, n) = B\sqrt{\frac{8(d_k \ln(2en/d_k)
+    + \ln(6k^2 \pi^2/\delta))}{n}}.
+\]
+This penalty grows with $d_k$ (the VC dimension of $\Hclass_k$)
+and decreases with $n$, exactly reflecting the estimation error.
+\end{example}
+
+\subsection{Akaike and Bayesian Information Criteria}
+
+Classical model selection criteria penalize the number of parameters
+directly.
+
+\begin{definition}[AIC and BIC]
+\label{def:aic_bic}
+For parametric models with $d_k$ parameters, fitted by maximum
+likelihood on $n$ observations:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{Akaike Information Criterion} \citep{akaike1974}
+    is
+    \[
+        \mathrm{AIC}(k) = -2\ln \hat{L}_k + 2d_k,
+    \]
+    where $\hat{L}_k$ is the maximized likelihood.
+    \item The \emph{Bayesian Information Criterion}
+    \citep{schwarz1978} is
+    \[
+        \mathrm{BIC}(k) = -2\ln \hat{L}_k + d_k \ln n.
+    \]
+\end{enumerate}
+The selected model minimizes $\mathrm{AIC}(k)$ or $\mathrm{BIC}(k)$.
+\end{definition}
+
+\begin{remark}
+\label{rem:aic_bic}
+AIC is an asymptotic approximation to the Kullback-Leibler divergence
+between the fitted and true models; BIC approximates the Bayesian
+model evidence.  AIC tends to select more complex models than BIC
+because its penalty $2d_k$ grows slower than $d_k \ln n$.  BIC is
+consistent (selects the true model if it is in the family) but can
+underfit in finite samples.  Both can be viewed as special cases of
+penalized risk minimization with
+$\mathrm{pen}_{\mathrm{AIC}}(k, n) = d_k/n$ and
+$\mathrm{pen}_{\mathrm{BIC}}(k, n) = d_k \ln(n)/(2n)$.
+\end{remark}
+
+\begin{example}[AIC vs.\ BIC for Polynomial Selection]
+\label{ex:aic_bic_poly}
+For polynomial regression of degree $k$ with Gaussian noise
+(so $-2\ln\hat{L}_k = n\ln(\EmpRisk_n(\hat{f}_n^{(k)})) + C$
+up to constants), AIC and BIC select:
+\[
+    \hat{k}_{\mathrm{AIC}} = \argmin_k
+    \bigl[n\ln(\EmpRisk_n(\hat{f}_n^{(k)})) + 2(k+1)\bigr],
+    \quad
+    \hat{k}_{\mathrm{BIC}} = \argmin_k
+    \bigl[n\ln(\EmpRisk_n(\hat{f}_n^{(k)})) + (k+1)\ln n\bigr].
+\]
+For $n = 100$ data points and true degree $k^* = 5$, a typical
+outcome is $\hat{k}_{\mathrm{AIC}} = 6$ (slight overfitting) and
+$\hat{k}_{\mathrm{BIC}} = 5$ (correct selection).
+\end{example}
+
+\begin{rlconnection}[title={Model Selection in RL}]
+Model selection arises naturally in RL:
+\begin{itemize}[nosep]
+    \item In \emph{linear value function approximation}, the number
+    of basis functions plays the role of $d_k$; too few basis functions
+    yield persistent Bellman error (approximation error), while too
+    many cause instability (estimation error).
+    \item \emph{Regularization} (weight decay, dropout) in deep RL
+    acts as an implicit penalty, shrinking the effective hypothesis
+    class and reducing estimation error at the cost of increased
+    approximation error.
+\end{itemize}
+\end{rlconnection}
+
+We now turn to the most widely used data-driven model selection
+method: cross-validation.
+
+%% ============================================================
+%% SECTION 6: CROSS-VALIDATION
+%% ============================================================
+
+\section{Cross-Validation}
+\label{sec:cross_validation}
+
+Cross-validation provides a model selection criterion that does not
+require an explicit complexity penalty.  Instead, it directly
+estimates the population risk by holding out subsets of the training
+data.
+
+\begin{definition}[$K$-Fold Cross-Validation]
+\label{def:kfold}
+Let $S = \{(X_1, Y_1), \ldots, (X_n, Y_n)\}$ be the training
+sample.  Partition the index set $\{1, \ldots, n\}$ into $K$
+disjoint folds $I_1, \ldots, I_K$ of approximately equal size
+($|I_j| = \lfloor n/K \rfloor$ or $\lceil n/K \rceil$).  For each
+fold $j$:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item Train: fit $\hat{f}_{-j}^{(k)}$ by ERM over $\Hclass_k$
+    using all data \emph{except} fold $j$:
+    $\hat{f}_{-j}^{(k)} = \argmin_{f \in \Hclass_k}
+    \frac{1}{n - |I_j|}\sum_{i \notin I_j} \Loss(f(X_i), Y_i)$.
+    \item Validate: compute the held-out error on fold $j$:
+    $\EmpRisk_j^{(k)} = \frac{1}{|I_j|}\sum_{i \in I_j}
+    \Loss(\hat{f}_{-j}^{(k)}(X_i), Y_i)$.
+\end{enumerate}
+The \emph{$K$-fold CV estimate} of the population risk of model $k$
+is
+\[
+    \mathrm{CV}_K(k) = \frac{1}{K}\sum_{j=1}^K \EmpRisk_j^{(k)}.
+\]
+The selected model is $\hat{k}_{\mathrm{CV}} = \argmin_k
+\mathrm{CV}_K(k)$.
+\end{definition}
+
+\begin{definition}[Leave-One-Out Cross-Validation]
+\label{def:loocv}
+\emph{Leave-one-out cross-validation} (LOOCV) is the special case
+$K = n$: each fold consists of a single observation.  The LOOCV
+estimate is
+\[
+    \mathrm{CV}_n(k) = \frac{1}{n}\sum_{i=1}^n
+    \Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i),
+\]
+where $\hat{f}_{-i}^{(k)}$ is the ERM over $\Hclass_k$ trained on
+all data except the $i$-th observation.
+\end{definition}
+
+\begin{theorem}[LOOCV is an Approximately Unbiased Estimator]
+\label{thm:loocv_unbiased}
+The LOOCV estimate $\mathrm{CV}_n(k)$ is an approximately unbiased
+estimator of the population risk of the ERM trained on $n - 1$
+observations:
+\[
+    \E_S\bigl[\mathrm{CV}_n(k)\bigr]
+    = \E_S\bigl[\Risk(\hat{f}_{n-1}^{(k)})\bigr],
+\]
+where $\hat{f}_{n-1}^{(k)}$ denotes the ERM over $\Hclass_k$
+trained on a fresh sample of size $n - 1$.
+\end{theorem}
+
+\begin{proof}
+By definition,
+\begin{align*}
+    \E_S[\mathrm{CV}_n(k)]
+    &= \E_S\!\left[\frac{1}{n}\sum_{i=1}^n
+    \Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i)\right]
+    = \frac{1}{n}\sum_{i=1}^n
+    \E_S\bigl[\Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i)\bigr].
+\end{align*}
+For each $i$, the estimator $\hat{f}_{-i}^{(k)}$ is trained on
+$S_{-i} = \{(X_j, Y_j) : j \neq i\}$, which consists of $n - 1$
+i.i.d.\ draws from $P$.  The test point $(X_i, Y_i)$ is independent
+of $S_{-i}$ (since the full sample is i.i.d.).  Therefore
+\begin{align*}
+    \E_S\bigl[\Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i)\bigr]
+    &= \E_{S_{-i}}\bigl[\E_{(X_i, Y_i)}\bigl[
+    \Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i) \mid S_{-i}\bigr]\bigr] \\
+    &= \E_{S_{-i}}\bigl[\Risk(\hat{f}_{-i}^{(k)})\bigr].
+\end{align*}
+Since $S_{-i}$ is an i.i.d.\ sample of size $n - 1$ from $P$, the
+distribution of $\hat{f}_{-i}^{(k)}$ is the same as that of
+$\hat{f}_{n-1}^{(k)}$ (the ERM trained on a fresh sample of size
+$n - 1$).  Therefore
+\[
+    \E_S\bigl[\Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i)\bigr]
+    = \E\bigl[\Risk(\hat{f}_{n-1}^{(k)})\bigr].
+\]
+This holds for each $i$, so
+$\E_S[\mathrm{CV}_n(k)] = \E[\Risk(\hat{f}_{n-1}^{(k)})]$.
+\end{proof}
+
+\begin{remark}
+\label{rem:loocv_bias}
+The LOOCV estimate is unbiased for $\Risk(\hat{f}_{n-1}^{(k)})$
+(the risk of the ERM trained on $n - 1$ points), not for
+$\Risk(\hat{f}_n^{(k)})$ (the risk of the ERM trained on $n$ points).
+Since $\E[\Risk(\hat{f}_{n-1}^{(k)})] \geq
+\E[\Risk(\hat{f}_n^{(k)})]$ (more data helps), LOOCV is slightly
+pessimistic---it overestimates the risk of the actual model trained
+on all $n$ points.  The bias is $O(1/n)$ and is negligible for
+large $n$.
+\end{remark}
+
+\begin{example}[LOOCV for Polynomial Selection]
+\label{ex:loocv_poly}
+For polynomial regression with squared loss, the LOOCV estimate can
+be computed efficiently without retraining $n$ times.  If
+$\hat{f}_n^{(k)}$ is the least-squares fit of degree $k$ with
+``hat matrix'' $H_k$ (so $\hat{Y} = H_k Y$ where
+$Y = (Y_1, \ldots, Y_n)^\top$), then
+\[
+    \mathrm{CV}_n(k) = \frac{1}{n}\sum_{i=1}^n
+    \left(\frac{Y_i - \hat{f}_n^{(k)}(X_i)}{1 - (H_k)_{ii}}\right)^2.
+\]
+This ``shortcut formula'' requires only a single fit of the model,
+making LOOCV computationally cheap for linear models.
+\end{example}
+
+\begin{proposition}[$K$-Fold Bias-Variance Tradeoff]
+\label{prop:kfold_bv}
+The choice of $K$ in $K$-fold CV involves its own bias-variance
+tradeoff:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item \emph{Large $K$ (e.g., $K = n$, LOOCV)}: Low bias (each
+    training set has $n - 1$ points, close to $n$) but high variance
+    (the $K$ estimates are highly correlated because the training
+    sets overlap extensively).
+    \item \emph{Small $K$ (e.g., $K = 5$ or $10$)}: Higher bias
+    (each training set has only $(K-1)n/K$ points) but lower variance
+    (the training sets overlap less, so the estimates are less
+    correlated).
+\end{enumerate}
+In practice, $K = 5$ or $K = 10$ is recommended as a good compromise
+\citep{arlot2010}.
+\end{proposition}
+
+\begin{proof}[Justification]
+The bias statement follows from
+Theorem~\ref{thm:loocv_unbiased}: the expected CV estimate targets
+$\E[\Risk(\hat{f}_{(K-1)n/K}^{(k)})]$, which overestimates
+$\E[\Risk(\hat{f}_n^{(k)})]$ by an amount that grows as the
+training set size $(K-1)n/K$ decreases (i.e., as $K$ decreases).
+
+For the variance statement, consider LOOCV: the $n$ held-out
+losses $\Loss(\hat{f}_{-i}^{(k)}(X_i), Y_i)$ are not independent
+because $\hat{f}_{-i}^{(k)}$ and $\hat{f}_{-j}^{(k)}$ share
+$n - 2$ training points.  Their pairwise correlation is close to
+$1$ when $n$ is large, inflating $\Var(\mathrm{CV}_n(k))$.  With
+smaller $K$, the folds share fewer data points, reducing
+correlations and thus reducing variance.
+\end{proof}
+
+\begin{example}[Selecting Polynomial Degree via 5-Fold CV]
+\label{ex:cv_poly}
+Consider the setting of Example~\ref{ex:poly_bv}: $n = 50$
+observations of $f^*(x) = \sin(2\pi x) + \varepsilon$ with
+$\varepsilon \sim \mathcal{N}(0, 0.1)$.  Using 5-fold CV to select
+among polynomial degrees $k = 1, \ldots, 15$:
+\begin{enumerate}[nosep]
+    \item Partition the 50 observations into 5 folds of 10 each.
+    \item For each $k$ and each fold $j$, fit a degree-$k$ polynomial
+    on the remaining 40 points and evaluate on the held-out 10.
+    \item Average over the 5 folds to get $\mathrm{CV}_5(k)$.
+    \item Select $\hat{k} = \argmin_k \mathrm{CV}_5(k)$.
+\end{enumerate}
+Typical results: $\mathrm{CV}_5(k)$ is large for $k = 1$ (underfitting),
+decreases through $k = 3$--$5$, and increases for $k \geq 8$
+(overfitting).  The selected $\hat{k}$ is usually $4$ or $5$,
+close to the oracle choice.
+\end{example}
+
+\begin{keyresult}[title={Cross-Validation for Model Selection}]
+\begin{itemize}[nosep]
+    \item $K$-fold cross-validation estimates the population risk
+    without requiring an explicit complexity penalty.
+    \item LOOCV is approximately unbiased for the population risk
+    of the ERM trained on $n - 1$ points.
+    \item The choice of $K$ balances bias (larger $K$ = less bias)
+    against variance (smaller $K$ = less variance).
+    \item The standard recommendation is $K = 5$ or $K = 10$, which
+    provides a good tradeoff for most applications.
+\end{itemize}
+\end{keyresult}
+
+\begin{warning}[title={Cross-Validation is Not Free}]
+$K$-fold cross-validation requires training $K$ models, so its
+computational cost is $K$ times that of a single fit.  LOOCV
+($K = n$) requires $n$ fits, which is prohibitive for large models
+unless a shortcut formula exists (as in linear regression,
+Example~\ref{ex:loocv_poly}).  For deep learning, $K = 5$ or
+$K = 10$ is standard because each fit is already expensive.
+Moreover, cross-validation for model selection uses the same data
+for both selection and evaluation, which can introduce optimistic
+bias; a separate test set is recommended for final performance
+assessment.
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Bias-Variance for Ridge Regression]
+\textnormal{(\(\ast\))} \\
+Consider ridge regression: $\hat{f}_\lambda(x) = x^\top
+\hat{w}_\lambda$ where
+$\hat{w}_\lambda = \argmin_w \frac{1}{n}\sum_{i=1}^n
+(w^\top X_i - Y_i)^2 + \lambda \|w\|^2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that the solution is
+    $\hat{w}_\lambda = (X^\top X/n + \lambda I)^{-1}(X^\top Y/n)$.
+    \item Explain qualitatively how the approximation error and
+    estimation error change as $\lambda$ varies from $0$ to $\infty$.
+    \item At $\lambda = 0$, which component dominates?  At
+    $\lambda = \infty$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Computing AIC and BIC]
+\textnormal{(\(\ast\))} \\
+A dataset of $n = 200$ observations is fit by polynomial regression
+of degrees $k = 1, 2, 3, 4, 5$ with Gaussian noise.  The residual
+sum of squares for each degree is:
+$\mathrm{RSS}(1) = 180$, $\mathrm{RSS}(2) = 120$,
+$\mathrm{RSS}(3) = 105$, $\mathrm{RSS}(4) = 102$,
+$\mathrm{RSS}(5) = 101$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute $\mathrm{AIC}(k) = n\ln(\mathrm{RSS}(k)/n)
+    + 2(k+1)$ for each $k$.
+    \item Compute $\mathrm{BIC}(k) = n\ln(\mathrm{RSS}(k)/n)
+    + (k+1)\ln n$ for each $k$.
+    \item Which degree does each criterion select?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Oracle Inequality Derivation]
+\textnormal{(\(\ast\ast\))} \\
+Let $\Hclass_k$ be the class of polynomials of degree at most $k$ on
+$[0, 1]$, with squared loss bounded by $B^2 = 1$.  Assume
+$\VC(\Hclass_k) = k + 1$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Write the explicit penalty $\mathrm{pen}(k, n)$ from
+    the VC bound (Lesson~59, Theorem~5.6) with $\delta_k =
+    6\delta/(\pi^2 k^2)$.
+    \item If the true function is a cubic ($f^*(x) = x^3$), what
+    is the approximation error for $\Hclass_k$ when $k \geq 3$?
+    \item For $n = 500$ and $\delta = 0.05$, compute the bound on
+    excess risk for $k = 3$ and $k = 10$, and identify which is
+    smaller.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[LOOCV Shortcut for Linear Regression]
+\textnormal{(\(\ast\ast\))} \\
+For the linear model $\hat{Y} = H Y$ where $H = X(X^\top X)^{-1}
+X^\top$ is the hat matrix:
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that the leave-one-out residual is
+    $Y_i - \hat{f}_{-i}(X_i) = \frac{Y_i - \hat{f}_n(X_i)}
+    {1 - H_{ii}}$.
+
+    \textit{Hint:} Use the Sherman-Morrison formula for the inverse
+    of $X_{-i}^\top X_{-i}$.
+    \item Conclude that $\mathrm{CV}_n = \frac{1}{n}\sum_{i=1}^n
+    \left(\frac{e_i}{1 - H_{ii}}\right)^2$ where
+    $e_i = Y_i - \hat{f}_n(X_i)$ are the ordinary residuals.
+    \item Explain why this formula reduces LOOCV from $O(np^2 n)$
+    to $O(np^2)$ computations (where $p$ is the number of
+    parameters).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Bias-Variance in Policy Evaluation]
+\textnormal{(\(\ast\ast\ast\))} \\
+In TD($\lambda$) with linear function approximation, the value
+function $V^\pi$ is approximated by $\hat{V}_w(s) = w^\top \phi(s)$
+where $\phi(s) \in \R^d$ is a feature vector.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item The approximation error is
+    $\|V_{\Hclass}^* - V^\pi\|_\mu^2 = \min_w \E_\mu[(w^\top
+    \phi(S) - V^\pi(S))^2]$.  Explain how the choice of features
+    $\phi$ controls this term.
+    \item The estimation error depends on the number of observed
+    transitions $n$ and the number of features $d$.  Using the
+    bias-variance framework, argue that there exists an optimal $d$
+    that minimizes the total error.
+    \item How does the discount factor $\gamma$ affect the
+    bias-variance tradeoff?  (Consider the effective horizon
+    $1/(1-\gamma)$ and its influence on both the approximation error
+    and the variance of TD targets.)
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{bias-variance decomposition} splits the expected
+    excess risk into approximation error
+    ($\|f_\Hclass^* - f^*\|_{L^2}^2$) and estimation error
+    ($\E_S[\|\hat{f}_n - f_\Hclass^*\|_{L^2}^2]$): the former
+    measures the expressiveness of $\Hclass$, the latter the
+    sensitivity to finite data.
+    \item For \emph{nested hypothesis classes}, the approximation
+    error decreases and the estimation error increases with
+    complexity; the optimal complexity balances both terms.
+    \item The \emph{oracle inequality} guarantees that penalized ERM
+    achieves excess risk within a constant factor of the best
+    possible tradeoff: $\Risk(\hat{f}_n^{(\hat{k})}) \leq
+    \min_k [\Risk(f_{\Hclass_k}^*) + O(\mathrm{pen}(k, n))]$.
+    \item \emph{Structural risk minimization} provides a principled
+    penalty based on complexity measures (VC dimension, number of
+    parameters); AIC and BIC are classical special cases with
+    penalties $2d_k$ and $d_k \ln n$ respectively.
+    \item \emph{$K$-fold cross-validation} estimates the population
+    risk by averaging held-out errors over $K$ data splits, without
+    requiring an explicit penalty.
+    \item \emph{Leave-one-out cross-validation} is an approximately
+    unbiased estimator of $\E[\Risk(\hat{f}_{n-1})]$; it has low
+    bias but high variance due to correlated folds.
+    \item The choice of $K$ in CV trades bias against variance:
+    $K = 5$ or $K = 10$ is recommended as a practical compromise.
+    \item For linear models, the LOOCV shortcut formula avoids
+    retraining $n$ times, reducing computation from $O(np^2 n)$ to
+    $O(np^2)$.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~59} provides the prerequisite material on
+    ERM, VC dimension, and uniform convergence that underlies the
+    generalization bounds in this lesson.
+    \item \textbf{Lesson~61} (Approximation Theory) develops
+    universal approximation results for neural networks, quantifying
+    the approximation error term for specific architectures and
+    connecting it to the depth, width, and regularity of the target
+    function.
+    \item \citet[Chapter 7]{hastie2009} provides an extensive
+    practical guide to model selection, including cross-validation,
+    bootstrap methods, and effective degrees of freedom.
+    \item \citet{arlot2010} is a comprehensive survey of
+    cross-validation procedures with theoretical guarantees,
+    covering $V$-fold CV, leave-$p$-out CV, and penalization
+    methods, with precise statements of oracle inequalities.
+    \item \citet{stone1974} introduced cross-validation for model
+    selection and proved its asymptotic optimality for prediction.
+    \item \citet[Chapter 7]{vapnik1998} presents the original theory
+    of structural risk minimization, connecting VC bounds to the
+    principle of choosing the simplest model consistent with the data.
+    \item For the double descent phenomenon---where increasing model
+    complexity beyond interpolation can \emph{decrease} test
+    error, challenging the classical bias-variance picture---see
+    Belkin et al.\ (2019) and Hastie et al.\ (2022).  This is a
+    major research direction in modern learning theory.
+\end{itemize}
+
+\bibliography{nn-refs}
+
+\end{document}

@@ -1,0 +1,894 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 63: Universal Approximation}}
+\fancyhead[R]{\thepage}
+\title{Lesson 63: Universal Approximation}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Suppose we wish to approximate a continuous function
+$f \colon [0,1]^d \to \R$---say a value function $V^*(s)$ over a compact
+state space, or a conditional density used in a generative model---using a
+neural network with a single hidden layer and $m$ neurons.  The network
+computes
+\[
+  x \;\mapsto\; \sum_{j=1}^{m} a_j \, \sigmoid(w_j^\top x + b_j),
+\]
+where $\sigmoid$ is a fixed activation function.  A natural and fundamental
+question arises: \emph{for which activations $\sigmoid$ can such networks
+approximate any continuous target $f$ to arbitrary accuracy, provided $m$ is
+large enough?}  If the answer is negative, the entire architecture is
+limited; if positive, the question shifts to efficiency (how large must $m$
+be?) and learnability (can we find the weights?).  The tools developed in
+this lesson---Cybenko's theorem and Hornik's generalization---show that the
+answer is positive for essentially every activation used in practice, and
+they identify the precise mathematical conditions that make universal
+approximation possible.
+
+\begin{rlconnection}[title={Why Universal Approximation Matters for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Value function approximation.}  In deep RL, one
+    approximates $V^*(s)$ or $Q^*(s,a)$ with a neural network.  Universal
+    approximation guarantees that the hypothesis class is rich enough that
+    the approximation error can, in principle, be driven to zero.
+  \item \textbf{Policy gradient methods.}  Parameterizing policies
+    $\pi_\theta(a \mid s)$ via neural networks requires that the network
+    class be sufficiently expressive to represent near-optimal policies.
+  \item \textbf{Generative models.}  Variational autoencoders and
+    normalizing flows rely on neural networks to approximate complex
+    densities; universal approximation justifies using these architectures.
+  \item \textbf{Architecture design.}  Understanding \emph{which}
+    activations yield universal approximation guides the choice between
+    sigmoid, ReLU, and other nonlinearities.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Compact subsets of $\R^d$ and continuous functions on them
+(Lesson~2, Heine--Borel theorem).  Basic properties of $L^p$ spaces
+(Lesson~4).  The Hahn--Banach theorem and its corollaries
+(Lesson~21, Theorem~3.1).  The Riesz representation theorem for
+$C(K)^*$ (Lesson~20, Theorem~3.2).  Familiarity with signed Borel
+measures and weak-$*$ convergence.
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} single-hidden-layer networks and state precisely
+    what ``universal approximation'' means in $C(K)$ and $L^p(\mu)$.
+  \item \textbf{State and prove} Cybenko's theorem for sigmoidal
+    activations using the Hahn--Banach theorem and the Riesz representation
+    theorem.
+  \item \textbf{State and prove} Hornik's generalization for non-polynomial
+    activations via the discriminatory function argument.
+  \item \textbf{Verify} that specific activations (ReLU, tanh, sigmoid,
+    softplus) satisfy the conditions for universal approximation.
+  \item \textbf{Explain} the limitations of universal approximation
+    theorems: the curse of dimensionality, the absence of constructive
+    weight-finding, and the gap between approximation and generalization.
+  \item \textbf{Justify} why Barron's theorem (Lesson~64) is needed to
+    obtain quantitative approximation rates.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapter 6]{bach2024} --- Presents universal approximation in
+    the context of learning theory; includes both Cybenko's and Hornik's
+    results with modern notation.
+  \item \citet{cybenko1989} --- The original paper proving that sigmoidal
+    networks are dense in $C(K)$.
+  \item \citet{hornik1989} --- Extends Cybenko's result to general
+    non-polynomial activations and $L^p$ approximation.
+  \item \citet{pinkus1999} --- A comprehensive survey of approximation
+    theory for multilayer perceptrons, including detailed proofs.
+  \item \citet{lu2017} --- Modern results on the expressive power of
+    bounded-width networks with ReLU activations.
+  \item \citet{hanin2019} --- Universal approximation for deep ReLU
+    networks with bounded width.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: SINGLE HIDDEN LAYER NETWORKS
+%% ============================================================
+\section{Single Hidden Layer Networks}
+\label{sec:single-layer}
+
+We begin by giving a precise definition of the function class produced by
+a single-hidden-layer feedforward network.
+
+\begin{definition}[Single-Hidden-Layer Network]
+\label{def:single-layer}
+Let $\sigmoid \colon \R \to \R$ be a fixed measurable function (the
+\emph{activation function}).  For $d \ge 1$ and $m \ge 1$, define the class
+of \emph{single-hidden-layer networks with $m$ neurons} by
+\[
+  \Fclass_m^{\sigmoid}
+  \;=\;
+  \biggl\{
+    x \mapsto \sum_{j=1}^{m} a_j \, \sigmoid(w_j^\top x + b_j)
+    \;:\;
+    a_j \in \R, \;
+    w_j \in \R^d, \;
+    b_j \in \R
+  \biggr\}.
+\]
+The class of all such networks (with any number of neurons) is
+\[
+  \Fclass^{\sigmoid}
+  \;=\;
+  \bigcup_{m=1}^{\infty} \Fclass_m^{\sigmoid}.
+\]
+Each function $f \in \Fclass_m^{\sigmoid}$ has $m(d+2)$ parameters:
+$m$ output weights $a_j$, $m$ weight vectors $w_j \in \R^d$, and $m$
+biases $b_j$.
+\end{definition}
+
+\begin{remark}
+\label{rem:linear-span}
+For each fixed $m$, the set $\Fclass_m^{\sigmoid}$ is \emph{not} a linear
+subspace of $C(K)$ (it is not closed under addition unless we increase $m$).
+However, $\Fclass^{\sigmoid}$ is a linear subspace: if $f \in
+\Fclass_m^{\sigmoid}$ and $g \in \Fclass_n^{\sigmoid}$, then
+$f + g \in \Fclass_{m+n}^{\sigmoid} \subseteq \Fclass^{\sigmoid}$.
+\end{remark}
+
+\begin{definition}[Universal Approximation Property]
+\label{def:universal-approx}
+Let $K \subseteq \R^d$ be compact.  We say the activation function
+$\sigmoid$ has the \emph{universal approximation property in $C(K)$} if
+$\Fclass^{\sigmoid}$ is dense in $C(K)$ with respect to the supremum norm:
+for every $f \in C(K)$ and every $\varepsilon > 0$, there exist $m \ge 1$
+and parameters $(a_j, w_j, b_j)_{j=1}^m$ such that
+\[
+  \sup_{x \in K}
+  \biggl| f(x) - \sum_{j=1}^{m} a_j \, \sigmoid(w_j^\top x + b_j) \biggr|
+  < \varepsilon.
+\]
+Similarly, $\sigmoid$ has the \emph{universal approximation property in
+$L^p(\mu)$} (for a finite Borel measure $\mu$ on $\R^d$ and $1 \le p <
+\infty$) if $\Fclass^{\sigmoid}$ is dense in $L^p(\mu)$.
+\end{definition}
+
+\begin{example}[Common Activations]
+\label{ex:activations}
+The following are widely used activation functions:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Logistic sigmoid:} $\sigmoid(t) = \frac{1}{1 + e^{-t}}$.
+    Smooth, bounded, with $\sigmoid(t) \to 1$ as $t \to +\infty$ and
+    $\sigmoid(t) \to 0$ as $t \to -\infty$.
+  \item \textbf{Hyperbolic tangent:} $\sigmoid(t) = \tanh(t) =
+    \frac{e^t - e^{-t}}{e^t + e^{-t}}$.  Smooth, bounded,
+    $\sigmoid(t) \to \pm 1$ as $t \to \pm\infty$.
+  \item \textbf{ReLU:} $\sigmoid(t) = \max(0, t)$.  Continuous but not
+    bounded; piecewise linear.
+  \item \textbf{Softplus:} $\sigmoid(t) = \log(1 + e^t)$.  Smooth
+    approximation to ReLU; unbounded.
+\end{enumerate}
+\end{example}
+
+\begin{example}[A Simple Network on {$[0,1]$}]
+\label{ex:simple-net}
+Let $d = 1$, $K = [0,1]$, $\sigmoid(t) = \frac{1}{1+e^{-t}}$ (logistic
+sigmoid), and $m = 2$.  Consider
+\[
+  f(x) = a_1 \, \sigmoid(w_1 x + b_1) + a_2 \, \sigmoid(w_2 x + b_2).
+\]
+With $w_1 = w_2 = 10$, $b_1 = -3$, $b_2 = -7$, $a_1 = 1$, $a_2 = -1$,
+the function $f$ approximates a ``bump'' that is close to $1$ on an
+interval around $x \approx 0.3$--$0.7$ and close to $0$ elsewhere.  This
+illustrates how two neurons can construct approximate indicator functions of
+intervals, a building block used in the proof of Cybenko's theorem.
+\end{example}
+
+\begin{rlconnection}[title={Network Width and Value Function Quality}]
+In deep RL, the number of neurons $m$ in the hidden layer controls the
+expressiveness of the value function approximation.  Universal approximation
+says that, for any continuous $V^*$, sufficiently large $m$ yields an
+approximation within $\varepsilon$.  However, the theorem says nothing
+about \emph{how large} $m$ must be---this quantitative question is
+addressed by Barron's theorem (Lesson~64) and by Rademacher complexity
+bounds (Lesson~60).
+\end{rlconnection}
+
+We now turn to the first major result: Cybenko's theorem, which resolves
+the universal approximation question for sigmoidal activations.
+
+%% ============================================================
+%% SECTION 4: CYBENKO'S THEOREM
+%% ============================================================
+\section{Cybenko's Theorem}
+\label{sec:cybenko}
+
+Cybenko's 1989 result was the first rigorous proof that neural networks
+with sigmoidal activations are universal approximators.  The proof
+strategy is indirect: one uses the Hahn--Banach theorem to reduce the
+density question to a property of signed measures, and then shows that
+the sigmoidal assumption forces any annihilating measure to be zero.
+
+\begin{definition}[Sigmoidal Function]
+\label{def:sigmoidal}
+A measurable function $\sigmoid \colon \R \to \R$ is \emph{sigmoidal} if
+\[
+  \lim_{t \to +\infty} \sigmoid(t) = 1
+  \qquad \text{and} \qquad
+  \lim_{t \to -\infty} \sigmoid(t) = 0.
+\]
+\end{definition}
+
+\begin{example}[Sigmoidal Functions]
+\label{ex:sigmoidal}
+The logistic sigmoid $\sigmoid(t) = 1/(1+e^{-t})$ is sigmoidal.  The
+rescaled hyperbolic tangent $\sigmoid(t) = \frac{1}{2}(\tanh(t) + 1)$ is
+sigmoidal.  The Heaviside step function $\sigmoid(t) = \indicator_{[0,
+\infty)}(t)$ is also sigmoidal (though discontinuous).  Note that the
+standard $\tanh$ is \emph{not} sigmoidal in the sense of
+Definition~\ref{def:sigmoidal}, since $\tanh(t) \to \pm 1$; however, it
+satisfies Hornik's weaker condition (Section~\ref{sec:hornik}).
+\end{example}
+
+The key concept in Cybenko's proof is the notion of a discriminatory
+function, which we now introduce.
+
+\begin{definition}[Discriminatory Function]
+\label{def:discriminatory}
+Let $K \subseteq \R^d$ be compact.  A measurable function $\sigmoid
+\colon \R \to \R$ is called \emph{discriminatory} (with respect to $K$)
+if the following holds: for any finite signed Borel measure $\mu$ on $K$,
+\[
+  \int_K \sigmoid(w^\top x + b) \, d\mu(x) = 0
+  \quad \text{for all } w \in \R^d, \; b \in \R
+  \qquad \Longrightarrow \qquad
+  \mu = 0.
+\]
+In other words, $\sigmoid$ is discriminatory if the only signed measure
+annihilated by all functions $x \mapsto \sigmoid(w^\top x + b)$ is the
+zero measure.
+\end{definition}
+
+\begin{lemma}[Sigmoidal Implies Discriminatory]
+\label{lem:sig-disc}
+If $\sigmoid \colon \R \to \R$ is continuous and sigmoidal
+(Definition~\ref{def:sigmoidal}), then $\sigmoid$ is discriminatory with
+respect to any compact $K \subseteq \R^d$.
+\end{lemma}
+
+\begin{proof}
+Let $\mu$ be a finite signed Borel measure on $K$ such that
+\begin{equation}
+\label{eq:annihilating}
+  \int_K \sigmoid(w^\top x + b) \, d\mu(x) = 0
+  \qquad \text{for all } w \in \R^d, \; b \in \R.
+\end{equation}
+We must show $\mu = 0$.
+
+\textbf{Step 1: Pointwise limit.}
+Fix $w \in \R^d$ and $\theta \in \R$, and define the half-space
+$H_{w,\theta} = \{x \in \R^d : w^\top x + \theta > 0\}$.  For
+$\lambda > 0$ and any $b \in \R$, consider
+\[
+  \sigmoid(\lambda(w^\top x + b)).
+\]
+Since $\sigmoid$ is sigmoidal, as $\lambda \to +\infty$:
+\[
+  \sigmoid(\lambda(w^\top x + b))
+  \;\to\;
+  \begin{cases}
+    1 & \text{if } w^\top x + b > 0, \\
+    0 & \text{if } w^\top x + b < 0, \\
+    \sigmoid(0) & \text{if } w^\top x + b = 0.
+  \end{cases}
+\]
+That is, $\sigmoid(\lambda(w^\top x + b)) \to \indicator_{H_{w,-b}}(x)$
+for $\mu$-almost every $x$ (the hyperplane $\{x : w^\top x + b = 0\}$ has
+$|\mu|$-measure zero for all but countably many values of $b$).
+
+\textbf{Step 2: Passing to the limit.}
+By \eqref{eq:annihilating}, for every $\lambda > 0$ and $b \in \R$,
+\[
+  \int_K \sigmoid(\lambda(w^\top x + b)) \, d\mu(x) = 0.
+\]
+(Here we replace $w$ by $\lambda w$ and use the fact that the condition
+holds for all $w$.)
+The function $\sigmoid$ is bounded (since it is continuous and converges at
+$\pm\infty$), so by the bounded convergence theorem, taking
+$\lambda \to +\infty$:
+\[
+  \int_K \indicator_{H_{w,-b}}(x) \, d\mu(x) = 0,
+\]
+i.e., $\mu(H_{w,-b}) = 0$ for all half-spaces $H_{w,-b}$ (for almost
+every $b$, and by a density argument for all $b$).
+
+\textbf{Step 3: Half-spaces generate the Borel $\sigmoid$-algebra.}
+Since the open half-spaces $\{H_{w,\theta} : w \in \R^d, \theta \in \R\}$
+generate the Borel $\sigmoid$-algebra $\Borel(\R^d)$, a signed measure that
+vanishes on all half-spaces must be the zero measure.  To see this, note
+that finite intersections of half-spaces form all open convex polytopes, and
+these form a $\pi$-system generating $\Borel(\R^d)$.  Since $\mu$ vanishes
+on this $\pi$-system, it vanishes on the generated $\sigmoid$-algebra by
+the $\pi$-$\lambda$ theorem (Lesson~1, Theorem~3.3).  Therefore $\mu = 0$.
+\end{proof}
+
+We now state and prove the main result.
+
+\begin{theorem}[Cybenko, 1989]
+\label{thm:cybenko}
+Let $K \subseteq \R^d$ be compact and let $\sigmoid \colon \R \to \R$ be
+any continuous discriminatory function.  Then $\Fclass^{\sigmoid}$ is dense
+in $C(K)$ with respect to the supremum norm $\|f\|_\infty = \sup_{x \in K}
+|f(x)|$.
+\end{theorem}
+
+\begin{proof}
+Suppose for contradiction that $\overline{\Fclass^{\sigmoid}} \neq C(K)$,
+where the closure is in the supremum norm.  Since $\Fclass^{\sigmoid}$ is
+a linear subspace of $C(K)$ (Remark~\ref{rem:linear-span}), its closure
+$\overline{\Fclass^{\sigmoid}}$ is a closed linear subspace of $C(K)$ that
+is strictly contained in $C(K)$.
+
+By the Hahn--Banach theorem (Lesson~21, Theorem~3.1), there exists a
+bounded linear functional $L \in C(K)^*$ such that $L \neq 0$ and
+$L(g) = 0$ for all $g \in \overline{\Fclass^{\sigmoid}}$.
+
+By the Riesz representation theorem for $C(K)$ (Lesson~20, Theorem~3.2),
+every bounded linear functional on $C(K)$ is represented by a finite signed
+Borel measure: there exists a finite signed Borel measure $\mu$ on $K$ such
+that
+\[
+  L(g) = \int_K g(x) \, d\mu(x)
+  \qquad \text{for all } g \in C(K).
+\]
+In particular, for every $w \in \R^d$ and $b \in \R$, the function
+$x \mapsto \sigmoid(w^\top x + b)$ belongs to $\Fclass_1^{\sigmoid}
+\subseteq \Fclass^{\sigmoid}$, so
+\[
+  \int_K \sigmoid(w^\top x + b) \, d\mu(x) = L(\sigmoid(w^\top \cdot + b))
+  = 0.
+\]
+Since $\sigmoid$ is discriminatory (Definition~\ref{def:discriminatory}),
+this implies $\mu = 0$, hence $L = 0$.  This contradicts $L \neq 0$.
+
+Therefore $\overline{\Fclass^{\sigmoid}} = C(K)$, i.e.,
+$\Fclass^{\sigmoid}$ is dense in $C(K)$.
+\end{proof}
+
+\begin{keyresult}[title={Cybenko's Universal Approximation Theorem}]
+Combining Theorem~\ref{thm:cybenko} and Lemma~\ref{lem:sig-disc}: if
+$\sigmoid$ is continuous and sigmoidal, then for any compact $K \subseteq
+\R^d$, any $f \in C(K)$, and any $\varepsilon > 0$, there exist $m \ge 1$
+and parameters $(a_j, w_j, b_j)_{j=1}^m$ such that
+\[
+  \sup_{x \in K}
+  \biggl| f(x) - \sum_{j=1}^{m} a_j \, \sigmoid(w_j^\top x + b_j) \biggr|
+  < \varepsilon.
+\]
+\end{keyresult}
+
+\begin{example}[Approximating a Step Function]
+\label{ex:step-approx}
+Let $K = [0,1]$, $f(x) = \indicator_{[1/3, 2/3]}(x)$ (which is not
+continuous, but can be approximated by continuous functions).  Consider
+a continuous approximation $f_\delta$ with linear ramps of width $\delta$
+at the endpoints.  For $\varepsilon > 0$, Cybenko's theorem guarantees
+that $f_\delta$ can be approximated within $\varepsilon$ by a network
+with sigmoidal activation.  In practice, this is achieved by using neurons
+with large weights to create steep transitions, as in
+Example~\ref{ex:simple-net}.
+\end{example}
+
+\begin{example}[Constructive Illustration in 1D]
+\label{ex:constructive-1d}
+To approximate $f(x) = x^2$ on $[0,1]$ using the logistic sigmoid
+$\sigmoid(t) = 1/(1+e^{-t})$, one can partition $[0,1]$ into $m$ equal
+intervals and use $2m$ neurons to create approximate bump functions on
+each interval, scaling each bump by the value of $f$ at the interval
+midpoint.  This piecewise-constant approximation achieves
+$\|f - f_m\|_\infty \le \frac{1}{4m^2}$ (since $f'' = 2$ gives error
+$\frac{1}{2} \cdot \frac{f''}{8} \cdot (1/m)^2$).  The number of neurons
+grows as $O(1/\varepsilon^{1/2})$ for this particular smooth target.
+\end{example}
+
+\begin{remark}
+\label{rem:non-constructive}
+Cybenko's proof is \emph{non-constructive}: it shows that a good
+approximation exists but provides no algorithm for finding the weights
+$(a_j, w_j, b_j)$.  The Hahn--Banach theorem yields existence via
+contradiction, not via an explicit construction.  This limitation motivates
+both (a)~constructive proofs based on sampling (Barron's theorem,
+Lesson~64) and (b)~the study of optimization algorithms for training
+(Lesson~65).
+\end{remark}
+
+Having established Cybenko's theorem for sigmoidal activations, we next
+ask: what happens for activations that are not sigmoidal?
+
+%% ============================================================
+%% SECTION 5: HORNIK'S GENERALIZATION
+%% ============================================================
+\section{Hornik's Generalization}
+\label{sec:hornik}
+
+Cybenko's theorem covers sigmoidal activations (those converging to $0$
+and $1$ at $\pm\infty$), but the most popular activation in modern deep
+learning---the ReLU $\sigmoid(t) = \max(0,t)$---is not sigmoidal.
+Hornik, Stinchcombe, and White (1989) showed that universal approximation
+holds for a much broader class of activations.
+
+\begin{definition}[Non-Polynomial Activation]
+\label{def:non-polynomial}
+A continuous function $\sigmoid \colon \R \to \R$ is called
+\emph{non-polynomial} if $\sigmoid$ is not a polynomial, i.e., there is no
+polynomial $p$ such that $\sigmoid(t) = p(t)$ for all $t \in \R$.
+\end{definition}
+
+\begin{remark}
+\label{rem:polynomial-fail}
+If $\sigmoid$ is a polynomial of degree $k$, then every function in
+$\Fclass^{\sigmoid}$ is also a polynomial of degree at most $k$ in each
+coordinate.  In particular, $\Fclass^{\sigmoid}$ cannot approximate all
+continuous functions.  Therefore the non-polynomial condition is
+\emph{necessary} for universal approximation.
+\end{remark}
+
+We now show that continuous non-polynomial activations are discriminatory,
+which by Cybenko's framework (Theorem~\ref{thm:cybenko}) immediately
+implies universal approximation.
+
+\begin{lemma}[Non-Polynomial Implies Discriminatory]
+\label{lem:non-poly-disc}
+If $\sigmoid \colon \R \to \R$ is continuous and non-polynomial, then
+$\sigmoid$ is discriminatory with respect to any compact $K \subseteq \R^d$.
+\end{lemma}
+
+\begin{proof}
+Let $\mu$ be a finite signed Borel measure on $K$ satisfying
+\begin{equation}
+\label{eq:annihilating2}
+  \int_K \sigmoid(w^\top x + b) \, d\mu(x) = 0
+  \qquad \text{for all } w \in \R^d, \; b \in \R.
+\end{equation}
+We show that $\mu = 0$.
+
+\textbf{Step 1: The annihilating condition extends to polynomials.}
+Define the function $F \colon \R^d \times \R \to \R$ by
+\[
+  F(w, b) = \int_K \sigmoid(w^\top x + b) \, d\mu(x).
+\]
+By \eqref{eq:annihilating2}, $F(w, b) = 0$ for all $(w, b)$.  Since
+$\sigmoid$ is continuous and $K$ is compact, $F$ is infinitely
+differentiable in $(w, b)$, and we can differentiate under the integral sign.
+In particular, for any multi-index $\alpha = (\alpha_1, \ldots, \alpha_d)$
+and any $n \ge 0$,
+\[
+  \frac{\partial^{|\alpha|+n} F}{\partial w_1^{\alpha_1} \cdots
+  \partial w_d^{\alpha_d} \, \partial b^n}(w, b)
+  = \int_K x_1^{\alpha_1} \cdots x_d^{\alpha_d} \,
+  \sigmoid^{(|\alpha|+n)}(w^\top x + b) \, d\mu(x) = 0,
+\]
+where $\sigmoid^{(k)}$ denotes the $k$-th derivative of $\sigmoid$.
+
+\textbf{Step 2: Evaluating at the origin.}
+Setting $w = 0$ and $b = 0$:
+\[
+  \sigmoid^{(|\alpha|+n)}(0)
+  \int_K x_1^{\alpha_1} \cdots x_d^{\alpha_d} \, d\mu(x) = 0.
+\]
+Since $\sigmoid$ is not a polynomial, its derivatives of all orders cannot
+all vanish at a single point: there exists a sequence of orders $k_j$ such
+that $\sigmoid^{(k_j)}(0) \neq 0$.  More precisely, if
+$\sigmoid^{(k)}(0) = 0$ for all $k \ge N$ for some $N$, then $\sigmoid$
+would be a polynomial of degree at most $N-1$ in a neighborhood of $0$
+(by Taylor's theorem), and by analyticity arguments on each interval,
+$\sigmoid$ would be a polynomial globally---contradicting the assumption.
+
+Therefore, for each choice of $|\alpha| + n$, we can find a derivative order
+where $\sigmoid$ does not vanish.  Specifically, for any monomial exponent
+$(p_1, \ldots, p_d)$ with $p_1 + \cdots + p_d = k$, we choose
+$\alpha = (p_1, \ldots, p_d)$ and $n = 0$ and pick $w = 0$, $b = 0$;
+if $\sigmoid^{(k)}(0) = 0$, we instead choose $n > 0$ so that
+$|\alpha| + n = k + n$ where $\sigmoid^{(k+n)}(0) \neq 0$, and absorb the
+extra $b$-derivatives.  After dividing by the nonzero constant
+$\sigmoid^{(k+n)}(0)$, we obtain
+\begin{equation}
+\label{eq:moments-zero}
+  \int_K x_1^{p_1} \cdots x_d^{p_d} \, d\mu(x) = 0
+  \qquad \text{for all } p_1, \ldots, p_d \ge 0.
+\end{equation}
+
+\textbf{Step 3: Moment characterization.}
+Equation~\eqref{eq:moments-zero} says that all moments of $\mu$ vanish.
+Since $K$ is compact, $\mu$ is a compactly supported signed measure, and
+the Weierstrass approximation theorem (or Stone--Weierstrass) implies that
+polynomials are dense in $C(K)$.  Therefore, for any $g \in C(K)$, we
+can approximate $g$ uniformly by polynomials $p_n$, and
+\[
+  \int_K g(x) \, d\mu(x) = \lim_{n \to \infty}
+  \int_K p_n(x) \, d\mu(x) = 0.
+\]
+Since this holds for all $g \in C(K)$, the Riesz representation theorem
+implies $\mu = 0$.
+\end{proof}
+
+Combining Lemma~\ref{lem:non-poly-disc} with Theorem~\ref{thm:cybenko},
+we obtain:
+
+\begin{theorem}[Hornik, Stinchcombe, and White, 1989]
+\label{thm:hornik}
+Let $K \subseteq \R^d$ be compact and let $\sigmoid \colon \R \to \R$ be
+any continuous, non-polynomial function.  Then $\Fclass^{\sigmoid}$ is dense
+in $C(K)$ with respect to the supremum norm.  More generally,
+$\Fclass^{\sigmoid}$ is dense in $L^p(\mu)$ for any finite Borel measure
+$\mu$ on $K$ and $1 \le p < \infty$.
+\end{theorem}
+
+\begin{proof}
+The $C(K)$ density follows directly from Theorem~\ref{thm:cybenko}
+and Lemma~\ref{lem:non-poly-disc}: since continuous non-polynomial
+activations are discriminatory, Cybenko's framework applies.
+
+For the $L^p(\mu)$ extension: since $C(K)$ is dense in $L^p(\mu)$ (as
+$K$ is compact), and $\Fclass^{\sigmoid}$ is dense in $C(K)$, transitivity
+of density gives that $\Fclass^{\sigmoid}$ is dense in $L^p(\mu)$.
+\end{proof}
+
+\begin{keyresult}[title={Hornik's Universal Approximation Theorem}]
+For any continuous non-polynomial activation $\sigmoid$ (including ReLU,
+tanh, logistic sigmoid, softplus, ELU, swish, and essentially every
+activation used in practice), single-hidden-layer networks are dense in
+$C(K)$ for compact $K$ and in $L^p(\mu)$ for any finite measure $\mu$.
+The only activations that fail are polynomials.
+\end{keyresult}
+
+\begin{example}[ReLU Is a Universal Approximator]
+\label{ex:relu-universal}
+The ReLU activation $\sigmoid(t) = \max(0, t)$ is continuous and
+non-polynomial (it is not differentiable at $t = 0$, so it cannot be a
+polynomial).  Therefore, by Theorem~\ref{thm:hornik}, ReLU networks are
+universal approximators.
+
+Concretely, a ReLU network $f_m(x) = \sum_{j=1}^m a_j \max(0, w_j^\top x
++ b_j)$ computes a piecewise-affine function on $\R^d$.  The set of
+``breakpoints'' (where some neuron transitions between its active and
+inactive regimes) divides $\R^d$ into convex polytopes, and $f_m$ is affine
+on each polytope.  As $m \to \infty$, the number of polytopes grows and
+the piecewise-affine function can approximate any continuous function.
+\end{example}
+
+\begin{example}[Verification for $\tanh$]
+\label{ex:tanh}
+The hyperbolic tangent $\sigmoid(t) = \tanh(t)$ is continuous and
+non-polynomial (its Taylor series $\tanh(t) = t - t^3/3 + 2t^5/15 - \cdots$
+has infinitely many nonzero terms and converges on all of $\R$; a polynomial
+would have only finitely many).  Therefore $\tanh$ is a universal
+approximator by Theorem~\ref{thm:hornik}.
+\end{example}
+
+\begin{warning}[title={Density Does Not Imply Efficient Approximation}]
+Universal approximation guarantees that for every $\varepsilon > 0$ there
+\emph{exists} a network with finitely many neurons achieving error less than
+$\varepsilon$.  It does \emph{not} bound the number of neurons $m$ as a
+function of $\varepsilon$ and $d$.  For generic continuous functions on
+$[0,1]^d$, achieving $\varepsilon$-accuracy may require
+$m = \Omega(\varepsilon^{-d})$ neurons---an exponential dependence on
+dimension.  This is the \emph{curse of dimensionality}, which motivates
+Barron's theorem (Lesson~64).
+\end{warning}
+
+We now examine precisely what universal approximation theorems do and do
+not tell us.
+
+%% ============================================================
+%% SECTION 6: LIMITATIONS OF UNIVERSAL APPROXIMATION
+%% ============================================================
+\section{Limitations of Universal Approximation}
+\label{sec:limitations}
+
+Universal approximation is an existence theorem: it guarantees that neural
+networks form a rich enough function class.  However, three critical gaps
+remain between the theoretical guarantee and practical neural network
+performance.
+
+\subsection{Gap 1: Approximation Rate (The Curse of Dimensionality)}
+\label{sec:curse}
+
+\begin{proposition}[Lower Bound for Generic Functions]
+\label{prop:lower-bound}
+Let $\Fclass_m^{\sigmoid}$ denote the class of single-hidden-layer
+networks with $m$ neurons and any continuous non-polynomial activation.
+For the class of all $L$-Lipschitz functions on $[0,1]^d$, the minimax
+approximation error satisfies
+\[
+  \inf_{f_m \in \Fclass_m^{\sigmoid}} \;
+  \sup_{\substack{f : [0,1]^d \to \R \\ \text{$L$-Lipschitz}}}
+  \|f - f_m\|_{L^2}
+  \;\ge\;
+  c \, L \, m^{-1/d}
+\]
+for a constant $c > 0$ depending only on $d$.  That is, approximating
+generic Lipschitz functions to accuracy $\varepsilon$ requires
+$m = \Omega(\varepsilon^{-d})$ neurons.
+\end{proposition}
+
+\begin{proof}
+This follows from classical lower bounds in approximation theory.  The
+class of $L$-Lipschitz functions on $[0,1]^d$ has
+$\varepsilon$-covering number (in $L^2$) at least
+$\exp(c' (L/\varepsilon)^d)$ for a constant $c' > 0$.  On the other
+hand, $\Fclass_m^{\sigmoid}$ has $m(d+2)$ parameters, so its covering
+number is at most $\exp(c'' \, m(d+2) \log(1/\varepsilon))$.  Matching
+these gives $m \ge c \, (L/\varepsilon)^d / ((d+2) \log(1/\varepsilon))$,
+which yields the stated $m^{-1/d}$ rate.
+\end{proof}
+
+\begin{example}[Dimension Scaling]
+\label{ex:dimension-scaling}
+To approximate a Lipschitz function on $[0,1]^{100}$ to accuracy
+$\varepsilon = 0.01$ in the worst case, the lower bound requires
+$m = \Omega(100^{100})$ neurons---an astronomically large network.
+In contrast, Barron's theorem (Lesson~64) shows that for functions in
+the Barron class, $m = O(1/\varepsilon^2)$ suffices regardless of $d$,
+dramatically escaping this curse.
+\end{example}
+
+\subsection{Gap 2: Finding the Weights (Optimization)}
+\label{sec:optimization-gap}
+
+Even when a good approximation exists, the training problem
+\[
+  \min_{a_j, w_j, b_j} \;
+  \frac{1}{n} \sum_{i=1}^{n}
+  \biggl( y_i - \sum_{j=1}^{m} a_j \, \sigmoid(w_j^\top x_i + b_j)
+  \biggr)^2
+\]
+is non-convex in the parameters $(w_j, b_j)$ whenever $\sigmoid$ is
+nonlinear.  Universal approximation says nothing about whether gradient
+descent or any other algorithm can find a (near-)global minimum.
+
+\begin{remark}
+\label{rem:ntk}
+Recent work on the \emph{neural tangent kernel} (NTK)
+\citep{jacot2018} shows that, in the infinite-width limit ($m \to \infty$),
+gradient descent on overparameterized networks converges to a global minimum
+of the training loss.  This connects the approximation theory of this lesson
+to the optimization theory of Lesson~65.  However, the NTK regime requires
+$m$ to be very large (polynomial in $n$), and it is debated whether this
+regime captures the practical behavior of finite-width networks.
+\end{remark}
+
+\subsection{Gap 3: Generalization from Finite Data}
+\label{sec:generalization-gap}
+
+Approximation error measures how well the best network in
+$\Fclass_m^{\sigmoid}$ can represent the target function.  But in
+practice, we only have $n$ training samples and must also control the
+\emph{estimation error}: the gap between the best-in-class network and
+the network we actually find from data.  The total error decomposes as
+\[
+  \underbrace{\Risk(\hat{f}_n) - \inf_{f \in \Fclass} \Risk(f)}_{
+    \text{estimation error}}
+  \;+\;
+  \underbrace{\inf_{f \in \Fclass} \Risk(f) - \inf_{f} \Risk(f)}_{
+    \text{approximation error}},
+\]
+where $\Risk(f) = \E[\Loss(f(X), Y)]$ is the population risk.  Universal
+approximation controls the second term, but the first term depends on the
+complexity of $\Fclass_m^{\sigmoid}$ (measured, e.g., by Rademacher
+complexity).  Making $m$ larger reduces approximation error but increases
+estimation error---a fundamental tradeoff analyzed in Lesson~60.
+
+\begin{rlconnection}[title={The Bias-Variance Tradeoff in RL}]
+In deep RL, the same tradeoff appears:
+\begin{itemize}[nosep]
+  \item A very large network ($m \gg 1$) can represent $V^*$ well
+    (\emph{low approximation error}), but may overfit to sampled
+    transitions (\emph{high estimation error}).
+  \item A small network may underfit $V^*$ (\emph{high approximation
+    error}) but generalize well from limited data.
+\end{itemize}
+Architecture selection in DQN, PPO, and SAC implicitly balances these
+competing effects.
+\end{rlconnection}
+
+\begin{example}[Overfitting with Universal Approximators]
+\label{ex:overfit}
+A network with $m = n$ neurons can interpolate $n$ arbitrary data points
+$(x_i, y_i)$ exactly (under mild conditions on the $x_i$).  This means
+the training error is zero, yet the test error can be arbitrarily large.
+Universal approximation guarantees richness, not generalization.
+\end{example}
+
+The limitations identified in this section---exponential width dependence
+on dimension, non-convex optimization, and the approximation-estimation
+tradeoff---motivate the study of Barron's theorem in Lesson~64, which
+provides dimension-free approximation rates for a natural subclass of
+functions.
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Discriminatory Verification]
+\textnormal{(\({}^*\))} \\
+Show that the Heaviside step function $\sigmoid(t) =
+\indicator_{[0,\infty)}(t)$ is discriminatory, directly from
+Definition~\ref{def:discriminatory}, without using
+Lemma~\ref{lem:sig-disc}. \\
+\textit{Hint:} If $\int_K \indicator_{[0,\infty)}(w^\top x + b) \,
+d\mu(x) = 0$ for all $w, b$, show that $\mu(H) = 0$ for every open
+half-space $H$.
+\end{exercise}
+
+\begin{exercise}[Polynomial Activations Fail]
+\textnormal{(\({}^*\))} \\
+Let $\sigmoid(t) = t^2$.  Show that $\Fclass^{\sigmoid}$ is \emph{not}
+dense in $C([0,1])$.  Specifically, find a continuous function on $[0,1]$
+that cannot be approximated by functions of the form $\sum_{j=1}^m a_j
+(w_j x + b_j)^2$, and prove your claim.
+\end{exercise}
+
+\begin{exercise}[ReLU Piecewise Affine Representation]
+\textnormal{(\({}^{**}\))} \\
+Let $d = 1$ and $\sigmoid(t) = \max(0, t)$ (ReLU).
+\begin{enumerate}[label=(\alph*)]
+  \item Show that any $f \in \Fclass_m^{\sigmoid}$ is a continuous
+    piecewise-affine function on $\R$ with at most $m$ breakpoints.
+  \item Conversely, show that any continuous piecewise-affine function
+    on $\R$ with $k$ breakpoints belongs to $\Fclass_{k+1}^{\sigmoid}$.
+  \item Using part (b), prove directly (without Theorem~\ref{thm:hornik})
+    that ReLU networks are dense in $C([a,b])$ for any $[a,b]$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Softplus Approximation of ReLU]
+\textnormal{(\({}^{**}\))} \\
+The softplus activation is $\sigmoid_\beta(t) = \frac{1}{\beta}
+\log(1 + e^{\beta t})$ for $\beta > 0$.
+\begin{enumerate}[label=(\alph*)]
+  \item Show that $\sigmoid_\beta(t) \to \max(0, t)$ pointwise as
+    $\beta \to \infty$.
+  \item Show that the convergence is uniform on compact subsets of
+    $\R \setminus \{0\}$ but \emph{not} uniform on any neighborhood of
+    $0$.
+  \item Conclude that if softplus networks are universal approximators
+    (which they are by Theorem~\ref{thm:hornik}), then ReLU networks are
+    also universal approximators, giving an alternative proof for ReLU.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Value Function Approximation in RL]
+\textnormal{(\({}^{**}\))} \\
+Consider a continuous MDP with state space $K = [0,1]^d$ and a continuous
+optimal value function $V^* \colon K \to [0, V_{\max}]$.  Let
+$\hat{V}_m$ be the best approximation of $V^*$ in $\Fclass_m^{\sigmoid}$
+(with $\sigmoid = \text{ReLU}$) in the supremum norm.
+\begin{enumerate}[label=(\alph*)]
+  \item State precisely what Theorem~\ref{thm:hornik} guarantees about
+    $\|V^* - \hat{V}_m\|_\infty$ as $m \to \infty$.
+  \item Explain why this guarantee alone is insufficient for practical
+    deep RL.  Identify at least two additional quantities that must be
+    controlled.
+  \item If $V^*$ belongs to the Barron class (defined in Lesson~64),
+    state the improved approximation rate.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Universal Approximation in $L^2$ but not $C$]
+\textnormal{(\({}^{***}\))} \\
+Construct a bounded measurable (but discontinuous) activation $\sigmoid$
+that is discriminatory but for which $\Fclass^{\sigmoid}$ is \emph{not}
+contained in $C(K)$ (and therefore the $C(K)$-density statement does
+not apply, though $L^2$-density may still hold).  Specifically, let
+$\sigmoid = \indicator_{[0,\infty)}$ and show:
+\begin{enumerate}[label=(\alph*)]
+  \item Every $f \in \Fclass^{\sigmoid}$ is a step function (finite
+    combination of indicator functions of half-spaces).
+  \item $\Fclass^{\sigmoid}$ is dense in $L^2(\mu)$ for any
+    compactly supported absolutely continuous measure $\mu$.
+  \item $\Fclass^{\sigmoid}$ is \emph{not} dense in $C(K)$ because
+    elements of $\Fclass^{\sigmoid}$ are not continuous.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A single-hidden-layer network with $m$ neurons computes
+    $f(x) = \sum_{j=1}^m a_j \sigmoid(w_j^\top x + b_j)$; the class
+    $\Fclass^{\sigmoid} = \bigcup_m \Fclass_m^{\sigmoid}$ forms a
+    linear subspace of the function space.
+
+  \item An activation $\sigmoid$ is \emph{discriminatory} if the only
+    signed measure annihilated by all functions $x \mapsto
+    \sigmoid(w^\top x + b)$ is the zero measure.
+
+  \item \textbf{Cybenko's theorem:} If $\sigmoid$ is continuous and
+    discriminatory (which holds for all continuous sigmoidal functions),
+    then $\Fclass^{\sigmoid}$ is dense in $C(K)$ for compact $K$.  The
+    proof uses the Hahn--Banach theorem and the Riesz representation
+    theorem.
+
+  \item \textbf{Hornik's theorem:} The discriminatory condition holds for
+    all continuous non-polynomial activations.  Therefore, any continuous
+    non-polynomial $\sigmoid$ (including ReLU, tanh, sigmoid, softplus)
+    yields universal approximation in $C(K)$ and $L^p(\mu)$.
+
+  \item The only activations that fail to be universal approximators are
+    polynomials, for which the output is necessarily polynomial.
+
+  \item Universal approximation is a \emph{qualitative} result: it
+    guarantees density but does not specify (a)~how many neurons are
+    needed, (b)~how to find the weights, or (c)~how the network
+    generalizes from finite data.
+
+  \item For generic Lipschitz functions on $[0,1]^d$, achieving
+    $\varepsilon$-accuracy requires $m = \Omega(\varepsilon^{-d})$
+    neurons in the worst case---an exponential dependence on dimension.
+
+  \item Barron's theorem (Lesson~64) escapes this curse for a restricted
+    but natural class of functions, providing a dimension-free
+    $O(1/m)$ rate.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 64} extends the analysis to quantitative
+    approximation rates via Barron's theorem, showing that for functions
+    with bounded Fourier moment, the rate $O(1/m)$ is dimension-free.
+
+  \item \textbf{Lesson 65} addresses the optimization question: how
+    gradient-based methods find good parameters in practice, including
+    the role of overparameterization and the neural tangent kernel.
+
+  \item \citet{pinkus1999} provides a comprehensive survey of
+    approximation-theoretic results for neural networks, including
+    generalizations to multiple hidden layers.
+
+  \item \citet{telgarsky2016} and \citet{eldan2016} study the
+    \emph{depth} advantage: there exist functions expressible by depth-$k$
+    networks with polynomial width that require exponential width at depth
+    $k-1$.  This motivates deep (multi-layer) architectures beyond the
+    single-layer setting of this lesson.
+
+  \item \citet{hanin2019} proves universal approximation for deep ReLU
+    networks with \emph{bounded width} (width $d+1$ suffices for
+    $L^p$ approximation on $\R^d$), complementing the width-based
+    results studied here.
+
+  \item \textbf{Historical note.}  Cybenko's 1989 paper was motivated by
+    the question of whether ``connectionist'' models (the terminology of
+    the era) had fundamental representational limitations.  Hornik,
+    Stinchcombe, and White's concurrent 1989 paper gave a more general
+    answer.  Both built on classical functional analysis---particularly
+    the Hahn--Banach theorem---showing a beautiful application of pure
+    mathematics to a question from machine learning.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

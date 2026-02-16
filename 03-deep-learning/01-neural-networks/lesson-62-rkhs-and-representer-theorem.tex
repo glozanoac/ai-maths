@@ -1,0 +1,1098 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 62: RKHS and the Representer Theorem}}
+\fancyhead[R]{\thepage}
+\title{Lesson 62: RKHS and the Representer Theorem}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider the problem of learning a function $f$ from data
+$(x_1, y_1), \ldots, (x_n, y_n)$ by minimizing a regularized
+objective
+\[
+\min_{f \in \Fclass} \; \frac{1}{n} \sum_{i=1}^n
+\Loss(y_i, f(x_i)) + \lambda \, \Omega(f),
+\]
+where $\Fclass$ is a function class, $\Loss$ is a loss function,
+and $\Omega(f)$ is a regularizer penalizing function complexity. If
+$\Fclass$ is a finite-dimensional space (e.g., polynomials of
+degree $\le p$), the optimization reduces to a parameter search.
+But what if we want $\Fclass$ to be a rich, infinite-dimensional
+space of functions---large enough to approximate any continuous
+function, yet structured enough that the optimization remains
+tractable?
+
+Reproducing kernel Hilbert spaces (RKHS) provide exactly this.
+An RKHS $\RKHS$ is an infinite-dimensional Hilbert space of
+functions equipped with a norm $\|f\|_{\RKHS}$ that controls
+pointwise values: $|f(x)| \le C_x \|f\|_{\RKHS}$. The
+\emph{representer theorem} shows that despite the
+infinite-dimensional search space, the minimizer of any regularized
+empirical risk over $\RKHS$ lies in the $n$-dimensional subspace
+$\Span\{\kernel(x_1, \cdot), \ldots, \kernel(x_n, \cdot)\}$.
+The tools developed in this lesson will let us reduce
+infinite-dimensional optimization to finite-dimensional linear
+algebra, providing the mathematical foundation for kernel ridge
+regression, support vector machines, and Gaussian process
+regression.
+
+\begin{rlconnection}[title={Why RKHS Theory Matters for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Kernel ridge regression / GP regression:} The
+    representer theorem reduces the infinite-dimensional minimization
+    to solving an $n \times n$ linear system $(\kernel + \lambda I)
+    \alpha = y$. This is the computational backbone of Gaussian
+    process regression with squared-error loss.
+    \item \textbf{Support vector machines:} The SVM dual problem
+    searches over $\alpha \in \R^n$ rather than $f \in \RKHS$,
+    a direct consequence of the representer theorem.
+    \item \textbf{RKHS-based RL:} Kernel temporal difference
+    learning and kernel Bellman equations represent value functions
+    in an RKHS, with convergence guarantees inherited from RKHS
+    norm control.
+    \item \textbf{Neural tangent kernel theory:} In the infinite-width
+    regime, the neural network function lies in the RKHS of the NTK,
+    and training dynamics are governed by kernel ridge regression in
+    this RKHS.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Positive definite kernels, Mercer's theorem, and the kernel trick
+(Lesson~61). Hilbert spaces, orthogonal projections, and the Riesz
+representation theorem (Lesson~19, Lesson~20). Completeness and
+convergence in normed spaces (Lesson~16).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Construct} the RKHS from a positive definite kernel
+    and \emph{prove} the reproducing property.
+    \item \emph{State} and \emph{prove} Aronszajn's theorem on the
+    uniqueness of the RKHS.
+    \item \emph{Derive} the norm-controls-pointwise-values bound
+    and \emph{characterize} RKHS elements via Mercer expansions.
+    \item \emph{State} and \emph{prove} the representer theorem for
+    regularized empirical risk minimization.
+    \item \emph{Apply} the representer theorem to derive the closed-form
+    solution for kernel ridge regression.
+    \item \emph{Analyze} the excess risk of kernel ridge regression
+    and \emph{compute} the optimal regularization parameter.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapter 5]{bach2024} -- RKHS construction,
+    representer theorem, and kernel ridge regression in the
+    learning theory framework.
+    \item \citet{aronszajn1950} -- Original paper establishing the
+    abstract theory of reproducing kernels and RKHS.
+    \item \citet[Chapters 4--5]{steinwart2008} -- Rigorous treatment
+    of RKHS theory, including interpolation and approximation
+    properties.
+    \item \citet[Chapter 2]{scholkopf2002} -- RKHS, representer
+    theorem, and applications to SVMs.
+    \item \citet[Chapter 6]{mohri2018} -- Kernel methods and
+    generalization bounds for RKHS-based algorithms.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: RKHS CONSTRUCTION
+%% ============================================================
+
+\section{RKHS Construction}
+\label{sec:rkhs-construction}
+
+We construct the reproducing kernel Hilbert space from a positive
+definite kernel in three steps: build a pre-Hilbert space, verify
+the reproducing property, and complete.
+
+\begin{definition}[Reproducing Kernel Hilbert Space]
+\label{def:rkhs}
+Let $\mathcal{X}$ be a nonempty set. A \emph{reproducing kernel
+Hilbert space} (RKHS) on $\mathcal{X}$ is a Hilbert space $H$ of
+functions $f \colon \mathcal{X} \to \R$ such that for every
+$x \in \mathcal{X}$, the \emph{evaluation functional}
+$\delta_x \colon H \to \R$ defined by $\delta_x(f) = f(x)$ is
+bounded (equivalently, continuous). That is, for each $x$ there
+exists $C_x > 0$ such that
+\begin{equation}
+\label{eq:rkhs-bound}
+|f(x)| \le C_x \|f\|_H \quad \text{for all } f \in H.
+\end{equation}
+\end{definition}
+
+\begin{remark}
+\label{rem:not-all-hilbert-rkhs}
+Not every Hilbert space of functions is an RKHS. For example,
+$L^2([0,1])$ is a Hilbert space of (equivalence classes of)
+functions, but point evaluation is not continuous: one can modify
+a function on a set of measure zero without changing its $L^2$
+norm, so $f(x)$ is not well-defined as a functional on $L^2$.
+The RKHS condition ensures that functions in $H$ have
+well-defined pointwise values.
+\end{remark}
+
+\begin{definition}[Reproducing Kernel]
+\label{def:reproducing-kernel}
+A function $\kernel \colon \mathcal{X} \times \mathcal{X} \to \R$ is
+a \emph{reproducing kernel} of a Hilbert space $H$ of functions on
+$\mathcal{X}$ if:
+\begin{enumerate}[label=(RK\arabic*)]
+    \item For each $x \in \mathcal{X}$, the function $\kernel_x :=
+    \kernel(x, \cdot)$ belongs to $H$.
+    \item \textbf{Reproducing property:} For each $x \in \mathcal{X}$
+    and each $f \in H$:
+    \begin{equation}
+    \label{eq:reproducing-property}
+    f(x) = \langle f, \kernel_x \rangle_H.
+    \end{equation}
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+\label{rem:kernel-ip}
+Applying the reproducing property twice: $\kernel(x, x') =
+\kernel_{x'}(x) = \langle \kernel_{x'}, \kernel_x \rangle_H =
+\langle \kernel_x, \kernel_{x'} \rangle_H$. This shows that the
+reproducing kernel is the inner product between the ``canonical
+feature vectors'' $\kernel_x$ and $\kernel_{x'}$ in $H$.
+\end{remark}
+
+We now construct the RKHS from a given pd kernel.
+
+\begin{theorem}[RKHS Construction]
+\label{thm:rkhs-construction}
+Let $\kernel \colon \mathcal{X} \times \mathcal{X} \to \R$ be a
+positive definite kernel. There exists a unique Hilbert space
+$\RKHS$ of functions on $\mathcal{X}$ for which $\kernel$ is
+the reproducing kernel.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Define the pre-Hilbert space.} Let $H_0$ be the
+set of all finite linear combinations of kernel sections:
+\[
+H_0 = \left\{ f = \sum_{i=1}^m \alpha_i \kernel_{x_i}
+\;\middle|\; m \in \N, \; \alpha_i \in \R, \;
+x_i \in \mathcal{X} \right\},
+\]
+where $\kernel_{x_i}(\cdot) = \kernel(x_i, \cdot)$. Each element
+of $H_0$ is a function $f \colon \mathcal{X} \to \R$.
+
+\textbf{Step 2: Define the inner product.} For $f = \sum_{i=1}^m
+\alpha_i \kernel_{x_i}$ and $g = \sum_{j=1}^l \beta_j
+\kernel_{x_j'}$, define
+\begin{equation}
+\label{eq:rkhs-inner-product}
+\langle f, g \rangle_{H_0} = \sum_{i=1}^m \sum_{j=1}^l
+\alpha_i \beta_j \, \kernel(x_i, x_j').
+\end{equation}
+
+We must verify this is well-defined (independent of the
+representation). Suppose $f = \sum_{i=1}^m \alpha_i \kernel_{x_i}
+= 0$ as a function. Then for any $g = \sum_{j=1}^l \beta_j
+\kernel_{x_j'}$:
+\[
+\langle f, g \rangle_{H_0} = \sum_{i=1}^m \alpha_i
+\sum_{j=1}^l \beta_j \kernel(x_i, x_j')
+= \sum_{i=1}^m \alpha_i g(x_i) = 0,
+\]
+since $\sum_{j=1}^l \beta_j \kernel(x_i, x_j') = g(x_i)$ and
+if $f = 0$ as a function then in particular $\sum_{i} \alpha_i
+g(x_i)$ can be shown to vanish by taking $g = f$ to get
+$\langle f, f \rangle_{H_0} = \sum_{i} \alpha_i f(x_i) = 0$
+(since $f = 0$). By bilinearity, the inner product is
+independent of representation.
+
+\textbf{Step 3: Verify positivity.} For $f = \sum_{i=1}^m
+\alpha_i \kernel_{x_i}$:
+\[
+\langle f, f \rangle_{H_0} = \sum_{i=1}^m \sum_{j=1}^m
+\alpha_i \alpha_j \kernel(x_i, x_j) \ge 0,
+\]
+by positive definiteness of $\kernel$. If $\langle f, f
+\rangle_{H_0} = 0$, then for any $x \in \mathcal{X}$:
+\[
+|f(x)|^2 = \left| \sum_{i=1}^m \alpha_i \kernel(x_i, x)
+\right|^2 = |\langle f, \kernel_x \rangle_{H_0}|^2
+\le \langle f, f \rangle_{H_0} \langle \kernel_x,
+\kernel_x \rangle_{H_0} = 0,
+\]
+by Cauchy--Schwarz (which holds in any semi-inner product space).
+Hence $f = 0$ as a function.
+
+\textbf{Step 4: Verify the reproducing property in $H_0$.}
+For $f = \sum_{i=1}^m \alpha_i \kernel_{x_i}$ and any
+$x \in \mathcal{X}$:
+\[
+\langle f, \kernel_x \rangle_{H_0} = \sum_{i=1}^m \alpha_i
+\kernel(x_i, x) = f(x).
+\]
+
+\textbf{Step 5: Complete $H_0$ to a Hilbert space $\RKHS$.}
+The space $(H_0, \langle \cdot, \cdot \rangle_{H_0})$ is a
+pre-Hilbert space. Let $\RKHS$ be its completion: every element
+of $\RKHS$ is the limit of a Cauchy sequence $(f_n)$ in $H_0$.
+We must verify that elements of $\RKHS$ are still functions on
+$\mathcal{X}$ and the reproducing property extends.
+
+For a Cauchy sequence $(f_n)$ in $H_0$, the reproducing property
+gives $|f_n(x) - f_m(x)| = |\langle f_n - f_m, \kernel_x
+\rangle_{H_0}| \le \|f_n - f_m\|_{H_0} \sqrt{\kernel(x, x)}$.
+Hence $(f_n(x))$ is Cauchy in $\R$ for each $x$, so $f(x) :=
+\lim_n f_n(x)$ exists. This defines the limit as a function
+$f \colon \mathcal{X} \to \R$. The reproducing property
+$f(x) = \langle f, \kernel_x \rangle_{\RKHS}$ follows by
+continuity of the inner product.
+
+\textbf{Step 6: Uniqueness.} Suppose $H'$ is another Hilbert
+space of functions on $\mathcal{X}$ with $\kernel$ as its
+reproducing kernel. Then $H_0 \subseteq H'$ (since $\kernel_x
+\in H'$ for all $x$), and the inner products agree on $H_0$
+(by the reproducing property: $\langle \kernel_x, \kernel_{x'}
+\rangle_{H'} = \kernel(x, x') = \langle \kernel_x, \kernel_{x'}
+\rangle_{H_0}$). Since $H_0$ is dense in $\RKHS$, and $H'$ is
+complete, we have $\RKHS \subseteq H'$. By a symmetric argument
+using the density of $H_0$ in $H'$, we get $H' \subseteq \RKHS$.
+Hence $\RKHS = H'$ with equal inner products.
+\end{proof}
+
+\begin{keyresult}[title={Aronszajn's Theorem}]
+\label{kr:aronszajn}
+There is a one-to-one correspondence between positive definite
+kernels and RKHS: every pd kernel $\kernel$ determines a unique
+RKHS $\RKHS$, and conversely, every RKHS $H$ has a unique
+reproducing kernel (given by $\kernel(x, x') = \langle
+\kernel_x, \kernel_{x'} \rangle_H$ where $\kernel_x$ is
+the Riesz representer of $\delta_x$). This is
+\emph{Aronszajn's theorem} \citep{aronszajn1950}.
+\end{keyresult}
+
+\begin{example}[RKHS of the Linear Kernel]
+\label{ex:linear-rkhs}
+For $\kernel(x, x') = x^\top x'$ on $\R^d$, the RKHS is $\RKHS =
+\{f(x) = w^\top x : w \in \R^d\}$ with inner product $\langle
+f_w, f_v \rangle_{\RKHS} = w^\top v$. The reproducing property:
+$f_w(x) = w^\top x = \langle f_w, f_x \rangle_{\RKHS}$ (here
+$\kernel_x(\cdot) = x^\top (\cdot) = f_x$). This is just $\R^d$
+relabeled as a space of linear functions.
+\end{example}
+
+\begin{example}[RKHS of the Polynomial Kernel]
+\label{ex:poly-rkhs}
+For the degree-$p$ polynomial kernel $\kernel(x, x') = (x^\top x')^p$
+on $\R^d$, the RKHS consists of all homogeneous polynomials of
+degree $p$, equipped with a specific inner product. For $d = 2$
+and $p = 2$: $\kernel(x, x') = (x_1 x_1' + x_2 x_2')^2 = x_1^2
+(x_1')^2 + 2 x_1 x_2 x_1' x_2' + x_2^2 (x_2')^2$, and $\RKHS =
+\{f(x) = a x_1^2 + b x_1 x_2 + c x_2^2 : a, b, c \in \R\}$ with
+$\|f\|_{\RKHS}^2 = a^2 + b^2/2 + c^2$. Note that the cross-term
+$x_1 x_2$ has half the norm penalty of the pure terms, reflecting
+the combinatorial coefficient in the kernel expansion.
+\end{example}
+
+The RKHS construction provides a concrete Hilbert space in which
+kernel methods operate. We next study the key structural properties
+of this space.
+
+%% ============================================================
+%% SECTION 4: PROPERTIES OF RKHS
+%% ============================================================
+
+\section{Properties of RKHS}
+\label{sec:rkhs-properties}
+
+\subsection{Norm Controls Pointwise Values}
+
+The fundamental property of an RKHS is that the norm provides
+uniform control over pointwise function values.
+
+\begin{theorem}[Pointwise Bound]
+\label{thm:pointwise-bound}
+For any $f \in \RKHS$ and any $x \in \mathcal{X}$:
+\begin{equation}
+\label{eq:pointwise-bound}
+|f(x)| \le \|f\|_{\RKHS} \sqrt{\kernel(x, x)}.
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By the reproducing property and the Cauchy--Schwarz inequality:
+\[
+|f(x)| = |\langle f, \kernel_x \rangle_{\RKHS}|
+\le \|f\|_{\RKHS} \|\kernel_x\|_{\RKHS}
+= \|f\|_{\RKHS} \sqrt{\langle \kernel_x, \kernel_x
+\rangle_{\RKHS}} = \|f\|_{\RKHS} \sqrt{\kernel(x, x)}.
+\]
+\end{proof}
+
+\begin{remark}
+\label{rem:pointwise-tight}
+The bound is tight: equality holds for $f = \kernel_x / \|\kernel_x
+\|_{\RKHS}$ (assuming $\kernel(x, x) > 0$). This function is the
+``peakiest'' unit-norm function at $x$.
+\end{remark}
+
+\begin{corollary}[Uniform Pointwise Bound on Compact Domains]
+\label{cor:uniform-pointwise}
+If $\mathcal{X}$ is compact and $\kernel$ is continuous, then
+$\sup_{x \in \mathcal{X}} |f(x)| \le M \|f\|_{\RKHS}$ where
+$M = \sup_{x \in \mathcal{X}} \sqrt{\kernel(x, x)} < \infty$.
+In particular, convergence in RKHS norm implies uniform convergence.
+\end{corollary}
+
+\begin{proof}
+Since $\kernel$ is continuous on the compact set $\{(x,x) :
+x \in \mathcal{X}\}$, $M := \sup_x \sqrt{\kernel(x,x)} <
+\infty$. Apply Theorem~\ref{thm:pointwise-bound}.
+\end{proof}
+
+\begin{rlconnection}[title={Norm Control in Function Approximation}]
+In value function approximation, we seek $\hat{V} \in \RKHS$
+approximating the true value function $V^*$. The pointwise bound
+ensures that if $\|\hat{V} - V^*\|_{\RKHS}$ is small, then
+$|\hat{V}(s) - V^*(s)|$ is small \emph{simultaneously at all
+states} $s$. This is much stronger than $L^2$ convergence, which
+only controls average error. The norm penalty $\lambda \|f\|_{\RKHS}^2$
+in regularized methods thus directly controls the pointwise
+approximation quality.
+\end{rlconnection}
+
+\subsection{Convergence and Inclusion}
+
+\begin{proposition}[RKHS Convergence Implies Pointwise Convergence]
+\label{prop:rkhs-pointwise-convergence}
+If $f_n \to f$ in $\RKHS$, then $f_n(x) \to f(x)$ for every
+$x \in \mathcal{X}$. If additionally $\mathcal{X}$ is compact
+and $\kernel$ is continuous, the convergence is uniform.
+\end{proposition}
+
+\begin{proof}
+$|f_n(x) - f(x)| \le \|f_n - f\|_{\RKHS} \sqrt{\kernel(x, x)}
+\to 0$ by Theorem~\ref{thm:pointwise-bound}. Uniformity follows
+from Corollary~\ref{cor:uniform-pointwise}.
+\end{proof}
+
+\begin{theorem}[RKHS Inclusion]
+\label{thm:rkhs-inclusion}
+Let $\kernel_1, \kernel_2$ be pd kernels on $\mathcal{X}$ with
+$\kernel_2 - \kernel_1$ positive definite. Then
+$\mathcal{H}_{\kernel_1} \subseteq \mathcal{H}_{\kernel_2}$
+and $\|f\|_{\mathcal{H}_{\kernel_2}} \le \|f\|_{\mathcal{H}_{\kernel_1}}$
+for all $f \in \mathcal{H}_{\kernel_1}$.
+\end{theorem}
+
+\begin{proof}
+Write $\kernel_2 = \kernel_1 + \kernel_3$ where $\kernel_3 =
+\kernel_2 - \kernel_1$ is pd. The RKHS of $\kernel_2$ satisfies
+$\mathcal{H}_{\kernel_2} = \mathcal{H}_{\kernel_1} +
+\mathcal{H}_{\kernel_3}$ (as a sum of Hilbert spaces). For any
+$f \in \mathcal{H}_{\kernel_1}$, write $f = f + 0$ with $f \in
+\mathcal{H}_{\kernel_1}$ and $0 \in \mathcal{H}_{\kernel_3}$.
+Then
+\[
+\|f\|_{\mathcal{H}_{\kernel_2}}^2
+= \inf_{f = g + h} \left(\|g\|_{\mathcal{H}_{\kernel_1}}^2
++ \|h\|_{\mathcal{H}_{\kernel_3}}^2\right)
+\le \|f\|_{\mathcal{H}_{\kernel_1}}^2 + 0.
+\qedhere
+\]
+\end{proof}
+
+\subsection{Mercer Characterization of RKHS Elements}
+
+When Mercer's theorem applies (continuous kernel on a compact
+domain with a full-support measure $\mu$), we can characterize
+RKHS elements through their Mercer expansion.
+
+\begin{theorem}[Mercer Characterization]
+\label{thm:mercer-characterization}
+Under the setting of Mercer's theorem (Lesson~61,
+Theorem~5.4), let $\kernel(x, x') = \sum_{j=1}^\infty
+\lambda_j \feature_j(x) \feature_j(x')$ be the Mercer expansion.
+Then $f \in \RKHS$ if and only if $f = \sum_{j=1}^\infty a_j
+\feature_j$ (convergence in $L^2(\mu)$ and pointwise) with
+\begin{equation}
+\label{eq:mercer-norm}
+\|f\|_{\RKHS}^2 = \sum_{j=1}^\infty \frac{a_j^2}{\lambda_j}
+< \infty,
+\end{equation}
+where the sum runs only over $j$ with $\lambda_j > 0$.
+\end{theorem}
+
+\begin{proof}
+\textbf{(``If'' direction.)} Suppose $f = \sum_{j=1}^\infty
+a_j \feature_j$ with $\sum_j a_j^2 / \lambda_j < \infty$.
+Define the partial sums $f_N = \sum_{j=1}^N a_j \feature_j$.
+We can write $f_N$ as a finite combination of kernel sections:
+since $\feature_j = \lambda_j^{-1} T_\kernel \feature_j$, we
+have $\feature_j(x) = \lambda_j^{-1} \int \kernel(x, x')
+\feature_j(x') \, d\mu(x')$, so $\feature_j$ is in the
+$L^2$-closure of kernel sections. More directly, the reproducing
+property gives $\langle \kernel_x, \feature_j \rangle_{\RKHS} =
+\feature_j(x)$, and one can verify that
+$\langle \feature_i, \feature_j \rangle_{\RKHS} =
+\delta_{ij} / \lambda_j$ (the Mercer eigenfunctions, when
+normalized in $L^2$, are orthogonal in $\RKHS$ with squared
+norms $1/\lambda_j$).
+
+To see this, compute:
+$\langle \feature_i, \feature_j \rangle_{\RKHS}
+= \feature_i(x)|_{x} = \ldots$ More carefully: by the reproducing
+property, $\feature_j(x) = \langle \feature_j, \kernel_x
+\rangle_{\RKHS}$. Using the Mercer expansion of $\kernel_x$:
+$\kernel_x = \sum_l \lambda_l \feature_l(x) \feature_l$, so
+$\langle \feature_j, \kernel_x \rangle_{\RKHS} = \sum_l
+\lambda_l \feature_l(x) \langle \feature_j, \feature_l
+\rangle_{\RKHS}$. For this to equal $\feature_j(x)$ for all $x$,
+we need $\lambda_l \langle \feature_j, \feature_l \rangle_{\RKHS}
+= \delta_{jl}$, giving $\langle \feature_j, \feature_l
+\rangle_{\RKHS} = \delta_{jl} / \lambda_j$.
+
+Therefore $\|f_N\|_{\RKHS}^2 = \sum_{j=1}^N a_j^2 / \lambda_j$.
+The sequence $(f_N)$ is Cauchy in $\RKHS$ since
+$\|f_N - f_M\|_{\RKHS}^2 = \sum_{j=M+1}^N a_j^2 / \lambda_j
+\to 0$ as $M, N \to \infty$ (tail of a convergent series).
+By completeness of $\RKHS$, $f_N \to f^*$ in $\RKHS$ for some
+$f^* \in \RKHS$. By Proposition~\ref{prop:rkhs-pointwise-convergence},
+$f^*(x) = \lim_N f_N(x) = \sum_j a_j \feature_j(x) = f(x)$.
+Hence $f = f^* \in \RKHS$ and $\|f\|_{\RKHS}^2 = \sum_j a_j^2 /
+\lambda_j$.
+
+\textbf{(``Only if'' direction.)} Let $f \in \RKHS$. Since
+$\{\feature_j / \sqrt{\lambda_j}\}$ is an orthonormal system in
+$\RKHS$, we have $f = \sum_j \langle f, \feature_j /
+\sqrt{\lambda_j} \rangle_{\RKHS} \cdot \feature_j /
+\sqrt{\lambda_j} + f^\perp$, where $f^\perp$ is orthogonal to
+all $\feature_j$. But $f^\perp(x) = \langle f^\perp,
+\kernel_x \rangle_{\RKHS} = \sum_l \lambda_l \feature_l(x)
+\langle f^\perp, \feature_l \rangle_{\RKHS} = 0$ for all $x$
+(since $\langle f^\perp, \feature_l \rangle_{\RKHS} = 0$).
+So $f^\perp = 0$. Setting $a_j = \langle f, \feature_j
+\rangle_{\RKHS} \cdot \sqrt{\lambda_j}$, we get
+$f = \sum_j a_j \feature_j$ and $\|f\|_{\RKHS}^2 = \sum_j
+a_j^2 / \lambda_j$.
+\end{proof}
+
+\begin{example}[RKHS of the Gaussian Kernel]
+\label{ex:gaussian-rkhs}
+The Gaussian kernel on a compact domain has eigenvalues
+$\lambda_j$ decaying exponentially fast (as noted in Lesson~61,
+Example~5.5). The Mercer
+characterization shows that $f \in \RKHS$ requires
+$\sum_j a_j^2 / \lambda_j < \infty$, meaning the Fourier-like
+coefficients $a_j$ must decay \emph{faster} than
+$\sqrt{\lambda_j}$, i.e., faster than exponentially. This
+imposes extreme smoothness: the RKHS of the Gaussian kernel
+consists of $C^\infty$ functions (in fact, real-analytic functions).
+
+Conversely, this means the Gaussian RKHS is a relatively
+``small'' function space. Functions with discontinuities,
+corners, or even finite-order differentiability do not lie in
+the Gaussian RKHS. This explains why Gaussian kernel methods
+may underperform on non-smooth target functions.
+\end{example}
+
+\begin{warning}[title={RKHS Norm vs.\ $L^2$ Norm}]
+The RKHS norm $\|f\|_{\RKHS}^2 = \sum_j a_j^2 / \lambda_j$ penalizes
+high-frequency components (large $j$, small $\lambda_j$) much more
+heavily than the $L^2$ norm $\|f\|_{L^2}^2 = \sum_j a_j^2$. A
+function can have small $L^2$ norm but infinite RKHS norm if its
+high-frequency content decays too slowly. Regularizing with
+$\|f\|_{\RKHS}^2$ thus imposes a smoothness bias.
+\end{warning}
+
+We now have a complete characterization of the RKHS. The central
+computational result of kernel methods is the representer theorem,
+which we develop next.
+
+%% ============================================================
+%% SECTION 5: THE REPRESENTER THEOREM
+%% ============================================================
+
+\section{The Representer Theorem}
+\label{sec:representer}
+
+The representer theorem is the computational cornerstone of kernel
+methods. It shows that the solution to any regularized empirical
+risk minimization problem over an RKHS is a finite linear
+combination of kernel sections centered at the training points,
+regardless of the (possibly infinite) dimensionality of the RKHS.
+
+\begin{theorem}[Representer Theorem]
+\label{thm:representer}
+Let $\RKHS$ be the RKHS associated with a pd kernel $\kernel$ on
+$\mathcal{X}$. Let $x_1, \ldots, x_n \in \mathcal{X}$ be training
+points and consider the optimization problem
+\begin{equation}
+\label{eq:regularized-erm}
+\min_{f \in \RKHS} \; J(f) := c\bigl(f(x_1), \ldots, f(x_n)\bigr)
++ g\bigl(\|f\|_{\RKHS}\bigr),
+\end{equation}
+where $c \colon \R^n \to \R$ is an arbitrary function (the empirical
+cost) and $g \colon [0, \infty) \to \R$ is strictly increasing (the
+regularizer). Then if \eqref{eq:regularized-erm} has a minimizer,
+it has one of the form
+\begin{equation}
+\label{eq:representer-form}
+f^*(x) = \sum_{i=1}^n \alpha_i \kernel(x_i, x)
+\end{equation}
+for some $\alpha_1, \ldots, \alpha_n \in \R$.
+\end{theorem}
+
+\begin{proof}
+The proof uses orthogonal decomposition in the Hilbert space $\RKHS$.
+
+\textbf{Step 1: Decompose.} Let $S = \Span\{\kernel_{x_1}, \ldots,
+\kernel_{x_n}\}$ be the (closed, finite-dimensional) subspace of
+$\RKHS$ spanned by the kernel sections at the training points.
+Any $f \in \RKHS$ can be decomposed as
+\[
+f = f_S + f_\perp, \quad f_S \in S, \; f_\perp \in S^\perp,
+\]
+where $S^\perp = \{h \in \RKHS : \langle h, g \rangle_{\RKHS} = 0
+\text{ for all } g \in S\}$.
+
+\textbf{Step 2: Show $f_\perp$ does not affect evaluations.}
+For any $x_i$ ($i = 1, \ldots, n$):
+\[
+f_\perp(x_i) = \langle f_\perp, \kernel_{x_i} \rangle_{\RKHS} = 0,
+\]
+since $f_\perp \in S^\perp$ and $\kernel_{x_i} \in S$. Therefore
+$f(x_i) = f_S(x_i) + f_\perp(x_i) = f_S(x_i)$ for all $i$.
+
+\textbf{Step 3: Show $f_\perp$ only increases the norm.}
+By the Pythagorean theorem:
+\[
+\|f\|_{\RKHS}^2 = \|f_S\|_{\RKHS}^2 + \|f_\perp\|_{\RKHS}^2
+\ge \|f_S\|_{\RKHS}^2,
+\]
+with equality iff $f_\perp = 0$.
+
+\textbf{Step 4: Conclude.} Combining Steps 2 and 3:
+\[
+J(f) = c(f(x_1), \ldots, f(x_n)) + g(\|f\|_{\RKHS})
+= c(f_S(x_1), \ldots, f_S(x_n)) + g(\|f\|_{\RKHS}).
+\]
+Since $g$ is strictly increasing and $\|f\|_{\RKHS} \ge
+\|f_S\|_{\RKHS}$:
+\[
+J(f) \ge c(f_S(x_1), \ldots, f_S(x_n)) + g(\|f_S\|_{\RKHS})
+= J(f_S).
+\]
+Strict inequality holds whenever $f_\perp \ne 0$. Hence any
+minimizer must satisfy $f_\perp = 0$, i.e., $f^* = f_S^* \in S$.
+Since $S = \Span\{\kernel_{x_1}, \ldots, \kernel_{x_n}\}$, we have
+$f^*(x) = \sum_{i=1}^n \alpha_i \kernel(x_i, x)$.
+\end{proof}
+
+\begin{keyresult}[title={Representer Theorem: From Infinite to Finite Dimensions}]
+The representer theorem reduces the infinite-dimensional optimization
+$\min_{f \in \RKHS} J(f)$ to the finite-dimensional problem
+$\min_{\alpha \in \R^n} J_\alpha(\alpha)$, where
+\[
+J_\alpha(\alpha) = c\!\left(\sum_{i} \alpha_i \kernel(x_i, x_1),
+\ldots, \sum_{i} \alpha_i \kernel(x_i, x_n)\right) +
+g\!\left(\sqrt{\alpha^\top K \alpha}\right),
+\]
+with $K_{ij} = \kernel(x_i, x_j)$. The search space dimension equals
+the number of training points $n$, regardless of the RKHS dimension
+(which may be infinite).
+\end{keyresult}
+
+\begin{example}[Representer Theorem for Squared Loss]
+\label{ex:representer-squared}
+For the squared loss $c(z_1, \ldots, z_n) = \frac{1}{n}
+\sum_{i=1}^n (y_i - z_i)^2$ and Tikhonov regularization
+$g(t) = \lambda t^2$, the representer theorem gives
+\[
+f^*(x) = \sum_{i=1}^n \alpha_i \kernel(x_i, x), \qquad
+\min_{\alpha \in \R^n} \frac{1}{n} \|y - K\alpha\|^2 +
+\lambda \, \alpha^\top K \alpha.
+\]
+This is kernel ridge regression, developed in detail in
+Section~\ref{sec:krr}.
+\end{example}
+
+\begin{example}[Representer Theorem for SVM]
+\label{ex:representer-svm}
+For the support vector machine with hinge loss
+$c(z_1, \ldots, z_n) = \frac{1}{n} \sum_{i=1}^n \max(0,
+1 - y_i z_i)$ (with $y_i \in \{-1, +1\}$), the representer
+theorem gives $f^* = \sum_i \alpha_i \kernel(x_i, \cdot)$.
+The optimal $\alpha$ is found by solving a quadratic program.
+The sparsity of the SVM solution (most $\alpha_i = 0$) is an
+additional property of the hinge loss, not of the representer
+theorem itself.
+\end{example}
+
+\begin{rlconnection}[title={Representer Theorem and Nonparametric RL}]
+In kernel-based reinforcement learning, the value function is
+represented as $\hat{V}(s) = \sum_{i=1}^n \alpha_i \kernel(s_i, s)$
+where $s_1, \ldots, s_n$ are visited states. The representer
+theorem guarantees that this finite representation is optimal among
+all functions in the (infinite-dimensional) RKHS, provided the
+objective has the form of a regularized empirical cost evaluated
+at the visited states. This justifies the kernel Bellman equation
+approach: $\hat{V} = \argmin_{f \in \RKHS} \sum_i (f(s_i) -
+r_i - \gamma f(s_i'))^2 + \lambda \|f\|_{\RKHS}^2$.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: KERNEL RIDGE REGRESSION
+%% ============================================================
+
+\section{Kernel Ridge Regression}
+\label{sec:krr}
+
+We apply the representer theorem to derive the complete solution
+for kernel ridge regression, then analyze its statistical properties.
+
+\subsection{Closed-Form Solution}
+
+\begin{definition}[Kernel Ridge Regression]
+\label{def:krr}
+Given training data $(x_1, y_1), \ldots, (x_n, y_n) \in
+\mathcal{X} \times \R$ and regularization parameter $\lambda > 0$,
+\emph{kernel ridge regression} (KRR) solves
+\begin{equation}
+\label{eq:krr}
+f^* = \argmin_{f \in \RKHS} \frac{1}{n} \sum_{i=1}^n
+(y_i - f(x_i))^2 + \lambda \|f\|_{\RKHS}^2.
+\end{equation}
+\end{definition}
+
+\begin{theorem}[KRR Solution]
+\label{thm:krr-solution}
+The minimizer of \eqref{eq:krr} is $f^*(x) = \sum_{j=1}^n
+\alpha_j^* \kernel(x_j, x)$ where
+\begin{equation}
+\label{eq:krr-alpha}
+\alpha^* = (K + n\lambda I)^{-1} y,
+\end{equation}
+with $K_{ij} = \kernel(x_i, x_j)$ and $y = (y_1, \ldots, y_n)^\top$.
+The matrix $K + n\lambda I$ is positive definite (hence invertible)
+for any $\lambda > 0$.
+\end{theorem}
+
+\begin{proof}
+By the representer theorem (Theorem~\ref{thm:representer}), the
+minimizer has the form $f^*(x) = \sum_j \alpha_j \kernel(x_j, x)$.
+Substituting into \eqref{eq:krr}: the prediction at $x_i$ is
+$f(x_i) = \sum_j \alpha_j \kernel(x_j, x_i) = (K\alpha)_i$, and
+the RKHS norm is
+\[
+\|f\|_{\RKHS}^2 = \left\langle \sum_i \alpha_i \kernel_{x_i},
+\sum_j \alpha_j \kernel_{x_j} \right\rangle_{\RKHS}
+= \sum_{i,j} \alpha_i \alpha_j \kernel(x_i, x_j)
+= \alpha^\top K \alpha.
+\]
+
+The objective becomes:
+\[
+J(\alpha) = \frac{1}{n} \|y - K\alpha\|^2 + \lambda \,
+\alpha^\top K \alpha
+= \frac{1}{n} (y^\top y - 2 y^\top K \alpha + \alpha^\top K^2
+\alpha) + \lambda \, \alpha^\top K \alpha.
+\]
+
+Taking the gradient and setting it to zero:
+\[
+\nabla_\alpha J = \frac{1}{n} (-2Ky + 2K^2 \alpha) + 2\lambda K
+\alpha = \frac{2K}{n}(-y + K\alpha + n\lambda \alpha) = 0.
+\]
+
+Since $K$ may be singular, we need the factor $(-y + K\alpha +
+n\lambda \alpha) = 0$, giving $(K + n\lambda I)\alpha = y$.
+Since $K \succeq 0$ and $n\lambda > 0$, the matrix $K + n\lambda I$
+is positive definite, hence invertible:
+$\alpha^* = (K + n\lambda I)^{-1} y$.
+\end{proof}
+
+\begin{example}[KRR with the Gaussian Kernel]
+\label{ex:krr-gaussian}
+Let $\mathcal{X} = \R$, $\kernel(x, x') = \exp(-(x-x')^2 /
+(2\sigma^2))$, and suppose we have $n = 5$ training points.
+The prediction at a test point $x$ is
+\[
+f^*(x) = \sum_{j=1}^5 \alpha_j^* \exp\!\left(
+-\frac{(x_j - x)^2}{2\sigma^2}\right),
+\]
+a weighted sum of Gaussian bumps centered at the training points.
+The weights $\alpha^*$ are determined by the linear system
+$(K + n\lambda I) \alpha^* = y$.
+
+For $\sigma \to 0$ (narrow bumps), $K \to I$ and
+$\alpha^* \to y / (1 + n\lambda)$: the predictor interpolates
+(approximately) at the training points. For $\sigma \to \infty$
+(wide bumps), $K \to \mathbf{1}\mathbf{1}^\top$ and the predictor
+approaches a constant function.
+\end{example}
+
+\subsection{Statistical Analysis}
+
+We now analyze the excess risk of kernel ridge regression.
+The excess risk measures how much worse our estimator $f^*$
+performs compared to the best function in the RKHS.
+
+\begin{assumption}[Statistical Setting]
+\label{asm:statistical-setting}
+The data $(x_i, y_i)$ are drawn i.i.d.\ from a distribution
+$\Prob$ on $\mathcal{X} \times \R$. The regression function is
+$f_0(x) = \E[Y \mid X = x]$. We assume $f_0 \in \RKHS$,
+$\|f_0\|_{\RKHS} \le B$, $|Y| \le M$ almost surely, and
+$\kernel(x, x) \le \kappa^2$ for all $x \in \mathcal{X}$.
+\end{assumption}
+
+\begin{definition}[Excess Risk]
+\label{def:excess-risk}
+The \emph{excess risk} of an estimator $\hat{f}$ is
+\begin{equation}
+\label{eq:excess-risk}
+\mathcal{E}(\hat{f}) = \E_X[(\hat{f}(X) - f_0(X))^2]
+= \|\hat{f} - f_0\|_{L^2(\Prob_X)}^2,
+\end{equation}
+where $\Prob_X$ is the marginal distribution of $X$.
+\end{definition}
+
+\begin{theorem}[Excess Risk Bound for KRR]
+\label{thm:krr-risk}
+Under Assumption~\ref{asm:statistical-setting}, the KRR
+estimator $\hat{f}_\lambda$ with regularization parameter
+$\lambda > 0$ satisfies
+\begin{equation}
+\label{eq:krr-risk-bound}
+\E[\mathcal{E}(\hat{f}_\lambda)] \le C_1 \lambda B^2 +
+\frac{C_2 \kappa^2 M^2}{n \lambda},
+\end{equation}
+where $C_1, C_2 > 0$ are universal constants.
+\end{theorem}
+
+\begin{proof}
+We decompose the excess risk into approximation error (bias)
+and estimation error (variance).
+
+\textbf{Step 1: Bias-variance decomposition.} Define the
+``population'' regularized risk minimizer
+$f_\lambda = \argmin_{f \in \RKHS} \E[(Y - f(X))^2] +
+\lambda \|f\|_{\RKHS}^2$. Then
+\[
+\mathcal{E}(\hat{f}_\lambda) \le 2 \|f_\lambda - f_0\|_{L^2}^2
++ 2 \|\hat{f}_\lambda - f_\lambda\|_{L^2}^2.
+\]
+
+\textbf{Step 2: Approximation error (bias).} The population
+minimizer $f_\lambda$ satisfies the optimality condition
+$(T + \lambda I) f_\lambda = T f_0$ where $T$ is the integral
+operator of $\kernel$ with respect to $\Prob_X$. Then
+$f_\lambda - f_0 = -\lambda (T + \lambda I)^{-1} f_0$. Hence
+\[
+\|f_\lambda - f_0\|_{L^2}^2 = \lambda^2 \|(T + \lambda I)^{-1}
+f_0\|_{L^2}^2 \le \lambda^2 \|f_0\|_{\RKHS}^2 / \lambda
+= \lambda B^2,
+\]
+where we used $\|(T + \lambda I)^{-1}\|_{\RKHS \to L^2} \le
+1/\sqrt{\lambda}$ (since the eigenvalues of $(T + \lambda I)^{-1}$
+in the RKHS-to-$L^2$ mapping are bounded by $\sqrt{\lambda_j} /
+(\lambda_j + \lambda) \le 1/(2\sqrt{\lambda})$, using
+$\sqrt{t}/(t + \lambda) \le 1/(2\sqrt{\lambda})$ for $t \ge 0$).
+
+\textbf{Step 3: Estimation error (variance).} The estimation error
+$\|\hat{f}_\lambda - f_\lambda\|_{L^2}^2$ depends on the random
+fluctuation of the empirical risk around the population risk.
+Standard arguments (see \citet[Chapter 5]{bach2024}) using the
+RKHS norm bound on the function class and concentration
+inequalities yield
+\[
+\E[\|\hat{f}_\lambda - f_\lambda\|_{L^2}^2] \le
+\frac{C_2 \kappa^2 M^2}{n\lambda}.
+\]
+The key ingredient is that the effective dimension of the
+search space (the number of eigenvalues of $T$ above $\lambda$)
+controls the variance, and the RKHS norm bound controls the
+sup-norm of functions in the class via
+Theorem~\ref{thm:pointwise-bound}.
+
+\textbf{Step 4: Combine.} Adding the two terms gives
+\eqref{eq:krr-risk-bound}.
+\end{proof}
+
+\begin{corollary}[Optimal Regularization]
+\label{cor:optimal-lambda}
+Minimizing the bound \eqref{eq:krr-risk-bound} over $\lambda$:
+the derivative with respect to $\lambda$ is
+$C_1 B^2 - C_2 \kappa^2 M^2 / (n\lambda^2)$. Setting to zero
+gives the optimal
+\begin{equation}
+\label{eq:optimal-lambda}
+\lambda^* = \left(\frac{C_2 \kappa^2 M^2}{C_1 B^2 n}\right)^{1/2}
+= O(n^{-1/2}),
+\end{equation}
+yielding the excess risk bound
+\begin{equation}
+\label{eq:optimal-risk}
+\E[\mathcal{E}(\hat{f}_{\lambda^*})]
+\le 2\sqrt{C_1 C_2} \cdot \frac{\kappa B M}{\sqrt{n}}
+= O(n^{-1/2}).
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+Direct substitution: with $\lambda^* = \kappa M
+\sqrt{C_2/(C_1 B^2 n)}$,
+\begin{align*}
+C_1 \lambda^* B^2 &= C_1 B^2 \cdot \kappa M
+\sqrt{\frac{C_2}{C_1 B^2 n}}
+= \kappa B M \sqrt{\frac{C_1 C_2}{n}}, \\
+\frac{C_2 \kappa^2 M^2}{n \lambda^*}
+&= \frac{C_2 \kappa^2 M^2}{n} \cdot
+\frac{\sqrt{C_1 B^2 n}}{\kappa M \sqrt{C_2}}
+= \kappa B M \sqrt{\frac{C_1 C_2}{n}}.
+\end{align*}
+The two terms are equal, and the total bound is
+$2\kappa B M \sqrt{C_1 C_2 / n}$.
+\end{proof}
+
+\begin{keyresult}[title={KRR Rate with Eigenvalue Decay}]
+\label{kr:krr-rate}
+The $O(n^{-1/2})$ rate is a worst-case bound. When the eigenvalues
+of the kernel integral operator $T$ satisfy $\lambda_j =
+O(j^{-\beta})$ for some $\beta > 1$ (polynomial decay), the
+excess risk of KRR with optimal $\lambda$ improves to
+$O(n^{-\beta/(\beta+1)})$.
+For the Gaussian kernel ($\beta = \infty$, exponential decay), the
+rate approaches $O(n^{-1} \log n)$, nearly parametric. This
+\emph{eigenvalue-dependent rate} is a central result connecting
+the smoothness of the kernel to the statistical efficiency of
+kernel methods.
+\end{keyresult}
+
+\begin{example}[KRR with Sobolev Kernel]
+\label{ex:krr-sobolev}
+The first-order Sobolev kernel on $[0, 1]$ is $\kernel(x, x') =
+1 + \min(x, x')$, whose RKHS is the Sobolev space $W^{1,2}([0,1])$
+of functions with square-integrable first derivatives. The
+eigenvalues decay as $\lambda_j = O(j^{-2})$ ($\beta = 2$).
+By the eigenvalue-dependent rate, KRR achieves excess risk
+$O(n^{-2/3})$, better than the generic $O(n^{-1/2})$ but
+slower than the Gaussian kernel rate. This reflects the fact
+that the Sobolev RKHS contains rougher functions than the
+Gaussian RKHS.
+\end{example}
+
+\begin{rlconnection}[title={KRR and Gaussian Process Regression}]
+Kernel ridge regression and Gaussian process (GP) regression
+with squared-error loss produce \emph{identical predictions}.
+If we place a GP prior $f \sim \mathcal{GP}(0, \kernel)$ and
+assume Gaussian noise $y_i = f(x_i) + \varepsilon_i$ with
+$\varepsilon_i \sim \mathcal{N}(0, \sigma^2)$, the posterior
+mean is $\hat{f}(x) = k_x^\top (K + \sigma^2 I)^{-1} y$, which
+matches the KRR solution with $\lambda = \sigma^2 / n$. The
+Bayesian interpretation provides uncertainty quantification
+(posterior variance) that KRR alone does not.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Reproducing Property Verification]
+\textnormal{(\(*\))} \\
+Let $\kernel(x, x') = 1 + x x'$ on $\mathcal{X} = \R$.
+\begin{enumerate}[label=(\alph*)]
+    \item Describe the RKHS $\RKHS$ as a set of functions and
+    specify the inner product.
+    \item Verify the reproducing property directly: for
+    $f(x) = a + bx \in \RKHS$, compute $\langle f,
+    \kernel_t \rangle_{\RKHS}$ and confirm it equals $f(t)$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[RKHS Norm Computation]
+\textnormal{(\(*\))} \\
+For the kernel $\kernel(x, x') = (x^\top x')^2$ on $\R^2$,
+compute $\|f\|_{\RKHS}$ for the function $f(x) = x_1^2 - x_2^2$.
+Express your answer in terms of the Mercer expansion of $\kernel$.
+\end{exercise}
+
+\begin{exercise}[Representer Theorem Application]
+\textnormal{(\(**\))} \\
+Consider the regularized absolute-deviation problem
+\[
+\min_{f \in \RKHS} \frac{1}{n} \sum_{i=1}^n |y_i - f(x_i)|
++ \lambda \|f\|_{\RKHS}^2.
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Verify that the representer theorem applies to this
+    problem. What role does the strict increase of
+    $g(t) = \lambda t^2$ play?
+    \item Write the finite-dimensional optimization problem that
+    results from substituting $f(x) = \sum_i \alpha_i \kernel(x_i, x)$.
+    \item Is this problem a quadratic program, a linear program,
+    or something else? Explain.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Mercer Characterization Details]
+\textnormal{(\(**\))} \\
+Let $\kernel$ be a continuous pd kernel on $[0,1]$ with Mercer
+expansion $\kernel(x, x') = \sum_{j=1}^\infty \lambda_j
+\feature_j(x) \feature_j(x')$, and suppose $\lambda_j = j^{-3}$.
+\begin{enumerate}[label=(\alph*)]
+    \item Show that $f(x) = \sum_{j=1}^\infty j^{-3/2} \feature_j(x)$
+    does \emph{not} belong to $\RKHS$.
+    \item Find the largest $\beta > 0$ such that
+    $f(x) = \sum_j j^{-\beta} \feature_j(x)$ belongs to $\RKHS$.
+    \item Compute $\|f\|_{\RKHS}$ for $f(x) = \sum_j j^{-2}
+    \feature_j(x)$ and verify it is finite.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[KRR Derivation with General Kernel]
+\textnormal{(\(**\))} \\
+Derive the KRR solution for the weighted loss
+$\sum_{i=1}^n w_i (y_i - f(x_i))^2 + \lambda \|f\|_{\RKHS}^2$,
+where $w_i > 0$ are given weights. Show that the optimal
+$\alpha = (K W K + n\lambda K)^{-1} K W y$ where $W = \diag(w_1,
+\ldots, w_n)$, and simplify to a form involving only $K$ and $W$.
+How does this reduce to standard KRR when $w_i = 1/n$ for all $i$?
+\end{exercise}
+
+\begin{exercise}[Kernel Bellman Equation]
+\textnormal{(\(***\))} \\
+In a discounted MDP with finite state observations $s_1, \ldots,
+s_n$ and transitions $(s_i, r_i, s_i')$, the kernel Bellman
+equation seeks $\hat{V} \in \RKHS$ minimizing
+\[
+\sum_{i=1}^n \left(\hat{V}(s_i) - r_i - \gamma
+\hat{V}(s_i')\right)^2 + \lambda \|\hat{V}\|_{\RKHS}^2.
+\]
+\begin{enumerate}[label=(\alph*)]
+    \item Apply the representer theorem to show that $\hat{V}(s) =
+    \sum_j \alpha_j \kernel(s_j, s)$.
+    \item Derive the linear system that $\alpha$ must satisfy.
+    Express it in terms of the Gram matrices $K_{ij} = \kernel(s_i, s_j)$
+    and $K'_{ij} = \kernel(s_i, s_j')$.
+    \item Under what conditions on $\gamma$, $\lambda$, and $\kernel$
+    is this system guaranteed to have a unique solution?
+\end{enumerate}
+
+\textit{Hint:} The representer theorem applies since the objective
+depends on $\hat{V}$ only through evaluations at $s_1, \ldots, s_n$
+and $s_1', \ldots, s_n'$. Augment the set of kernel sections.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item A \textbf{reproducing kernel Hilbert space} (RKHS) is a
+    Hilbert space of functions where point evaluation is a bounded
+    linear functional. The RKHS norm controls pointwise values:
+    $|f(x)| \le \|f\|_{\RKHS} \sqrt{\kernel(x,x)}$.
+
+    \item Every pd kernel $\kernel$ determines a \textbf{unique}
+    RKHS $\RKHS$ (\textbf{Aronszajn's theorem}), constructed by
+    completing the span of kernel sections $\{\kernel(x, \cdot)\}$
+    with the inner product $\langle \kernel_x, \kernel_{x'}
+    \rangle = \kernel(x, x')$.
+
+    \item The \textbf{reproducing property} $f(x) = \langle f,
+    \kernel_x \rangle_{\RKHS}$ allows pointwise evaluation via
+    inner products, connecting function evaluation to Hilbert space
+    geometry.
+
+    \item Under the Mercer expansion, $f \in \RKHS$ if and only if
+    $\sum_j a_j^2 / \lambda_j < \infty$, where $a_j$ are the
+    expansion coefficients. The RKHS norm $\|f\|_{\RKHS}^2 =
+    \sum_j a_j^2 / \lambda_j$ penalizes high-frequency
+    components, imposing a \textbf{smoothness bias}.
+
+    \item The \textbf{representer theorem} guarantees that the
+    minimizer of any regularized empirical risk over $\RKHS$ lies
+    in $\Span\{\kernel(x_1, \cdot), \ldots, \kernel(x_n, \cdot)\}$,
+    reducing infinite-dimensional optimization to an $n$-dimensional
+    problem.
+
+    \item \textbf{Kernel ridge regression} has the closed-form
+    solution $\alpha^* = (K + n\lambda I)^{-1} y$, with excess
+    risk $O(n^{-1/2})$ in the worst case and faster rates when
+    the kernel eigenvalues decay rapidly.
+
+    \item The optimal regularization parameter $\lambda^* =
+    O(n^{-1/2})$ balances approximation error ($O(\lambda B^2)$,
+    decreasing in $\lambda$) against estimation error
+    ($O(\kappa^2 M^2 / (n\lambda))$, increasing in $\lambda$).
+
+    \item KRR with a Gaussian kernel achieves near-parametric
+    rates $O(n^{-1} \log n)$ due to exponential eigenvalue decay,
+    while the Sobolev kernel achieves $O(n^{-2/3})$ due to
+    polynomial decay ($\lambda_j = O(j^{-2})$).
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+    \item \textbf{Lesson 63 (RNN)} develops recurrent neural
+    networks, which operate on sequential data. The kernel
+    perspective on neural networks (via the NTK) connects the RKHS
+    framework to the analysis of training dynamics in deep learning.
+
+    \item \citet{steinwart2008} provide a comprehensive and rigorous
+    treatment of RKHS theory, including universal kernels,
+    approximation properties, and oracle inequalities for SVMs.
+
+    \item \citet{bach2024} develops kernel ridge regression rates
+    with eigenvalue-dependent bounds, including minimax-optimal
+    results and comparisons with neural network methods.
+
+    \item \citet{scholkopf2002} cover the practical aspects of
+    kernel methods, including kernel selection, multi-task learning,
+    and kernel methods for structured data.
+
+    \item \citet{jacot2018} and \citet{lee2019} establish the
+    connection between wide neural networks and kernel methods via
+    the neural tangent kernel, showing that infinite-width networks
+    perform kernel ridge regression in the NTK RKHS.
+
+    \item The RKHS theory was introduced by \citet{aronszajn1950}
+    in the context of the theory of reproducing kernels. The
+    representer theorem in the generality presented here is due to
+    Sch\"olkopf, Herbrich, and Smola (2001), building on earlier
+    work by Kimeldorf and Wahba (1970) for spline smoothing.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

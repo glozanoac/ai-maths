@@ -1,0 +1,935 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 59: Empirical Risk Minimization and Generalization}}
+\fancyhead[R]{\thepage}
+\title{Lesson 59: Empirical Risk Minimization and Generalization}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider training a neural network to classify images: we collect a dataset
+of $n$ labeled examples $(x_1, y_1), \ldots, (x_n, y_n)$, choose a
+hypothesis class $\Hclass$ (e.g., all neural networks of a given
+architecture), and select the function $\hat{f} \in \Hclass$ that minimizes
+the average loss on the training data.  This procedure---\emph{empirical
+risk minimization} (ERM)---is the foundation of virtually every supervised
+learning algorithm.  Yet training error alone is meaningless; what matters
+is the \emph{population risk}, the expected loss on unseen data drawn from
+the same distribution.  The central question of statistical learning theory
+is: \emph{when and why does low training error imply low population risk?}
+Answering this question requires bounding the gap between empirical and
+population risk uniformly over the hypothesis class, leading to the
+classical notions of VC dimension and uniform convergence.  The tools
+developed in this lesson will let us derive explicit generalization bounds
+that quantify how many training examples suffice to guarantee good
+out-of-sample performance.
+
+\begin{rlconnection}[title={Why ERM and Generalization Matter for RL/ML}]
+\begin{itemize}[nosep]
+    \item \textbf{Fitted value iteration}: At each step, a regression
+    problem is solved by ERM over a hypothesis class; generalization bounds
+    control the propagation of approximation error across Bellman backups.
+    \item \textbf{Imitation learning (DAgger)}: The learner minimizes
+    empirical classification loss against an expert's actions;
+    generalization theory determines the sample complexity of achieving
+    near-expert performance.
+    \item \textbf{Neural network capacity}: VC dimension and uniform
+    convergence provide the classical framework for understanding why
+    overparameterized networks can still generalize, motivating the
+    norm-based bounds of Lesson~61 and beyond.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Probability spaces, random variables, expectation, and variance (Lesson~9--11).
+Hoeffding's inequality and the union bound (Lesson~12, Theorem~7.3).
+Convergence in probability (Lesson~12, Definition~5.1).
+Basic set theory and countability arguments (Lesson~1).
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+    \item \emph{Define} the population risk, empirical risk, hypothesis
+    class, excess risk, and ERM, and \emph{explain} the relationship
+    between them.
+    \item \emph{Prove} the finite hypothesis class generalization bound
+    using Hoeffding's inequality and the union bound.
+    \item \emph{Define} shattering, the growth function, and VC dimension,
+    and \emph{compute} the VC dimension of halfspaces in $\R^d$.
+    \item \emph{State} and \emph{prove} Sauer's lemma bounding the growth
+    function by the VC dimension.
+    \item \emph{State} the VC generalization bound and \emph{explain} its
+    dependence on VC dimension and sample size.
+    \item \emph{Prove} that ERM generalizes under uniform convergence and
+    \emph{state} the fundamental theorem of statistical learning for
+    binary classification.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+    \item \citet[Chapters 1--2]{bach2024} -- Statistical learning
+    framework, ERM, finite class bounds, and introduction to VC theory.
+    \item \citet[Chapters 2--6]{shalev2014} -- PAC learning, finite
+    hypothesis classes, VC dimension, and the fundamental theorem of
+    statistical learning.
+    \item \citet[Chapters 3--4]{mohri2018} -- Rademacher complexity and
+    VC dimension with detailed proofs.
+    \item \citet[Chapters 6--7]{vapnik1998} -- Original treatment of VC
+    theory and structural risk minimization.
+    \item \citet[Chapter 12]{devroye1996} -- VC dimension, growth
+    functions, and Sauer's lemma with combinatorial proofs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: STATISTICAL LEARNING FRAMEWORK
+%% ============================================================
+
+\section{Statistical Learning Framework}
+\label{sec:learning_framework}
+
+We begin by formalizing the supervised learning problem in its full
+generality.
+
+\begin{definition}[Supervised Learning Setup]
+\label{def:supervised_setup}
+A \emph{supervised learning problem} is specified by:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item An \emph{input space} $\mathcal{X}$ (e.g., $\R^d$).
+    \item An \emph{output space} $\mathcal{Y}$ (e.g., $\{0, 1\}$ for
+    binary classification, or $\R$ for regression).
+    \item An unknown \emph{data-generating distribution} $P$ on
+    $\mathcal{X} \times \mathcal{Y}$.
+    \item A \emph{loss function} $\Loss \colon \mathcal{Y} \times
+    \mathcal{Y} \to [0, \infty)$ measuring the cost of predicting
+    $\hat{y}$ when the true label is $y$.
+    \item A \emph{hypothesis class} $\Hclass \subseteq
+    \mathcal{Y}^{\mathcal{X}}$, a set of functions
+    $f \colon \mathcal{X} \to \mathcal{Y}$ from which the learner
+    selects.
+\end{enumerate}
+The learner observes a \emph{training sample}
+$S = \{(X_1, Y_1), \ldots, (X_n, Y_n)\}$ consisting of $n$
+independent draws from $P$, and must choose $\hat{f} \in \Hclass$
+based on $S$.
+\end{definition}
+
+\begin{definition}[Population Risk and Empirical Risk]
+\label{def:risk}
+The \emph{population risk} (or \emph{true risk}) of a function
+$f \colon \mathcal{X} \to \mathcal{Y}$ is
+\[
+    \Risk(f) = \E_{(X, Y) \sim P}\bigl[\Loss(f(X), Y)\bigr].
+\]
+The \emph{empirical risk} (or \emph{training error}) of $f$ with
+respect to a sample $S = \{(X_i, Y_i)\}_{i=1}^n$ is
+\[
+    \EmpRisk_n(f) = \frac{1}{n}\sum_{i=1}^n \Loss(f(X_i), Y_i).
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:risk_rv}
+For a fixed $f$, the empirical risk $\EmpRisk_n(f)$ is the sample mean
+of $n$ i.i.d.\ random variables $Z_i = \Loss(f(X_i), Y_i)$, each with
+expectation $\Risk(f)$.  By the law of large numbers (Lesson~12,
+Theorem~5.3), $\EmpRisk_n(f) \to \Risk(f)$ in probability as
+$n \to \infty$---but this holds \emph{pointwise} for each fixed $f$,
+not uniformly over $\Hclass$.
+\end{remark}
+
+\begin{definition}[Bayes Risk and Best-in-Class Risk]
+\label{def:bayes_risk}
+The \emph{Bayes-optimal predictor} is
+$f^* = \argmin_{f \colon \mathcal{X} \to \mathcal{Y}} \Risk(f)$,
+and $\Risk(f^*)$ is the \emph{Bayes risk}.  The \emph{best-in-class
+predictor} is $f_\Hclass^* = \argmin_{f \in \Hclass} \Risk(f)$, and
+$\Risk(f_\Hclass^*)$ is the \emph{best-in-class risk}.
+\end{definition}
+
+\begin{definition}[Empirical Risk Minimizer]
+\label{def:erm}
+The \emph{empirical risk minimizer} (ERM) over $\Hclass$ is any
+function
+\[
+    \hat{f}_n = \argmin_{f \in \Hclass} \EmpRisk_n(f).
+\]
+When the minimum is not attained, $\hat{f}_n$ denotes any
+$\varepsilon_n$-approximate minimizer with $\varepsilon_n \to 0$.
+\end{definition}
+
+\begin{definition}[Excess Risk Decomposition]
+\label{def:excess_risk}
+The \emph{excess risk} of the ERM $\hat{f}_n$ decomposes as
+\[
+    \Risk(\hat{f}_n) - \Risk(f^*)
+    = \underbrace{\bigl(\Risk(\hat{f}_n) - \Risk(f_\Hclass^*)\bigr)}_{\text{estimation error}}
+    + \underbrace{\bigl(\Risk(f_\Hclass^*) - \Risk(f^*)\bigr)}_{\text{approximation error}}.
+\]
+The \emph{estimation error} measures how well ERM finds the best function
+within $\Hclass$; the \emph{approximation error} measures how well
+$\Hclass$ approximates the Bayes-optimal predictor.
+\end{definition}
+
+\begin{example}[Linear Classifiers]
+\label{ex:linear_classifiers}
+Let $\mathcal{X} = \R^d$, $\mathcal{Y} = \{-1, +1\}$, and
+$\Loss(\hat{y}, y) = \indicator_{\{\hat{y} \neq y\}}$ (0-1 loss).
+The class of linear classifiers is
+$\Hclass = \{x \mapsto \sign(w^\top x) : w \in \R^d\}$.
+The ERM selects the linear separator that minimizes the fraction
+of misclassified training points.  The approximation error is zero
+if and only if the Bayes-optimal boundary is linear; otherwise,
+increasing the complexity of $\Hclass$ (e.g., to polynomial
+classifiers) reduces approximation error at the cost of increased
+estimation error.
+\end{example}
+
+\begin{example}[Polynomial Regression]
+\label{ex:poly_regression}
+Let $\mathcal{X} = [0, 1]$, $\mathcal{Y} = \R$, and
+$\Loss(\hat{y}, y) = (\hat{y} - y)^2$ (squared loss).  The class
+of polynomials of degree at most $k$ is
+$\Hclass_k = \{x \mapsto \sum_{j=0}^k a_j x^j : a_0, \ldots, a_k
+\in \R\}$.  ERM reduces to least-squares polynomial fitting.  As $k$
+increases, the approximation error decreases (by the Weierstrass
+approximation theorem), but the estimation error grows because
+$\Hclass_k$ becomes larger---a tension we will quantify precisely.
+\end{example}
+
+\begin{rlconnection}[title={ERM in Reinforcement Learning}]
+In fitted Q-iteration, the agent repeatedly solves regression problems
+of the form $\min_{f \in \Hclass} \frac{1}{n}\sum_{i=1}^n
+(f(s_i, a_i) - y_i)^2$, where $y_i = r_i + \gamma \max_{a'}
+\hat{Q}(s_i', a')$ are bootstrapped targets.  Each regression step
+is an instance of ERM.  The estimation error at each step propagates
+through the Bellman backup, and bounding the total error requires
+uniform convergence guarantees over $\Hclass$ applied at every
+iteration.
+\end{rlconnection}
+
+We now ask: for a given hypothesis class $\Hclass$, how large must
+$n$ be to ensure that the estimation error of ERM is small?  The
+simplest case---finite $\Hclass$---already reveals the key ideas.
+
+%% ============================================================
+%% SECTION 4: FINITE HYPOTHESIS CLASS BOUNDS
+%% ============================================================
+
+\section{Finite Hypothesis Class Bounds}
+\label{sec:finite_class}
+
+When $\Hclass$ is finite, we can apply Hoeffding's inequality to each
+$f \in \Hclass$ individually and then take a union bound.  This yields
+the fundamental generalization bound for finite classes.
+
+\begin{assumption}[Bounded Loss]
+\label{asm:bounded_loss}
+Throughout this section, we assume the loss is bounded:
+$0 \leq \Loss(f(x), y) \leq B$ for all $f \in \Hclass$, $x \in
+\mathcal{X}$, and $y \in \mathcal{Y}$.
+\end{assumption}
+
+\begin{lemma}[Pointwise Concentration]
+\label{lem:pointwise}
+Under Assumption~\ref{asm:bounded_loss}, for any fixed
+$f \in \Hclass$ and any $\varepsilon > 0$,
+\[
+    \Prob\bigl(|\EmpRisk_n(f) - \Risk(f)| \geq \varepsilon\bigr)
+    \leq 2\exp\!\left(-\frac{2n\varepsilon^2}{B^2}\right).
+\]
+\end{lemma}
+
+\begin{proof}
+The random variables $Z_i = \Loss(f(X_i), Y_i)$ are i.i.d.\ with
+$\E[Z_i] = \Risk(f)$ and $0 \leq Z_i \leq B$.  Since
+$\EmpRisk_n(f) = \frac{1}{n}\sum_{i=1}^n Z_i$, the result follows
+directly from Hoeffding's inequality for bounded i.i.d.\ random
+variables (Lesson~12, Corollary~7.5).
+\end{proof}
+
+\begin{theorem}[Finite Class Generalization Bound]
+\label{thm:finite_class}
+Let $\Hclass$ be a finite hypothesis class with $|\Hclass| < \infty$.
+Under Assumption~\ref{asm:bounded_loss}, for any $\delta \in (0, 1)$,
+with probability at least $1 - \delta$ over the draw of the training
+sample $S$,
+\[
+    \sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)|
+    \leq B\sqrt{\frac{\ln(2|\Hclass|/\delta)}{2n}}.
+\]
+In particular, for the ERM $\hat{f}_n$,
+\[
+    \Risk(\hat{f}_n) - \min_{f \in \Hclass} \Risk(f)
+    \leq 2B\sqrt{\frac{\ln(2|\Hclass|/\delta)}{2n}}.
+\]
+\end{theorem}
+
+\begin{proof}
+Set $\varepsilon = B\sqrt{\ln(2|\Hclass|/\delta)/(2n)}$.  By
+Lemma~\ref{lem:pointwise}, for each fixed $f \in \Hclass$,
+\[
+    \Prob\bigl(|\EmpRisk_n(f) - \Risk(f)| \geq \varepsilon\bigr)
+    \leq 2\exp\!\left(-\frac{2n\varepsilon^2}{B^2}\right)
+    = 2\exp\!\left(-\ln\frac{2|\Hclass|}{\delta}\right)
+    = \frac{\delta}{|\Hclass|}.
+\]
+By the union bound over all $f \in \Hclass$,
+\begin{align*}
+    \Prob\!\left(\sup_{f \in \Hclass}
+    |\EmpRisk_n(f) - \Risk(f)| \geq \varepsilon\right)
+    &\leq \sum_{f \in \Hclass}
+    \Prob\bigl(|\EmpRisk_n(f) - \Risk(f)| \geq \varepsilon\bigr) \\
+    &\leq |\Hclass| \cdot \frac{\delta}{|\Hclass|} = \delta.
+\end{align*}
+Thus with probability at least $1 - \delta$,
+$|\EmpRisk_n(f) - \Risk(f)| \leq \varepsilon$ for all
+$f \in \Hclass$ simultaneously.
+
+For the excess risk bound, let $f_\Hclass^* = \argmin_{f \in \Hclass}
+\Risk(f)$.  On the event that uniform convergence holds:
+\begin{align*}
+    \Risk(\hat{f}_n) - \Risk(f_\Hclass^*)
+    &= \bigl(\Risk(\hat{f}_n) - \EmpRisk_n(\hat{f}_n)\bigr)
+    + \bigl(\EmpRisk_n(\hat{f}_n) - \EmpRisk_n(f_\Hclass^*)\bigr)
+    + \bigl(\EmpRisk_n(f_\Hclass^*) - \Risk(f_\Hclass^*)\bigr) \\
+    &\leq \varepsilon + 0 + \varepsilon = 2\varepsilon,
+\end{align*}
+where we used that $\hat{f}_n$ minimizes $\EmpRisk_n$ so
+$\EmpRisk_n(\hat{f}_n) \leq \EmpRisk_n(f_\Hclass^*)$.
+\end{proof}
+
+\begin{example}[Threshold Classifiers]
+\label{ex:threshold}
+Let $\mathcal{X} = [0, 1]$, $\mathcal{Y} = \{0, 1\}$, and consider
+the finite set of threshold classifiers at multiples of $1/N$:
+$\Hclass_N = \{f_j : j = 0, 1, \ldots, N\}$ where
+$f_j(x) = \indicator_{\{x > j/N\}}$.  Then $|\Hclass_N| = N + 1$.
+With 0-1 loss ($B = 1$), Theorem~\ref{thm:finite_class} gives: with
+probability at least $1 - \delta$,
+\[
+    \Risk(\hat{f}_n) - \min_{f \in \Hclass_N} \Risk(f)
+    \leq 2\sqrt{\frac{\ln(2(N+1)/\delta)}{2n}}.
+\]
+For $N = 1000$ and $\delta = 0.05$, achieving excess risk at most
+$0.1$ requires $n \geq 200 \ln(40002) \approx 2122$ samples.
+\end{example}
+
+\begin{keyresult}[title={Finite Class Generalization Bound}]
+For a finite hypothesis class $\Hclass$ with bounded loss $\Loss
+\in [0, B]$, the estimation error of ERM satisfies
+\[
+    \Risk(\hat{f}_n) - \min_{f \in \Hclass} \Risk(f)
+    \leq O\!\left(B\sqrt{\frac{\log |\Hclass|}{n}}\right)
+\]
+with high probability.  The sample complexity to achieve excess risk
+$\leq \varepsilon$ is $n = O\!\left(\frac{B^2 \log |\Hclass|}
+{\varepsilon^2}\right)$.  The dependence on $\log |\Hclass|$ (not
+$|\Hclass|$) is crucial: it means the sample complexity grows only
+logarithmically with the number of hypotheses.
+\end{keyresult}
+
+\begin{warning}[title={The Union Bound is Loose for Continuous Classes}]
+The union bound argument fails when $\Hclass$ is infinite (or even
+uncountable), since we cannot sum over all hypotheses.  Naively,
+one might expect that infinite hypothesis classes require infinitely
+many samples.  This is false: the relevant quantity is not the
+cardinality of $\Hclass$ but its \emph{effective complexity}, measured
+by the VC dimension or Rademacher complexity.
+\end{warning}
+
+The finite class bound motivates a fundamental question: can we
+extend the union bound argument to infinite hypothesis classes by
+replacing $|\Hclass|$ with a measure of effective complexity?  The
+answer is yes, through the notion of VC dimension.
+
+%% ============================================================
+%% SECTION 5: VC DIMENSION
+%% ============================================================
+
+\section{VC Dimension}
+\label{sec:vc_dimension}
+
+We restrict attention to binary classification:
+$\mathcal{Y} = \{0, 1\}$ and $\Loss(\hat{y}, y) =
+\indicator_{\{\hat{y} \neq y\}}$ (0-1 loss).  The key insight is that
+even though $\Hclass$ may be uncountably infinite, it can only induce
+finitely many distinct labelings on any finite set of points.
+
+\begin{definition}[Restriction and Shattering]
+\label{def:shattering}
+Let $\Hclass \subseteq \{0, 1\}^{\mathcal{X}}$ be a hypothesis
+class and $C = \{x_1, \ldots, x_m\} \subseteq \mathcal{X}$ a finite
+set of $m$ points.
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item The \emph{restriction} of $\Hclass$ to $C$ is
+    $\Hclass|_C = \{(f(x_1), \ldots, f(x_m)) : f \in \Hclass\}
+    \subseteq \{0,1\}^m$.
+    \item The class $\Hclass$ \emph{shatters} $C$ if
+    $\Hclass|_C = \{0, 1\}^m$, i.e., every possible labeling of $C$
+    is realized by some $f \in \Hclass$.
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Growth Function]
+\label{def:growth_function}
+The \emph{growth function} (or \emph{shattering coefficient}) of
+$\Hclass$ is
+\[
+    \Pi_\Hclass(m) = \max_{C \subseteq \mathcal{X}, \, |C| = m}
+    |\Hclass|_C|.
+\]
+It counts the maximum number of distinct labelings that $\Hclass$
+can produce on any set of $m$ points.  We always have
+$\Pi_\Hclass(m) \leq 2^m$.
+\end{definition}
+
+\begin{definition}[VC Dimension]
+\label{def:vc_dim}
+The \emph{Vapnik-Chervonenkis (VC) dimension} of $\Hclass$, denoted
+$\VC(\Hclass)$, is the largest integer $d$ such that there exists a
+set of $d$ points that is shattered by $\Hclass$:
+\[
+    \VC(\Hclass) = \max\{d \in \N : \Pi_\Hclass(d) = 2^d\}.
+\]
+If $\Hclass$ shatters arbitrarily large sets, then
+$\VC(\Hclass) = \infty$.
+\end{definition}
+
+\begin{remark}
+\label{rem:vc_existence}
+To show $\VC(\Hclass) \geq d$, it suffices to exhibit \emph{one}
+set of $d$ points that is shattered.  To show $\VC(\Hclass) < d$,
+one must prove that \emph{no} set of $d$ points is shattered.
+\end{remark}
+
+\begin{example}[VC Dimension of Intervals]
+\label{ex:vc_intervals}
+Let $\mathcal{X} = \R$ and
+$\Hclass = \{x \mapsto \indicator_{\{a \leq x \leq b\}} :
+a \leq b\}$ (interval classifiers).  We show $\VC(\Hclass) = 2$.
+
+\emph{Lower bound}: The two points $\{1, 2\}$ are shattered.
+The four labelings $(0,0), (1,0), (0,1), (1,1)$ are realized by
+the intervals $(-\infty, 0]$, $[0.5, 1.5]$, $[1.5, 2.5]$, and
+$[0.5, 2.5]$, respectively.
+
+\emph{Upper bound}: Consider any three points $x_1 < x_2 < x_3$.
+The labeling $(1, 0, 1)$ cannot be realized by any interval: if
+$x_1$ and $x_3$ are inside $[a, b]$, then $x_2 \in [x_1, x_3]
+\subseteq [a, b]$, so $f(x_2) = 1 \neq 0$.  Hence no set of three
+points is shattered, so $\VC(\Hclass) \leq 2$.
+\end{example}
+
+\begin{example}[VC Dimension of Halfspaces]
+\label{ex:vc_halfspaces}
+Let $\mathcal{X} = \R^d$ and $\Hclass = \{x \mapsto
+\indicator_{\{w^\top x + b \geq 0\}} : w \in \R^d, \, b \in \R\}$
+(halfspace classifiers).  We prove $\VC(\Hclass) = d + 1$.
+
+\emph{Lower bound ($\VC \geq d + 1$)}: Consider the $d + 1$ points
+$\{0, e_1, e_2, \ldots, e_d\}$ where $e_i$ is the $i$-th standard
+basis vector.  We claim $\Hclass$ shatters this set.  For any
+labeling $(y_0, y_1, \ldots, y_d) \in \{0, 1\}^{d+1}$, define
+$\tilde{y}_i = 2y_i - 1 \in \{-1, +1\}$.  We need
+$w \in \R^d, b \in \R$ with $\sign(b) = \tilde{y}_0$ and
+$\sign(w_i + b) = \tilde{y}_i$ for $i = 1, \ldots, d$.  Setting
+$b = \tilde{y}_0$ and $w_i = \tilde{y}_i - b$ for each $i$ achieves
+this, since $w_i + b = \tilde{y}_i$ and $b = \tilde{y}_0$.  (More
+precisely, we use the convention that $\sign(0) = 1$ and scale
+$w, b$ by a small factor to avoid ties.)
+
+\emph{Upper bound ($\VC \leq d + 1$)}: By Radon's theorem, any set
+of $d + 2$ points in $\R^d$ can be partitioned into two disjoint sets
+$A, B$ such that $\conv(A) \cap \conv(B) \neq \emptyset$.  No
+hyperplane can separate $A$ from $B$, so the labeling that assigns
+$1$ to $A$ and $0$ to $B$ is not realizable.  Hence no set of
+$d + 2$ points is shattered.
+\end{example}
+
+\begin{example}[VC Dimension of Finite Classes]
+\label{ex:vc_finite}
+If $|\Hclass| < \infty$, then $\Pi_\Hclass(m) \leq |\Hclass|$ for
+all $m$.  Shattering a set of $d$ points requires
+$2^d \leq |\Hclass|$, so $\VC(\Hclass) \leq \log_2 |\Hclass|$.
+\end{example}
+
+We now establish the key combinatorial result that limits the growth
+function once $m$ exceeds the VC dimension.
+
+\subsection{Sauer's Lemma}
+
+\begin{theorem}[Sauer's Lemma]
+\label{thm:sauer}
+Let $\Hclass$ be a hypothesis class with $\VC(\Hclass) = d < \infty$.
+Then for all $m \geq 1$,
+\[
+    \Pi_\Hclass(m) \leq \sum_{i=0}^{d} \binom{m}{i}.
+\]
+In particular, for $m \geq d$,
+\[
+    \Pi_\Hclass(m) \leq \left(\frac{em}{d}\right)^d.
+\]
+\end{theorem}
+
+\begin{proof}
+We prove the first inequality by induction on $m + d$.
+
+\emph{Base cases}: If $d = 0$, then $\Hclass$ shatters no single
+point, so $\Hclass|_C$ contains at most one labeling for every $C$;
+thus $\Pi_\Hclass(m) \leq 1 = \binom{m}{0}$.  If $m = 0$, then
+$\Pi_\Hclass(0) = 1 \leq \sum_{i=0}^d \binom{0}{i} = 1$.
+
+\emph{Inductive step}: Fix $m \geq 1$ and $d \geq 1$, and assume
+the result holds for all pairs $(m', d')$ with $m' + d' < m + d$.
+Take any set $C = \{x_1, \ldots, x_m\}$ achieving the maximum in
+the growth function.  Partition $\Hclass|_C$ into pairs based on
+the last coordinate:
+\begin{align*}
+    \Hclass_0 &= \{(b_1, \ldots, b_{m-1}) :
+    (b_1, \ldots, b_{m-1}, 0) \in \Hclass|_C
+    \text{ or } (b_1, \ldots, b_{m-1}, 1) \in \Hclass|_C\}, \\
+    \Hclass_1 &= \{(b_1, \ldots, b_{m-1}) :
+    (b_1, \ldots, b_{m-1}, 0) \in \Hclass|_C
+    \text{ and } (b_1, \ldots, b_{m-1}, 1) \in \Hclass|_C\}.
+\end{align*}
+Then $|\Hclass|_C| = |\Hclass_0| + |\Hclass_1|$.  Now $\Hclass_0$
+is the restriction of $\Hclass$ to $C' = \{x_1, \ldots, x_{m-1}\}$,
+so $|\Hclass_0| \leq \Pi_\Hclass(m - 1)$.  The set $\Hclass_1$
+records the labelings on $C'$ for which both labels of $x_m$ are
+achievable; $\Hclass_1$ can be viewed as the restriction of some
+class $\Hclass'$ with $\VC(\Hclass') \leq d - 1$ (because if
+$\Hclass_1$ shattered a set $D \subseteq C'$ of size $d$, then
+$\Hclass$ would shatter $D \cup \{x_m\}$, a set of size $d + 1$,
+contradicting $\VC(\Hclass) = d$).  Hence
+$|\Hclass_1| \leq \Pi_{\Hclass'}(m - 1)$.
+
+By the inductive hypothesis:
+\begin{align*}
+    |\Hclass|_C| &\leq \Pi_\Hclass(m-1) + \Pi_{\Hclass'}(m-1) \\
+    &\leq \sum_{i=0}^d \binom{m-1}{i} +
+    \sum_{i=0}^{d-1} \binom{m-1}{i} \\
+    &= \sum_{i=0}^d \binom{m-1}{i} + \sum_{i=1}^d \binom{m-1}{i-1}
+    = \sum_{i=0}^d \left[\binom{m-1}{i} + \binom{m-1}{i-1}\right],
+\end{align*}
+where we set $\binom{m-1}{-1} = 0$.  By Pascal's identity
+$\binom{m-1}{i} + \binom{m-1}{i-1} = \binom{m}{i}$, this gives
+$|\Hclass|_C| \leq \sum_{i=0}^d \binom{m}{i}$.
+
+For the second inequality, when $m \geq d$:
+\[
+    \sum_{i=0}^d \binom{m}{i}
+    \leq \sum_{i=0}^d \binom{m}{i} \left(\frac{m}{d}\right)^{d-i}
+    \leq \left(\frac{m}{d}\right)^d \sum_{i=0}^d \binom{m}{i}
+    \frac{d^i}{m^i}.
+\]
+A cleaner argument uses the bound
+$\sum_{i=0}^d \binom{m}{i} \leq (em/d)^d$, which follows from the
+binomial theorem: $(1 + 1)^m = \sum_{i=0}^m \binom{m}{i} \geq
+\binom{m}{d} \geq (m/d)^d$, so
+$\sum_{i=0}^d \binom{m}{i} \leq (m/d)^d \cdot (e)^d = (em/d)^d$
+by the inequality $\sum_{i=0}^d \binom{m}{i} / \binom{m}{d}
+\leq e^d$ (which holds because
+$\binom{m}{i}/\binom{m}{d} \leq (d/m)^{d-i}$ for $i \leq d$
+and the geometric series sums to at most $e^d$
+when $d \leq m$; see \citet[Lemma~12.3]{devroye1996} for a
+detailed proof).
+\end{proof}
+
+\begin{remark}
+\label{rem:sauer_significance}
+Sauer's lemma is the bridge between combinatorics and learning theory.
+Before the VC dimension is reached ($m \leq d$), the growth function
+can be $2^m$ (exponential).  Once $m > d$, the growth function is
+bounded by a polynomial of degree $d$ in $m$.  This polynomial growth
+is what makes learning from infinite hypothesis classes possible.
+\end{remark}
+
+\begin{keyresult}[title={Sauer's Lemma and Polynomial Growth}]
+If $\VC(\Hclass) = d < \infty$, then the growth function satisfies
+\[
+    \Pi_\Hclass(m) \leq \left(\frac{em}{d}\right)^d
+    \quad \text{for all } m \geq d.
+\]
+The growth function transitions from potentially exponential ($2^m$)
+for $m \leq d$ to polynomial ($O(m^d)$) for $m > d$.  This transition
+at $m = d$ is the essence of why VC dimension controls generalization.
+\end{keyresult}
+
+With Sauer's lemma in hand, we can state the VC generalization bound.
+
+\subsection{The VC Generalization Bound}
+
+\begin{theorem}[VC Bound]
+\label{thm:vc_bound}
+Let $\Hclass$ be a class of binary classifiers with
+$\VC(\Hclass) = d < \infty$.  Then for any distribution $P$ and any
+$\delta \in (0, 1)$, with probability at least $1 - \delta$ over a
+sample of size $n$,
+\[
+    \sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)|
+    \leq \sqrt{\frac{8}{n}\left(d \ln\frac{2en}{d}
+    + \ln\frac{4}{\delta}\right)}.
+\]
+Equivalently, for the ERM $\hat{f}_n$,
+\[
+    \Risk(\hat{f}_n) \leq \Risk(f_\Hclass^*)
+    + O\!\left(\sqrt{\frac{d \log(n/d)}{n}}\right).
+\]
+\end{theorem}
+
+The full proof of Theorem~\ref{thm:vc_bound} uses a symmetrization
+argument (introducing ``ghost samples'') combined with Sauer's lemma.
+We sketch the key steps.
+
+\begin{proof}[Proof sketch]
+The proof proceeds in three stages:
+
+\emph{Step 1 (Symmetrization)}: Introduce an independent ``ghost
+sample'' $S' = \{(X_1', Y_1'), \ldots, (X_n', Y_n')\}$ drawn from $P$.
+A standard symmetrization argument (see \citet[Chapter~4]{shalev2014})
+shows
+\[
+    \Prob\!\left(\sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)|
+    \geq \varepsilon\right)
+    \leq 2 \Prob\!\left(\sup_{f \in \Hclass}
+    |\EmpRisk_n(f) - \EmpRisk_n'(f)| \geq \varepsilon/2\right),
+\]
+where $\EmpRisk_n'(f) = \frac{1}{n}\sum_{i=1}^n
+\Loss(f(X_i'), Y_i')$ is the empirical risk on the ghost sample.
+
+\emph{Step 2 (Reduction to finite class)}: Conditioned on the
+combined sample $S \cup S'$ of $2n$ points, the supremum over
+$\Hclass$ depends only on the restriction $\Hclass|_{S \cup S'}$,
+which has at most $\Pi_\Hclass(2n)$ elements.  We apply the finite
+class bound (Theorem~\ref{thm:finite_class}) to this restricted
+class.
+
+\emph{Step 3 (Apply Sauer's lemma)}: By Sauer's lemma
+(Theorem~\ref{thm:sauer}), $\Pi_\Hclass(2n) \leq (2en/d)^d$.
+Substituting into the finite class bound and solving for $\varepsilon$
+yields the stated result.
+\end{proof}
+
+\begin{example}[VC Bound for Halfspaces]
+\label{ex:vc_bound_halfspaces}
+For halfspace classifiers in $\R^d$ with $\VC(\Hclass) = d + 1$
+(Example~\ref{ex:vc_halfspaces}), the VC bound gives: with high
+probability,
+\[
+    \Risk(\hat{f}_n) - \Risk(f_\Hclass^*)
+    = O\!\left(\sqrt{\frac{(d+1) \log(n/(d+1))}{n}}\right).
+\]
+To achieve excess risk $\varepsilon$, the sample complexity is
+$n = O(d/\varepsilon^2)$ (ignoring logarithmic factors).  This
+matches the intuition that learning a $d$-dimensional linear
+classifier requires $O(d)$ samples per unit of accuracy.
+\end{example}
+
+With the VC bound established, we now formalize the key concept
+that connects all of these results: uniform convergence.
+
+%% ============================================================
+%% SECTION 6: UNIFORM CONVERGENCE
+%% ============================================================
+
+\section{Uniform Convergence}
+\label{sec:uniform_convergence}
+
+\begin{definition}[Uniform Convergence of Empirical Risk]
+\label{def:uniform_convergence}
+A hypothesis class $\Hclass$ has the \emph{uniform convergence
+property} if for every $\varepsilon > 0$ and every distribution $P$,
+\[
+    \lim_{n \to \infty} \Prob\!\left(\sup_{f \in \Hclass}
+    |\EmpRisk_n(f) - \Risk(f)| \geq \varepsilon\right) = 0.
+\]
+If the convergence holds at an explicit rate, we say $\Hclass$ has
+\emph{uniform convergence at rate} $r(n, \delta)$: with probability
+at least $1 - \delta$,
+$\sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)| \leq r(n, \delta)$.
+\end{definition}
+
+\begin{theorem}[ERM Generalizes Under Uniform Convergence]
+\label{thm:erm_uc}
+If $\Hclass$ has uniform convergence at rate $r(n, \delta)$, then
+the ERM $\hat{f}_n$ satisfies: with probability at least $1 - \delta$,
+\[
+    \Risk(\hat{f}_n) \leq \min_{f \in \Hclass} \Risk(f) + 2r(n, \delta).
+\]
+\end{theorem}
+
+\begin{proof}
+Let $f_\Hclass^* = \argmin_{f \in \Hclass} \Risk(f)$.  On the event
+$\{\sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)| \leq r(n, \delta)\}$
+(which occurs with probability at least $1 - \delta$), we have:
+\begin{align*}
+    \Risk(\hat{f}_n)
+    &\leq \EmpRisk_n(\hat{f}_n) + r(n, \delta)
+    && \text{(uniform convergence applied to } \hat{f}_n\text{)} \\
+    &\leq \EmpRisk_n(f_\Hclass^*) + r(n, \delta)
+    && \text{(definition of ERM: } \hat{f}_n \text{ minimizes }
+    \EmpRisk_n\text{)} \\
+    &\leq \Risk(f_\Hclass^*) + r(n, \delta) + r(n, \delta)
+    && \text{(uniform convergence applied to } f_\Hclass^*\text{)} \\
+    &= \Risk(f_\Hclass^*) + 2r(n, \delta). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{remark}
+\label{rem:erm_uc_structure}
+Theorem~\ref{thm:erm_uc} reveals the structure of ERM generalization:
+the factor of $2$ arises because uniform convergence is invoked twice
+--- once to convert from population to empirical risk for $\hat{f}_n$,
+and once in the opposite direction for $f_\Hclass^*$.  This is the
+fundamental proof template for all ERM generalization results.
+\end{remark}
+
+The following definition captures the standard notion of learnability.
+
+\begin{definition}[PAC Learnability]
+\label{def:pac}
+A hypothesis class $\Hclass$ is \emph{PAC learnable} (Probably
+Approximately Correct) if there exists an algorithm $A$ and a
+function $n_\Hclass \colon (0,1)^2 \to \N$ such that for every
+$\varepsilon, \delta \in (0,1)$ and every distribution $P$, when
+given a sample $S$ of size $n \geq n_\Hclass(\varepsilon, \delta)$,
+the algorithm outputs $\hat{f} = A(S)$ satisfying
+\[
+    \Prob\bigl(\Risk(\hat{f}) \leq \min_{f \in \Hclass} \Risk(f)
+    + \varepsilon\bigr) \geq 1 - \delta.
+\]
+The function $n_\Hclass(\varepsilon, \delta)$ is the \emph{sample
+complexity} of learning $\Hclass$.
+\end{definition}
+
+We can now state the crowning result of VC theory.
+
+\begin{theorem}[Fundamental Theorem of Statistical Learning]
+\label{thm:ftsl}
+For binary classification with 0-1 loss, the following are equivalent
+for a hypothesis class $\Hclass$:
+\begin{enumerate}[nosep,label=(\roman*)]
+    \item $\Hclass$ has the uniform convergence property.
+    \item ERM is a successful PAC learner for $\Hclass$.
+    \item $\Hclass$ is PAC learnable (by some algorithm).
+    \item $\VC(\Hclass) < \infty$.
+\end{enumerate}
+Moreover, the sample complexity of PAC learning $\Hclass$ satisfies
+\[
+    C_1 \frac{d + \ln(1/\delta)}{\varepsilon^2}
+    \leq n_\Hclass(\varepsilon, \delta)
+    \leq C_2 \frac{d \ln(1/\varepsilon) + \ln(1/\delta)}{\varepsilon^2},
+\]
+where $d = \VC(\Hclass)$ and $C_1, C_2$ are universal constants.
+\end{theorem}
+
+\begin{proof}
+We prove the key implications, deferring the full proof of $(iii)
+\Rightarrow (iv)$ to the references.
+
+\emph{$(iv) \Rightarrow (i)$}: This is the content of the VC bound
+(Theorem~\ref{thm:vc_bound}).  If $\VC(\Hclass) = d < \infty$, then
+$\sup_{f \in \Hclass} |\EmpRisk_n(f) - \Risk(f)|
+\leq O(\sqrt{d \log(n/d) / n})$, which tends to $0$ as
+$n \to \infty$.
+
+\emph{$(i) \Rightarrow (ii)$}: This is Theorem~\ref{thm:erm_uc}.
+Uniform convergence at rate $r(n, \delta)$ implies ERM achieves
+excess risk at most $2r(n, \delta)$.
+
+\emph{$(ii) \Rightarrow (iii)$}: Trivial, since ERM is a particular
+algorithm.
+
+\emph{$(iii) \Rightarrow (iv)$}: This is the converse direction and
+is the most subtle.  The idea is that if $\VC(\Hclass) = \infty$,
+then for any sample size $n$, there exists a distribution $P$ under
+which no algorithm can PAC-learn $\Hclass$ (a ``no free lunch''
+argument; see \citet[Theorem~5.1]{shalev2014}).
+\end{proof}
+
+\begin{keyresult}[title={Fundamental Theorem of Statistical Learning}]
+For binary classification, a hypothesis class $\Hclass$ is learnable
+if and only if $\VC(\Hclass) < \infty$.  Moreover, ERM is a
+universal learning algorithm: it succeeds for any learnable class.
+The sample complexity is $\Theta(d/\varepsilon^2)$ where
+$d = \VC(\Hclass)$, with the VC dimension serving as the unique
+measure of learning complexity for binary classification.
+\end{keyresult}
+
+\begin{rlconnection}[title={VC Theory and RL Function Approximation}]
+In reinforcement learning, the value function $V^\pi$ or $Q^\pi$ is
+typically approximated by a class $\Hclass$ (e.g., linear functions,
+neural networks).  The VC dimension of $\Hclass$ controls the sample
+complexity of learning a good approximation from observed transitions.
+For example, the PAC-MDP framework guarantees that an agent can
+learn a near-optimal policy with a number of samples polynomial in
+$\VC(\Hclass)$ and the MDP parameters.  However, for deep networks,
+the classical VC dimension is often vacuous (too large), motivating
+the norm-based complexity measures developed in Lesson~61.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[VC Dimension of Rectangles]
+\textnormal{(\(\ast\))} \\
+Let $\mathcal{X} = \R^2$ and $\Hclass = \{(x_1, x_2) \mapsto
+\indicator_{\{a_1 \leq x_1 \leq b_1, \, a_2 \leq x_2 \leq b_2\}} :
+a_1 \leq b_1, \, a_2 \leq b_2\}$ (axis-aligned rectangles).
+Show that $\VC(\Hclass) = 4$ by exhibiting a shattered set of 4
+points and proving that no set of 5 points is shattered.
+\end{exercise}
+
+\begin{exercise}[Generalization Bound Computation]
+\textnormal{(\(\ast\))} \\
+A binary classifier uses halfspaces in $\R^{10}$ (so
+$\VC(\Hclass) = 11$) and is trained on $n = 1000$ examples with
+0-1 loss.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Compute the upper bound on the estimation error from
+    Theorem~\ref{thm:vc_bound} with $\delta = 0.05$.
+    \item How many samples would be needed to reduce this bound
+    to $0.05$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Union of Hypothesis Classes]
+\textnormal{(\(\ast\ast\))} \\
+Let $\Hclass_1$ and $\Hclass_2$ be hypothesis classes with
+$\VC(\Hclass_1) = d_1$ and $\VC(\Hclass_2) = d_2$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that $\Pi_{\Hclass_1 \cup \Hclass_2}(m) \leq
+    \Pi_{\Hclass_1}(m) + \Pi_{\Hclass_2}(m)$.
+    \item Prove that $\VC(\Hclass_1 \cup \Hclass_2) \leq
+    2(d_1 + d_2 + 1) \ln(2e)$.
+
+    \textit{Hint:} Use Sauer's lemma and the bound
+    $(em/d)^d + (em/d')^{d'} < 2^m$.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[ERM for Fitted Value Iteration]
+\textnormal{(\(\ast\ast\))} \\
+In fitted value iteration, at each step $k$ the agent solves
+$\hat{f}_k = \argmin_{f \in \Hclass} \frac{1}{n}\sum_{i=1}^n
+(f(s_i) - T\hat{f}_{k-1}(s_i))^2$, where $T$ is the Bellman
+operator and $s_1, \ldots, s_n$ are sampled states.  Assume the loss
+$\Loss(f(s), T\hat{f}_{k-1}(s)) = (f(s) - T\hat{f}_{k-1}(s))^2
+\in [0, B^2]$ is bounded.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Apply Theorem~\ref{thm:finite_class} (or its extension via
+    VC theory) to bound the single-step estimation error
+    $\Risk(\hat{f}_k) - \min_{f \in \Hclass} \Risk(f)$.
+    \item If $K$ Bellman backups are performed and each uses an
+    independent sample of size $n$, how does the total approximation
+    error grow with $K$?
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Growth Function Computation]
+\textnormal{(\(\ast\ast\ast\))} \\
+Let $\mathcal{X} = \R$ and $\Hclass_k = \{x \mapsto
+\indicator_{\{p(x) \geq 0\}} : p \text{ is a polynomial of degree}
+\leq k\}$.
+\begin{enumerate}[nosep,label=(\alph*)]
+    \item Show that $\VC(\Hclass_k) = k + 1$.
+
+    \textit{Hint:} For the lower bound, choose $k + 1$ distinct
+    points and use Lagrange interpolation.  For the upper bound,
+    note that a degree-$k$ polynomial has at most $k$ real roots.
+    \item Compute $\Pi_{\Hclass_2}(m)$ exactly for $m = 1, 2, 3, 4$
+    and verify that Sauer's lemma holds in each case.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+    \item The \emph{statistical learning framework} formalizes supervised
+    learning via a data-generating distribution $P$, a loss function
+    $\Loss$, and a hypothesis class $\Hclass$; the goal is to
+    minimize the population risk $\Risk(f) = \E[\Loss(f(X), Y)]$.
+    \item \emph{Empirical risk minimization} (ERM) selects
+    $\hat{f}_n = \argmin_{f \in \Hclass} \EmpRisk_n(f)$; the excess
+    risk decomposes into approximation error (bias) and estimation
+    error (variance).
+    \item For \emph{finite hypothesis classes}, the generalization
+    bound $\Risk(\hat{f}_n) - \Risk(f_\Hclass^*) \leq
+    O(B\sqrt{\log|\Hclass|/n})$ follows from Hoeffding's inequality
+    and the union bound.
+    \item The \emph{VC dimension} $d = \VC(\Hclass)$ is the largest
+    number of points that $\Hclass$ can shatter; for halfspaces in
+    $\R^d$, $\VC = d + 1$.
+    \item \emph{Sauer's lemma} shows that the growth function satisfies
+    $\Pi_\Hclass(m) \leq (em/d)^d$ for $m \geq d$, transitioning
+    from exponential to polynomial growth at the VC dimension.
+    \item The \emph{VC generalization bound} gives
+    $\Risk(\hat{f}_n) - \Risk(f_\Hclass^*) = O(\sqrt{d\log(n/d)/n})$,
+    with sample complexity $\Theta(d/\varepsilon^2)$.
+    \item \emph{Uniform convergence} of empirical to population risk
+    is both necessary and sufficient for ERM to generalize; this
+    is the mechanism underlying all classical generalization bounds.
+    \item The \emph{fundamental theorem of statistical learning}
+    establishes the equivalence: $\Hclass$ is PAC learnable if and
+    only if $\VC(\Hclass) < \infty$, with ERM as a universal learner.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+
+\section{Further Reading}
+\label{sec:further_reading}
+
+\begin{itemize}
+    \item \textbf{Lesson~60} develops the bias-variance decomposition
+    and model selection, providing the tools to choose the optimal
+    hypothesis class complexity from the nested family
+    $\Hclass_1 \subseteq \Hclass_2 \subseteq \cdots$.
+    \item \textbf{Lesson~61} (Approximation Theory) extends these
+    ideas to neural networks, where the classical VC dimension is
+    too large to be useful; Rademacher complexity and norm-based
+    bounds provide tighter generalization guarantees.
+    \item \citet{vapnik1971} is the original paper introducing VC
+    dimension; \citet{sauer1972} and Shelah independently proved
+    the lemma bounding growth functions.
+    \item \citet{valiant1984} introduced the PAC learning framework,
+    initiating the study of computational learning theory.
+    \item \citet{boucheron2013} provides a modern treatment of
+    concentration inequalities and their applications to learning
+    theory, going well beyond Hoeffding's inequality.
+    \item For connections to RL, the PAC-MDP framework of Strehl,
+    Li, and Littman (2009) uses VC-type arguments to bound the
+    sample complexity of model-based reinforcement learning.
+\end{itemize}
+
+\bibliography{nn-refs}
+
+\end{document}

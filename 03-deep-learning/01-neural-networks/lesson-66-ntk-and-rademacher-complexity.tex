@@ -1,0 +1,1199 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 66: NTK and Rademacher Complexity}}
+\fancyhead[R]{\thepage}
+\title{Lesson 66: Neural Tangent Kernel and Rademacher Complexity}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Modern neural networks used in deep RL and supervised learning are
+massively overparameterized: the number of parameters $p$ vastly
+exceeds the number of training examples $n$.  Classical learning
+theory (Lesson~59) predicts that such models should overfit
+catastrophically---the VC dimension of a network with $p$ parameters
+is $\Theta(p)$, giving a vacuous generalization bound when $p \gg n$.
+Yet in practice, overparameterized networks trained by gradient
+descent generalize remarkably well.  This is the \emph{generalization
+puzzle} of deep learning.
+
+Two complementary theoretical frameworks resolve (in part) this
+puzzle.  First, \emph{Rademacher complexity bounds} based on weight
+norms rather than parameter counts show that generalization depends
+on how ``small'' the learned weights are, not on how many there are.
+The spectrally-normalized bound of \citet{bartlett2017} shows that
+the generalization gap scales with the product of spectral norms
+$\prod_\ell \|W_\ell\|_2$ divided by $\sqrt{n}$---a quantity that
+can be small even for heavily overparameterized networks.  Second,
+the \emph{neural tangent kernel} (NTK) of \citet{jacot2018} shows
+that in the infinite-width limit, neural network training by gradient
+descent is equivalent to kernel regression with a fixed, deterministic
+kernel.  This connects deep learning to the well-understood theory of
+RKHS (Lesson~62), providing both optimization and generalization
+guarantees.  The tools developed in this lesson will let us understand
+why overparameterized networks generalize, how weight norms control
+capacity, and what regime of training the NTK theory describes.
+
+\begin{rlconnection}[title={Why NTK and Rademacher Complexity Matter
+    for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Generalization in deep RL.}  Policy and value networks
+    in PPO, SAC, and DQN are typically overparameterized.  Norm-based
+    Rademacher bounds explain why these networks generalize from
+    limited environment interactions despite having millions of
+    parameters.
+  \item \textbf{Implicit regularization.}  Gradient descent on
+    overparameterized networks converges to minimum-norm solutions
+    (in the NTK regime), providing implicit regularization that
+    controls generalization without explicit weight decay.
+  \item \textbf{Neural network as kernel method.}  The NTK framework
+    allows transferring kernel ridge regression theory (Lesson~62) to
+    neural networks, yielding concrete convergence and generalization
+    guarantees.
+  \item \textbf{Architecture selection.}  Understanding that spectral
+    norms---not parameter counts---control generalization informs the
+    choice of network architecture and initialization scheme in
+    deep RL.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Rademacher complexity and its connection to generalization
+(Lesson~59, Definition~5.1).  The approximation-estimation tradeoff
+(Lesson~60, Section~3).  RKHS and kernel ridge regression
+(Lesson~62, Sections~3--5).  Spectral norm and operator norm of
+matrices (Lesson~8, Definition~3.1).  Gradient descent and convex
+optimization (Lesson~30).  Deep neural networks and their function
+classes (Lesson~65, Definition~3.1).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} Rademacher complexity and \textbf{prove} the
+    fundamental generalization bound relating it to the uniform
+    deviation of empirical risk from population risk.
+  \item \textbf{State and prove} the spectrally-normalized Rademacher
+    complexity bound for deep networks, and \textbf{explain} why it
+    depends on weight norms rather than parameter counts.
+  \item \textbf{Define} the neural tangent kernel and \textbf{derive}
+    the linearized dynamics of gradient descent in the infinite-width
+    limit.
+  \item \textbf{Prove} that the NTK converges to a deterministic
+    kernel at initialization and remains approximately constant
+    during training (the lazy training regime).
+  \item \textbf{Apply} NTK theory to deduce generalization bounds
+    for overparameterized networks via kernel regression theory.
+  \item \textbf{Evaluate} the limitations of the NTK framework,
+    including its failure to capture feature learning.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet{bartlett2002} --- Foundational paper on Rademacher
+    complexity: definitions, structural results, and the
+    generalization bound.
+  \item \citet{bartlett2017} --- Spectrally-normalized margin bounds
+    for deep networks; the key norm-based Rademacher complexity result.
+  \item \citet{jacot2018} --- The neural tangent kernel: convergence
+    and generalization in the infinite-width limit.
+  \item \citet{lee2019} --- Wide neural networks evolve as linear
+    models under gradient descent; empirical validation of the NTK
+    regime.
+  \item \citet{arora2019} --- Fine-grained analysis of optimization
+    and generalization for overparameterized two-layer networks.
+  \item \citet{du2019} --- Gradient descent provably optimizes
+    overparameterized neural networks: convergence guarantees via
+    the NTK.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: RADEMACHER COMPLEXITY
+%% ============================================================
+\section{Rademacher Complexity}
+\label{sec:rademacher}
+
+Rademacher complexity is a data-dependent measure of the richness
+of a function class.  It refines the VC dimension by accounting for
+the specific distribution of the data and the real-valued nature
+of the functions (rather than just binary labelings).
+
+\begin{definition}[Rademacher Random Variables]
+\label{def:rademacher-rv}
+A \emph{Rademacher random variable} $\varepsilon$ takes values
+$+1$ and $-1$ each with probability $1/2$.  Rademacher random
+variables are symmetric: $\varepsilon \stackrel{d}{=} -\varepsilon$.
+\end{definition}
+
+\begin{definition}[Empirical Rademacher Complexity]
+\label{def:empirical-rademacher}
+Let $\Fclass$ be a class of functions $f \colon \mathcal{X} \to \R$
+and let $S = (x_1, \ldots, x_n) \in \mathcal{X}^n$ be a fixed
+sample.  The \emph{empirical Rademacher complexity} of $\Fclass$
+with respect to $S$ is
+\[
+  \hat{\Rad}_S(\Fclass) = \E_{\varepsilon}\biggl[
+    \sup_{f \in \Fclass} \frac{1}{n} \sum_{i=1}^{n}
+    \varepsilon_i f(x_i) \biggr],
+\]
+where $\varepsilon_1, \ldots, \varepsilon_n$ are i.i.d.\ Rademacher
+random variables.
+\end{definition}
+
+\begin{definition}[Rademacher Complexity]
+\label{def:rademacher}
+The \emph{Rademacher complexity} of $\Fclass$ with respect to a
+distribution $P$ on $\mathcal{X}$ and sample size $n$ is
+\[
+  \Rad_n(\Fclass) = \E_{S \sim P^n}\bigl[
+    \hat{\Rad}_S(\Fclass) \bigr]
+  = \E_{S, \varepsilon}\biggl[
+    \sup_{f \in \Fclass} \frac{1}{n} \sum_{i=1}^{n}
+    \varepsilon_i f(x_i) \biggr].
+\]
+\end{definition}
+
+\begin{remark}
+\label{rem:rademacher-interpretation}
+The Rademacher complexity measures how well the function class
+$\Fclass$ can \emph{correlate with random noise}.  If $\Fclass$ is
+rich enough to fit arbitrary label assignments
+$(\varepsilon_1, \ldots, \varepsilon_n) \in \{-1, +1\}^n$, then
+$\hat{\Rad}_S(\Fclass)$ is close to $1$.  If $\Fclass$ consists only
+of constant functions, then $\hat{\Rad}_S(\Fclass) = 0$.  In general,
+$0 \le \hat{\Rad}_S(\Fclass) \le \sup_{f \in \Fclass} \|f\|_\infty$.
+\end{remark}
+
+\begin{example}[Rademacher Complexity of Linear Classifiers]
+\label{ex:rad-linear}
+Let $\Fclass = \{x \mapsto w^\top x : \|w\|_2 \le B\}$ and suppose
+$\|x_i\|_2 \le C$ for all $i$.  Then
+\begin{align*}
+  \hat{\Rad}_S(\Fclass)
+  &= \E_\varepsilon\biggl[
+    \sup_{\|w\|_2 \le B} \frac{1}{n}
+    w^\top \sum_{i=1}^n \varepsilon_i x_i \biggr]
+  = \frac{B}{n} \E_\varepsilon\biggl[
+    \biggl\| \sum_{i=1}^n \varepsilon_i x_i \biggr\|_2 \biggr] \\
+  &\le \frac{B}{n} \sqrt{\E\biggl[
+    \biggl\| \sum_{i=1}^n \varepsilon_i x_i \biggr\|_2^2 \biggr]}
+  = \frac{B}{n} \sqrt{\sum_{i=1}^n \|x_i\|_2^2}
+  \le \frac{BC}{\sqrt{n}},
+\end{align*}
+where we used Jensen's inequality and the fact that
+$\E[\varepsilon_i \varepsilon_j] = \delta_{ij}$.  Thus
+$\Rad_n(\Fclass) \le BC / \sqrt{n}$, which is independent of
+the dimension $d$ of the weight vector.
+\end{example}
+
+We now prove the fundamental generalization bound via Rademacher
+complexity.
+
+\begin{theorem}[Rademacher Generalization Bound]
+\label{thm:rademacher-bound}
+Let $\Fclass$ be a class of functions $f \colon \mathcal{X} \to [0,1]$,
+and let $(X_1, Y_1), \ldots, (X_n, Y_n)$ be i.i.d.\ from a
+distribution $P$ on $\mathcal{X} \times \mathcal{Y}$.  Define the
+loss class $\mathcal{G} = \{(x,y) \mapsto \Loss(f(x), y) :
+f \in \Fclass\}$ where $\Loss$ takes values in $[0, 1]$.  Then
+for any $\delta > 0$, with probability at least $1 - \delta$ over
+the sample $S$:
+\[
+  \sup_{f \in \Fclass} \bigl| \Risk(f) - \EmpRisk_n(f) \bigr|
+  \le 2 \Rad_n(\mathcal{G})
+  + \sqrt{\frac{\ln(2/\delta)}{2n}}.
+\]
+If the loss $\Loss$ is $\rho$-Lipschitz in its first argument, then
+$\Rad_n(\mathcal{G}) \le \rho \, \Rad_n(\Fclass)$.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Symmetrization.}
+Define $\Phi(S) = \sup_{g \in \mathcal{G}} \bigl[
+\E[g(X,Y)] - \frac{1}{n} \sum_{i=1}^n g(X_i, Y_i) \bigr]$.
+We first show $\E[\Phi(S)] \le 2 \Rad_n(\mathcal{G})$.
+
+Let $S' = (X_1', Y_1'), \ldots, (X_n', Y_n')$ be an independent
+copy of $S$.  For each $g \in \mathcal{G}$,
+$\E[g(X_j', Y_j')] = \E[g(X,Y)]$, so
+\begin{align*}
+  \E[\Phi(S)]
+  &= \E_S\biggl[ \sup_{g \in \mathcal{G}} \E_{S'}\biggl[
+    \frac{1}{n} \sum_{i=1}^n
+    \bigl(g(X_i', Y_i') - g(X_i, Y_i)\bigr) \biggr] \biggr] \\
+  &\le \E_{S, S'}\biggl[ \sup_{g \in \mathcal{G}}
+    \frac{1}{n} \sum_{i=1}^n
+    \bigl(g(X_i', Y_i') - g(X_i, Y_i)\bigr) \biggr].
+\end{align*}
+Since $g(X_i', Y_i') - g(X_i, Y_i)$ is symmetric about $0$
+(the pairs $(X_i, Y_i)$ and $(X_i', Y_i')$ are exchangeable), we
+can introduce Rademacher variables $\varepsilon_i$:
+\begin{align*}
+  \E[\Phi(S)]
+  &\le \E_{S, S', \varepsilon}\biggl[ \sup_{g \in \mathcal{G}}
+    \frac{1}{n} \sum_{i=1}^n \varepsilon_i
+    \bigl(g(X_i', Y_i') - g(X_i, Y_i)\bigr) \biggr] \\
+  &\le \E_{S', \varepsilon}\biggl[ \sup_{g \in \mathcal{G}}
+    \frac{1}{n} \sum_{i=1}^n \varepsilon_i g(X_i', Y_i')
+    \biggr]
+  + \E_{S, \varepsilon}\biggl[ \sup_{g \in \mathcal{G}}
+    \frac{1}{n} \sum_{i=1}^n (-\varepsilon_i) g(X_i, Y_i) \biggr] \\
+  &= 2 \Rad_n(\mathcal{G}).
+\end{align*}
+
+\textbf{Step 2: Concentration.}
+The function $\Phi(S)$ changes by at most $1/n$ when a single sample
+$(X_i, Y_i)$ is replaced (since $g$ is bounded in $[0,1]$).  By
+McDiarmid's inequality (a consequence of the bounded differences
+inequality, see Lesson~12):
+\[
+  \Prob\bigl( \Phi(S) - \E[\Phi(S)] \ge t \bigr)
+  \le \exp\biggl( -\frac{2n^2 t^2}{n \cdot (1/n)^2 \cdot n} \biggr)
+  = \exp(-2nt^2).
+\]
+Setting $t = \sqrt{\ln(2/\delta)/(2n)}$ and combining with
+$\E[\Phi(S)] \le 2\Rad_n(\mathcal{G})$ gives the one-sided bound.
+The two-sided bound follows by applying the same argument to $-g$.
+
+\textbf{Step 3: Lipschitz contraction.}
+If $\Loss(\cdot, y)$ is $\rho$-Lipschitz for each $y$, then by
+the contraction lemma (Ledoux--Talagrand):
+\[
+  \E_\varepsilon\biggl[ \sup_{f \in \Fclass} \frac{1}{n}
+    \sum_{i=1}^n \varepsilon_i \Loss(f(x_i), y_i) \biggr]
+  \le \rho \, \E_\varepsilon\biggl[ \sup_{f \in \Fclass}
+    \frac{1}{n} \sum_{i=1}^n \varepsilon_i f(x_i) \biggr],
+\]
+giving $\Rad_n(\mathcal{G}) \le \rho \, \Rad_n(\Fclass)$.
+\end{proof}
+
+\begin{keyresult}[title={Rademacher Generalization Bound}]
+For any function class $\Fclass$ with bounded loss, the uniform
+deviation between population risk and empirical risk satisfies
+\[
+  \sup_{f \in \Fclass} \bigl| \Risk(f) - \EmpRisk_n(f) \bigr|
+  \le 2 \Rad_n(\Fclass) + O\biggl(\sqrt{\frac{\log(1/\delta)}{n}}
+  \biggr)
+\]
+with high probability.  The Rademacher complexity $\Rad_n(\Fclass)$
+is a more refined measure of function class capacity than the VC
+dimension, as it accounts for the distribution of the data and the
+real-valued nature of the functions.
+\end{keyresult}
+
+\begin{example}[Rademacher vs.\ VC for Halfspaces]
+\label{ex:rad-vs-vc}
+For halfspace classifiers $\Fclass = \{x \mapsto \sign(w^\top x) :
+\|w\|_2 \le B\}$ on data with $\|x\|_2 \le C$:
+\begin{itemize}[nosep]
+  \item \textbf{VC bound} (Lesson~59): generalization gap
+    $O(\sqrt{d \log n / n})$, depending on dimension $d$.
+  \item \textbf{Rademacher bound}: generalization gap
+    $O(BC / \sqrt{n})$, independent of dimension $d$.
+\end{itemize}
+The Rademacher bound is tighter when $BC$ is small (i.e., when
+the margin is large), which is precisely the regime where SVMs
+work well.
+\end{example}
+
+Having established the Rademacher framework, we now apply it to
+deep neural networks.
+
+%% ============================================================
+%% SECTION 4: RADEMACHER COMPLEXITY OF NEURAL NETWORKS
+%% ============================================================
+\section{Rademacher Complexity of Neural Networks}
+\label{sec:rad-nn}
+
+The key result of this section is that the Rademacher complexity
+of deep networks depends on the \emph{spectral norms} of the weight
+matrices, not on the number of parameters.  This explains why
+overparameterized networks can generalize.
+
+\subsection{The Contraction Lemma}
+
+\begin{lemma}[Contraction Lemma (Ledoux--Talagrand)]
+\label{lem:contraction}
+Let $\Fclass$ be a function class and let $\phi_1, \ldots, \phi_n
+\colon \R \to \R$ be $\rho$-Lipschitz functions with $\phi_i(0) = 0$.
+Then
+\[
+  \E_\varepsilon\biggl[ \sup_{f \in \Fclass} \frac{1}{n}
+    \sum_{i=1}^n \varepsilon_i \phi_i(f(x_i)) \biggr]
+  \le \rho \, \E_\varepsilon\biggl[ \sup_{f \in \Fclass}
+    \frac{1}{n} \sum_{i=1}^n \varepsilon_i f(x_i) \biggr].
+\]
+\end{lemma}
+
+\begin{proof}
+This is a classical result; see \citet[Theorem~4.12]{ledoux1991}.
+The proof proceeds by induction on $n$.  For $n = 1$: by the
+Lipschitz condition,
+$\sup_{t \in T} \varepsilon \phi(t) \le \rho \sup_{t \in T}
+\varepsilon t$ for any index set $T$ (where $T = \{f(x_1) :
+f \in \Fclass\}$).  Taking expectations over $\varepsilon$
+gives the result.  The inductive step conditions on
+$\varepsilon_1, \ldots, \varepsilon_{n-1}$ and applies the
+$n = 1$ case to $\varepsilon_n$.
+\end{proof}
+
+\begin{remark}
+\label{rem:relu-contraction}
+The ReLU activation $\sigmoid(t) = \max(0, t)$ is $1$-Lipschitz with
+$\sigmoid(0) = 0$.  Therefore, applying a ReLU layer does not increase
+the Rademacher complexity.  This is the key reason why depth, per se,
+does not inflate the Rademacher complexity---only the weight norms
+matter.
+\end{remark}
+
+\subsection{Spectrally-Normalized Bound}
+
+\begin{theorem}[Bartlett, Foster, and Telgarsky, 2017]
+\label{thm:spectral-rad}
+Consider an $L$-layer ReLU network (Definition~3.1 in Lesson~65):
+$f(x) = W_L \sigmoid(W_{L-1} \sigmoid(\cdots \sigmoid(W_1 x)
+\cdots))$
+with weight matrices $W_\ell \in \R^{n_\ell \times n_{\ell-1}}$
+(biases omitted for clarity).  Let $\Fclass$ be the class of all
+such networks with $\|W_\ell\|_2 \le s_\ell$ (spectral norm bound)
+for each layer $\ell$.  If $\|x_i\|_2 \le B_x$ for all data points,
+then the empirical Rademacher complexity satisfies
+\begin{equation}
+\label{eq:spectral-bound}
+  \hat{\Rad}_S(\Fclass) \le
+  \frac{B_x \cdot \prod_{\ell=1}^{L} s_\ell}{\sqrt{n}}
+  \cdot O\biggl( \sqrt{L \log(W)} \biggr),
+\end{equation}
+where $W = \max_\ell n_\ell$ is the maximum width.
+\end{theorem}
+
+\begin{proof}
+We prove a simplified version of the bound, establishing the product
+structure; the logarithmic factors are refined in
+\citet{bartlett2017}.
+
+\textbf{Step 1: Peel off the output layer.}
+Define $h(x) = \sigmoid(W_{L-1} \sigmoid(\cdots \sigmoid(W_1 x)
+\cdots))$ so that $f(x) = W_L h(x)$.  The Rademacher complexity of
+the composition with the linear map $W_L$ satisfies
+\[
+  \hat{\Rad}_S(\{x \mapsto W_L h(x)\})
+  \le \|W_L\|_2 \cdot \hat{\Rad}_S(\{x \mapsto h(x)\}),
+\]
+by viewing $W_L$ as a linear operator and using the definition of
+the spectral norm.  More precisely, for scalar output ($n_L = 1$),
+$W_L$ is a row vector with $\|W_L\|_2 = \|W_L\|_F$, and
+\begin{align*}
+  \E_\varepsilon\biggl[\sup_{f \in \Fclass} \frac{1}{n}
+    \sum_i \varepsilon_i W_L h(x_i)\biggr]
+  &= \E_\varepsilon\biggl[\sup_{\|W_L\|_2 \le s_L} W_L \cdot
+    \sup_{h \in \Hclass_{L-1}} \frac{1}{n}
+    \sum_i \varepsilon_i h(x_i)\biggr] \\
+  &\le s_L \cdot \E_\varepsilon\biggl[\sup_{h \in \Hclass_{L-1}}
+    \frac{1}{n} \biggl\|\sum_i \varepsilon_i h(x_i)\biggr\|_2
+    \biggr],
+\end{align*}
+where $\Hclass_{L-1}$ is the class of functions computed by the first
+$L-1$ layers.
+
+\textbf{Step 2: Peel off the activation.}
+The ReLU activation is $1$-Lipschitz with $\sigmoid(0) = 0$.  By
+the contraction lemma (Lemma~\ref{lem:contraction}), replacing
+$\sigmoid(W_\ell \cdot)$ with $W_\ell \cdot$ does not increase the
+Rademacher complexity (applied coordinatewise).
+
+\textbf{Step 3: Iterate.}
+Repeating Steps 1 and 2 for layers $L-1, L-2, \ldots, 1$, each
+peeling contributes a factor of $s_\ell = \|W_\ell\|_2$.  The
+base case is the input layer, where the Rademacher complexity of
+$\{x \mapsto x\}$ with respect to data bounded by $B_x$ is
+$B_x / \sqrt{n}$ (by Example~\ref{ex:rad-linear} with $B = 1$).
+
+\textbf{Step 4: Combine.}
+The product of the spectral norm factors gives
+\[
+  \hat{\Rad}_S(\Fclass) \le
+  \frac{B_x \cdot \prod_{\ell=1}^{L} s_\ell}{\sqrt{n}}
+  \cdot C(L, W),
+\]
+where $C(L, W)$ accounts for the vector-valued nature of the
+intermediate layers (the Rademacher complexity of vector-valued
+functions picks up a factor of $\sqrt{\log W}$ per layer from
+covering number arguments).  Careful analysis in
+\citet{bartlett2017} shows $C(L, W) = O(\sqrt{L \log W})$.
+\end{proof}
+
+\begin{keyresult}[title={Norm-Based Generalization for Deep Networks}]
+The generalization gap of a deep ReLU network is controlled by
+\[
+  \text{Generalization gap} \le O\biggl(
+  \frac{B_x \cdot \prod_{\ell=1}^L \|W_\ell\|_2 \cdot
+  \sqrt{L \log W}}{\sqrt{n}} \biggr),
+\]
+which depends on the \textbf{spectral norms} of the weight matrices
+and the \textbf{data norm} $B_x$, but is \textbf{independent of the
+number of parameters}.  An overparameterized network with small
+spectral norms can generalize well even when the number of parameters
+far exceeds the sample size.
+\end{keyresult}
+
+\begin{example}[Parameter-Free Bound for a DQN]
+\label{ex:dqn-bound}
+Consider a DQN with $L = 5$ layers, width $W = 256$, and spectral
+norms $\|W_\ell\|_2 \le 2$ for each layer.  The total parameter count
+is roughly $5 \times 256^2 \approx 327{,}680$.  With $n = 10{,}000$
+training transitions and $B_x = 1$:
+\begin{itemize}[nosep]
+  \item \textbf{VC bound:} $O(\sqrt{327{,}680 / 10{,}000})
+    \approx 5.7$ --- vacuous (the bound exceeds $1$).
+  \item \textbf{Spectral bound:} $O(2^5 \cdot \sqrt{5 \log 256}
+    / \sqrt{10{,}000}) = O(32 \cdot 3.1 / 100) \approx 1.0$ ---
+    borderline, but dramatically tighter than the VC bound.
+\end{itemize}
+With spectral normalization or weight decay to keep $\|W_\ell\|_2$
+close to $1$, the bound improves to $O(0.03)$---a meaningful guarantee.
+\end{example}
+
+\begin{rlconnection}[title={Spectral Normalization in Deep RL}]
+The spectral norm bound motivates the use of \emph{spectral
+normalization} in deep RL:
+\begin{itemize}[nosep]
+  \item In DDPG and TD3, spectral normalization of the critic
+    network stabilizes training and improves generalization.
+  \item The bound $\prod_\ell \|W_\ell\|_2$ shows that controlling
+    the product of spectral norms (not the individual norms) is
+    what matters for generalization.
+  \item Weight decay ($\ell^2$ regularization) implicitly controls
+    spectral norms, providing a connection between the common
+    practice of regularization and the theoretical bound.
+\end{itemize}
+\end{rlconnection}
+
+\begin{warning}[title={Norm-Based Bounds Can Still Be Loose}]
+While spectrally-normalized bounds are much tighter than VC bounds
+for overparameterized networks, they are still often \emph{vacuous}
+for practical networks (the bound exceeds $1$ for classification).
+The product $\prod_\ell \|W_\ell\|_2$ grows exponentially with depth
+unless each spectral norm is close to $1$.  Tighter bounds require
+margin-based analysis or PAC-Bayesian arguments; see
+\citet{neyshabur2015} for further developments.
+\end{warning}
+
+The norm-based bounds explain generalization in terms of weight
+properties.  The next section provides a complementary perspective:
+the neural tangent kernel explains the \emph{dynamics} of training
+and connects overparameterized networks to kernel methods.
+
+%% ============================================================
+%% SECTION 5: THE NEURAL TANGENT KERNEL
+%% ============================================================
+\section{The Neural Tangent Kernel}
+\label{sec:ntk}
+
+The neural tangent kernel (NTK) reveals that in the infinite-width
+limit, training a neural network by gradient descent is equivalent
+to performing kernel regression with a specific, deterministic kernel.
+
+\subsection{Definition and Motivation}
+
+\begin{definition}[Neural Tangent Kernel]
+\label{def:ntk}
+Let $f(x; \theta) \colon \R^d \to \R$ be a neural network with
+parameters $\theta \in \R^p$.  The \emph{neural tangent kernel}
+(NTK) is the kernel function
+\begin{equation}
+\label{eq:ntk-def}
+  \Theta(x, x'; \theta) = \bigl\langle
+    \nabla_\theta f(x; \theta), \;
+    \nabla_\theta f(x'; \theta) \bigr\rangle
+  = \sum_{j=1}^{p} \frac{\partial f(x; \theta)}{\partial \theta_j}
+    \cdot \frac{\partial f(x'; \theta)}{\partial \theta_j},
+\end{equation}
+where $\nabla_\theta f(x; \theta) \in \R^p$ is the gradient of the
+network output with respect to all parameters.
+\end{definition}
+
+\begin{remark}
+\label{rem:ntk-feature}
+The NTK can be viewed as an inner product in a feature space: define
+$\feature_\theta(x) = \nabla_\theta f(x; \theta) \in \R^p$, so that
+$\Theta(x, x'; \theta) = \langle \feature_\theta(x),
+\feature_\theta(x') \rangle$.  This is a kernel in the sense of
+Lesson~61, but with a feature map that depends on the parameters
+$\theta$.
+\end{remark}
+
+\begin{example}[NTK for a Two-Layer Network]
+\label{ex:ntk-two-layer}
+Consider a two-layer network with $m$ hidden units:
+\[
+  f(x; \theta) = \frac{1}{\sqrt{m}} \sum_{j=1}^{m}
+    a_j \sigmoid(w_j^\top x),
+\]
+where $\theta = (a_1, \ldots, a_m, w_1, \ldots, w_m)$, the
+$1/\sqrt{m}$ scaling ensures finite limits as $m \to \infty$, and
+$\sigmoid$ is a smooth activation.  The gradients are:
+\begin{align*}
+  \frac{\partial f}{\partial a_j} &= \frac{1}{\sqrt{m}}
+    \sigmoid(w_j^\top x), \\
+  \frac{\partial f}{\partial w_j} &= \frac{1}{\sqrt{m}}
+    a_j \sigmoid'(w_j^\top x) \, x.
+\end{align*}
+The NTK is
+\begin{align}
+  \Theta(x, x'; \theta) &= \frac{1}{m} \sum_{j=1}^{m}
+    \sigmoid(w_j^\top x) \sigmoid(w_j^\top x')
+    \label{eq:ntk-a-part} \\
+  &\quad + \frac{1}{m} \sum_{j=1}^{m} a_j^2
+    \sigmoid'(w_j^\top x) \sigmoid'(w_j^\top x')
+    \, (x^\top x'). \label{eq:ntk-w-part}
+\end{align}
+The first term \eqref{eq:ntk-a-part} is the kernel induced by the
+output-layer gradients; the second term \eqref{eq:ntk-w-part}
+captures the hidden-layer gradients.
+\end{example}
+
+\subsection{NTK Dynamics of Gradient Descent}
+
+\begin{proposition}[Gradient Descent in Function Space]
+\label{prop:gd-dynamics}
+Consider training the network $f(x; \theta)$ on data
+$(x_1, y_1), \ldots, (x_n, y_n)$ by minimizing the squared loss
+$\mathcal{L}(\theta) = \frac{1}{2} \sum_{i=1}^{n}
+(f(x_i; \theta) - y_i)^2$
+with continuous-time gradient descent $\dot{\theta}(t) =
+-\nabla_\theta \mathcal{L}(\theta(t))$.  Then the network predictions
+$u_i(t) = f(x_i; \theta(t))$ evolve according to
+\begin{equation}
+\label{eq:gd-dynamics}
+  \dot{u}_i(t) = -\sum_{j=1}^{n}
+    \Theta(x_i, x_j; \theta(t)) \, (u_j(t) - y_j),
+\end{equation}
+or in matrix form, $\dot{u}(t) = -K(t)(u(t) - y)$, where
+$K(t) \in \R^{n \times n}$ is the \emph{NTK Gram matrix}
+$K_{ij}(t) = \Theta(x_i, x_j; \theta(t))$.
+\end{proposition}
+
+\begin{proof}
+By the chain rule,
+\[
+  \dot{u}_i(t) = \frac{d}{dt} f(x_i; \theta(t))
+  = \nabla_\theta f(x_i; \theta(t))^\top \dot{\theta}(t).
+\]
+The gradient descent dynamics give
+\[
+  \dot{\theta}(t) = -\nabla_\theta \mathcal{L}(\theta(t))
+  = -\sum_{j=1}^{n} (f(x_j; \theta(t)) - y_j)
+    \nabla_\theta f(x_j; \theta(t)).
+\]
+Substituting:
+\begin{align*}
+  \dot{u}_i(t)
+  &= -\sum_{j=1}^{n} (u_j(t) - y_j)
+    \nabla_\theta f(x_i; \theta(t))^\top
+    \nabla_\theta f(x_j; \theta(t)) \\
+  &= -\sum_{j=1}^{n} \Theta(x_i, x_j; \theta(t))
+    (u_j(t) - y_j). \qedhere
+\end{align*}
+\end{proof}
+
+\begin{remark}
+\label{rem:kernel-regression-ode}
+If the NTK Gram matrix $K(t)$ were \emph{constant} (independent of
+$t$), then \eqref{eq:gd-dynamics} would be a linear ODE with solution
+$u(t) - y = e^{-Kt}(u(0) - y)$.  If $K$ is positive definite, all
+eigenvalues are positive and $u(t) \to y$ exponentially fast: the
+training loss converges to zero.  This motivates the central question
+of NTK theory: under what conditions does the NTK remain approximately
+constant during training?
+\end{remark}
+
+\subsection{The Infinite-Width Limit}
+
+\begin{theorem}[NTK Convergence at Initialization --- Jacot et al., 2018]
+\label{thm:ntk-init}
+Consider a fully-connected network of depth $L$ with layer widths
+$n_1 = n_2 = \cdots = n_{L-1} = m$ (hidden widths all equal to $m$),
+smooth activation $\sigmoid$, and random initialization: each weight
+$W_\ell^{(ij)} \sim \mathcal{N}(0, 2/n_{\ell-1})$ (He initialization).
+Then as $m \to \infty$:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The NTK at initialization $\Theta(x, x'; \theta_0)$ converges
+    in probability to a deterministic limit $\Theta_\infty^{(L)}(x, x')$
+    that depends only on $x, x'$ and the network architecture (depth
+    $L$ and activation $\sigmoid$), not on the random initialization.
+  \item The limiting kernel $\Theta_\infty^{(L)}$ can be computed
+    recursively.  Define the \emph{NNGP kernel} (neural network Gaussian
+    process kernel) by $\Sigma^{(0)}(x, x') = x^\top x'$ and
+    \begin{equation}
+    \label{eq:nngp-recursion}
+      \Sigma^{(\ell)}(x, x') = \E_{(u, v) \sim \mathcal{N}(0,
+        \Lambda^{(\ell)})} \bigl[ \sigmoid(u) \sigmoid(v) \bigr],
+    \end{equation}
+    where $\Lambda^{(\ell)} = \bigl( \begin{smallmatrix}
+    \Sigma^{(\ell-1)}(x,x) & \Sigma^{(\ell-1)}(x,x') \\
+    \Sigma^{(\ell-1)}(x',x) & \Sigma^{(\ell-1)}(x',x')
+    \end{smallmatrix} \bigr)$.  Then $\Theta_\infty^{(L)}$ is
+    determined by the $\Sigma^{(\ell)}$ kernels and their
+    derivative counterparts
+    $\dot{\Sigma}^{(\ell)}(x, x') = \E[\sigmoid'(u)\sigmoid'(v)]$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+(i) At initialization, the pre-activations
+$h_\ell^{(j)} = \sum_k W_\ell^{(jk)} \sigmoid(h_{\ell-1}^{(k)})$
+are sums of $m$ independent random variables (scaled by $1/\sqrt{m}$
+via the initialization).  By the central limit theorem, as $m \to
+\infty$, the pre-activations at each layer converge jointly to a
+Gaussian process.  The covariance of this Gaussian process is the
+NNGP kernel $\Sigma^{(\ell)}$, defined by the recursion
+\eqref{eq:nngp-recursion}.
+
+The NTK $\Theta(x, x'; \theta_0) = \sum_{j=1}^p
+\frac{\partial f(x)}{\partial \theta_j}
+\frac{\partial f(x')}{\partial \theta_j}$ is also a sum of $O(m)$
+terms (one for each parameter).  By the law of large numbers (in the
+$m \to \infty$ limit), this sum converges to its expectation, which
+is a deterministic function of $\Sigma^{(\ell)}$ and
+$\dot{\Sigma}^{(\ell)}$.
+
+(ii) The recursive formula follows from the layer-by-layer structure
+of the network.  The output-layer contribution to the NTK is
+$\Sigma^{(L-1)}(x, x')$ (from the gradients with respect to
+$W_L$), and the hidden-layer contributions involve
+$\dot{\Sigma}^{(\ell)}$ (from the chain rule through the
+activations).  The full recursive formula is given in
+\citet{jacot2018}.
+\end{proof}
+
+\begin{example}[NTK for a Two-Layer Network with ReLU]
+\label{ex:ntk-relu}
+For a two-layer ReLU network with He initialization and $m$ hidden
+units, the limiting NTK as $m \to \infty$ is
+\[
+  \Theta_\infty(x, x') = \frac{\|x\|_2 \|x'\|_2}{2\pi}
+    \bigl( \sin\alpha + (\pi - \alpha) \cos\alpha \bigr)
+    + \frac{x^\top x'}{2\pi} (\pi - \alpha),
+\]
+where $\alpha = \arccos\bigl( \frac{x^\top x'}{\|x\|_2 \|x'\|_2}
+\bigr)$ is the angle between $x$ and $x'$.  This is the ``arc-cosine
+kernel'' studied in the kernel methods literature.
+\end{example}
+
+\subsection{Lazy Training: NTK Stays Constant}
+
+\begin{theorem}[Lazy Training Regime]
+\label{thm:lazy}
+Under the same setup as Theorem~\ref{thm:ntk-init}, if the width
+$m$ is sufficiently large (specifically, $m = \Omega(n^4 / \lambda_0^4)$
+where $\lambda_0 > 0$ is the smallest eigenvalue of the limiting NTK
+Gram matrix $K_\infty \in \R^{n \times n}$), then with high
+probability over the random initialization:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item The NTK Gram matrix $K(t)$ stays close to its initial value
+    throughout training:
+    $\|K(t) - K(0)\|_F \le \varepsilon$ for all $t \ge 0$, where
+    $\varepsilon \to 0$ as $m \to \infty$.
+  \item The parameters stay close to their initialization:
+    $\|\theta(t) - \theta_0\|_2 = O(1/\sqrt{m})$ for all $t$.
+  \item The training loss converges to zero exponentially fast:
+    $\mathcal{L}(\theta(t)) \le e^{-\lambda_0 t} \mathcal{L}(\theta_0)$.
+  \item The network function is approximately linear in the
+    parameters:
+    \begin{equation}
+    \label{eq:linearized}
+      f(x; \theta(t)) \approx f(x; \theta_0) +
+      \nabla_\theta f(x; \theta_0)^\top (\theta(t) - \theta_0).
+    \end{equation}
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+\textbf{(i) and (ii):} The gradient $\nabla_\theta f(x; \theta)$ is
+$O(1/\sqrt{m})$ in each coordinate (by the scaling of the
+initialization).  The gradient descent update moves $\theta$ by
+$\Delta\theta = -\eta \nabla_\theta \mathcal{L}(\theta)$, which
+involves $\nabla_\theta f(x_i; \theta) \cdot (u_i - y_i)$.  Since
+$\nabla_\theta f$ has $O(m)$ coordinates each of size $O(1/\sqrt{m})$,
+the total movement $\|\theta(t) - \theta_0\|_2 = O(\sqrt{n}/\sqrt{m})$,
+which is $O(1/\sqrt{m})$ for fixed $n$.
+
+The NTK involves second-order information: $\Theta(x, x'; \theta)
+- \Theta(x, x'; \theta_0)$ is bounded by the Hessian of $f$ times
+$\|\theta - \theta_0\|$, which is $O(1/\sqrt{m})$ times
+$O(1/\sqrt{m})$, giving $O(1/m)$ change.  This shows the NTK
+remains approximately constant.
+
+\textbf{(iii):}  With $K(t) \approx K(0) \approx K_\infty$, the
+dynamics \eqref{eq:gd-dynamics} become approximately linear:
+$\dot{u}(t) \approx -K_\infty(u(t) - y)$, with solution
+$u(t) - y = e^{-K_\infty t}(u(0) - y)$.  Since $K_\infty \succeq
+\lambda_0 I$, we have $\|u(t) - y\|_2^2 \le e^{-2\lambda_0 t}
+\|u(0) - y\|_2^2$.
+
+\textbf{(iv):}  The linearization \eqref{eq:linearized} follows from
+Taylor expansion: $f(x; \theta) = f(x; \theta_0) +
+\nabla_\theta f(x; \theta_0)^\top (\theta - \theta_0) + O(\|\theta
+- \theta_0\|^2)$, and $\|\theta - \theta_0\|^2 = O(1/m) \to 0$.
+\end{proof}
+
+\begin{keyresult}[title={NTK Theory: Training = Kernel Regression}]
+In the infinite-width limit, training a neural network by gradient
+descent is equivalent to kernel regression with the neural tangent
+kernel $\Theta_\infty$:
+\begin{enumerate}[nosep]
+  \item The NTK converges to a deterministic kernel at initialization.
+  \item The NTK stays approximately constant during training (lazy
+    training).
+  \item The network dynamics are approximately linear: $f(x; \theta_t)
+    \approx f(x; \theta_0) + \nabla_\theta f(x; \theta_0)^\top
+    (\theta_t - \theta_0)$.
+  \item Training converges to zero loss at an exponential rate
+    $e^{-\lambda_0 t}$ determined by the smallest eigenvalue of the
+    NTK Gram matrix.
+\end{enumerate}
+\end{keyresult}
+
+\begin{example}[Linearized Network as Random Features]
+\label{ex:linearized-rf}
+The linearized model \eqref{eq:linearized} can be written as
+\[
+  f_{\text{lin}}(x; \alpha) = f(x; \theta_0) +
+  \sum_{j=1}^{p} \alpha_j \frac{\partial f(x; \theta_0)}
+  {\partial \theta_j},
+\]
+where $\alpha = \theta - \theta_0$ are the trainable parameters.
+This is a \emph{random features model} (Lesson~64,
+Lesson~64, Section~4.2): the features
+$\phi_j(x) = \partial f(x; \theta_0) / \partial \theta_j$ are
+fixed at initialization, and only the linear coefficients $\alpha_j$
+are learned.  The associated kernel is precisely the NTK:
+$\Theta(x, x') = \sum_j \phi_j(x) \phi_j(x')$.
+\end{example}
+
+We now connect the NTK framework to generalization theory.
+
+%% ============================================================
+%% SECTION 6: IMPLICATIONS FOR GENERALIZATION
+%% ============================================================
+\section{Implications for Generalization}
+\label{sec:generalization}
+
+\subsection{NTK Generalization via Kernel Theory}
+
+In the lazy training regime (Theorem~\ref{thm:lazy}), the trained
+network computes approximately the same function as the kernel
+regression estimator with kernel $\Theta_\infty$.  This allows us
+to transfer the rich generalization theory of kernel methods
+(Lesson~62) to neural networks.
+
+\begin{proposition}[Generalization of the NTK Estimator]
+\label{prop:ntk-generalization}
+In the lazy training regime, the trained network $f(\cdot; \theta_T)$
+(after $T$ gradient descent steps or continuous-time training)
+satisfies the same generalization bounds as kernel ridge regression
+with kernel $\Theta_\infty$ and regularization $\lambda \propto 1/T$.
+Specifically, if the target function $f^*$ lies in the RKHS
+$\mathcal{H}_{\Theta_\infty}$ with RKHS norm
+$\|f^*\|_{\mathcal{H}_{\Theta_\infty}} \le B$, then the population
+risk of the trained network satisfies
+\[
+  \Risk(f(\cdot; \theta_T)) - \Risk(f^*)
+  \le O\biggl( \frac{B^2}{n} + \frac{B^2}{T} \biggr).
+\]
+The first term is the statistical error (from $n$ samples) and the
+second is the optimization error (from $T$ training steps).
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+In the lazy regime, $f(\cdot; \theta_T) \approx f_{\text{lin}}
+(\cdot; \alpha_T)$ where $\alpha_T$ is obtained by gradient descent
+on the linearized model with features $\nabla_\theta f(\cdot;
+\theta_0)$.  This linearized model is a kernel method with kernel
+$\Theta_\infty$, and its generalization properties follow from
+standard kernel ridge regression theory (Lesson~62, Section~5).
+The gradient descent with $T$ steps on the squared loss is equivalent
+to kernel ridge regression with implicit regularization
+$\lambda \propto 1/T$ (early stopping regularization).  The
+generalization bound then follows from the bias-variance decomposition
+for kernel ridge regression.
+\end{proof}
+
+\begin{example}[NTK Generalization for Overparameterized Networks]
+\label{ex:ntk-gen}
+Consider a two-layer ReLU network with $m = 10{,}000$ hidden units
+trained on $n = 100$ data points in $\R^{10}$.  The network has
+$p = 10{,}000 \times 11 + 10{,}001 \approx 120{,}000$ parameters
+($p \gg n$).
+
+\begin{itemize}[nosep]
+  \item \textbf{VC bound:} $O(\sqrt{p/n}) = O(\sqrt{1200}) \approx
+    35$ --- completely vacuous.
+  \item \textbf{NTK bound:} If $f^*$ lies in the NTK RKHS with
+    $\|f^*\|_{\mathcal{H}_\Theta} \le B = 5$, then the excess risk
+    is $O(B^2/n) = O(25/100) = O(0.25)$ --- a meaningful guarantee,
+    independent of $m$.
+\end{itemize}
+The NTK framework shows that overparameterization ($m \gg n$) does
+not hurt generalization, because the trained network implements
+kernel regression with a fixed kernel.
+\end{example}
+
+\subsection{Limitations of the NTK Framework}
+
+\begin{remark}[The Feature Learning Gap]
+\label{rem:feature-learning}
+The NTK theory has a fundamental limitation: it describes the
+\emph{lazy training} regime where the network stays close to its
+initialization and the features $\nabla_\theta f(\cdot; \theta_0)$
+remain essentially fixed.  This means the network does not
+\emph{learn features}---it uses the random features from initialization.
+
+In practice, the power of deep learning comes precisely from
+\emph{feature learning}: the network discovers useful representations
+in the hidden layers.  This happens in the ``rich'' or ``active''
+training regime, where the parameters move far from initialization
+and the NTK changes significantly during training.  The NTK theory
+does not capture this regime.
+\end{remark}
+
+\begin{proposition}[NTK vs.\ Finite-Width Networks]
+\label{prop:ntk-limitations}
+The following gaps exist between the NTK regime and practical neural
+network training:
+\begin{enumerate}[nosep,label=(\roman*)]
+  \item \textbf{Sample complexity.}  Kernel methods (and hence
+    NTK-regime networks) require $n = \Omega(d^s)$ samples to learn
+    $s$-smooth functions on $\R^d$, suffering the curse of
+    dimensionality.  Finite-width networks with feature learning can
+    potentially avoid this curse (Lesson~65,
+    Lesson~65, Section~6).
+  \item \textbf{Representation.}  The RKHS of the NTK may not contain
+    functions that finite-width networks can efficiently represent.
+    The NTK kernel is fixed at initialization and does not adapt to
+    the data, while the effective kernel of a finite-width network
+    evolves during training.
+  \item \textbf{Depth benefit.}  In the NTK regime, depth provides
+    only a polynomial (not exponential) improvement in the kernel
+    eigenvalues, while finite-width deep networks exhibit exponential
+    depth separation (Lesson~65, Theorem~4.5).
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}[Justification]
+(i) follows from the minimax rates for kernel regression in the RKHS
+of a fixed kernel; see \citet{bietti2019} for a detailed analysis of
+NTK eigenvalues and their implications for learning rates.
+
+(ii) The RKHS of the infinite-width NTK is a fixed function space
+determined by the kernel eigenvalues.  Feature learning corresponds
+to adapting the kernel to the data, which the NTK regime precludes.
+
+(iii) \citet{bietti2019} shows that the eigenvalue decay of the
+NTK for depth-$L$ networks improves only polynomially with $L$,
+while the depth separation results of \citet{telgarsky2016} show
+exponential gains for finite-width networks.
+\end{proof}
+
+\begin{rlconnection}[title={Beyond the NTK in Deep RL}]
+The NTK theory provides a useful theoretical baseline but does not
+fully explain deep RL success:
+\begin{itemize}[nosep]
+  \item \textbf{Feature learning is crucial.}  In Atari games and
+    robotic control, the learned representations in hidden layers
+    are essential for good performance.  A randomly initialized
+    feature map (as in the NTK regime) would miss task-relevant
+    structure.
+  \item \textbf{Non-stationary targets.}  In RL, the training targets
+    (Bellman backup targets) change during training, violating the
+    fixed-target assumption of NTK theory.
+  \item \textbf{Mean-field theory.}  An alternative to the NTK
+    (which linearizes around initialization) is the mean-field theory
+    (Lesson~64, Section~6), which tracks the evolution of the
+    weight distribution and captures feature learning in the
+    large-width limit.
+\end{itemize}
+\end{rlconnection}
+
+\begin{warning}[title={NTK Does Not Explain Deep Learning}]
+While the NTK provides valuable theoretical insights, the consensus
+in the research community is that the lazy training regime does not
+capture the behavior of practical deep networks.  \citet{zhang2021}
+show that standard networks memorize random labels (consistent with
+the NTK regime) but also generalize on structured data (which
+requires feature learning beyond the NTK regime).  The NTK is best
+understood as a \emph{limiting case} that is analytically tractable
+but does not capture the full power of deep learning.
+\end{warning}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[Rademacher Complexity of Bounded Linear Functions]
+\textnormal{(\({}^*\))} \\
+Let $\Fclass = \{x \mapsto w^\top x : \|w\|_1 \le B\}$ and
+$\|x_i\|_\infty \le C$ for all $i$.  Show that
+$\hat{\Rad}_S(\Fclass) \le BC \sqrt{2 \log(2d) / n}$.
+
+\textit{Hint:} Use $\sup_{\|w\|_1 \le B} w^\top z = B \|z\|_\infty$
+and the fact that $\E[\max_{j \le d} Z_j] \le \sqrt{2 \log d} \cdot
+\max_j (\E[Z_j^2])^{1/2}$ for sub-Gaussian $Z_j$.
+\end{exercise}
+
+\begin{exercise}[Computing the NTK for a Simple Network]
+\textnormal{(\({}^*\))} \\
+Consider a two-layer network $f(x; a, w) = a \sigmoid(wx + b)$ with
+scalar input $x \in \R$, parameters $\theta = (a, w, b)$, and smooth
+activation $\sigmoid$.  Compute the NTK
+$\Theta(x, x'; \theta) = \nabla_\theta f(x)^\top \nabla_\theta f(x')$
+explicitly.
+\end{exercise}
+
+\begin{exercise}[Spectral Norm Bound for a Specific Network]
+\textnormal{(\({}^{**}\))} \\
+Consider a $3$-layer ReLU network on $\R^{10}$ with layer widths
+$(10, 50, 50, 1)$ and weight matrices $W_1, W_2, W_3$.
+\begin{enumerate}[label=(\alph*)]
+  \item Suppose $\|W_1\|_2 = 1.5$, $\|W_2\|_2 = 1.2$,
+    $\|W_3\|_2 = 0.8$, and $B_x = 1$.  Compute the spectrally-
+    normalized Rademacher complexity bound from
+    Theorem~\ref{thm:spectral-rad} (ignoring the logarithmic factor).
+  \item How many training samples $n$ are needed for the generalization
+    gap to be at most $0.1$?
+  \item The network has $10 \times 50 + 50 \times 50 + 50 \times 1 =
+    3{,}050$ parameters.  Compare the VC-based sample complexity with
+    the norm-based sample complexity from part (b).
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[NTK Gram Matrix and Training Convergence]
+\textnormal{(\({}^{**}\))} \\
+Consider training data $(x_1, y_1), (x_2, y_2)$ with the NTK Gram
+matrix $K = \bigl( \begin{smallmatrix} 2 & 1 \\ 1 & 2
+\end{smallmatrix} \bigr)$.
+\begin{enumerate}[label=(\alph*)]
+  \item Compute the eigenvalues of $K$ and verify that $K$ is
+    positive definite.
+  \item Using the continuous-time gradient descent solution
+    $u(t) - y = e^{-Kt}(u(0) - y)$, compute $u(t)$ for
+    $u(0) = (0, 0)^\top$ and $y = (1, -1)^\top$.
+  \item How long does it take for the training loss
+    $\|u(t) - y\|_2^2$ to decrease to $1\%$ of its initial value?
+  \item If the NTK Gram matrix were $K' = \bigl(
+    \begin{smallmatrix} 2 & 1.99 \\ 1.99 & 2 \end{smallmatrix}
+    \bigr)$, how would the convergence rate change?  Relate this
+    to the condition number.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Rademacher Complexity and Value Function Generalization]
+\textnormal{(\({}^{**}\))} \\
+In fitted Q-iteration, the Q-function is approximated by a $3$-layer
+ReLU network with spectral norms $\|W_\ell\|_2 \le s$ for each layer.
+States satisfy $\|s\|_2 \le 1$ and rewards are bounded by $1$.
+\begin{enumerate}[label=(\alph*)]
+  \item Using Theorem~\ref{thm:spectral-rad}, bound the Rademacher
+    complexity of the Q-network class.
+  \item Apply Theorem~\ref{thm:rademacher-bound} to bound the
+    generalization gap of each Bellman backup step.
+  \item If $K$ backups are performed and the discount factor is
+    $\gamma$, bound the total error of fitted Q-iteration.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[NTK Feature Learning Gap]
+\textnormal{(\({}^{***}\))} \\
+Consider learning the function $f^*(x) = \|Ax\|_2$ on $\R^d$ where
+$A \in \R^{k \times d}$ is an unknown rank-$k$ matrix with $k \ll d$.
+\begin{enumerate}[label=(\alph*)]
+  \item Show that $f^*$ lies in a $k$-dimensional subspace: there
+    exists a feature map $\phi(x) = Ax \in \R^k$ such that $f^*$
+    depends on $x$ only through $\phi(x)$.
+  \item Argue that a neural network that learns the features $\phi$
+    (feature learning regime) needs $O(k)$ effective parameters to
+    represent $f^*$, while the NTK regime (random features)
+    requires $O(d^s)$ parameters for $s$-smooth functions.
+  \item Conclude that for $k \ll d$, the feature learning regime
+    is exponentially more sample-efficient than the NTK regime for
+    this target function.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item \textbf{Rademacher complexity}
+    $\Rad_n(\Fclass) = \E[\sup_{f \in \Fclass} \frac{1}{n}
+    \sum_i \varepsilon_i f(x_i)]$ measures how well a function
+    class can correlate with random noise.  It provides a more
+    refined capacity measure than VC dimension, accounting for the
+    data distribution and real-valued functions.
+
+  \item The \textbf{fundamental Rademacher bound}: the uniform
+    deviation $\sup_f |\Risk(f) - \EmpRisk_n(f)|$ is bounded by
+    $2\Rad_n(\Fclass) + O(\sqrt{\log(1/\delta)/n})$ with high
+    probability.
+
+  \item For deep ReLU networks, the \textbf{spectrally-normalized
+    bound} gives
+    $\Rad_n \le O(B_x \prod_\ell \|W_\ell\|_2 \cdot
+    \sqrt{L \log W} / \sqrt{n})$.  This depends on
+    \textbf{weight norms, not parameter counts}, explaining why
+    overparameterized networks can generalize.
+
+  \item The \textbf{neural tangent kernel} $\Theta(x, x') =
+    \langle \nabla_\theta f(x), \nabla_\theta f(x') \rangle$
+    governs the dynamics of gradient descent on neural networks:
+    $\dot{u}(t) = -K(t)(u(t) - y)$ where $K_{ij}(t) =
+    \Theta(x_i, x_j; \theta(t))$.
+
+  \item In the \textbf{infinite-width limit}: (1)~the NTK converges
+    to a deterministic kernel $\Theta_\infty$, (2)~the NTK stays
+    approximately constant during training (lazy training),
+    (3)~the network dynamics are linear, and (4)~training converges
+    exponentially fast.
+
+  \item The \textbf{lazy training regime} shows that training an
+    overparameterized network is equivalent to kernel regression
+    with the NTK, allowing generalization guarantees to be
+    transferred from kernel theory.
+
+  \item \textbf{Limitations}: the NTK regime does not capture
+    \emph{feature learning}, which is where deep networks truly
+    excel.  The NTK gives curse-of-dimensionality rates, while
+    practical networks with feature learning can exploit structure
+    to achieve faster rates.
+
+  \item The norm-based Rademacher bound and the NTK theory provide
+    complementary perspectives on generalization: the former says
+    ``small weights imply generalization,'' and the latter says
+    ``overparameterized networks implement kernel regression.''
+\end{itemize}
+
+\subsection*{Neural Network Theory Subdomain Summary}
+
+This capstone lesson completes the Neural Network Theory subdomain
+(Lessons~59--66).  The following table summarizes the arc of the
+subdomain.
+
+\begin{center}
+\small
+\begin{tabular}{clp{5cm}l}
+\toprule
+\textbf{Lesson} & \textbf{Topic} & \textbf{Key Result} & \textbf{Theme} \\
+\midrule
+59 & ERM and Generalization & VC dimension bounds;
+  fundamental theorem of statistical learning &
+  Statistical learning \\
+60 & Bias-Variance and Model Selection & Bias-variance decomposition;
+  oracle inequalities for model selection &
+  Tradeoff analysis \\
+61 & Kernel Methods & Mercer's theorem; the kernel trick
+  for implicit feature maps &
+  Feature spaces \\
+62 & RKHS and Representer Theorem & Representer theorem reduces
+  infinite-dimensional optimization to finite &
+  Regularization \\
+63 & Universal Approximation & Cybenko/Hornik: non-polynomial
+  activations yield density in $C(K)$ &
+  Expressiveness \\
+64 & Barron's Theorem & Dimension-free $O(1/m)$ rate for
+  Barron-class functions &
+  Approximation rates \\
+65 & Depth-Width Tradeoffs & Telgarsky: depth $L$ needs width
+  $2^{\Omega(L)}$ in shallow nets; compositional gains &
+  Architecture \\
+66 & NTK and Rademacher Complexity & Norm-based generalization;
+  infinite-width networks = kernel regression &
+  Generalization \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The subdomain progresses from the foundations of statistical learning
+(what does it mean to generalize?) through kernel methods (a tractable
+infinite-dimensional framework) to neural network-specific results
+(universal approximation, approximation rates, depth advantages, and
+overparameterization).  The key tension throughout is between
+\emph{expressiveness} (can the network represent the target?) and
+\emph{generalization} (does it learn the target from finite data?).
+Barron's theorem and the NTK provide two different resolutions: Barron
+shows dimension-free approximation for a restricted class, while the
+NTK shows that overparameterization does not hurt generalization
+(in the lazy regime).
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item \textbf{Lesson 67} (RNNs and BPTT) begins the next subdomain
+    (3.2: Recurrent Architectures), studying how temporal depth
+    interacts with the expressiveness and trainability results
+    developed here.
+
+  \item \textbf{Phase 04} (Deep RL) applies the theory of this
+    subdomain to RL-specific settings: DQN and its extensions
+    (Lesson~74), trust region methods (Lesson~76), PPO (Lesson~77),
+    and SAC (Lesson~79).
+
+  \item \citet{golowich2018} improves the spectrally-normalized bound
+    by removing the dependence on depth in the logarithmic factor,
+    showing that the bound can be made independent of both depth and
+    width.
+
+  \item \citet{allen-zhu2019} provides convergence guarantees for
+    gradient descent on overparameterized networks that go beyond the
+    NTK regime, using a notion of ``semi-smoothness'' of the loss
+    landscape.
+
+  \item \citet{chizat2018} develops the mean-field theory of
+    two-layer networks as an alternative to the NTK: the ``active''
+    or ``rich'' regime where features evolve during training and the
+    network does not stay close to initialization.
+
+  \item \citet{zhang2021} presents the celebrated experiments showing
+    that overparameterized networks can memorize random labels yet
+    generalize on structured data, demonstrating that classical
+    generalization theory (VC, Rademacher) alone cannot explain
+    deep learning generalization.
+
+  \item \textbf{Historical note.}  The NTK was introduced by
+    \citet{jacot2018} in 2018, building on earlier observations by
+    Neal (1996) that wide neural networks converge to Gaussian
+    processes.  The connection between overparameterization and
+    kernel methods was independently developed by
+    \citet{du2019} and \citet{allen-zhu2019}.  The spectrally-
+    normalized bound of \citet{bartlett2017} was motivated by the
+    practical success of spectral normalization in GANs and the
+    theoretical need for parameter-count-independent generalization
+    bounds.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

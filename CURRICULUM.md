@@ -640,16 +640,78 @@ the most important -- you should be able to state and prove these from memory.
 **Primary text:** Bach, F. *Learning Theory from First Principles* (2024, free online)
 **Supplementary:** Pinkus, A. *Approximation Theory of the MLP Model* (1999, Acta Numerica)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 59 | Bach Ch.1--2: statistical learning | ERM, hypothesis classes, generalization bounds | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 60 | Bach Ch.3: bias-variance | Bias-variance decomposition, model selection | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 61 | Bach Ch.4: kernel methods | Kernel trick, Mercer's theorem, RKHS construction | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 62 | Bach Ch.5: RKHS theory | Reproducing kernel Hilbert spaces, representer theorem | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 63 | Bach Ch.6: NN approximation | Universal approximation theorems (Cybenko, Hornik et al.) | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 64 | Bach Ch.7: NN optimization | Barron's theorem, dimension-free approximation rates | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 65 | Pinkus (1999): approximation rates | Approximation rates for smooth functions, width vs depth tradeoffs | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
-| 66 | NTK perspective + complexity | Neural Tangent Kernel, Rademacher complexity bounds for NNs | [01-approximation-theory](03-deep-learning/01-neural-networks/01-approximation-theory.pdf) |
+#### Lesson 59: Empirical Risk Minimization and Generalization
+
+> [lesson-59](03-deep-learning/01-neural-networks/lesson-59-erm-and-generalization.pdf)
+
+- **Definitions:** 3.1 Supervised Learning Setup, 3.2 Population Risk and Empirical Risk, 3.4 Bayes Risk and Best-in-Class Risk, 3.5 Empirical Risk Minimizer, 3.6 Excess Risk Decomposition, 5.1 Restriction and Shattering, 5.2 Growth Function, 5.3 VC Dimension, 6.1 Uniform Convergence of Empirical Risk, 6.4 PAC Learnability
+- **Key results:** 4.1 Assumption (Bounded Loss), 4.2 Lemma (Pointwise Concentration), **4.3 Thm (Finite Class Generalization Bound)**, **5.7 Thm (Sauer's Lemma)**, **5.10 Thm (VC Bound)**, 6.2 Thm (ERM Generalizes Under Uniform Convergence), **6.5 Thm (Fundamental Theorem of Statistical Learning)**
+- **Examples:** 3.7 Linear Classifiers, 3.8 Polynomial Regression, 4.4 Threshold Classifiers, 5.5 VC Dimension of Intervals, 5.6 VC Dimension of Halfspaces, 5.7 VC Dimension of Finite Classes, 5.11 VC Bound for Halfspaces
+- **Exercises:** 59.1--59.5
+
+#### Lesson 60: Bias-Variance Tradeoff and Model Selection
+
+> [lesson-60](03-deep-learning/01-neural-networks/lesson-60-bias-variance-and-model-selection.pdf)
+
+- **Definitions:** 3.1 Regression Function and Noise, 3.3 Best-in-Class Function, 4.1 Nested Hypothesis Classes, 4.5 Structural Risk Minimization, 5.1 Penalized Risk Minimization, 5.4 AIC and BIC, 6.1 K-Fold Cross-Validation, 6.2 Leave-One-Out Cross-Validation
+- **Key results:** 3.2 Prop (Bayes Risk for Squared Loss), **3.4 Thm (Bias-Variance Decomposition)**, 4.2 Prop (Monotonicity of Approximation and Estimation Errors), **4.3 Thm (Oracle Inequality for ERM)**, **5.2 Thm (Oracle Inequality for Penalized Selection)**, **6.3 Thm (LOOCV Approximately Unbiased)**, 6.6 Prop (K-Fold Bias-Variance Tradeoff)
+- **Examples:** 3.6 Polynomial Regression, 3.7 Nearest Neighbor, 4.4 Optimal Polynomial Degree, 5.3 VC-Based Penalty, 5.6 AIC vs BIC for Polynomial Selection, 6.5 LOOCV for Polynomial Selection, 6.7 Selecting Polynomial Degree via 5-Fold CV
+- **Exercises:** 60.1--60.5
+
+#### Lesson 61: Kernel Methods
+
+> [lesson-61](03-deep-learning/01-neural-networks/lesson-61-kernel-methods.pdf)
+
+- **Definitions:** 3.1 Feature Map, 3.2 Kernel Function, 4.1 Positive Definite Kernel, 5.1 Assumption (Mercer Setting), 5.2 Integral Operator
+- **Key results:** 3.5 Prop (Kernelization Criterion), **4.3 Thm (Inner-Product Kernels are PD)**, **4.4 Thm (Closure Properties of PD Kernels)**, 5.3 Lemma (Properties of Integral Operator), **5.4 Thm (Mercer's Theorem)**, 6.2 Prop (General Polynomial Kernel), **6.3 Thm (Positive Definiteness of Gaussian Kernel)**, 6.5 Prop (Laplacian Kernel), 6.6 Prop (Additional Closure Operations)
+- **Examples:** 3.3 Polynomial Kernel, 3.4 Kernelized Ridge Regression, 4.5 Linear Kernel, 4.6 Polynomial Kernel (PD), 4.7 Gaussian RBF Kernel, 5.5 Eigenexpansion of Gaussian on [0,1], 6.1 Bag-of-Words Kernel, 6.7 Constructing Kernels by Composition
+- **Exercises:** 61.1--61.6
+
+#### Lesson 62: RKHS and the Representer Theorem
+
+> [lesson-62](03-deep-learning/01-neural-networks/lesson-62-rkhs-and-representer-theorem.pdf)
+
+- **Definitions:** 3.1 Reproducing Kernel Hilbert Space, 3.3 Reproducing Kernel, 6.1 Kernel Ridge Regression, 6.5 Excess Risk
+- **Key results:** **3.5 Thm (RKHS Construction / Aronszajn's Theorem)**, **4.1 Thm (Pointwise Bound)**, 4.3 Corollary (Uniform Pointwise Bound), 4.4 Prop (RKHS Convergence Implies Pointwise), 4.5 Thm (RKHS Inclusion), **4.6 Thm (Mercer Characterization)**, **5.1 Thm (Representer Theorem)**, **6.2 Thm (KRR Solution)**, 6.4 Assumption (Statistical Setting), **6.6 Thm (Excess Risk Bound for KRR)**, 6.7 Corollary (Optimal Regularization)
+- **Examples:** 3.6 RKHS of the Linear Kernel, 3.7 RKHS of the Polynomial Kernel, 4.7 RKHS of the Gaussian Kernel, 5.2 Representer Theorem for Squared Loss, 5.3 Representer Theorem for SVM, 6.3 KRR with the Gaussian Kernel, 6.8 KRR with Sobolev Kernel
+- **Exercises:** 62.1--62.6
+
+#### Lesson 63: Universal Approximation
+
+> [lesson-63](03-deep-learning/01-neural-networks/lesson-63-universal-approximation.pdf)
+
+- **Definitions:** 3.1 Single-Hidden-Layer Network, 3.3 Universal Approximation Property, 4.1 Sigmoidal Function, 4.3 Discriminatory Function, 5.1 Non-Polynomial Activation
+- **Key results:** 4.4 Lemma (Sigmoidal Implies Discriminatory), **4.5 Thm (Cybenko, 1989)**, 5.3 Lemma (Non-Polynomial Implies Discriminatory), **5.4 Thm (Hornik, 1989)**, 6.1 Prop (Lower Bound for Generic Functions)
+- **Examples:** 3.4 Common Activations, 3.5 Simple Network on [0,1], 4.2 Sigmoidal Functions, 4.6 Approximating a Step Function, 4.7 Constructive Illustration in 1D, 5.5 ReLU Is a Universal Approximator, 5.6 Verification for tanh, 6.2 Dimension Scaling, 6.4 Overfitting with Universal Approximators
+- **Exercises:** 63.1--63.6
+
+#### Lesson 64: Barron's Theorem and Approximation Rates
+
+> [lesson-64](03-deep-learning/01-neural-networks/lesson-64-barron-theorem-and-approximation-rates.pdf)
+
+- **Definitions:** 3.1 Fourier Transform, 3.2 Barron Norm, 3.4 Barron Class, 5.5 Variation Norm, 6.1 Integral Representation of Neural Networks
+- **Key results:** 4.1 Lemma (Fourier Representation of Barron Functions), 4.3 Prop (Expectation Representation), **4.4 Thm (Barron, 1993)**, 5.1 Prop (Classical Approximation Rates), 5.4 Prop (Sample Complexity for Barron Class), 6.3 Prop (Barron Norm as Total Variation)
+- **Examples:** 3.6 Gaussian Function, 3.7 Logistic Function, 3.8 Indicator Functions Not in Barron Class, 4.5 Approximating a Gaussian, 4.6 Linear Combination of Sigmoids, 5.2 Dimension Dependence (Sobolev vs Barron), 6.4 Integral Representation of a Gaussian, 6.5 Integral Representation of a Two-Layer Network
+- **Exercises:** 64.1--64.6
+
+#### Lesson 65: Depth-Width Tradeoffs
+
+> [lesson-65](03-deep-learning/01-neural-networks/lesson-65-depth-width-tradeoffs.pdf)
+
+- **Definitions:** 3.1 L-Layer Neural Network, 3.2 Width and Depth, 3.3 Deep Network Function Class, 4.1 Tent Map, 4.3 Sawtooth Function, 5.4 Linear Region, 6.1 Sobolev Space, 6.5 Compositional Function
+- **Key results:** 4.2 Lemma (ReLU Representation of Tent Map), 4.4 Lemma (Properties of Sawtooth), 4.6 Prop (Sawtooth as Deep Network), 4.7 Lemma (Linear Pieces of Shallow ReLU Networks), 4.8 Lemma (Oscillation Lower Bound), **4.9 Thm (Telgarsky Depth Separation)**, **5.1 Thm (Lu et al. Width Sufficiency)**, **5.2 Thm (Hanin Minimal Width)**, **5.5 Thm (Linear Region Bounds)**, 6.2 Prop (Classical Minimax Rates), **6.3 Thm (Yarotsky, 2017)**, **6.6 Thm (Depth Advantage for Compositional Functions)**
+- **Examples:** 3.4 Parameter Count (Shallow vs Deep), 4.5 Sawtooth Functions for Small L, 4.10 Depth-2 vs Depth-20, 4.11 Depth Separation in Higher Dimensions, 5.3 Minimal Width in One Dimension, 5.6 Linear Regions (Depth vs Width), 6.7 Vision-Like Compositional Structure
+- **Exercises:** 65.1--65.6
+
+#### Lesson 66: Neural Tangent Kernel and Rademacher Complexity
+
+> [lesson-66](03-deep-learning/01-neural-networks/lesson-66-ntk-and-rademacher-complexity.pdf)
+
+- **Definitions:** 3.1 Rademacher Random Variables, 3.2 Empirical Rademacher Complexity, 3.3 Rademacher Complexity, 5.1 Neural Tangent Kernel
+- **Key results:** **3.6 Thm (Rademacher Generalization Bound)**, 4.1 Lemma (Contraction / Ledoux-Talagrand), **4.3 Thm (Bartlett-Foster-Telgarsky Spectrally-Normalized Bound)**, 5.4 Prop (Gradient Descent in Function Space), **5.6 Thm (NTK Convergence at Initialization)**, **5.8 Thm (Lazy Training Regime)**, 6.1 Prop (NTK Generalization via Kernel Theory), 6.4 Prop (NTK Limitations)
+- **Examples:** 3.5 Rademacher Complexity of Linear Classifiers, 3.7 Rademacher vs VC for Halfspaces, 4.4 Parameter-Free Bound for a DQN, 5.3 NTK for a Two-Layer Network, 5.7 NTK for Two-Layer ReLU, 6.2 NTK Generalization for Overparameterized Networks
+- **Exercises:** 66.1--66.6
+- **Review:** Capstone summary table (Lessons 59--66) covering the Neural Network Theory subdomain arc from statistical learning foundations through kernel methods to NTK and Rademacher complexity
 
 ### 3.2 Recurrent Neural Networks (Lessons 67--69)
 
