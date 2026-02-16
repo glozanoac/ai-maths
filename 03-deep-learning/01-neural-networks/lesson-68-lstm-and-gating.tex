@@ -1,0 +1,898 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 68: LSTM and Gating Mechanisms}}
+\fancyhead[R]{\thepage}
+\title{Lesson 68: Long Short-Term Memory\\and Gating Mechanisms}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+In Lesson~67, we proved that the gradient of the loss with respect to
+an earlier hidden state decays exponentially as $\gamma^{t-\tau}$ when
+$\|\mathbf{U}\| < 1$.  This means a vanilla RNN cannot learn to
+associate an input at time $\tau = 1$ with a target at time $t = 100$:
+the gradient signal is attenuated by a factor of $\gamma^{99}$, which
+is negligible for any $\gamma < 1$.  The root cause is the
+\emph{multiplicative} nature of gradient flow through the recurrence
+$\mathbf{h}_t = \tanh(\mathbf{W}\mathbf{x}_t +
+\mathbf{U}\mathbf{h}_{t-1} + \mathbf{b})$: each backward step
+multiplies by $\diag(1 - \mathbf{h}_t^2)\mathbf{U}$, and the product
+of many such matrices either shrinks or grows.
+
+What if we could replace this multiplicative chain with an
+\emph{additive} update?  The Long Short-Term Memory (LSTM)
+architecture, introduced by \citet{hochreiter1997}, does exactly this.
+It introduces a \emph{cell state} $\mathbf{c}_t$ that is updated
+additively: $\mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+\mathbf{i}_t \odot \tilde{\mathbf{c}}_t$.  When the forget gate
+$\mathbf{f}_t \approx \mathbf{1}$, gradients flow through the cell
+state with minimal decay, creating a ``gradient highway'' that allows
+information to persist over hundreds of time steps.  The tools
+developed in this lesson will let us formalize the LSTM architecture,
+derive the BPTT algorithm through its gated structure, and prove that
+the cell state update mitigates the vanishing gradient problem.
+
+\begin{rlconnection}[title={Why LSTMs Matter for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Recurrent policies in POMDPs.}  LSTM-based policies
+    in PPO and A3C can maintain belief states over long episodes,
+    enabling effective decision-making under partial observability.
+  \item \textbf{Long-range credit assignment.}  The LSTM's ability to
+    preserve gradient flow over hundreds of steps is critical for
+    tasks where rewards are sparse or delayed.
+  \item \textbf{Sequence modeling benchmarks.}  LSTMs achieve
+    state-of-the-art results on speech recognition, machine
+    translation, and language modeling---tasks that require capturing
+    long-range dependencies.
+  \item \textbf{Gating as a design principle.}  The gating mechanism
+    introduced by LSTMs appears throughout deep RL: highway networks,
+    residual connections, and attention mechanisms all use similar
+    ideas of controlled information flow.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Vanilla RNN architecture and BPTT (Lesson~67, Definitions~4.2--5.3
+and Theorems~6.1--6.4).  Vanishing gradient problem and the Jacobian
+product structure (Lesson~67, Section~7).  Sigmoid function
+$\sigma(z) = 1/(1 + e^{-z})$ and its derivative
+$\sigma'(z) = \sigma(z)(1 - \sigma(z))$ (Lesson~63, Section~3).
+Hadamard (element-wise) product.
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the LSTM cell architecture, including the
+    forget gate, input gate, candidate cell state, cell state
+    update, and output gate.
+  \item \textbf{Derive} the complete LSTM forward equations and
+    \textbf{compute} the parameter count.
+  \item \textbf{Derive} the BPTT algorithm through the LSTM,
+    including the cell state gradient recurrence and gate gradients.
+  \item \textbf{Prove} that the cell state gradient recurrence
+    $\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1} =
+    \diag(\mathbf{f}_t)$ allows gradients to flow with minimal
+    decay when $\mathbf{f}_t \approx \mathbf{1}$.
+  \item \textbf{Compare} the gradient flow in LSTMs versus vanilla
+    RNNs and \textbf{explain} why the additive cell state update
+    solves the vanishing gradient problem.
+  \item \textbf{Describe} LSTM variants (peephole connections,
+    coupled input-forget gate) and \textbf{evaluate} their
+    trade-offs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet{hochreiter1997} --- The original LSTM paper:
+    architecture, gating mechanisms, and experimental validation
+    on long-range dependency tasks.
+  \item \citet{gers2000} --- Introduction of the forget gate, which
+    was absent from the original LSTM and is now considered essential.
+  \item \citet{greff2017} --- Comprehensive empirical study of LSTM
+    variants, ablation studies, and practical guidelines.
+  \item \citet[Chapter~10]{goodfellow2016} --- Textbook treatment of
+    LSTM architecture and its relationship to gated recurrent
+    networks.
+  \item \citet{graves2012} --- Supervised sequence labelling with
+    LSTMs, including CTC and bidirectional architectures.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: THE GATING PRINCIPLE
+%% ============================================================
+\section{The Gating Principle}
+\label{sec:gating-principle}
+
+The central idea behind the LSTM is to control information flow using
+\emph{gates}: vectors whose components lie in $(0, 1)$, which act as
+soft switches via element-wise multiplication.
+
+\begin{definition}[Sigmoid Gate]
+\label{def:sigmoid-gate}
+A \emph{sigmoid gate} is a vector
+$\mathbf{g} \in (0, 1)^m$ computed as:
+\[
+  \mathbf{g} = \sigma(\mathbf{W}_g \mathbf{x}_t +
+    \mathbf{U}_g \mathbf{h}_{t-1} + \mathbf{b}_g),
+\]
+where $\sigma(z) = 1/(1 + e^{-z})$ is the logistic sigmoid applied
+element-wise.
+\end{definition}
+
+\begin{definition}[Hadamard Product]
+\label{def:hadamard}
+For vectors $\mathbf{a}, \mathbf{b} \in \R^m$, the \emph{Hadamard
+product} $\mathbf{a} \odot \mathbf{b} \in \R^m$ is defined
+component-wise:
+\[
+  (\mathbf{a} \odot \mathbf{b})_j = a_j \cdot b_j,
+  \quad j = 1, \ldots, m.
+\]
+In matrix form: $\mathbf{a} \odot \mathbf{b} =
+\diag(\mathbf{a})\mathbf{b} = \diag(\mathbf{b})\mathbf{a}$.
+\end{definition}
+
+\begin{remark}[Gating as Soft Selection]
+\label{rem:gating}
+The operation $\mathbf{g} \odot \mathbf{v}$ where
+$\mathbf{g} \in (0, 1)^m$ acts as a soft selection: when
+$g_j \approx 1$, component $v_j$ passes through; when
+$g_j \approx 0$, it is suppressed.  This allows the network to
+\emph{learn} which information to keep, which to discard, and which
+to update---all in a differentiable manner.
+\end{remark}
+
+\begin{proposition}[Derivative Properties]
+\label{prop:activation-derivatives}
+The activation functions used in LSTM gates satisfy:
+\begin{align}
+  \frac{d\sigma}{dz} &= \sigma(z)(1 - \sigma(z)),
+    \label{eq:sigmoid-deriv} \\
+  \frac{d\tanh}{dz} &= 1 - \tanh^2(z) = \mathrm{sech}^2(z).
+    \label{eq:tanh-deriv}
+\end{align}
+Both derivatives can be expressed in terms of the function values,
+enabling efficient computation during backpropagation.
+\end{proposition}
+
+\begin{proof}
+For the sigmoid:
+$\frac{d}{dz}\frac{1}{1+e^{-z}} = \frac{e^{-z}}{(1+e^{-z})^2}
+= \frac{1}{1+e^{-z}} \cdot \frac{e^{-z}}{1+e^{-z}}
+= \sigma(z)(1 - \sigma(z))$.
+The $\tanh$ derivative follows from
+$\tanh(z) = 2\sigma(2z) - 1$, giving
+$\frac{d\tanh}{dz} = 2 \cdot 2\sigma(2z)(1-\sigma(2z)) =
+1 - \tanh^2(z)$.
+\end{proof}
+
+We now construct the LSTM cell from four gating components.
+
+%% ============================================================
+%% SECTION 4: LSTM CELL ARCHITECTURE
+%% ============================================================
+\section{LSTM Cell Architecture}
+\label{sec:lstm-cell}
+
+The LSTM cell maintains two state vectors at each time step:
+\begin{itemize}[nosep]
+  \item The \emph{cell state} $\mathbf{c}_t \in \R^m$: long-term
+    memory, updated additively.
+  \item The \emph{hidden state} $\mathbf{h}_t \in (-1, 1)^m$:
+    short-term memory and output, derived from the cell state.
+\end{itemize}
+Four components govern the cell update at each time step.
+
+\subsection{The Forget Gate}
+
+\begin{definition}[Forget Gate]
+\label{def:forget-gate}
+The \emph{forget gate} $\mathbf{f}_t \in (0, 1)^m$ at time $t$
+determines which components of the previous cell state to retain:
+\begin{equation}
+  \boxed{\mathbf{f}_t = \sigma(\mathbf{W}_f \mathbf{x}_t +
+    \mathbf{U}_f \mathbf{h}_{t-1} + \mathbf{b}_f)},
+  \label{eq:forget-gate}
+\end{equation}
+where $\mathbf{W}_f \in \R^{m \times n}$,
+$\mathbf{U}_f \in \R^{m \times m}$, and
+$\mathbf{b}_f \in \R^m$.
+\end{definition}
+
+\begin{remark}[Interpretation]
+When $f_t^{(j)} \approx 0$, the $j$-th component of the cell state
+is ``forgotten'' (erased).  When $f_t^{(j)} \approx 1$, it is
+preserved.  The forget gate was not part of the original LSTM
+\citep{hochreiter1997} but was added by \citet{gers2000} and is now
+considered essential.
+\end{remark}
+
+\subsection{The Input Gate and Candidate Cell State}
+
+\begin{definition}[Input Gate]
+\label{def:input-gate}
+The \emph{input gate} $\mathbf{i}_t \in (0, 1)^m$ controls how much
+of the new candidate information to incorporate:
+\begin{equation}
+  \boxed{\mathbf{i}_t = \sigma(\mathbf{W}_i \mathbf{x}_t +
+    \mathbf{U}_i \mathbf{h}_{t-1} + \mathbf{b}_i)},
+  \label{eq:input-gate}
+\end{equation}
+where $\mathbf{W}_i \in \R^{m \times n}$,
+$\mathbf{U}_i \in \R^{m \times m}$, and
+$\mathbf{b}_i \in \R^m$.
+\end{definition}
+
+\begin{definition}[Candidate Cell State]
+\label{def:candidate}
+The \emph{candidate cell state}
+$\tilde{\mathbf{c}}_t \in (-1, 1)^m$ represents potential new
+information:
+\begin{equation}
+  \boxed{\tilde{\mathbf{c}}_t = \tanh(\mathbf{W}_c \mathbf{x}_t +
+    \mathbf{U}_c \mathbf{h}_{t-1} + \mathbf{b}_c)},
+  \label{eq:candidate}
+\end{equation}
+where $\mathbf{W}_c \in \R^{m \times n}$,
+$\mathbf{U}_c \in \R^{m \times m}$, and
+$\mathbf{b}_c \in \R^m$.
+\end{definition}
+
+\subsection{Cell State Update}
+
+\begin{definition}[Cell State Update]
+\label{def:cell-update}
+The cell state is updated by combining retained old information with
+gated new information:
+\begin{equation}
+  \boxed{\mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+    \mathbf{i}_t \odot \tilde{\mathbf{c}}_t}.
+  \label{eq:cell-update}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Additive Structure]
+\label{rem:additive}
+The cell state update~\eqref{eq:cell-update} is \emph{additive}:
+$\mathbf{c}_t$ is a weighted sum of the previous cell state and a
+new candidate.  This is the key architectural innovation.  Unlike the
+vanilla RNN's multiplicative update
+$\mathbf{h}_t = \tanh(\mathbf{U}\mathbf{h}_{t-1} + \cdots)$, the
+additive structure allows the Jacobian
+$\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1}$ to be close to
+the identity, enabling gradient flow over long distances.
+\end{remark}
+
+\subsection{The Output Gate and Hidden State}
+
+\begin{definition}[Output Gate]
+\label{def:output-gate}
+The \emph{output gate} $\mathbf{o}_t \in (0, 1)^m$ determines which
+components of the cell state are exposed as the hidden state:
+\begin{equation}
+  \boxed{\mathbf{o}_t = \sigma(\mathbf{W}_o \mathbf{x}_t +
+    \mathbf{U}_o \mathbf{h}_{t-1} + \mathbf{b}_o)},
+  \label{eq:output-gate}
+\end{equation}
+where $\mathbf{W}_o \in \R^{m \times n}$,
+$\mathbf{U}_o \in \R^{m \times m}$, and
+$\mathbf{b}_o \in \R^m$.
+\end{definition}
+
+\begin{definition}[Hidden State Output]
+\label{def:hidden-output}
+The hidden state is computed by filtering the cell state through the
+output gate:
+\begin{equation}
+  \boxed{\mathbf{h}_t = \mathbf{o}_t \odot \tanh(\mathbf{c}_t)}.
+  \label{eq:hidden-output}
+\end{equation}
+The $\tanh$ squashes the cell state to $(-1, 1)$, and the output
+gate selects which components to expose.
+\end{definition}
+
+\begin{example}[LSTM as Selective Memory]
+\label{ex:selective-memory}
+Consider a language model processing the sentence ``The cat, which
+was sitting on the mat, \textbf{was} sleeping.''  The LSTM must
+remember that the subject is singular (``cat'') across the relative
+clause to correctly predict the verb ``was'' (not ``were''):
+\begin{itemize}[nosep]
+  \item At ``cat'': the input gate stores subject number information
+    in a cell state component.
+  \item During the relative clause: the forget gate keeps this
+    component close to $1$, preserving the information.
+  \item At the verb position: the output gate exposes the number
+    information to influence the prediction.
+\end{itemize}
+A vanilla RNN would lose this information due to the vanishing
+gradient over the 7-word gap.
+\end{example}
+
+%% ============================================================
+%% SECTION 5: COMPLETE LSTM FORWARD PASS
+%% ============================================================
+\section{Complete LSTM Forward Pass}
+\label{sec:forward-pass}
+
+\begin{keyresult}[title={LSTM Forward Equations}]
+At each time step $t = 1, \ldots, T$:
+\begin{align}
+  \mathbf{f}_t &= \sigma(\mathbf{W}_f \mathbf{x}_t +
+    \mathbf{U}_f \mathbf{h}_{t-1} + \mathbf{b}_f),
+    && \text{[Forget Gate]} \label{eq:lstm-f} \\
+  \mathbf{i}_t &= \sigma(\mathbf{W}_i \mathbf{x}_t +
+    \mathbf{U}_i \mathbf{h}_{t-1} + \mathbf{b}_i),
+    && \text{[Input Gate]} \label{eq:lstm-i} \\
+  \tilde{\mathbf{c}}_t &= \tanh(\mathbf{W}_c \mathbf{x}_t +
+    \mathbf{U}_c \mathbf{h}_{t-1} + \mathbf{b}_c),
+    && \text{[Candidate]} \label{eq:lstm-c-tilde} \\
+  \mathbf{c}_t &= \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+    \mathbf{i}_t \odot \tilde{\mathbf{c}}_t,
+    && \text{[Cell Update]} \label{eq:lstm-c} \\
+  \mathbf{o}_t &= \sigma(\mathbf{W}_o \mathbf{x}_t +
+    \mathbf{U}_o \mathbf{h}_{t-1} + \mathbf{b}_o),
+    && \text{[Output Gate]} \label{eq:lstm-o} \\
+  \mathbf{h}_t &= \mathbf{o}_t \odot \tanh(\mathbf{c}_t),
+    && \text{[Hidden State]} \label{eq:lstm-h}
+\end{align}
+with initial conditions $\mathbf{h}_0 = \mathbf{0} \in \R^m$ and
+$\mathbf{c}_0 = \mathbf{0} \in \R^m$.
+\end{keyresult}
+
+\begin{proposition}[LSTM Parameter Count]
+\label{prop:lstm-params}
+For an LSTM with input dimension $n$ and hidden dimension $m$, the
+total number of trainable parameters (excluding the output layer) is:
+\begin{equation}
+  P = 4(mn + m^2 + m) = 4m(n + m + 1).
+  \label{eq:lstm-params}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Each of the four components (forget gate, input gate, candidate,
+output gate) has:
+\begin{itemize}[nosep]
+  \item Input weight matrix: $m \times n$ parameters,
+  \item Recurrent weight matrix: $m \times m$ parameters,
+  \item Bias vector: $m$ parameters.
+\end{itemize}
+Total: $4 \times (mn + m^2 + m) = 4m(n + m + 1)$.
+\end{proof}
+
+\begin{remark}[LSTM vs Vanilla RNN Parameters]
+An LSTM has approximately $4\times$ more parameters than a vanilla
+RNN of the same hidden dimension, due to the four separate
+gate/candidate components.  Despite this overhead, the improved
+gradient flow typically justifies the additional cost.
+\end{remark}
+
+\begin{definition}[Compact Matrix Formulation]
+\label{def:compact}
+For computational efficiency, define concatenated parameters:
+\begin{equation}
+  \mathbf{W} = \begin{pmatrix} \mathbf{W}_f \\ \mathbf{W}_i \\
+    \mathbf{W}_c \\ \mathbf{W}_o \end{pmatrix} \in \R^{4m \times n},
+  \quad
+  \mathbf{U} = \begin{pmatrix} \mathbf{U}_f \\ \mathbf{U}_i \\
+    \mathbf{U}_c \\ \mathbf{U}_o \end{pmatrix} \in \R^{4m \times m},
+  \quad
+  \mathbf{b} = \begin{pmatrix} \mathbf{b}_f \\ \mathbf{b}_i \\
+    \mathbf{b}_c \\ \mathbf{b}_o \end{pmatrix} \in \R^{4m}.
+  \label{eq:compact-params}
+\end{equation}
+All pre-activations are computed in a single operation:
+\[
+  \mathbf{z}_t = \mathbf{W}\mathbf{x}_t + \mathbf{U}\mathbf{h}_{t-1}
+    + \mathbf{b} \in \R^{4m},
+\]
+then split into four segments of size $m$ and passed through the
+appropriate activations ($\sigma$ for gates, $\tanh$ for candidate).
+This reduces the number of matrix multiplications from 8 to 2.
+\end{definition}
+
+\begin{example}[LSTM Parameter Count]
+\label{ex:param-count}
+For an LSTM processing word embeddings of dimension $n = 300$ with
+hidden size $m = 512$:
+\[
+  P = 4 \times 512 \times (300 + 512 + 1) = 4 \times 512 \times 813
+    = 1{,}664{,}256 \approx 1.66\text{M parameters}.
+\]
+A vanilla RNN of the same dimensions has
+$512 \times (300 + 512 + 1) = 416{,}256 \approx 0.42\text{M}$, about
+$4\times$ fewer.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: BPTT THROUGH LSTM
+%% ============================================================
+\section{Backpropagation Through the LSTM}
+\label{sec:bptt-lstm}
+
+Given a sequence loss $\mathcal{L} = \sum_{t=1}^T \mathcal{L}_t$,
+we derive the gradients by propagating errors backward through the
+LSTM computational graph.  Define the error signals:
+\begin{align}
+  \boldsymbol{\delta}_t^h &= \frac{\partial \mathcal{L}}
+    {\partial \mathbf{h}_t}, \label{eq:delta-h} \\
+  \boldsymbol{\delta}_t^c &= \frac{\partial \mathcal{L}}
+    {\partial \mathbf{c}_t}. \label{eq:delta-c}
+\end{align}
+
+\begin{theorem}[Cell State Gradient Recurrence]
+\label{thm:cell-gradient}
+The cell state error signal satisfies the recurrence:
+\begin{equation}
+  \boxed{\boldsymbol{\delta}_t^c = \boldsymbol{\delta}_t^h \odot
+    \mathbf{o}_t \odot (1 - \tanh^2(\mathbf{c}_t)) +
+    \boldsymbol{\delta}_{t+1}^c \odot \mathbf{f}_{t+1}}.
+  \label{eq:cell-recurrence}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+The cell state $\mathbf{c}_t$ influences the total loss through two
+paths:
+\begin{enumerate}[nosep]
+  \item Through the current hidden state:
+    $\mathbf{c}_t \to \tanh(\mathbf{c}_t) \to \mathbf{h}_t$.
+  \item Through the next cell state:
+    $\mathbf{c}_t \to \mathbf{c}_{t+1}$ via the cell update equation.
+\end{enumerate}
+
+For path (1): since $\mathbf{h}_t = \mathbf{o}_t \odot
+\tanh(\mathbf{c}_t)$,
+\[
+  \frac{\partial \mathbf{h}_t}{\partial \mathbf{c}_t}
+    = \diag(\mathbf{o}_t) \diag(1 - \tanh^2(\mathbf{c}_t)).
+\]
+So the contribution is $\boldsymbol{\delta}_t^h \odot \mathbf{o}_t
+\odot (1 - \tanh^2(\mathbf{c}_t))$.
+
+For path (2): since $\mathbf{c}_{t+1} = \mathbf{f}_{t+1} \odot
+\mathbf{c}_t + \mathbf{i}_{t+1} \odot \tilde{\mathbf{c}}_{t+1}$,
+and in the standard LSTM (without peephole connections) the gates
+$\mathbf{f}_{t+1}$, $\mathbf{i}_{t+1}$, and
+$\tilde{\mathbf{c}}_{t+1}$ do not depend on $\mathbf{c}_t$:
+\[
+  \frac{\partial \mathbf{c}_{t+1}}{\partial \mathbf{c}_t}
+    = \diag(\mathbf{f}_{t+1}).
+\]
+Combining both paths gives the recurrence~\eqref{eq:cell-recurrence}.
+\end{proof}
+
+\begin{keyresult}[title={LSTM Gradient Highway}]
+The cell state gradient recurrence
+$\boldsymbol{\delta}_t^c = (\text{local term}) +
+\boldsymbol{\delta}_{t+1}^c \odot \mathbf{f}_{t+1}$
+is the key to the LSTM's success.  The gradient flows backward
+through the cell state by multiplication with the forget gate values
+$\mathbf{f}_{t+1}$.  When $\mathbf{f}_t \approx \mathbf{1}$:
+\[
+  \boldsymbol{\delta}_1^c \approx \boldsymbol{\delta}_T^c \cdot
+    \prod_{t=2}^{T} \diag(\mathbf{f}_t) \approx
+    \boldsymbol{\delta}_T^c,
+\]
+achieving near-perfect gradient preservation over $T$ steps.
+\end{keyresult}
+
+The gate pre-activation gradients are used to compute weight
+gradients.  Define the pre-activation error signals:
+\begin{align}
+  \boldsymbol{\delta}_t^f &= \boldsymbol{\delta}_t^c \odot
+    \mathbf{c}_{t-1} \odot \mathbf{f}_t \odot (1 - \mathbf{f}_t),
+    && \text{[Forget Gate]} \label{eq:delta-f} \\
+  \boldsymbol{\delta}_t^i &= \boldsymbol{\delta}_t^c \odot
+    \tilde{\mathbf{c}}_t \odot \mathbf{i}_t \odot
+    (1 - \mathbf{i}_t),
+    && \text{[Input Gate]} \label{eq:delta-i} \\
+  \boldsymbol{\delta}_t^{\tilde{c}} &= \boldsymbol{\delta}_t^c
+    \odot \mathbf{i}_t \odot (1 - \tilde{\mathbf{c}}_t^2),
+    && \text{[Candidate]} \label{eq:delta-c-tilde} \\
+  \boldsymbol{\delta}_t^o &= \boldsymbol{\delta}_t^h \odot
+    \tanh(\mathbf{c}_t) \odot \mathbf{o}_t \odot
+    (1 - \mathbf{o}_t).
+    && \text{[Output Gate]} \label{eq:delta-o}
+\end{align}
+
+\begin{theorem}[LSTM Weight Gradients]
+\label{thm:lstm-weight-grads}
+The gradients with respect to the forget gate parameters are:
+\begin{align}
+  \frac{\partial \mathcal{L}}{\partial \mathbf{W}_f}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^f \mathbf{x}_t^\top,
+    \label{eq:grad-Wf} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{U}_f}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^f
+       \mathbf{h}_{t-1}^\top,
+    \label{eq:grad-Uf} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{b}_f}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^f.
+    \label{eq:grad-bf}
+\end{align}
+Analogous expressions hold for the input gate, candidate, and output
+gate parameters (replacing the superscript $f$ with $i$,
+$\tilde{c}$, and $o$ respectively).
+\end{theorem}
+
+\begin{proof}
+Consider the forget gate at time $t$.  Let
+$\mathbf{z}_t^f = \mathbf{W}_f \mathbf{x}_t +
+\mathbf{U}_f \mathbf{h}_{t-1} + \mathbf{b}_f$ be the
+pre-activation.  Then $\mathbf{f}_t = \sigma(\mathbf{z}_t^f)$
+and the chain rule gives:
+\[
+  \frac{\partial \mathcal{L}}{\partial \mathbf{z}_t^f}
+    = \frac{\partial \mathcal{L}}{\partial \mathbf{c}_t}
+      \odot \frac{\partial \mathbf{c}_t}{\partial \mathbf{f}_t}
+      \odot \frac{\partial \mathbf{f}_t}{\partial \mathbf{z}_t^f}
+    = \boldsymbol{\delta}_t^c \odot \mathbf{c}_{t-1} \odot
+      \mathbf{f}_t \odot (1 - \mathbf{f}_t)
+    = \boldsymbol{\delta}_t^f.
+\]
+Since $\mathbf{z}_t^f = \mathbf{W}_f \mathbf{x}_t +
+\mathbf{U}_f \mathbf{h}_{t-1} + \mathbf{b}_f$, the weight
+gradients follow by the standard matrix calculus:
+$\frac{\partial \mathcal{L}}{\partial \mathbf{W}_f} =
+\sum_{t} \boldsymbol{\delta}_t^f \mathbf{x}_t^\top$.
+The derivations for the other gates are identical in structure.
+\end{proof}
+
+\begin{remark}[Hidden State Error Signal]
+The hidden state error $\boldsymbol{\delta}_t^h$ receives
+contributions from the current loss $\mathcal{L}_t$ and from the
+backpropagation through the gates at time $t + 1$ (since the gates
+at $t + 1$ depend on $\mathbf{h}_t$).  Specifically:
+\begin{equation}
+  \boldsymbol{\delta}_t^h = \frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t} + \sum_{g \in \{f,i,c,o\}}
+    \mathbf{U}_g^\top \boldsymbol{\delta}_{t+1}^g,
+  \label{eq:delta-h-full}
+\end{equation}
+where the sum is over the four gate/candidate pre-activation
+errors at time $t + 1$.
+\end{remark}
+
+%% ============================================================
+%% SECTION 7: GRADIENT FLOW ANALYSIS
+%% ============================================================
+\section{Gradient Flow Analysis}
+\label{sec:gradient-flow}
+
+We now formally compare the gradient flow properties of the LSTM
+with those of the vanilla RNN.
+
+\begin{theorem}[LSTM Cell State Jacobian]
+\label{thm:lstm-jacobian}
+In the standard LSTM (without peephole connections), the Jacobian of
+$\mathbf{c}_t$ with respect to $\mathbf{c}_{t-1}$ is:
+\begin{equation}
+  \frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}}
+    = \diag(\mathbf{f}_t).
+  \label{eq:lstm-jacobian}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Taking the partial derivative of the cell state update
+$\mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+\mathbf{i}_t \odot \tilde{\mathbf{c}}_t$ with respect to
+$\mathbf{c}_{t-1}$:
+\[
+  \frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}}
+    = \diag(\mathbf{f}_t)
+      + \mathbf{c}_{t-1} \odot \frac{\partial \mathbf{f}_t}
+        {\partial \mathbf{c}_{t-1}}
+      + \tilde{\mathbf{c}}_t \odot
+        \frac{\partial \mathbf{i}_t}{\partial \mathbf{c}_{t-1}}
+      + \mathbf{i}_t \odot
+        \frac{\partial \tilde{\mathbf{c}}_t}
+          {\partial \mathbf{c}_{t-1}}.
+\]
+In the standard LSTM, the gates depend on $\mathbf{x}_t$ and
+$\mathbf{h}_{t-1}$ but \emph{not directly} on $\mathbf{c}_{t-1}$,
+so the last three terms vanish:
+$\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_{t-1}} =
+\diag(\mathbf{f}_t)$.
+\end{proof}
+
+\begin{corollary}[Long-Range Cell State Gradient]
+\label{cor:long-range-lstm}
+The gradient of $\mathcal{L}$ with respect to an earlier cell state
+$\mathbf{c}_\tau$ ($\tau < t$) through the cell state pathway is:
+\begin{equation}
+  \frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_\tau}
+    = \prod_{i=\tau+1}^{t} \diag(\mathbf{f}_i).
+  \label{eq:long-range-cell}
+\end{equation}
+\end{corollary}
+
+\begin{proof}
+By Theorem~\ref{thm:lstm-jacobian} and the chain rule:
+$\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_\tau} =
+\prod_{i=\tau+1}^{t} \frac{\partial \mathbf{c}_i}
+{\partial \mathbf{c}_{i-1}} = \prod_{i=\tau+1}^{t}
+\diag(\mathbf{f}_i)$.
+\end{proof}
+
+\begin{theorem}[Vanishing Gradient Mitigation]
+\label{thm:vanishing-mitigation}
+When $\mathbf{f}_t \approx \mathbf{1}$ for all $t$, the cell state
+gradient satisfies:
+\begin{equation}
+  \frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_\tau}
+    \approx \mathbf{I},
+  \label{eq:gradient-preservation}
+\end{equation}
+preventing the exponential decay characteristic of vanilla RNNs.
+More precisely, for component $j$:
+\[
+  \left[\frac{\partial \mathbf{c}_t}{\partial \mathbf{c}_\tau}
+  \right]_{jj} = \prod_{i=\tau+1}^{t} f_i^{(j)}.
+\]
+If $f_i^{(j)} \geq 1 - \epsilon$ for all $i$, then
+$\prod_{i=\tau+1}^{t} f_i^{(j)} \geq (1-\epsilon)^{t-\tau}
+\geq 1 - (t-\tau)\epsilon$ for small $\epsilon$.
+\end{theorem}
+
+\begin{proof}
+When $\mathbf{f}_i \approx \mathbf{1}$ for all $i$, each diagonal
+matrix $\diag(\mathbf{f}_i) \approx \mathbf{I}$.  The product of
+$t - \tau$ such matrices is approximately $\mathbf{I}$.  For the
+precise bound, use $(1-\epsilon)^k \geq 1 - k\epsilon$ (valid for
+$0 \leq \epsilon \leq 1$ and $k \geq 1$, by Bernoulli's inequality).
+\end{proof}
+
+\begin{example}[LSTM vs Vanilla RNN Gradient Flow]
+\label{ex:gradient-comparison}
+Consider a sequence of length $T = 100$ with time gap $k = 99$.
+\begin{itemize}[nosep]
+  \item \textbf{Vanilla RNN} with $\|\mathbf{U}\| = 0.9$: gradient
+    decays by $0.9^{99} \approx 3 \times 10^{-5}$ (effectively zero).
+  \item \textbf{LSTM} with $f_i^{(j)} = 0.99$ for all $i$:
+    gradient decays by $0.99^{99} \approx 0.37$ (substantial
+    signal preserved).
+  \item \textbf{LSTM} with $f_i^{(j)} = 1.0$: gradient decays by
+    $1.0^{99} = 1$ (perfect preservation).
+\end{itemize}
+The LSTM's forget gate can maintain gradient flow over arbitrarily
+long sequences by keeping $\mathbf{f}_t$ close to $\mathbf{1}$.
+\end{example}
+
+\begin{rlconnection}[title={Forget Gate Bias Initialization}]
+In practice, the forget gate bias $\mathbf{b}_f$ is often
+initialized to a positive value (e.g., $1$ or $2$) so that
+$\sigma(\mathbf{b}_f) \approx 1$ at the start of training.  This
+ensures that the LSTM begins with near-perfect gradient flow through
+the cell state, allowing it to learn long-range dependencies from
+the outset.  This trick, recommended by \citet{gers2000}, is widely
+used in deep RL implementations.
+\end{rlconnection}
+
+\begin{warning}[title={Gradient Flow Through Hidden State}]
+The analysis above concerns gradient flow through the
+\emph{cell state} pathway.  Gradients also flow through the
+\emph{hidden state} pathway via the gate recurrences
+(Equation~\ref{eq:delta-h-full}), which involves multiplication by
+the recurrent weight matrices $\mathbf{U}_g^\top$.  This pathway
+can still suffer from vanishing gradients, but the cell state
+highway provides an alternative route that bypasses this bottleneck.
+\end{warning}
+
+%% ============================================================
+%% SECTION 8: LSTM VARIANTS
+%% ============================================================
+\section{LSTM Variants}
+\label{sec:variants}
+
+\subsection{Peephole Connections}
+
+\begin{definition}[Peephole LSTM]
+\label{def:peephole}
+\emph{Peephole connections}, introduced by \citet{gers2000}, allow
+the gates to access the cell state directly:
+\begin{align}
+  \mathbf{f}_t &= \sigma(\mathbf{W}_f \mathbf{x}_t +
+    \mathbf{U}_f \mathbf{h}_{t-1} +
+    \mathbf{V}_f \odot \mathbf{c}_{t-1} + \mathbf{b}_f),
+    \label{eq:peep-f} \\
+  \mathbf{i}_t &= \sigma(\mathbf{W}_i \mathbf{x}_t +
+    \mathbf{U}_i \mathbf{h}_{t-1} +
+    \mathbf{V}_i \odot \mathbf{c}_{t-1} + \mathbf{b}_i),
+    \label{eq:peep-i} \\
+  \mathbf{o}_t &= \sigma(\mathbf{W}_o \mathbf{x}_t +
+    \mathbf{U}_o \mathbf{h}_{t-1} +
+    \mathbf{V}_o \odot \mathbf{c}_t + \mathbf{b}_o),
+    \label{eq:peep-o}
+\end{align}
+where $\mathbf{V}_f, \mathbf{V}_i, \mathbf{V}_o \in \R^m$ are
+diagonal peephole weight vectors.
+\end{definition}
+
+\begin{remark}[Peephole Trade-offs]
+Peephole connections add $3m$ parameters and make the Jacobian
+$\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1}$ more complex
+(no longer purely $\diag(\mathbf{f}_t)$).  Empirical studies
+\citep{greff2017} find that peephole connections provide marginal
+benefit on most tasks and are not commonly used in modern
+implementations.
+\end{remark}
+
+\subsection{Coupled Input-Forget Gate}
+
+\begin{definition}[Coupled Gate LSTM]
+\label{def:coupled}
+The \emph{coupled input-forget gate} variant enforces the constraint
+$\mathbf{i}_t = \mathbf{1} - \mathbf{f}_t$, reducing the cell state
+update to:
+\begin{equation}
+  \mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+    (\mathbf{1} - \mathbf{f}_t) \odot \tilde{\mathbf{c}}_t.
+  \label{eq:coupled}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Coupled Gate Interpretation]
+The coupled gate makes an explicit trade-off: the network can either
+retain old information ($f_t^{(j)} \approx 1$) or write new
+information ($f_t^{(j)} \approx 0$), but not both simultaneously.
+This reduces the parameter count by $m(n + m + 1)$ (one fewer gate)
+while maintaining the core functionality.
+\end{remark}
+
+\begin{example}[Coupled Gate vs Standard LSTM]
+\label{ex:coupled}
+With the coupled gate, the cell state update
+$\mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+(1 - \mathbf{f}_t) \odot \tilde{\mathbf{c}}_t$ is a convex
+combination of the old cell state and the candidate.  This ensures
+that the cell state norm does not grow unboundedly (since
+$|\tilde{c}_t^{(j)}| < 1$), providing implicit regularization.
+In the standard LSTM, $\mathbf{c}_t$ can grow without bound if
+both $\mathbf{f}_t$ and $\mathbf{i}_t$ are simultaneously large.
+\end{example}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[LSTM Forward Pass]
+\textnormal{(\(\ast\))} \\
+Consider a scalar LSTM ($n = m = 1$) with
+$W_f = W_i = W_c = W_o = 1$, $U_f = U_i = U_c = U_o = 0.5$,
+$b_f = 1$, and $b_i = b_c = b_o = 0$.  Starting from
+$h_0 = c_0 = 0$, compute the cell state $c_1, c_2$ and hidden state
+$h_1, h_2$ for inputs $x_1 = 1, x_2 = -1$.
+\end{exercise}
+
+\begin{exercise}[Cell State Gradient]
+\textnormal{(\(\ast\ast\))} \\
+For an LSTM with $m = 2$ and constant forget gate values
+$\mathbf{f}_t = (0.95, 0.99)^\top$ for all $t$, compute the cell
+state gradient $\partial \mathbf{c}_{100} / \partial \mathbf{c}_1$
+and compare it with the gradient in a vanilla RNN with
+$\|\mathbf{U}\| = 0.95$.  Which architecture preserves the gradient
+signal better over 100 steps?
+\end{exercise}
+
+\begin{exercise}[LSTM vs Coupled Gate Parameter Count]
+\textnormal{(\(\ast\))} \\
+For an LSTM with input dimension $n = 256$ and hidden dimension
+$m = 512$, compute the parameter count for: (a)~the standard LSTM,
+(b)~the coupled input-forget gate variant.  What percentage of
+parameters does the coupled variant save?
+\end{exercise}
+
+\begin{exercise}[Peephole Jacobian]
+\textnormal{(\(\ast\ast\ast\))} \\
+Derive the Jacobian $\partial \mathbf{c}_t / \partial
+\mathbf{c}_{t-1}$ for the peephole LSTM
+(Definition~\ref{def:peephole}).  Show that it is no longer
+$\diag(\mathbf{f}_t)$ and identify the additional terms.  Under
+what conditions do these terms improve or degrade gradient flow
+compared to the standard LSTM?
+
+\textit{Hint:} The forget and input gates now depend on
+$\mathbf{c}_{t-1}$ through the peephole connections.
+\end{exercise}
+
+\begin{exercise}[Gradient Flow with Saturated Gates]
+\textnormal{(\(\ast\ast\))} \\
+Suppose the forget gate saturates at $\mathbf{f}_t = \mathbf{1}$
+(all components exactly $1$).  Show that the cell state gradient
+$\partial \mathbf{c}_t / \partial \mathbf{c}_\tau = \mathbf{I}$ for
+all $\tau < t$.  Then explain why this ``perfect'' gradient flow
+is problematic: what happens to the cell state values
+$\|\mathbf{c}_t\|$ as $t$ grows, and how does this affect the
+numerical stability of the network?
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The LSTM introduces a \emph{cell state} $\mathbf{c}_t$
+    updated additively:
+    $\mathbf{c}_t = \mathbf{f}_t \odot \mathbf{c}_{t-1} +
+    \mathbf{i}_t \odot \tilde{\mathbf{c}}_t$.  This additive
+    structure is the key architectural innovation.
+  \item Four gating components---forget gate $\mathbf{f}_t$, input
+    gate $\mathbf{i}_t$, candidate $\tilde{\mathbf{c}}_t$, and
+    output gate $\mathbf{o}_t$---control information flow using
+    sigmoid-gated element-wise products.
+  \item The cell state Jacobian is
+    $\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1} =
+    \diag(\mathbf{f}_t)$, which is close to the identity when
+    $\mathbf{f}_t \approx \mathbf{1}$, creating a ``gradient highway''
+    that mitigates the vanishing gradient problem.
+  \item BPTT through the LSTM involves the cell state gradient
+    recurrence $\boldsymbol{\delta}_t^c =
+    \boldsymbol{\delta}_t^h \odot \mathbf{o}_t \odot
+    (1 - \tanh^2(\mathbf{c}_t)) +
+    \boldsymbol{\delta}_{t+1}^c \odot \mathbf{f}_{t+1}$
+    and four gate pre-activation errors.
+  \item The LSTM has $4m(n + m + 1)$ parameters---approximately
+    $4\times$ more than a vanilla RNN---due to the four separate
+    gate/candidate components.
+  \item Variants include peephole connections (gates access cell
+    state directly) and the coupled input-forget gate
+    ($\mathbf{i}_t = \mathbf{1} - \mathbf{f}_t$), which trades
+    flexibility for fewer parameters.
+  \item Initializing the forget gate bias to a positive value
+    ($b_f \approx 1$--$2$) ensures good gradient flow from the
+    start of training.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item Lesson~69 introduces the Gated Recurrent Unit (GRU), a
+    simplified gated architecture with fewer parameters, and covers
+    bidirectional RNNs, deep stacked RNNs, and the encoder-decoder
+    framework.
+  \item \citet{greff2017} provides a comprehensive empirical
+    evaluation of LSTM variants (peephole, coupled gates,
+    no-input-gate, no-forget-gate, etc.), finding that the
+    forget gate and output activation are the most critical
+    components.
+  \item \citet{hochreiter1997} is the original LSTM paper and
+    contains the detailed analysis of the \emph{constant error
+    carousel}---the precursor to the modern cell state update.
+  \item \citet{graves2012} covers practical applications of
+    LSTMs to sequence labelling, including speech recognition
+    and handwriting generation.
+  \item The connection between LSTMs and residual networks
+    (both use additive shortcuts to improve gradient flow)
+    is explored in the deep RL literature on recurrent policies
+    (Phase~04, Lessons~77--80).
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

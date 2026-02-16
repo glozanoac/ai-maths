@@ -1,0 +1,971 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 67: Recurrent Neural Networks and BPTT}}
+\fancyhead[R]{\thepage}
+\title{Lesson 67: Recurrent Neural Networks\\and Backpropagation Through Time}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider an RL agent navigating a partially observable environment.
+At each time step, the agent receives an observation $\mathbf{x}_t$
+that depends on the full history of states and actions.  A feedforward
+network maps each observation independently to an action, discarding
+all temporal structure.  Yet the optimal policy often depends on the
+\emph{sequence} of past observations---for instance, distinguishing
+whether a partially visible object is moving left or right requires
+comparing the current frame with previous ones.  How can a neural
+network process variable-length sequences while maintaining a
+fixed-size parameter set?
+
+Recurrent Neural Networks (RNNs) answer this question by introducing
+a \emph{hidden state} $\mathbf{h}_t$ that is updated at each time
+step as a function of the current input and the previous hidden
+state.  This recurrence compresses the entire history into a
+fixed-dimensional vector, enabling the network to model temporal
+dependencies.  The learning algorithm that trains RNNs---Backpropagation
+Through Time (BPTT)---unfolds the recurrence into a deep feedforward
+graph and applies the chain rule.  However, the repeated multiplication
+of Jacobian matrices along this unfolded graph leads to a fundamental
+pathology: gradients either \emph{vanish} or \emph{explode}
+exponentially with the sequence length.  The tools developed in this
+lesson will let us formalize the RNN architecture, derive the BPTT
+algorithm, and prove sharp bounds on gradient decay and growth.
+
+\begin{rlconnection}[title={Why RNNs and BPTT Matter for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Partial observability in RL.}  When the agent cannot
+    observe the full state, recurrent policies (e.g., LSTM-based
+    actors in PPO) use hidden states to approximate belief states
+    over the underlying MDP.
+  \item \textbf{Sequence prediction.}  Language modeling, speech
+    recognition, and time-series forecasting all require processing
+    variable-length sequences---the core capability of RNNs.
+  \item \textbf{Gradient pathology.}  The vanishing/exploding gradient
+    problem discovered in vanilla RNNs motivates gated architectures
+    (LSTM, GRU) studied in Lessons~68--69, and also informs gradient
+    clipping strategies used throughout deep RL.
+  \item \textbf{Credit assignment over time.}  BPTT is the temporal
+    analogue of spatial backpropagation; understanding its limitations
+    clarifies why long-horizon credit assignment remains challenging
+    in deep RL.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Feedforward neural networks and backpropagation (Lesson~63,
+Section~3).  Matrix norms, spectral norm, and eigenvalues
+(Lesson~8, Definitions~3.1--3.3).  Chain rule for vector-valued
+functions and Jacobian matrices (Lesson~3, Theorem~2.3; Lesson~8,
+Section~5).  Sequences and convergence (Lesson~1, Section~4).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the vanilla RNN architecture and
+    \textbf{derive} the forward equations for hidden state
+    updates, output computation, and sequence loss.
+  \item \textbf{Derive} the complete BPTT algorithm, including
+    the hidden state error recurrence and weight gradient formulas.
+  \item \textbf{Prove} that gradients in vanilla RNNs decay
+    exponentially when the spectral norm $\|\mathbf{U}\| < 1$
+    (vanishing gradient theorem).
+  \item \textbf{Prove} that gradients can grow exponentially
+    when $\|\mathbf{U}\| > 1$ (exploding gradient theorem).
+  \item \textbf{Analyze} the eigenvalue structure of the recurrent
+    weight matrix and its role in determining gradient behavior.
+  \item \textbf{Explain} gradient clipping, orthogonal initialization,
+    and truncated BPTT as mitigation strategies, and \textbf{evaluate}
+    their limitations.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapter~10]{goodfellow2016} --- Comprehensive treatment
+    of RNN architectures, BPTT, and gradient flow analysis.
+  \item \citet{elman1990} --- Original Elman network introducing the
+    simple recurrent architecture with hidden state feedback.
+  \item \citet{rumelhart1986} --- Backpropagation algorithm for
+    feedforward networks; the foundation on which BPTT builds.
+  \item \citet{bengio1994} --- Seminal analysis of why learning
+    long-term dependencies with gradient descent is difficult.
+  \item \citet{pascanu2013} --- Detailed analysis of the vanishing
+    and exploding gradient problem with gradient clipping solutions.
+  \item \citet{hochreiter1991} --- Early identification of the
+    vanishing gradient problem in recurrent networks.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: SEQUENCE MODELING
+%% ============================================================
+\section{Sequence Modeling}
+\label{sec:sequences}
+
+\begin{definition}[Sequence]
+\label{def:sequence}
+A \emph{sequence} of length $T$ over a set $\mathcal{X}$ is an
+ordered tuple
+\[
+  \mathbf{x}_{1:T} = (\mathbf{x}_1, \mathbf{x}_2, \ldots,
+    \mathbf{x}_T), \quad
+  \mathbf{x}_t \in \mathcal{X} \text{ for all } t \in \{1,\ldots,T\}.
+\]
+\end{definition}
+
+The fundamental challenge in sequence modeling is to learn a function
+that captures dependencies between elements at different positions.
+Feedforward networks treat each input independently, discarding
+positional information unless it is explicitly encoded.
+
+\begin{definition}[Sequence-to-Sequence Map]
+\label{def:seq2seq-map}
+A \emph{sequence-to-sequence map} is a function
+$F : \mathcal{X}^T \to \mathcal{Y}^T$ that maps an input sequence
+$\mathbf{x}_{1:T}$ to an output sequence
+$\mathbf{y}_{1:T} = (F(\mathbf{x}_{1:T})_1, \ldots,
+F(\mathbf{x}_{1:T})_T)$.  The map is \emph{causal} if each output
+$\mathbf{y}_t$ depends only on current and past inputs
+$\mathbf{x}_1, \ldots, \mathbf{x}_t$.
+\end{definition}
+
+\begin{example}[Language Modeling]
+\label{ex:language-model}
+In language modeling, $\mathbf{x}_t$ is the one-hot encoding of the
+$t$-th word and $\mathbf{y}_t = P(\mathbf{x}_{t+1} \mid
+\mathbf{x}_{1:t})$ is the conditional distribution over the next word.
+This is a causal sequence-to-sequence map: predicting the next word
+requires only the past context.
+\end{example}
+
+\begin{rlconnection}[title={Sequences in RL}]
+In reinforcement learning, the agent's trajectory
+$(\mathbf{o}_1, a_1, r_1, \mathbf{o}_2, a_2, r_2, \ldots)$ is a
+sequence.  Under partial observability (POMDPs), the optimal policy
+$\pi^*$ may depend on the entire observation history
+$\mathbf{o}_{1:t}$, not just the current observation $\mathbf{o}_t$.
+An RNN can approximate this by encoding the history into a hidden
+state $\mathbf{h}_t$ that serves as a surrogate for the belief state.
+\end{rlconnection}
+
+We now introduce the recurrence principle that allows a neural
+network to process sequences with a fixed number of parameters.
+
+%% ============================================================
+%% SECTION 4: RNN ARCHITECTURE
+%% ============================================================
+\section{Recurrent Neural Network Architecture}
+\label{sec:rnn-architecture}
+
+\begin{definition}[Recurrence Relation]
+\label{def:recurrence}
+A \emph{recurrence relation} defines a hidden state $\mathbf{h}_t$
+as a function of the current input $\mathbf{x}_t$ and the previous
+hidden state $\mathbf{h}_{t-1}$:
+\[
+  \mathbf{h}_t = f(\mathbf{h}_{t-1}, \mathbf{x}_t; \boldsymbol{\theta}),
+\]
+where $f$ is a parameterized function and $\boldsymbol{\theta}$
+represents the learnable parameters.
+\end{definition}
+
+\begin{definition}[Vanilla RNN]
+\label{def:vanilla-rnn}
+A \emph{vanilla recurrent neural network} (Elman network) with input
+dimension $n$, hidden dimension $m$, and output dimension $k$ is
+defined by the following equations.  At each time step $t = 1, \ldots, T$:
+\begin{align}
+  \mathbf{a}_t &= \mathbf{W}\mathbf{x}_t + \mathbf{U}\mathbf{h}_{t-1}
+    + \mathbf{b}, \label{eq:pre-activation} \\
+  \mathbf{h}_t &= \tanh(\mathbf{a}_t), \label{eq:hidden-state} \\
+  \mathbf{o}_t &= \mathbf{V}\mathbf{h}_t + \mathbf{c},
+    \label{eq:output-pre} \\
+  \mathbf{y}_t &= g(\mathbf{o}_t), \label{eq:output}
+\end{align}
+where:
+\begin{itemize}[nosep]
+  \item $\mathbf{W} \in \R^{m \times n}$ is the input-to-hidden
+    weight matrix,
+  \item $\mathbf{U} \in \R^{m \times m}$ is the hidden-to-hidden
+    (recurrent) weight matrix,
+  \item $\mathbf{V} \in \R^{k \times m}$ is the hidden-to-output
+    weight matrix,
+  \item $\mathbf{b} \in \R^m$ and $\mathbf{c} \in \R^k$ are bias
+    vectors,
+  \item $g$ is an output activation function (identity for regression,
+    softmax for classification),
+  \item $\mathbf{h}_0 = \mathbf{0} \in \R^m$ (or learned).
+\end{itemize}
+\end{definition}
+
+\begin{keyresult}[title={RNN Forward Equations}]
+The complete RNN forward pass is:
+\begin{align}
+  \mathbf{h}_t &= \tanh(\mathbf{W}\mathbf{x}_t +
+    \mathbf{U}\mathbf{h}_{t-1} + \mathbf{b}),
+    \label{eq:rnn-hidden} \\
+  \mathbf{y}_t &= g(\mathbf{V}\mathbf{h}_t + \mathbf{c}),
+    \label{eq:rnn-output}
+\end{align}
+with initial condition $\mathbf{h}_0 = \mathbf{0} \in \R^m$.
+\end{keyresult}
+
+\begin{remark}[Parameter Sharing]
+\label{rem:param-sharing}
+The same parameters $(\mathbf{W}, \mathbf{U}, \mathbf{V},
+\mathbf{b}, \mathbf{c})$ are used at every time step.  This provides:
+(i)~the ability to process sequences of any length,
+(ii)~a parameter count independent of sequence length, and
+(iii)~statistical sharing of patterns across positions.
+\end{remark}
+
+\begin{proposition}[Parameter Count]
+\label{prop:param-count}
+For a vanilla RNN with input dimension $n$, hidden dimension $m$,
+and output dimension $k$, the total number of trainable parameters is:
+\[
+  P = m(n + m + 1) + k(m + 1).
+\]
+\end{proposition}
+
+\begin{proof}
+The parameters are: $\mathbf{W} \in \R^{m \times n}$ ($mn$
+entries), $\mathbf{U} \in \R^{m \times m}$ ($m^2$ entries),
+$\mathbf{b} \in \R^m$ ($m$ entries), $\mathbf{V} \in \R^{k \times m}$
+($km$ entries), $\mathbf{c} \in \R^k$ ($k$ entries).  Total:
+$mn + m^2 + m + km + k = m(n + m + 1) + k(m + 1)$.
+\end{proof}
+
+\begin{definition}[Unfolded RNN]
+\label{def:unfolded}
+For a sequence of length $T$, the \emph{unfolded} RNN is the
+composition:
+\[
+  \mathbf{h}_T = f(f(\cdots f(f(\mathbf{h}_0, \mathbf{x}_1),
+    \mathbf{x}_2) \cdots, \mathbf{x}_{T-1}), \mathbf{x}_T),
+\]
+where $f(\mathbf{h}, \mathbf{x}) = \tanh(\mathbf{W}\mathbf{x} +
+\mathbf{U}\mathbf{h} + \mathbf{b})$.  This can be viewed as a deep
+feedforward network with $T$ layers, all sharing the same parameters.
+\end{definition}
+
+\begin{example}[Simple RNN Computation]
+\label{ex:simple-rnn}
+Consider a scalar RNN with $n = m = k = 1$, weights $W = 0.5$,
+$U = 0.8$, $V = 1$, biases $b = c = 0$, and inputs
+$x_1 = 1, x_2 = 0, x_3 = -1$.  Starting from $h_0 = 0$:
+\begin{align*}
+  h_1 &= \tanh(0.5 \cdot 1 + 0.8 \cdot 0) = \tanh(0.5) \approx 0.462, \\
+  h_2 &= \tanh(0.5 \cdot 0 + 0.8 \cdot 0.462) = \tanh(0.370)
+    \approx 0.354, \\
+  h_3 &= \tanh(0.5 \cdot (-1) + 0.8 \cdot 0.354) = \tanh(-0.217)
+    \approx -0.214.
+\end{align*}
+The hidden state retains a trace of past inputs: $h_3$ is influenced
+by all three inputs despite receiving only $x_3$ directly.
+\end{example}
+
+The RNN architecture defines a causal sequence-to-sequence map.
+We now define the loss function used to train it.
+
+%% ============================================================
+%% SECTION 5: LOSS FUNCTIONS
+%% ============================================================
+\section{Loss Functions for Sequences}
+\label{sec:loss}
+
+\begin{definition}[Sequence Loss]
+\label{def:seq-loss}
+For a sequence with target outputs $\hat{\mathbf{y}}_{1:T}$, the
+\emph{total sequence loss} is:
+\begin{equation}
+  \mathcal{L}(\boldsymbol{\theta}) = \sum_{t=1}^{T}
+    \mathcal{L}_t(\mathbf{y}_t, \hat{\mathbf{y}}_t),
+  \label{eq:seq-loss}
+\end{equation}
+where $\mathcal{L}_t$ is the per-timestep loss function.
+\end{definition}
+
+\begin{definition}[Common Loss Functions]
+\label{def:common-losses}
+For regression tasks with continuous targets:
+\[
+  \mathcal{L}_t(\mathbf{y}_t, \hat{\mathbf{y}}_t)
+    = \frac{1}{2} \|\mathbf{y}_t - \hat{\mathbf{y}}_t\|_2^2
+    \quad \text{(mean squared error)}.
+\]
+For classification with softmax outputs and one-hot targets:
+\[
+  \mathcal{L}_t(\mathbf{y}_t, \hat{\mathbf{y}}_t)
+    = -\sum_{i=1}^{k} \hat{y}_t^{(i)} \log y_t^{(i)}
+    = -\log y_t^{(c_t)}
+    \quad \text{(cross-entropy)},
+\]
+where $c_t$ is the true class index.
+\end{definition}
+
+\begin{proposition}[Softmax--Cross-Entropy Gradient]
+\label{prop:softmax-ce}
+When using softmax output with cross-entropy loss, the gradient of
+$\mathcal{L}_t$ with respect to the pre-activation $\mathbf{o}_t$
+simplifies to:
+\begin{equation}
+  \frac{\partial \mathcal{L}_t}{\partial \mathbf{o}_t}
+    = \mathbf{y}_t - \hat{\mathbf{y}}_t.
+  \label{eq:softmax-grad}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+For the $j$-th component with true class $c_t$:
+\[
+  \frac{\partial \mathcal{L}_t}{\partial o_t^{(j)}}
+    = -\frac{\partial}{\partial o_t^{(j)}}
+      \log \frac{e^{o_t^{(c_t)}}}{\sum_i e^{o_t^{(i)}}}
+    = -\delta_{j c_t} + \frac{e^{o_t^{(j)}}}{\sum_i e^{o_t^{(i)}}}
+    = y_t^{(j)} - \hat{y}_t^{(j)}.  \qedhere
+\]
+\end{proof}
+
+With the forward pass and loss defined, we derive the algorithm
+for computing gradients.
+
+%% ============================================================
+%% SECTION 6: BACKPROPAGATION THROUGH TIME
+%% ============================================================
+\section{Backpropagation Through Time}
+\label{sec:bptt}
+
+Backpropagation Through Time (BPTT) computes gradients of the
+sequence loss $\mathcal{L} = \sum_{t=1}^T \mathcal{L}_t$ by
+applying the chain rule to the unfolded computational graph.  The
+key insight is that $\mathbf{h}_t$ influences the loss both directly
+(through $\mathcal{L}_t$) and indirectly (through all future losses
+$\mathcal{L}_{t+1}, \ldots, \mathcal{L}_T$ via the recurrence).
+
+\begin{definition}[Output Error Signal]
+\label{def:output-error}
+The \emph{output error signal} at time $t$ is:
+\begin{equation}
+  \boldsymbol{\delta}_t^{(o)} = \frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{o}_t} \in \R^k.
+  \label{eq:output-error}
+\end{equation}
+For softmax with cross-entropy:
+$\boldsymbol{\delta}_t^{(o)} = \mathbf{y}_t - \hat{\mathbf{y}}_t$.
+\end{definition}
+
+\begin{definition}[Hidden State Error Signal]
+\label{def:hidden-error}
+The \emph{hidden state error signal} at time $t$ accumulates
+contributions from all future losses:
+\begin{equation}
+  \boldsymbol{\delta}_t^{(h)} = \frac{\partial \mathcal{L}}
+    {\partial \mathbf{h}_t} \in \R^m.
+  \label{eq:hidden-error}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Hidden State Error Recurrence]
+\label{thm:hidden-error-recurrence}
+The hidden state error signal satisfies the backward recurrence:
+\begin{equation}
+  \boldsymbol{\delta}_t^{(h)} = \mathbf{V}^\top
+    \boldsymbol{\delta}_t^{(o)} + \mathbf{U}^\top
+    \bigl(\boldsymbol{\delta}_{t+1}^{(h)} \odot
+    (1 - \mathbf{h}_{t+1}^2)\bigr) \cdot \indicator_{t < T},
+  \label{eq:hidden-recurrence}
+\end{equation}
+where $\odot$ denotes element-wise multiplication, $\mathbf{h}_{t+1}^2$
+denotes element-wise squaring, and $(1 - \mathbf{h}_{t+1}^2)$ is the
+derivative of $\tanh$ evaluated at $\mathbf{a}_{t+1}$.
+\end{theorem}
+
+\begin{proof}
+The hidden state $\mathbf{h}_t$ influences the total loss through two
+paths:
+\begin{enumerate}[nosep]
+  \item \emph{Direct path} through $\mathbf{y}_t$:
+    $\mathbf{h}_t \to \mathbf{o}_t \to \mathbf{y}_t \to \mathcal{L}_t$.
+  \item \emph{Indirect path} through $\mathbf{h}_{t+1}$ (when $t < T$):
+    $\mathbf{h}_t \to \mathbf{a}_{t+1} \to \mathbf{h}_{t+1} \to
+    \cdots \to \mathcal{L}$.
+\end{enumerate}
+For the direct path, since $\mathbf{o}_t = \mathbf{V}\mathbf{h}_t +
+\mathbf{c}$:
+\[
+  \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_t}
+    = \mathbf{V}^\top \frac{\partial \mathcal{L}_t}
+      {\partial \mathbf{o}_t}
+    = \mathbf{V}^\top \boldsymbol{\delta}_t^{(o)}.
+\]
+For the indirect path (when $t < T$), since
+$\mathbf{a}_{t+1} = \mathbf{W}\mathbf{x}_{t+1} +
+\mathbf{U}\mathbf{h}_t + \mathbf{b}$ and
+$\mathbf{h}_{t+1} = \tanh(\mathbf{a}_{t+1})$:
+\[
+  \frac{\partial \mathcal{L}}{\partial \mathbf{h}_t}\bigg|_{\text{indirect}}
+    = \frac{\partial \mathbf{a}_{t+1}^\top}{\partial \mathbf{h}_t}
+      \frac{\partial \mathbf{h}_{t+1}^\top}{\partial \mathbf{a}_{t+1}}
+      \frac{\partial \mathcal{L}}{\partial \mathbf{h}_{t+1}}
+    = \mathbf{U}^\top \diag(1 - \mathbf{h}_{t+1}^2)
+      \boldsymbol{\delta}_{t+1}^{(h)}.
+\]
+Combining both paths yields the recurrence.
+\end{proof}
+
+\begin{definition}[Pre-activation Error]
+\label{def:pre-activation-error}
+The error with respect to the pre-activation is:
+\begin{equation}
+  \boldsymbol{\delta}_t^{(a)} = \frac{\partial \mathcal{L}}
+    {\partial \mathbf{a}_t}
+    = \boldsymbol{\delta}_t^{(h)} \odot (1 - \mathbf{h}_t^2).
+  \label{eq:pre-activation-error}
+\end{equation}
+\end{definition}
+
+\begin{theorem}[BPTT Weight Gradients]
+\label{thm:weight-gradients}
+The gradients with respect to the weight matrices and bias vectors are:
+\begin{align}
+  \frac{\partial \mathcal{L}}{\partial \mathbf{V}}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(o)}
+       \mathbf{h}_t^\top, \label{eq:grad-V} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{W}}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(a)}
+       \mathbf{x}_t^\top, \label{eq:grad-W} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{U}}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(a)}
+       \mathbf{h}_{t-1}^\top, \label{eq:grad-U} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{c}}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(o)},
+       \label{eq:grad-c} \\
+  \frac{\partial \mathcal{L}}{\partial \mathbf{b}}
+    &= \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(a)}.
+       \label{eq:grad-b}
+\end{align}
+\end{theorem}
+
+\begin{proof}
+For $\mathbf{V}$: at each time $t$, $\mathbf{o}_t =
+\mathbf{V}\mathbf{h}_t + \mathbf{c}$, so
+$\frac{\partial \mathcal{L}_t}{\partial \mathbf{V}} =
+\boldsymbol{\delta}_t^{(o)} \mathbf{h}_t^\top$.  Summing over $t$
+gives~\eqref{eq:grad-V}.
+
+For $\mathbf{W}$ and $\mathbf{U}$: since
+$\mathbf{a}_t = \mathbf{W}\mathbf{x}_t +
+\mathbf{U}\mathbf{h}_{t-1} + \mathbf{b}$, we have
+$\frac{\partial \mathbf{a}_t}{\partial \mathbf{W}} = \mathbf{x}_t^\top$
+and $\frac{\partial \mathbf{a}_t}{\partial \mathbf{U}} =
+\mathbf{h}_{t-1}^\top$.  The total gradient accumulates over all
+time steps:
+\[
+  \frac{\partial \mathcal{L}}{\partial \mathbf{W}}
+    = \sum_{t=1}^{T} \frac{\partial \mathcal{L}}
+      {\partial \mathbf{a}_t}
+      \frac{\partial \mathbf{a}_t}{\partial \mathbf{W}}
+    = \sum_{t=1}^{T} \boldsymbol{\delta}_t^{(a)} \mathbf{x}_t^\top.
+\]
+The derivation for $\mathbf{U}$, $\mathbf{b}$, and $\mathbf{c}$
+is analogous.
+\end{proof}
+
+\begin{keyresult}[title={Complete BPTT Algorithm}]
+\textbf{Forward Pass:}
+\begin{enumerate}[nosep]
+  \item Initialize $\mathbf{h}_0 = \mathbf{0}$.
+  \item For $t = 1$ to $T$: compute $\mathbf{a}_t$,
+    $\mathbf{h}_t$, $\mathbf{o}_t$, $\mathbf{y}_t$, and
+    $\mathcal{L}_t$.
+\end{enumerate}
+\textbf{Backward Pass:}
+\begin{enumerate}[nosep]
+  \item Initialize $\boldsymbol{\delta}_{T+1}^{(h)} = \mathbf{0}$.
+  \item For $t = T$ down to $1$:
+    \begin{itemize}[nosep]
+      \item $\boldsymbol{\delta}_t^{(o)} = \mathbf{y}_t -
+        \hat{\mathbf{y}}_t$
+      \item $\boldsymbol{\delta}_t^{(h)} = \mathbf{V}^\top
+        \boldsymbol{\delta}_t^{(o)} + \mathbf{U}^\top
+        (\boldsymbol{\delta}_{t+1}^{(h)} \odot
+        (1 - \mathbf{h}_{t+1}^2))$
+      \item $\boldsymbol{\delta}_t^{(a)} =
+        \boldsymbol{\delta}_t^{(h)} \odot (1 - \mathbf{h}_t^2)$
+      \item Accumulate weight gradients.
+    \end{itemize}
+\end{enumerate}
+\end{keyresult}
+
+\begin{example}[BPTT for a Two-Step Sequence]
+\label{ex:bptt-two-step}
+Consider $T = 2$ with $m = 2$, $k = 1$ (regression, so $g$ is
+identity).  The total loss is $\mathcal{L} = \mathcal{L}_1 +
+\mathcal{L}_2$.  The backward pass computes:
+\begin{align*}
+  \boldsymbol{\delta}_2^{(h)} &= \mathbf{V}^\top
+    \boldsymbol{\delta}_2^{(o)}, \\
+  \boldsymbol{\delta}_1^{(h)} &= \mathbf{V}^\top
+    \boldsymbol{\delta}_1^{(o)} + \mathbf{U}^\top
+    (\boldsymbol{\delta}_2^{(h)} \odot (1 - \mathbf{h}_2^2)).
+\end{align*}
+Note that $\boldsymbol{\delta}_1^{(h)}$ receives gradient information
+from \emph{both} $\mathcal{L}_1$ and $\mathcal{L}_2$, reflecting
+the influence of $\mathbf{h}_1$ on the entire future.
+\end{example}
+
+The BPTT algorithm reveals a critical structural property: the
+backward pass involves repeated multiplication by $\mathbf{U}^\top$
+scaled by the tanh derivative.  We now analyze the consequences.
+
+%% ============================================================
+%% SECTION 7: VANISHING AND EXPLODING GRADIENTS
+%% ============================================================
+\section{The Vanishing and Exploding Gradient Problem}
+\label{sec:gradient-problem}
+
+\begin{theorem}[Long-Range Gradient]
+\label{thm:long-range}
+The gradient of the loss at time $t$ with respect to the hidden
+state at an earlier time $\tau < t$ is:
+\begin{equation}
+  \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+    = \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_t}
+      \prod_{i=\tau+1}^{t} \frac{\partial \mathbf{h}_i}
+        {\partial \mathbf{h}_{i-1}}.
+  \label{eq:long-range}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+By repeated application of the chain rule along the path
+$\mathbf{h}_\tau \to \mathbf{h}_{\tau+1} \to \cdots \to
+\mathbf{h}_t \to \mathcal{L}_t$:
+\[
+  \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+    = \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_t}
+      \cdot \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_{t-1}}
+      \cdots \frac{\partial \mathbf{h}_{\tau+1}}
+        {\partial \mathbf{h}_\tau}
+    = \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_t}
+      \prod_{i=\tau+1}^{t} \frac{\partial \mathbf{h}_i}
+        {\partial \mathbf{h}_{i-1}}.  \qedhere
+\]
+\end{proof}
+
+\begin{lemma}[Jacobian of Hidden State Transition]
+\label{lem:jacobian}
+The Jacobian of the hidden state transition is:
+\begin{equation}
+  \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_{t-1}}
+    = \diag(1 - \mathbf{h}_t^2) \, \mathbf{U},
+  \label{eq:jacobian}
+\end{equation}
+where $\diag(1 - \mathbf{h}_t^2)$ is the diagonal matrix with entries
+$(1 - h_t^{(j)2})$.
+\end{lemma}
+
+\begin{proof}
+Since $\mathbf{h}_t = \tanh(\mathbf{a}_t)$ and
+$\mathbf{a}_t = \mathbf{W}\mathbf{x}_t + \mathbf{U}\mathbf{h}_{t-1}
++ \mathbf{b}$:
+\[
+  \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_{t-1}}
+    = \frac{\partial \mathbf{h}_t}{\partial \mathbf{a}_t}
+      \cdot \frac{\partial \mathbf{a}_t}{\partial \mathbf{h}_{t-1}}
+    = \diag(1 - \mathbf{h}_t^2) \, \mathbf{U}.  \qedhere
+\]
+\end{proof}
+
+\begin{theorem}[Vanishing Gradient]
+\label{thm:vanishing}
+Let $\gamma = \|\mathbf{U}\|$ be the spectral norm of $\mathbf{U}$.
+If $\gamma < 1$, then:
+\begin{equation}
+  \left\|\frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+  \right\| \leq \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}\right\| \gamma^{t - \tau}.
+  \label{eq:vanishing}
+\end{equation}
+Thus, gradients decay \textbf{exponentially} with the time gap
+$(t - \tau)$.
+\end{theorem}
+
+\begin{proof}
+Using the submultiplicativity of matrix norms and
+Theorem~\ref{thm:long-range}:
+\[
+  \left\|\frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+  \right\| = \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}
+    \prod_{i=\tau+1}^{t} \diag(1 - \mathbf{h}_i^2)\,
+    \mathbf{U}\right\|
+  \leq \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}\right\|
+    \prod_{i=\tau+1}^{t} \|\diag(1 - \mathbf{h}_i^2)\|
+    \cdot \|\mathbf{U}\|.
+\]
+Since $\tanh$ maps to $(-1, 1)$, we have
+$|1 - h_i^{(j)2}| \leq 1$ for all components, so
+$\|\diag(1 - \mathbf{h}_i^2)\| \leq 1$.  Therefore:
+\[
+  \left\|\frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+  \right\| \leq \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}\right\| \|\mathbf{U}\|^{t-\tau}
+    = \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}\right\| \gamma^{t-\tau}.  \qedhere
+\]
+\end{proof}
+
+\begin{keyresult}[title={Vanishing Gradient Bound}]
+When $\gamma = \|\mathbf{U}\| < 1$, the gradient
+$\|\partial \mathcal{L}_t / \partial \mathbf{h}_\tau\|$ decays at
+rate $\gamma^{t-\tau}$.  For $\gamma = 0.9$ and a time gap of
+$k = t - \tau$ steps:
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$k$ & 10 & 50 & 100 & 200 \\
+\midrule
+$\gamma^k$ & 0.35 & $5 \times 10^{-3}$ & $2.7 \times 10^{-5}$
+  & $7 \times 10^{-10}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Gradients become negligible after a few dozen time steps.
+\end{keyresult}
+
+\begin{theorem}[Exploding Gradient]
+\label{thm:exploding}
+If $\gamma = \|\mathbf{U}\| > 1$ and the Jacobian products do not
+shrink sufficiently (i.e., the activation derivatives remain bounded
+away from zero), then gradients can grow exponentially:
+\begin{equation}
+  \left\|\frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+  \right\| \geq C \cdot \gamma_{\min}^{t - \tau},
+  \label{eq:exploding}
+\end{equation}
+for some constant $C > 0$, where $\gamma_{\min} > 0$ depends on the
+minimum activation derivative along the trajectory.
+\end{theorem}
+
+\begin{proof}
+If $\sigma_{\min}(\mathbf{U}) > 0$ denotes the smallest singular
+value of $\mathbf{U}$ and the diagonal entries of
+$\diag(1 - \mathbf{h}_i^2)$ are bounded below by some
+$\alpha > 0$ (the network operates in the linear regime of $\tanh$),
+then:
+\[
+  \left\|\prod_{i=\tau+1}^{t} \diag(1 - \mathbf{h}_i^2)\,
+    \mathbf{U}\right\|
+  \geq \prod_{i=\tau+1}^{t} \alpha \cdot \sigma_{\min}(\mathbf{U})
+  = (\alpha \, \sigma_{\min}(\mathbf{U}))^{t-\tau}.
+\]
+When $\alpha \, \sigma_{\min}(\mathbf{U}) > 1$, the product grows
+exponentially.  In practice, even $\|\mathbf{U}\| > 1$ often
+suffices since the activation derivatives are not uniformly small.
+\end{proof}
+
+\begin{warning}[title={The Gradient Dilemma}]
+The vanishing and exploding gradient problems create a fundamental
+dilemma for vanilla RNNs:
+\begin{itemize}[nosep]
+  \item If $\|\mathbf{U}\| < 1$: long-range dependencies cannot be
+    learned (gradients vanish).
+  \item If $\|\mathbf{U}\| > 1$: training becomes unstable (gradients
+    explode).
+  \item If $\|\mathbf{U}\| = 1$: marginally stable but practically
+    unachievable with fixed weights.
+\end{itemize}
+This means vanilla RNNs cannot effectively learn dependencies
+spanning more than approximately 10--20 time steps.
+\end{warning}
+
+\begin{proposition}[Eigenvalue Characterization]
+\label{prop:eigenvalue}
+Let $\lambda_1, \ldots, \lambda_m$ be the eigenvalues of
+$\mathbf{U}$.  The gradient behavior is characterized by the
+spectral radius $\rho(\mathbf{U}) = \max_j |\lambda_j|$:
+\begin{itemize}[nosep]
+  \item If $|\lambda_{\max}| < 1$: vanishing gradients dominate.
+  \item If $|\lambda_{\max}| > 1$: exploding gradient risk.
+  \item If $|\lambda_{\max}| = 1$: marginally stable (ideal but
+    fragile).
+\end{itemize}
+\end{proposition}
+
+\begin{example}[Vanishing Gradient Demonstration]
+\label{ex:vanishing-demo}
+Consider $m = 2$ with
+$\mathbf{U} = \begin{pmatrix} 0.5 & 0.3 \\ 0.2 & 0.4 \end{pmatrix}$.
+The eigenvalues are $\lambda_1 \approx 0.72$ and
+$\lambda_2 \approx 0.18$, so $\|\mathbf{U}\| < 1$.  After $k = 20$
+steps, the gradient is attenuated by at most $0.72^{20} \approx
+0.0013$---three orders of magnitude smaller.  The network effectively
+cannot learn dependencies beyond $\sim$20 steps.
+\end{example}
+
+\begin{rlconnection}[title={Gradient Pathology in Deep RL}]
+In recurrent policies for POMDPs, the vanishing gradient problem
+limits the effective memory horizon.  An LSTM-based PPO agent can
+maintain information over hundreds of steps (Lesson~68), while a
+vanilla RNN policy is limited to $\sim$10--20 steps.  This is why
+virtually all modern recurrent RL architectures use gated units.
+\end{rlconnection}
+
+Having identified the gradient pathology, we now discuss strategies
+to mitigate it.
+
+%% ============================================================
+%% SECTION 8: MITIGATION STRATEGIES
+%% ============================================================
+\section{Mitigation Strategies}
+\label{sec:mitigation}
+
+\begin{definition}[Gradient Clipping]
+\label{def:grad-clip}
+\emph{Gradient clipping} rescales the gradient when its norm exceeds
+a threshold $\theta > 0$:
+\begin{equation}
+  \bar{\mathbf{g}} = \begin{cases}
+    \mathbf{g} & \text{if } \|\mathbf{g}\| \leq \theta, \\
+    \frac{\theta}{\|\mathbf{g}\|} \mathbf{g}
+      & \text{if } \|\mathbf{g}\| > \theta.
+  \end{cases}
+  \label{eq:grad-clip}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Clipping Properties]
+Gradient clipping preserves the gradient direction while bounding its
+magnitude.  It addresses the exploding gradient problem but does
+\emph{not} solve the vanishing gradient problem.  The threshold
+$\theta$ is a hyperparameter; \citet{pascanu2013} recommend values in
+the range $[1, 10]$.
+\end{remark}
+
+\begin{proposition}[Orthogonal Initialization]
+\label{prop:orthogonal}
+If $\mathbf{U}$ is initialized as an orthogonal matrix
+($\mathbf{U}^\top \mathbf{U} = \mathbf{I}$), then
+$\|\mathbf{U}\| = 1$ and all singular values equal $1$.  This
+provides ideal gradient flow at initialization:
+$\|\diag(1 - \mathbf{h}_i^2) \, \mathbf{U}\| \leq 1$ with
+equality when the network operates in the linear regime.
+\end{proposition}
+
+\begin{proof}
+For an orthogonal matrix, all singular values are $1$, so
+$\|\mathbf{U}\| = 1$.  The Jacobian product satisfies:
+\[
+  \left\|\prod_{i=\tau+1}^{t} \diag(1 - \mathbf{h}_i^2)\,
+    \mathbf{U}\right\| \leq \prod_{i=\tau+1}^{t}
+    \|\diag(1 - \mathbf{h}_i^2)\| \cdot \|\mathbf{U}\|
+    \leq 1.
+\]
+When the pre-activations are near zero (as at initialization with
+small inputs), $1 - h_i^{(j)2} \approx 1$, yielding
+$\|\diag(1 - \mathbf{h}_i^2) \, \mathbf{U}\| \approx 1$.
+\end{proof}
+
+\begin{warning}[title={Orthogonality is Not Preserved}]
+Although orthogonal initialization provides ideal gradient flow at
+the start of training, gradient updates break the orthogonality
+of $\mathbf{U}$.  After several training steps, the singular values
+of $\mathbf{U}$ drift away from $1$, and the vanishing/exploding
+gradient problem resurfaces.
+\end{warning}
+
+\begin{definition}[Truncated BPTT]
+\label{def:truncated-bptt}
+\emph{Truncated BPTT} with window size $k$ limits backpropagation to
+the most recent $k$ time steps:
+\begin{equation}
+  \frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+    \approx \begin{cases}
+      \text{computed} & \text{if } t - \tau \leq k, \\
+      0 & \text{if } t - \tau > k.
+    \end{cases}
+  \label{eq:truncated-bptt}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Truncated BPTT Trade-off]
+Truncated BPTT introduces bias by ignoring long-range dependencies
+but reduces computational cost from $O(T)$ to $O(k)$ per step.  It
+is a practical compromise when full BPTT is too expensive.  The
+window size $k$ controls the bias--computation trade-off: larger $k$
+captures longer dependencies but costs more.
+\end{remark}
+
+\begin{example}[Comparing Mitigation Strategies]
+\label{ex:mitigation-compare}
+Consider training a vanilla RNN on sequences of length $T = 100$:
+\begin{itemize}[nosep]
+  \item \emph{No mitigation}: gradients vanish for $t - \tau > 20$;
+    the network can only learn short-range patterns.
+  \item \emph{Gradient clipping} ($\theta = 5$): prevents numerical
+    overflow from exploding gradients but does not help with vanishing
+    gradients.
+  \item \emph{Truncated BPTT} ($k = 20$): reduces computation but
+    explicitly limits the memory horizon.
+  \item \emph{Orthogonal initialization}: helps at the start of
+    training but degrades as $\mathbf{U}$ drifts.
+\end{itemize}
+The fundamental solution requires redesigning the architecture, which
+motivates gated RNNs (Lessons~68--69).
+\end{example}
+
+%% ============================================================
+%% SECTION 9: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[RNN Forward Pass]
+\textnormal{(\(\ast\))} \\
+Consider a vanilla RNN with $n = 2$, $m = 3$, $k = 1$, and
+\[
+  \mathbf{W} = \begin{pmatrix} 1 & 0 \\ 0 & 1 \\ 1 & 1
+    \end{pmatrix}, \quad
+  \mathbf{U} = \begin{pmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\
+    0 & 0 & 0.5 \end{pmatrix}, \quad
+  \mathbf{V} = \begin{pmatrix} 1 & 1 & 1 \end{pmatrix},
+\]
+with zero biases and $\mathbf{h}_0 = \mathbf{0}$.  Compute the
+hidden states $\mathbf{h}_1, \mathbf{h}_2$ and outputs
+$y_1, y_2$ for the input sequence
+$\mathbf{x}_1 = (1, 0)^\top$, $\mathbf{x}_2 = (0, 1)^\top$.
+\end{exercise}
+
+\begin{exercise}[BPTT Derivation for Scalar RNN]
+\textnormal{(\(\ast\ast\))} \\
+For a scalar RNN ($n = m = k = 1$) with loss
+$\mathcal{L} = \frac{1}{2}\sum_{t=1}^T (y_t - \hat{y}_t)^2$ and
+$g = \text{identity}$, derive explicit expressions for
+$\frac{\partial \mathcal{L}}{\partial W}$,
+$\frac{\partial \mathcal{L}}{\partial U}$, and
+$\frac{\partial \mathcal{L}}{\partial V}$ for a sequence of length
+$T = 3$.  Verify that the gradient with respect to $U$ involves
+contributions from all time steps.
+\end{exercise}
+
+\begin{exercise}[Gradient Norm Bound]
+\textnormal{(\(\ast\ast\))} \\
+Prove that for the vanilla RNN with $\tanh$ activation, the gradient
+satisfies:
+\[
+  \left\|\frac{\partial \mathcal{L}_t}{\partial \mathbf{h}_\tau}
+  \right\| \leq \left\|\frac{\partial \mathcal{L}_t}
+    {\partial \mathbf{h}_t}\right\| \cdot
+    \left(\max_j |1 - h_j^2| \cdot \|\mathbf{U}\|\right)^{t-\tau}.
+\]
+Under what conditions on the hidden state values does this become
+a tighter bound than the one in Theorem~\ref{thm:vanishing}?
+
+\textit{Hint:} Consider what happens when the hidden state components
+are large in magnitude (near saturation).
+\end{exercise}
+
+\begin{exercise}[ReLU Activation in RNNs]
+\textnormal{(\(\ast\ast\))} \\
+Suppose we replace $\tanh$ with $\text{ReLU}(z) = \max(0, z)$ in the
+vanilla RNN.  Derive the Jacobian
+$\partial \mathbf{h}_t / \partial \mathbf{h}_{t-1}$ in this case.
+Explain why the vanishing gradient problem persists (or worsens) and
+why the exploding gradient problem becomes more severe.
+\end{exercise}
+
+\begin{exercise}[Optimal Memory Horizon]
+\textnormal{(\(\ast\ast\ast\))} \\
+Consider a vanilla RNN trained on a task where the target at time $T$
+depends on the input at time $1$ (a ``copy'' task with delay $T-1$).
+Using the vanishing gradient bound (Theorem~\ref{thm:vanishing}),
+derive an upper bound on the sequence length $T$ for which the
+gradient signal from time $1$ remains above a threshold
+$\epsilon > 0$.  Express your answer in terms of $\gamma$ and
+$\epsilon$.  For $\gamma = 0.95$ and
+$\epsilon = 10^{-6}$, what is the maximum effective delay?
+
+\textit{Hint:} Solve $\gamma^{T-1} \geq \epsilon$ for $T$.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 10: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A recurrent neural network maintains a hidden state
+    $\mathbf{h}_t = \tanh(\mathbf{W}\mathbf{x}_t +
+    \mathbf{U}\mathbf{h}_{t-1} + \mathbf{b})$ that compresses the
+    entire input history into a fixed-dimensional vector.
+  \item Parameter sharing across time steps allows RNNs to process
+    sequences of arbitrary length with $O(m(n + m + 1) + k(m+1))$
+    parameters, independent of sequence length.
+  \item BPTT computes gradients by unfolding the recurrence into a
+    deep feedforward graph and propagating errors backward through
+    time, yielding weight gradients that accumulate over all time
+    steps.
+  \item The long-range gradient involves a product of $(t - \tau)$
+    Jacobian matrices $\diag(1 - \mathbf{h}_i^2)\mathbf{U}$,
+    leading to exponential decay or growth.
+  \item When $\|\mathbf{U}\| < 1$, gradients vanish at rate
+    $\gamma^{t-\tau}$, preventing the network from learning
+    dependencies beyond $\sim$10--20 time steps.
+  \item When $\|\mathbf{U}\| > 1$, gradients can explode, causing
+    training instability and numerical overflow.
+  \item Gradient clipping addresses exploding gradients by rescaling
+    the gradient vector, while orthogonal initialization and
+    truncated BPTT provide partial remedies.
+  \item The fundamental solution to the vanishing gradient problem
+    requires architectural innovation: gated recurrent networks
+    (LSTM, GRU) create additive paths for gradient flow.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 11: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item Lesson~68 introduces the LSTM architecture, which solves the
+    vanishing gradient problem through an additive cell state update
+    and learnable gating mechanisms.
+  \item Lesson~69 covers the GRU (a simplified gated architecture),
+    bidirectional RNNs, deep stacked RNNs, and the encoder-decoder
+    framework for sequence-to-sequence tasks.
+  \item \citet{pascanu2013} provides a detailed analysis of gradient
+    flow in RNNs, including second-order methods and the connection
+    between gradient clipping and trust regions.
+  \item \citet{bengio1994} gives the original theoretical analysis
+    of why learning long-term dependencies is fundamentally difficult,
+    including connections to dynamical systems theory.
+  \item \citet[Chapter~10]{goodfellow2016} offers a comprehensive
+    survey of recurrent architectures, training techniques, and
+    practical considerations.
+  \item \citet{graves2012} covers supervised sequence labelling with
+    RNNs, including connectionist temporal classification (CTC) for
+    speech and handwriting recognition.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

@@ -715,11 +715,36 @@ the most important -- you should be able to state and prove these from memory.
 
 ### 3.2 Recurrent Neural Networks (Lessons 67--69)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 67 | BPTT derivation | Backpropagation Through Time, vanishing/exploding gradient problem | [rnn](03-deep-learning/01-neural-networks/rnn.pdf) |
-| 68 | LSTM architecture | Gating mechanisms (input, forget, output), cell state dynamics | [lstm](03-deep-learning/01-neural-networks/lstm.pdf) |
-| 69 | GRU and variants | GRU simplification, sequence-to-sequence architectures | [lstm](03-deep-learning/01-neural-networks/lstm.pdf) |
+**Primary text:** Goodfellow, I., Bengio, Y. & Courville, A. *Deep Learning* (2016, Chapter 10)
+**Supplementary:** Hochreiter & Schmidhuber (1997), Cho et al. (2014), Pascanu et al. (2013)
+
+#### Lesson 67: Recurrent Neural Networks and Backpropagation Through Time
+
+> [lesson-67](03-deep-learning/01-neural-networks/lesson-67-rnn-and-bptt.pdf)
+
+- **Definitions:** 3.1 Sequence, 3.2 Sequence-to-Sequence Map, 4.1 Recurrence Relation, 4.2 Vanilla RNN, 4.5 Unfolded RNN, 5.1 Sequence Loss, 5.2 Common Loss Functions, 6.1 Output Error Signal, 6.2 Hidden State Error Signal, 6.5 Pre-activation Error, 8.1 Gradient Clipping, 8.4 Truncated BPTT
+- **Key results:** 4.3 Prop (Parameter Count), **5.3 Prop (Softmax-Cross-Entropy Gradient)**, **6.3 Thm (Hidden State Error Recurrence)**, **6.6 Thm (BPTT Weight Gradients)**, **7.1 Thm (Long-Range Gradient)**, 7.2 Lemma (Jacobian of Hidden State Transition), **7.3 Thm (Vanishing Gradient)**, **7.5 Thm (Exploding Gradient)**, 7.7 Prop (Eigenvalue Characterization), 8.2 Prop (Orthogonal Initialization)
+- **Examples:** 3.3 Language Modeling, 4.4 Simple RNN Computation, 6.9 BPTT for a Two-Step Sequence, 7.8 Vanishing Gradient Demonstration, 8.5 Comparing Mitigation Strategies
+- **Exercises:** 67.1--67.5
+
+#### Lesson 68: Long Short-Term Memory and Gating Mechanisms
+
+> [lesson-68](03-deep-learning/01-neural-networks/lesson-68-lstm-and-gating.pdf)
+
+- **Definitions:** 3.1 Sigmoid Gate, 3.2 Hadamard Product, 4.1 Forget Gate, 4.3 Input Gate, 4.4 Candidate Cell State, 4.5 Cell State Update, 4.6 Output Gate, 4.7 Hidden State Output, 5.3 Compact Matrix Formulation, 8.1 Peephole LSTM, 8.3 Coupled Gate LSTM
+- **Key results:** 3.4 Prop (Derivative Properties), 5.1 Prop (LSTM Parameter Count), **6.1 Thm (Cell State Gradient Recurrence)**, **6.4 Thm (LSTM Weight Gradients)**, **7.1 Thm (LSTM Cell State Jacobian)**, **7.2 Cor (Long-Range Cell State Gradient)**, **7.3 Thm (Vanishing Gradient Mitigation)**
+- **Examples:** 4.8 LSTM as Selective Memory, 5.4 LSTM Parameter Count, 7.4 LSTM vs Vanilla RNN Gradient Flow, 8.4 Coupled Gate vs Standard LSTM
+- **Exercises:** 68.1--68.5
+
+#### Lesson 69: Gated Recurrent Unit and Sequence Architectures (Capstone)
+
+> [lesson-69](03-deep-learning/01-neural-networks/lesson-69-gru-and-sequence-architectures.pdf)
+
+- **Definitions:** 3.1 Reset Gate, 3.2 Update Gate, 3.3 GRU Candidate Hidden State, 3.4 GRU Hidden State Update, 4.1 Bidirectional RNN, 5.1 Stacked RNN, 6.1 Encoder-Decoder Architecture
+- **Key results:** 3.6 Prop (GRU Parameter Count), **3.8 Thm (GRU Hidden State Jacobian)**, 3.9 Cor (GRU Gradient Preservation), 4.2 Prop (Bidirectional RNN Parameter Count), 5.2 Prop (Stacked RNN Parameter Count), 6.3 Prop (Encoder-Decoder Training)
+- **Examples:** 3.7 Parameter Comparison (RNN/GRU/LSTM), 4.3 Bidirectional Context, 5.3 Stacked LSTM Parameter Count, 6.4 Machine Translation
+- **Exercises:** 69.1--69.6
+- **Review:** Capstone summary table (Lessons 67--69) covering the RNN subdomain arc from vanilla RNNs through LSTM gating to GRU and sequence architectures
 
 ### 3.3 Optimization for Deep Learning (Lessons 70--72)
 

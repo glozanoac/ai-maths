@@ -10,7 +10,7 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 
 Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf -- 102 sessions). Each phase directory has its own `README.md` with full details.
 
-**Total: 69 documents** (53 exist, 16 planned)
+**Total: 70 documents** (54 exist, 16 planned)
 
 ### Phase 00 -- Prerequisites (12 lessons)
 
@@ -68,7 +68,7 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 | 40 | `02-core-rl/03-policy-gradient/lesson-57-actor-critic-and-gae` | Actor-critic architecture, advantage functions, GAE, two-timescale convergence | **exists** |
 | 41 | `02-core-rl/03-policy-gradient/lesson-58-policy-gradient-synthesis` | Unified PG framework, variance reduction taxonomy, convergence landscape, connections to TRPO/PPO/SAC | **exists** |
 
-### Phase 03 -- Deep Learning (11 docs)
+### Phase 03 -- Deep Learning (12 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
@@ -80,41 +80,42 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 | 47 | `03-deep-learning/01-neural-networks/lesson-64-barron-theorem-and-approximation-rates` | Barron's theorem, dimension-free approximation rates, Fourier analysis, integral representation | **exists** |
 | 48 | `03-deep-learning/01-neural-networks/lesson-65-depth-width-tradeoffs` | Depth separation (Telgarsky), width sufficiency, approximation rates for smooth functions | **exists** |
 | 49 | `03-deep-learning/01-neural-networks/lesson-66-ntk-and-rademacher-complexity` | Neural tangent kernel, lazy training, Rademacher complexity bounds for NNs, generalization | **exists** |
-| 50 | `03-deep-learning/01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | **exists** |
-| 51 | `03-deep-learning/01-neural-networks/lstm` | Gating mechanisms, cell state dynamics, GRU | **exists** |
-| 52 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
+| 50 | `03-deep-learning/01-neural-networks/lesson-67-rnn-and-bptt` | Vanilla RNN architecture, BPTT derivation, vanishing/exploding gradient theorems, gradient clipping | **exists** |
+| 51 | `03-deep-learning/01-neural-networks/lesson-68-lstm-and-gating` | LSTM cell architecture, forget/input/output gates, cell state dynamics, BPTT through LSTM, gradient flow analysis | **exists** |
+| 52 | `03-deep-learning/01-neural-networks/lesson-69-gru-and-sequence-architectures` | GRU, bidirectional RNNs, deep stacked RNNs, encoder-decoder framework | **exists** |
+| 53 | `03-deep-learning/02-optimization-for-dl/01-sgd-and-adaptive-methods` | SGD convergence (convex/non-convex), variance reduction, AdaGrad, RMSprop, Adam, loss landscape geometry, batch normalization | planned |
 
 ### Phase 04 -- Deep Reinforcement Learning (7 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 53 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
-| 54 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
-| 55 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
-| 56 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
-| 57 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
-| 58 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
-| 59 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
+| 54 | `04-deep-rl/01-value-based/01-dqn-and-extensions` | DQN, experience replay, target networks, Double DQN, Dueling, overestimation bias | planned |
+| 55 | `04-deep-rl/01-value-based/02-distributional-rl` | C51, quantile regression DQN, IQN, distributional Bellman equation | planned |
+| 56 | `04-deep-rl/02-policy-based/01-trust-region-methods` | TRPO, natural policy gradient, KL-constrained optimization | **exists** |
+| 57 | `04-deep-rl/02-policy-based/02-proximal-policy-optimization` | PPO, clipped surrogate objective, advantage estimation | **exists** |
+| 58 | `04-deep-rl/02-policy-based/03-deterministic-policy-gradient` | Deterministic PG theorem, DDPG, TD3 | planned |
+| 59 | `04-deep-rl/02-policy-based/04-maximum-entropy-rl` | Maximum entropy framework, SAC, two-timescale actor-critic analysis | planned |
+| 60 | `04-deep-rl/03-model-based/01-model-based-rl` | Dyna, MuZero, Dreamer, world models, planning with learned models | planned |
 
 ### Phase 05 -- Multi-Agent RL (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 60 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
-| 61 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
-| 62 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
-| 63 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
-| 64 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
+| 61 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
+| 62 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
+| 63 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
+| 64 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
+| 65 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
 
 ### Phase 06 -- Aerospace Applications (5 docs)
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 65 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
-| 66 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
-| 67 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
-| 68 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
-| 69 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
+| 66 | `06-aerospace/01-continuous-control/01-continuous-control` | High-dimensional action spaces, hierarchical RL, MPC+RL hybrids | planned |
+| 67 | `06-aerospace/02-safety/01-safety-and-constraints` | Constrained MDPs, Lagrangian relaxation, CPO, Lyapunov stability, reachability | planned |
+| 68 | `06-aerospace/03-partial-observability/01-pomdps` | POMDP formulation, belief states, structural results, approximate methods | planned |
+| 69 | `06-aerospace/04-sim-to-real/01-sim-to-real-transfer` | Domain randomization, system identification, progressive nets | planned |
+| 70 | `06-aerospace/05-multi-vehicle/01-multi-vehicle-coordination` | Formation control (graph Laplacian), collision avoidance, communication-aware coordination | planned |
 
 ## Dependency Tree / Reading Order
 
@@ -138,7 +139,7 @@ Phase 02 -- Core RL (requires: Phase 01 measure theory + optimization)
 
 Phase 03 -- Deep Learning (requires: Phase 01 measure theory; independent of Phase 02)
   NN Theory: lesson-59 -> lesson-60 -> lesson-61 -> lesson-62 -> lesson-63 -> lesson-64 -> lesson-65 -> lesson-66
-  RNN: rnn -> lstm
+  RNN: lesson-67 -> lesson-68 -> lesson-69
   Optimization: 01-sgd-and-adaptive-methods
 
 Phase 04 -- Deep RL (requires: Phase 02 + Phase 03)

@@ -1,0 +1,812 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 69: GRU and Sequence Architectures}}
+\fancyhead[R]{\thepage}
+\title{Lesson 69: Gated Recurrent Unit\\and Sequence Architectures}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Lesson~67 established the vanilla RNN and exposed its fundamental
+limitation: vanishing gradients prevent learning long-range
+dependencies.  Lesson~68 showed how the LSTM resolves this through
+an additive cell state update with learnable gates, at the cost of
+$4\times$ more parameters.  A natural question arises: \emph{can we
+achieve comparable gradient flow with a simpler gating mechanism?}
+
+The Gated Recurrent Unit (GRU), introduced by \citet{cho2014},
+answers affirmatively.  The GRU merges the cell state and hidden
+state into a single vector and uses only two gates (reset and
+update) instead of three.  Empirical comparisons \citep{chung2014}
+show that the GRU achieves performance comparable to the LSTM on
+many tasks while requiring fewer parameters and less computation.
+
+Beyond the choice of recurrent cell, the power of recurrent
+architectures is amplified by structural innovations:
+\emph{bidirectional} processing captures both past and future
+context, \emph{deep stacking} increases representational capacity,
+and the \emph{encoder-decoder} framework enables variable-length
+sequence-to-sequence mappings.  This lesson develops all four
+extensions and concludes with a capstone summary of the entire
+Recurrent Neural Networks subdomain.
+
+\begin{rlconnection}[title={Why GRU and Sequence Architectures
+    Matter for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Lightweight recurrent policies.}  GRU-based policies
+    offer a favorable trade-off between memory capacity and
+    computational cost for on-policy RL algorithms like PPO that
+    require many forward passes per training step.
+  \item \textbf{Bidirectional context in offline RL.}  When
+    processing pre-collected trajectories (offline RL, imitation
+    learning), bidirectional RNNs can leverage both past and future
+    context to improve state estimation.
+  \item \textbf{Deep recurrent architectures.}  Stacked RNNs
+    increase the capacity of recurrent value functions and policies,
+    enabling richer representations in complex environments.
+  \item \textbf{Sequence-to-sequence in RL.}  The encoder-decoder
+    framework underlies trajectory transformers, goal-conditioned
+    policies, and communication protocols in multi-agent RL.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+LSTM cell architecture and gating mechanisms (Lesson~68,
+Definitions~4.1--4.7 and Theorem~7.1).  Vanishing gradient problem
+and the cell state gradient highway (Lesson~68, Corollary~7.2 and
+Theorem~7.3).  BPTT algorithm for vanilla RNNs (Lesson~67,
+Section~6).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the GRU architecture and \textbf{derive}
+    its forward equations, including the reset and update gates.
+  \item \textbf{Compare} the GRU and LSTM in terms of parameter
+    count, gradient flow properties, and computational efficiency.
+  \item \textbf{Derive} the BPTT equations for the GRU, including
+    the hidden state gradient recurrence.
+  \item \textbf{Define} bidirectional RNNs and \textbf{explain}
+    when bidirectional processing is appropriate.
+  \item \textbf{Define} deep (stacked) RNNs and \textbf{compute}
+    their parameter counts.
+  \item \textbf{Formalize} the encoder-decoder framework and
+    \textbf{explain} the context vector bottleneck.
+  \item \textbf{Synthesize} the subdomain arc from vanilla RNNs
+    through gated architectures to sequence-level designs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet{cho2014} --- Original GRU paper: the encoder-decoder
+    architecture with GRU cells for statistical machine translation.
+  \item \citet{chung2014} --- Empirical comparison of GRU and LSTM
+    on sequence modeling tasks (polyphonic music, speech).
+  \item \citet{schuster1997} --- Bidirectional recurrent neural
+    networks: architecture and training algorithm.
+  \item \citet{sutskever2014} --- Sequence-to-sequence learning with
+    neural networks: the encoder-decoder framework with LSTMs.
+  \item \citet{bahdanau2015} --- Attention mechanism for
+    encoder-decoder models, addressing the context vector bottleneck.
+  \item \citet[Chapter~10]{goodfellow2016} --- Comprehensive
+    treatment of recurrent architectures and sequence modeling.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: GATED RECURRENT UNIT
+%% ============================================================
+\section{Gated Recurrent Unit}
+\label{sec:gru}
+
+\subsection{GRU Architecture}
+
+The GRU simplifies the LSTM by merging the cell state and hidden
+state into a single vector $\mathbf{h}_t$ and using two gates
+instead of three.
+
+\begin{definition}[Reset Gate]
+\label{def:reset-gate}
+The \emph{reset gate} $\mathbf{r}_t \in (0, 1)^m$ controls how much
+of the previous hidden state to ``forget'' when computing the
+candidate:
+\begin{equation}
+  \boxed{\mathbf{r}_t = \sigma(\mathbf{W}_r \mathbf{x}_t +
+    \mathbf{U}_r \mathbf{h}_{t-1} + \mathbf{b}_r)},
+  \label{eq:reset-gate}
+\end{equation}
+where $\mathbf{W}_r \in \R^{m \times n}$,
+$\mathbf{U}_r \in \R^{m \times m}$, and $\mathbf{b}_r \in \R^m$.
+\end{definition}
+
+\begin{definition}[Update Gate]
+\label{def:update-gate}
+The \emph{update gate} $\mathbf{z}_t \in (0, 1)^m$ controls the
+balance between the previous hidden state and the candidate:
+\begin{equation}
+  \boxed{\mathbf{z}_t = \sigma(\mathbf{W}_z \mathbf{x}_t +
+    \mathbf{U}_z \mathbf{h}_{t-1} + \mathbf{b}_z)},
+  \label{eq:update-gate}
+\end{equation}
+where $\mathbf{W}_z \in \R^{m \times n}$,
+$\mathbf{U}_z \in \R^{m \times m}$, and $\mathbf{b}_z \in \R^m$.
+\end{definition}
+
+\begin{definition}[GRU Candidate Hidden State]
+\label{def:gru-candidate}
+The \emph{candidate hidden state} $\tilde{\mathbf{h}}_t \in
+(-1, 1)^m$ is computed using the reset gate to selectively
+incorporate the previous hidden state:
+\begin{equation}
+  \boxed{\tilde{\mathbf{h}}_t = \tanh(\mathbf{W}_h \mathbf{x}_t +
+    \mathbf{U}_h (\mathbf{r}_t \odot \mathbf{h}_{t-1}) +
+    \mathbf{b}_h)},
+  \label{eq:gru-candidate}
+\end{equation}
+where $\mathbf{W}_h \in \R^{m \times n}$,
+$\mathbf{U}_h \in \R^{m \times m}$, and $\mathbf{b}_h \in \R^m$.
+\end{definition}
+
+\begin{definition}[GRU Hidden State Update]
+\label{def:gru-update}
+The hidden state is a convex combination of the previous hidden
+state and the candidate:
+\begin{equation}
+  \boxed{\mathbf{h}_t = (1 - \mathbf{z}_t) \odot \mathbf{h}_{t-1}
+    + \mathbf{z}_t \odot \tilde{\mathbf{h}}_t}.
+  \label{eq:gru-hidden}
+\end{equation}
+\end{definition}
+
+\begin{keyresult}[title={GRU Forward Equations}]
+At each time step $t = 1, \ldots, T$:
+\begin{align}
+  \mathbf{r}_t &= \sigma(\mathbf{W}_r \mathbf{x}_t +
+    \mathbf{U}_r \mathbf{h}_{t-1} + \mathbf{b}_r),
+    && \text{[Reset Gate]} \label{eq:gru-r} \\
+  \mathbf{z}_t &= \sigma(\mathbf{W}_z \mathbf{x}_t +
+    \mathbf{U}_z \mathbf{h}_{t-1} + \mathbf{b}_z),
+    && \text{[Update Gate]} \label{eq:gru-z} \\
+  \tilde{\mathbf{h}}_t &= \tanh(\mathbf{W}_h \mathbf{x}_t +
+    \mathbf{U}_h (\mathbf{r}_t \odot \mathbf{h}_{t-1}) +
+    \mathbf{b}_h),
+    && \text{[Candidate]} \label{eq:gru-h-tilde} \\
+  \mathbf{h}_t &= (1 - \mathbf{z}_t) \odot \mathbf{h}_{t-1} +
+    \mathbf{z}_t \odot \tilde{\mathbf{h}}_t.
+    && \text{[Hidden State]} \label{eq:gru-h}
+\end{align}
+\end{keyresult}
+
+\begin{remark}[GRU vs LSTM: Structural Comparison]
+\label{rem:gru-vs-lstm}
+The GRU and LSTM share the principle of gated information flow but
+differ in key ways:
+\begin{itemize}[nosep]
+  \item The GRU has no separate cell state; $\mathbf{h}_t$ serves
+    as both memory and output.
+  \item The update gate $\mathbf{z}_t$ plays the role of both the
+    LSTM's forget gate and input gate (coupled as
+    $\mathbf{i} = 1 - \mathbf{f}$).
+  \item The reset gate $\mathbf{r}_t$ has no direct LSTM analogue;
+    it controls how much of $\mathbf{h}_{t-1}$ contributes to the
+    candidate computation.
+  \item The GRU hidden state update is a convex combination, so
+    $\|\mathbf{h}_t\| \leq \max(\|\mathbf{h}_{t-1}\|,
+    \|\tilde{\mathbf{h}}_t\|)$, providing implicit norm control.
+\end{itemize}
+\end{remark}
+
+\begin{proposition}[GRU Parameter Count]
+\label{prop:gru-params}
+For a GRU with input dimension $n$ and hidden dimension $m$, the
+total number of trainable parameters (excluding the output layer) is:
+\begin{equation}
+  P = 3(mn + m^2 + m) = 3m(n + m + 1).
+  \label{eq:gru-params}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Each of the three components (reset gate, update gate, candidate)
+has $mn + m^2 + m$ parameters.  Total:
+$3(mn + m^2 + m) = 3m(n + m + 1)$.
+\end{proof}
+
+\begin{example}[Parameter Comparison]
+\label{ex:param-comparison}
+For $n = 300$, $m = 512$ (word embedding to hidden state):
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Architecture & Formula & Parameters \\
+\midrule
+Vanilla RNN & $m(n + m + 1)$ & 416,256 \\
+GRU & $3m(n + m + 1)$ & 1,248,768 \\
+LSTM & $4m(n + m + 1)$ & 1,664,256 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The GRU has $75\%$ of the LSTM's parameters while often achieving
+comparable performance.
+\end{example}
+
+\subsection{GRU Gradient Flow}
+
+\begin{theorem}[GRU Hidden State Jacobian]
+\label{thm:gru-jacobian}
+The Jacobian of $\mathbf{h}_t$ with respect to $\mathbf{h}_{t-1}$
+in the GRU is:
+\begin{equation}
+  \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_{t-1}}
+    = \diag(1 - \mathbf{z}_t) + \mathbf{A}_t + \mathbf{B}_t
+      + \mathbf{C}_t,
+  \label{eq:gru-jacobian}
+\end{equation}
+where:
+\begin{align*}
+  \mathbf{A}_t &= \diag(\mathbf{z}_t \odot
+    (1 - \tilde{\mathbf{h}}_t^2)) \, \mathbf{U}_h \,
+    \diag(\mathbf{r}_t),
+    && \text{(candidate through reset)} \\
+  \mathbf{B}_t &= \diag(\tilde{\mathbf{h}}_t - \mathbf{h}_{t-1})
+    \, \diag(\mathbf{z}_t \odot (1 - \mathbf{z}_t)) \,
+    \mathbf{U}_z,
+    && \text{(update gate)} \\
+  \mathbf{C}_t &= \diag(\mathbf{z}_t \odot
+    (1 - \tilde{\mathbf{h}}_t^2)) \, \mathbf{U}_h \,
+    \diag(\mathbf{h}_{t-1} \odot \mathbf{r}_t \odot
+    (1 - \mathbf{r}_t)) \, \mathbf{U}_r.
+    && \text{(reset gate)}
+\end{align*}
+\end{theorem}
+
+\begin{proof}
+The hidden state update is $\mathbf{h}_t = (1 - \mathbf{z}_t) \odot
+\mathbf{h}_{t-1} + \mathbf{z}_t \odot \tilde{\mathbf{h}}_t$.
+Differentiating with respect to $\mathbf{h}_{t-1}$:
+\[
+  \frac{\partial \mathbf{h}_t}{\partial \mathbf{h}_{t-1}}
+    = \diag(1 - \mathbf{z}_t)
+    - \diag(\mathbf{h}_{t-1}) \frac{\partial \mathbf{z}_t}
+      {\partial \mathbf{h}_{t-1}}
+    + \diag(\tilde{\mathbf{h}}_t) \frac{\partial \mathbf{z}_t}
+      {\partial \mathbf{h}_{t-1}}
+    + \diag(\mathbf{z}_t) \frac{\partial \tilde{\mathbf{h}}_t}
+      {\partial \mathbf{h}_{t-1}}.
+\]
+For the update gate: $\frac{\partial \mathbf{z}_t}
+{\partial \mathbf{h}_{t-1}} = \diag(\mathbf{z}_t \odot
+(1 - \mathbf{z}_t)) \mathbf{U}_z$.
+For the candidate:
+$\frac{\partial \tilde{\mathbf{h}}_t}{\partial \mathbf{h}_{t-1}}
+= \diag(1 - \tilde{\mathbf{h}}_t^2) \mathbf{U}_h
+(\diag(\mathbf{r}_t) + \diag(\mathbf{h}_{t-1})
+\frac{\partial \mathbf{r}_t}{\partial \mathbf{h}_{t-1}})$,
+where $\frac{\partial \mathbf{r}_t}{\partial \mathbf{h}_{t-1}} =
+\diag(\mathbf{r}_t \odot (1 - \mathbf{r}_t)) \mathbf{U}_r$.
+Collecting terms yields $\mathbf{A}_t$, $\mathbf{B}_t$, and
+$\mathbf{C}_t$.
+\end{proof}
+
+\begin{corollary}[GRU Gradient Preservation]
+\label{cor:gru-gradient}
+When $\mathbf{z}_t \approx \mathbf{0}$ (update gate closed), the
+dominant term in the Jacobian is $\diag(1 - \mathbf{z}_t) \approx
+\mathbf{I}$, and the hidden state approximately copies forward:
+$\mathbf{h}_t \approx \mathbf{h}_{t-1}$.  This provides a gradient
+highway analogous to the LSTM's cell state pathway.
+\end{corollary}
+
+\begin{rlconnection}[title={GRU in Deep RL}]
+In practice, GRUs and LSTMs perform comparably on most RL tasks.
+The GRU's lower parameter count makes it attractive for:
+\begin{itemize}[nosep]
+  \item On-policy methods (PPO, A3C) where many forward passes are
+    needed per gradient update.
+  \item Memory-constrained settings (mobile robotics, embedded
+    systems).
+  \item Multi-agent RL where each agent has its own recurrent
+    network.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 4: BIDIRECTIONAL RNNS
+%% ============================================================
+\section{Bidirectional Recurrent Neural Networks}
+\label{sec:bidirectional}
+
+\begin{definition}[Bidirectional RNN]
+\label{def:bidirectional}
+A \emph{bidirectional RNN} processes a sequence in both forward and
+backward directions using two separate recurrent networks:
+\begin{align}
+  \overrightarrow{\mathbf{h}}_t &= f_{\text{forward}}(\mathbf{x}_t,
+    \overrightarrow{\mathbf{h}}_{t-1}),
+    \label{eq:bidir-forward} \\
+  \overleftarrow{\mathbf{h}}_t &= f_{\text{backward}}(\mathbf{x}_t,
+    \overleftarrow{\mathbf{h}}_{t+1}),
+    \label{eq:bidir-backward}
+\end{align}
+where $f_{\text{forward}}$ and $f_{\text{backward}}$ are recurrent
+cells (vanilla RNN, LSTM, or GRU) with independent parameters.
+The outputs are concatenated:
+\begin{equation}
+  \mathbf{h}_t = [\overrightarrow{\mathbf{h}}_t;
+    \overleftarrow{\mathbf{h}}_t] \in \R^{2m},
+  \label{eq:bidir-concat}
+\end{equation}
+where $[\cdot;\cdot]$ denotes vertical concatenation.
+\end{definition}
+
+\begin{proposition}[Bidirectional RNN Parameter Count]
+\label{prop:bidir-params}
+A bidirectional RNN with cell type $C$ (having $P_C$ parameters per
+direction) has $2P_C$ recurrent parameters plus the output layer
+parameters.  The output layer maps from $2m$ dimensions instead of
+$m$.
+\end{proposition}
+
+\begin{proof}
+The forward and backward networks have independent parameters, so
+the total recurrent parameters are $2P_C$.  The output layer
+$\mathbf{V} \in \R^{k \times 2m}$ maps the concatenated hidden
+state to the output.
+\end{proof}
+
+\begin{example}[Bidirectional Context]
+\label{ex:bidir-context}
+Consider named entity recognition in the sentence
+``John visited Paris last summer.''  At the word ``Paris'':
+\begin{itemize}[nosep]
+  \item The forward hidden state $\overrightarrow{\mathbf{h}}_3$
+    captures ``John visited''---suggesting a destination.
+  \item The backward hidden state $\overleftarrow{\mathbf{h}}_3$
+    captures ``last summer''---suggesting a temporal context.
+\end{itemize}
+The concatenated representation $[\overrightarrow{\mathbf{h}}_3;
+\overleftarrow{\mathbf{h}}_3]$ captures both contexts, making it
+easier to classify ``Paris'' as a location.
+\end{example}
+
+\begin{warning}[title={Bidirectional RNNs Require Full Sequences}]
+Bidirectional RNNs can only be applied when the \emph{entire}
+sequence is available before prediction (the backward pass requires
+future inputs).  They are \textbf{not suitable} for:
+\begin{itemize}[nosep]
+  \item Online prediction (each output must be produced before
+    seeing future inputs).
+  \item Causal sequence-to-sequence tasks (language modeling,
+    real-time RL).
+  \item Streaming applications where inputs arrive one at a time.
+\end{itemize}
+They \textbf{are suitable} for tasks like sequence classification,
+offline RL trajectory encoding, and post-hoc sequence labeling.
+\end{warning}
+
+\begin{remark}[Training Bidirectional RNNs]
+\label{rem:bidir-training}
+During training, the forward and backward networks are trained
+independently on their respective directions.  The total gradient
+at each parameter is the sum of gradients from the forward and
+backward losses.  Computationally, the forward pass requires
+two sequential scans of the sequence (one in each direction),
+doubling the forward pass time compared to a unidirectional RNN.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: DEEP (STACKED) RNNS
+%% ============================================================
+\section{Deep (Stacked) Recurrent Neural Networks}
+\label{sec:deep-rnn}
+
+\begin{definition}[Stacked RNN]
+\label{def:stacked}
+An $L$-layer \emph{stacked} (deep) RNN defines a hierarchy of
+recurrent layers.  Let $\mathbf{h}_t^{(\ell)}$ denote the hidden
+state at time $t$ and layer $\ell$.  The first layer processes the
+input:
+\begin{equation}
+  \mathbf{h}_t^{(1)} = \text{Cell}^{(1)}(\mathbf{x}_t,
+    \mathbf{h}_{t-1}^{(1)}),
+  \label{eq:stacked-layer1}
+\end{equation}
+and subsequent layers use the hidden state of the layer below as
+input:
+\begin{equation}
+  \mathbf{h}_t^{(\ell)} = \text{Cell}^{(\ell)}(
+    \mathbf{h}_t^{(\ell-1)}, \mathbf{h}_{t-1}^{(\ell)}),
+    \quad \ell = 2, \ldots, L,
+  \label{eq:stacked-layerL}
+\end{equation}
+where $\text{Cell}^{(\ell)}$ is a recurrent cell (vanilla RNN,
+LSTM, or GRU) with its own parameters.  The output is typically
+taken from the top layer: $\mathbf{y}_t = g(\mathbf{V}
+\mathbf{h}_t^{(L)} + \mathbf{c})$.
+\end{definition}
+
+\begin{proposition}[Stacked RNN Parameter Count]
+\label{prop:stacked-params}
+For an $L$-layer stacked RNN where each layer has hidden dimension
+$m$ and the cell type has parameter count $P_C(n_\ell, m)$ for
+input dimension $n_\ell$:
+\begin{equation}
+  P = P_C(n, m) + (L - 1) P_C(m, m) + k(m + 1),
+  \label{eq:stacked-params}
+\end{equation}
+where the first term is the bottom layer (input dimension $n$), the
+middle term covers layers $2$ through $L$ (input dimension $m$), and
+the last term is the output layer.
+\end{proposition}
+
+\begin{proof}
+Layer $1$ receives input of dimension $n$, contributing $P_C(n, m)$
+parameters.  Layers $2, \ldots, L$ each receive hidden states of
+dimension $m$, contributing $(L-1) P_C(m, m)$ parameters.  The
+output layer $\mathbf{V} \in \R^{k \times m}$ and $\mathbf{c} \in
+\R^k$ contribute $k(m + 1)$.
+\end{proof}
+
+\begin{example}[Stacked LSTM Parameter Count]
+\label{ex:stacked-lstm}
+A 3-layer stacked LSTM with $n = 300$, $m = 512$, $k = 10000$
+(vocabulary size):
+\begin{align*}
+  \text{Layer 1:} &\quad 4 \times 512 \times (300 + 512 + 1)
+    = 1{,}664{,}256, \\
+  \text{Layers 2-3:} &\quad 2 \times 4 \times 512 \times
+    (512 + 512 + 1) = 4{,}198{,}400, \\
+  \text{Output:} &\quad 10000 \times (512 + 1) = 5{,}130{,}000. \\
+  \text{Total:} &\quad 10{,}992{,}656 \approx 11\text{M}.
+\end{align*}
+\end{example}
+
+\begin{remark}[Depth vs Width]
+\label{rem:depth-vs-width}
+Stacking layers adds \emph{depth} in the spatial dimension (across
+layers at a fixed time step), complementing the temporal depth
+inherent in the recurrence.  Each layer can learn increasingly
+abstract representations:
+\begin{itemize}[nosep]
+  \item Layer 1: low-level features (character patterns, phonemes).
+  \item Layer 2: mid-level features (word meanings, phrases).
+  \item Layer 3: high-level features (sentence semantics, discourse).
+\end{itemize}
+In practice, 2--4 layers suffice for most tasks; deeper stacks
+suffer from optimization difficulties similar to very deep
+feedforward networks.
+\end{remark}
+
+\begin{rlconnection}[title={Deep Recurrent RL}]
+In deep RL, stacked LSTMs or GRUs are used when the agent faces
+complex partial observability.  For example, a 2-layer LSTM in an
+Atari game with partial information: layer~1 processes visual
+features (from a CNN) into temporal patterns, while layer~2
+integrates these patterns into a belief state for action selection.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 6: ENCODER-DECODER FRAMEWORK
+%% ============================================================
+\section{Encoder-Decoder Framework}
+\label{sec:encoder-decoder}
+
+\begin{definition}[Encoder-Decoder Architecture]
+\label{def:enc-dec}
+The \emph{encoder-decoder} (sequence-to-sequence) architecture
+\citep{sutskever2014,cho2014} maps a variable-length input sequence
+$\mathbf{x}_{1:T}$ to a variable-length output sequence
+$\mathbf{y}_{1:T'}$ (where $T' \neq T$ in general) through two
+components:
+
+\textbf{Encoder:} processes the input sequence and produces a
+fixed-dimensional \emph{context vector}:
+\begin{equation}
+  \mathbf{h}_t^{\text{enc}} = f_{\text{enc}}(\mathbf{x}_t,
+    \mathbf{h}_{t-1}^{\text{enc}}), \quad t = 1, \ldots, T,
+  \label{eq:encoder}
+\end{equation}
+\begin{equation}
+  \mathbf{q} = \phi(\mathbf{h}_T^{\text{enc}}),
+  \label{eq:context}
+\end{equation}
+where $\phi$ is typically the identity ($\mathbf{q} =
+\mathbf{h}_T^{\text{enc}}$).
+
+\textbf{Decoder:} generates the output sequence conditioned on the
+context vector:
+\begin{equation}
+  \mathbf{h}_t^{\text{dec}} = f_{\text{dec}}(\mathbf{y}_{t-1},
+    \mathbf{h}_{t-1}^{\text{dec}}), \quad
+    \mathbf{h}_0^{\text{dec}} = \mathbf{q},
+  \label{eq:decoder}
+\end{equation}
+\begin{equation}
+  \mathbf{y}_t = g(\mathbf{V} \mathbf{h}_t^{\text{dec}} +
+    \mathbf{c}).
+  \label{eq:decoder-output}
+\end{equation}
+\end{definition}
+
+\begin{remark}[Context Vector as Information Bottleneck]
+\label{rem:bottleneck}
+The context vector $\mathbf{q} \in \R^m$ must encode the
+\emph{entire} input sequence into a fixed-dimensional vector.  For
+long input sequences, this creates an information bottleneck: the
+encoder must compress arbitrarily long sequences into $m$ dimensions,
+inevitably losing information.  This limitation motivated the
+development of \emph{attention mechanisms} \citep{bahdanau2015},
+which allow the decoder to access all encoder hidden states
+rather than just the final one.
+\end{remark}
+
+\begin{example}[Machine Translation]
+\label{ex:translation}
+In English-to-French translation of ``The cat sat on the mat'':
+\begin{enumerate}[nosep]
+  \item The encoder processes the English tokens one by one,
+    building up $\mathbf{h}_1^{\text{enc}}, \ldots,
+    \mathbf{h}_6^{\text{enc}}$.
+  \item The context vector $\mathbf{q} = \mathbf{h}_6^{\text{enc}}$
+    summarizes the entire English sentence.
+  \item The decoder generates French tokens autoregressively:
+    ``Le'', ``chat'', ``s'est'', ``assis'', ``sur'', ``le'',
+    ``tapis'', until a special end token is produced.
+\end{enumerate}
+The output length (7 tokens) differs from the input length
+(6 tokens).
+\end{example}
+
+\begin{proposition}[Encoder-Decoder Training]
+\label{prop:enc-dec-training}
+The encoder-decoder is trained end-to-end by maximizing the
+log-likelihood of the target sequence:
+\begin{equation}
+  \mathcal{L}(\boldsymbol{\theta}_{\text{enc}},
+    \boldsymbol{\theta}_{\text{dec}})
+    = -\sum_{t=1}^{T'} \log P(\mathbf{y}_t \mid
+      \mathbf{y}_{1:t-1}, \mathbf{x}_{1:T}).
+  \label{eq:enc-dec-loss}
+\end{equation}
+Gradients flow backward through the decoder, through the context
+vector, and into the encoder via BPTT.
+\end{proposition}
+
+\begin{proof}
+The decoder output $\mathbf{y}_t$ depends on
+$\mathbf{h}_t^{\text{dec}}$, which depends on
+$\mathbf{h}_{t-1}^{\text{dec}}$ (via the decoder recurrence) and
+ultimately on $\mathbf{h}_0^{\text{dec}} = \mathbf{q} =
+\mathbf{h}_T^{\text{enc}}$.  The encoder hidden state
+$\mathbf{h}_T^{\text{enc}}$ depends on the encoder parameters
+through the encoder recurrence.  Thus the chain rule connects the
+decoder loss to the encoder parameters:
+\[
+  \frac{\partial \mathcal{L}}{\partial
+    \boldsymbol{\theta}_{\text{enc}}}
+    = \frac{\partial \mathcal{L}}
+      {\partial \mathbf{h}_0^{\text{dec}}}
+    \cdot \frac{\partial \mathbf{h}_T^{\text{enc}}}
+      {\partial \boldsymbol{\theta}_{\text{enc}}}.
+\]
+Both components are computed via BPTT in their respective networks.
+\end{proof}
+
+\begin{rlconnection}[title={Encoder-Decoder in RL}]
+The encoder-decoder framework appears in RL in several forms:
+\begin{itemize}[nosep]
+  \item \textbf{Goal-conditioned policies}: the encoder processes
+    the goal description, and the decoder generates actions.
+  \item \textbf{Trajectory transformers}: encode past trajectories
+    and decode future actions or state predictions.
+  \item \textbf{Communication in MARL}: agents encode messages using
+    an encoder and decode received messages to inform actions
+    (Phase~05, Lesson~64).
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 7: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[GRU Forward Pass]
+\textnormal{(\(\ast\))} \\
+Consider a scalar GRU ($n = m = 1$) with all weight parameters
+equal to $1$, all biases equal to $0$, and $h_0 = 0$.  Compute
+$r_1, z_1, \tilde{h}_1, h_1$ for input $x_1 = 1$.  Then compute
+$r_2, z_2, \tilde{h}_2, h_2$ for input $x_2 = 0$.
+\end{exercise}
+
+\begin{exercise}[GRU vs LSTM Gradient Analysis]
+\textnormal{(\(\ast\ast\))} \\
+For a GRU with constant update gate $\mathbf{z}_t = \epsilon
+\mathbf{1}$ (small $\epsilon > 0$) and for an LSTM with constant
+forget gate $\mathbf{f}_t = (1 - \epsilon)\mathbf{1}$, compute the
+long-range gradient attenuation over $k$ steps for each
+architecture.  Show that both architectures preserve gradients
+when $\epsilon$ is small, but through different mechanisms.
+\end{exercise}
+
+\begin{exercise}[Bidirectional RNN Output]
+\textnormal{(\(\ast\))} \\
+A bidirectional GRU with $m = 128$ per direction processes a
+sequence of length $T = 50$.  What is the dimension of the output
+$\mathbf{h}_t$ at each time step?  If the output layer maps to a
+vocabulary of $k = 10{,}000$ classes, how many parameters does the
+output layer have?
+\end{exercise}
+
+\begin{exercise}[Encoder-Decoder Gradient Flow]
+\textnormal{(\(\ast\ast\))} \\
+In an encoder-decoder with a vanilla RNN encoder (hidden dimension
+$m$) and LSTM decoder, derive the gradient of the decoder loss
+$\mathcal{L}_1^{\text{dec}}$ (at the first decoder step) with
+respect to the encoder hidden state $\mathbf{h}_1^{\text{enc}}$.
+Express your answer in terms of the encoder Jacobian products.
+Explain why the context vector bottleneck makes this gradient
+vanish for long input sequences when the encoder is a vanilla RNN,
+and how using an LSTM encoder helps.
+\end{exercise}
+
+\begin{exercise}[Stacked GRU Design]
+\textnormal{(\(\ast\ast\))} \\
+Design a 2-layer stacked GRU for a sentiment analysis task with
+input embedding dimension $n = 200$, hidden dimension $m = 256$ per
+layer, and $k = 5$ sentiment classes.  (a)~Compute the total
+parameter count.  (b)~If we use a bidirectional GRU for the first
+layer and a unidirectional GRU for the second layer, what changes
+in the parameter count and the input dimension of the second layer?
+\end{exercise}
+
+\begin{exercise}[Attention Motivation]
+\textnormal{(\(\ast\ast\ast\))} \\
+Consider an encoder-decoder where the encoder produces hidden states
+$\mathbf{h}_1^{\text{enc}}, \ldots, \mathbf{h}_T^{\text{enc}}$ and
+the context is $\mathbf{q} = \mathbf{h}_T^{\text{enc}}$.  Suppose
+instead we define a time-dependent context:
+\[
+  \mathbf{q}_t = \sum_{s=1}^{T} \alpha_{ts}
+    \mathbf{h}_s^{\text{enc}}, \quad
+  \alpha_{ts} = \frac{\exp(e_{ts})}{\sum_{s'=1}^T \exp(e_{ts'})},
+  \quad
+  e_{ts} = \mathbf{v}^\top \tanh(\mathbf{W}_a
+    \mathbf{h}_s^{\text{enc}} + \mathbf{U}_a
+    \mathbf{h}_{t-1}^{\text{dec}}).
+\]
+This is the attention mechanism of \citet{bahdanau2015}.
+(a)~Show that when $\alpha_{ts} = \delta_{sT}$ (attention focuses
+entirely on the last encoder state), this reduces to the standard
+encoder-decoder.
+(b)~Explain how attention alleviates the information bottleneck.
+(c)~Derive $\frac{\partial \mathbf{q}_t}{\partial
+\mathbf{h}_s^{\text{enc}}}$ and argue that attention provides a
+``shortcut'' for gradient flow from the decoder to early encoder
+states.
+
+\textit{Hint:} For part (c), note that the gradient of
+$\mathbf{q}_t$ with respect to $\mathbf{h}_s^{\text{enc}}$ includes
+a direct term $\alpha_{ts} \mathbf{I}$ that does not pass through
+the encoder recurrence.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 8: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \textbf{GRU} simplifies the LSTM by merging cell and
+    hidden states and using two gates (reset and update) instead
+    of three, achieving $75\%$ of the LSTM's parameter count with
+    comparable performance.
+  \item The GRU hidden state update
+    $\mathbf{h}_t = (1 - \mathbf{z}_t) \odot \mathbf{h}_{t-1} +
+    \mathbf{z}_t \odot \tilde{\mathbf{h}}_t$ is a convex combination
+    that provides gradient preservation when
+    $\mathbf{z}_t \approx \mathbf{0}$.
+  \item \textbf{Bidirectional RNNs} process sequences in both
+    directions, capturing past and future context, but require the
+    entire sequence to be available (not suitable for online or
+    causal settings).
+  \item \textbf{Stacked (deep) RNNs} add spatial depth by layering
+    recurrent cells, enabling hierarchical feature extraction.  In
+    practice, 2--4 layers suffice.
+  \item The \textbf{encoder-decoder} framework maps variable-length
+    input sequences to variable-length output sequences through a
+    context vector, enabling tasks like machine translation.
+  \item The context vector creates an \textbf{information bottleneck}
+    for long sequences, motivating attention mechanisms that allow the
+    decoder to access all encoder hidden states.
+\end{itemize}
+
+\subsection*{Subdomain 3.2 Summary: Recurrent Neural Networks}
+
+The following table summarizes the arc of Lessons~67--69.
+
+\begin{center}
+\small
+\begin{tabular}{p{1.5cm}p{3.5cm}p{5cm}p{3cm}}
+\toprule
+\textbf{Lesson} & \textbf{Topic} & \textbf{Key Results}
+  & \textbf{Significance} \\
+\midrule
+67 & Vanilla RNN and BPTT
+  & RNN forward equations; BPTT algorithm; vanishing gradient
+    bound $\|\partial \mathcal{L}_t/\partial \mathbf{h}_\tau\|
+    \leq C\gamma^{t-\tau}$; exploding gradient bound
+  & Establishes the fundamental architecture and its core
+    limitation \\[6pt]
+68 & LSTM and Gating
+  & LSTM forward equations (6 equations); cell state Jacobian
+    $\partial \mathbf{c}_t/\partial \mathbf{c}_{t-1} =
+    \diag(\mathbf{f}_t)$; gradient highway when
+    $\mathbf{f}_t \approx \mathbf{1}$
+  & Solves the vanishing gradient problem via additive cell
+    state update \\[6pt]
+69 & GRU and Sequence Architectures
+  & GRU equations (4 equations); GRU Jacobian; bidirectional
+    concatenation; stacked layers; encoder-decoder framework
+  & Simplified gating + structural innovations for practical
+    sequence processing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Unifying theme:} the evolution from multiplicative
+(vanilla RNN) to additive (LSTM) to simplified additive (GRU)
+gradient flow, complemented by structural innovations
+(bidirectional, stacked, encoder-decoder) that expand the
+representational and functional capabilities of recurrent
+architectures.
+
+%% ============================================================
+%% SECTION 9: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item The attention mechanism of \citet{bahdanau2015} resolves
+    the encoder-decoder bottleneck and leads directly to the
+    Transformer architecture, which has largely replaced RNNs in
+    NLP.  A mathematical treatment of attention and Transformers
+    would be a natural extension of this subdomain.
+  \item \citet{chung2014} provides empirical comparisons of GRU
+    and LSTM on music and speech modeling, finding no clear winner
+    across all tasks.
+  \item \citet{greff2017} is the most comprehensive ablation study
+    of LSTM variants, testing the importance of each gate and
+    providing practical recommendations.
+  \item Phase~04 (Deep RL) builds on recurrent architectures:
+    recurrent DQN (DRQN) uses LSTMs in value-based methods, while
+    recurrent PPO uses LSTMs/GRUs for policies in POMDPs.
+  \item \citet{graves2012} covers sequence transduction with RNNs,
+    including connectionist temporal classification (CTC) for
+    speech recognition and handwriting synthesis.
+  \item The historical development of gated RNNs traces from
+    \citet{hochreiter1991}'s identification of the vanishing
+    gradient problem, through \citet{hochreiter1997}'s LSTM solution,
+    \citet{gers2000}'s addition of the forget gate, to
+    \citet{cho2014}'s GRU simplification.
+\end{itemize}
+
+\bibliography{nn-refs}
+\end{document}

@@ -27,9 +27,9 @@ Mathematical foundations of deep learning: neural network approximation theory, 
 
 | Lesson | File | Topic | Pages |
 |--------|------|-------|-------|
-| 67 | `01-neural-networks/rnn` | BPTT, vanishing/exploding gradients, sequence modeling | -- |
-| 68 | `01-neural-networks/lstm` | Gating mechanisms (input, forget, output), cell state dynamics | -- |
-| 69 | `01-neural-networks/lstm` | GRU simplification, sequence-to-sequence architectures | -- |
+| 67 | `01-neural-networks/lesson-67-rnn-and-bptt` | Vanilla RNN, BPTT derivation, vanishing/exploding gradient theorems, gradient clipping | 12 |
+| 68 | `01-neural-networks/lesson-68-lstm-and-gating` | LSTM cell, forget/input/output gates, cell state gradient highway, LSTM variants | 11 |
+| 69 | `01-neural-networks/lesson-69-gru-and-sequence-architectures` | GRU, bidirectional RNNs, stacked RNNs, encoder-decoder framework | 11 |
 
 ### 3.3 Optimization for Deep Learning (Lessons 70-72)
 
@@ -48,7 +48,7 @@ Mathematical foundations of deep learning: neural network approximation theory, 
 
 ```
 NN Theory: 59 -> 60 -> 61 -> 62 -> 63 -> 64 -> 65 -> 66
-RNN:       rnn -> lstm
+RNN:       67 -> 68 -> 69
 OPT:       01-sgd-and-adaptive-methods (independent of above)
 ```
 
