@@ -439,43 +439,197 @@ the most important -- you should be able to state and prove these from memory.
 
 **Primary text:** Puterman, M.L. *Markov Decision Processes* (2014)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 39 | Puterman Ch.2: model formulation | MDP components (S, A, P, R), policies, histories | [lesson-39](02-core-rl/01-mdp/lesson-39-mdp-model-and-policies.pdf) |
-| 40 | Puterman Ch.3: finite-horizon MDPs | Backward induction, finite-horizon optimality equations | [lesson-40](02-core-rl/01-mdp/lesson-40-finite-horizon-mdp.pdf) |
-| 41 | Puterman Ch.4: infinite-horizon, discounted | Bellman optimality equation, discounted reward criterion | [lesson-41](02-core-rl/01-mdp/lesson-41-discounted-reward-bellman-equations.pdf) |
-| 42 | Puterman Ch.5.1--5.3: contraction, value iteration | Contraction property of Bellman operator (sup-norm), value iteration convergence | [lesson-42](02-core-rl/01-mdp/lesson-42-contraction-and-value-iteration.pdf) |
-| 43 | Puterman Ch.5.4--5.6: value iteration (cont.) | Error bounds, stopping criteria, monotonicity | [lesson-43](02-core-rl/01-mdp/lesson-43-vi-error-bounds-and-monotonicity.pdf) |
-| 44 | Puterman Ch.6: average reward | Average reward criterion, gain-bias equations, Blackwell optimality | [lesson-44](02-core-rl/01-mdp/lesson-44-average-reward-mdp.pdf) |
-| 45 | Puterman Ch.8.1--8.4: policy iteration | Policy improvement theorem, policy iteration convergence | [lesson-45](02-core-rl/01-mdp/lesson-45-policy-iteration.pdf) |
-| 46 | Puterman Ch.8.5--8.8: LP formulation | Linear programming formulation of MDPs, occupancy measures | [lesson-46](02-core-rl/01-mdp/lesson-46-lp-formulation-and-occupancy.pdf) |
+#### Lesson 39: MDP Model and Policies
+
+> [lesson-39](02-core-rl/01-mdp/lesson-39-mdp-model-and-policies.pdf)
+
+- **Definitions:** 3.1 Markov decision process, 3.2 Markov property, 4.1 history, 4.2 history-dependent policy, 4.3 Markov policy, 4.4 stationary policy, 4.5 deterministic policy, 5.1 discounted return, 5.2 state-value function, 5.3 action-value function, 5.4 advantage function, 7.1 optimal value functions, 7.2 optimal policy
+- **Key results:** Prop 5.1 return is well-defined and bounded, Prop 5.5 value-action value relationship, **Thm 6.1 Bellman expectation equation for V^pi**, **Thm 6.2 Bellman expectation equation for Q^pi**, Thm 7.3 existence of deterministic stationary optimal policy
+- **Examples:** 3.3 grid world MDP, 4.6 inventory management MDP, 6.3 two-state MDP, 7.4 optimal policy for two-state MDP
+- **Exercises:** 39.1--39.5
+
+#### Lesson 40: Finite-Horizon MDPs
+
+> [lesson-40](02-core-rl/01-mdp/lesson-40-finite-horizon-mdp.pdf)
+
+- **Definitions:** 3.1 finite-horizon MDP, 3.2 finite-horizon return, 3.3 time-dependent Markov policy, 3.4 finite-horizon value functions, 5.1 backward induction algorithm
+- **Key results:** Thm 4.1 principle of optimality, **Thm 4.2 finite-horizon Bellman optimality equations**, Thm 5.2 existence of deterministic Markov optimal policy, Prop 5.3 complexity of backward induction O(S^2 A T), Thm 7.1 finite-horizon Bellman expectation equations
+- **Examples:** 6.1 shortest path on a grid, 6.2 optimal stopping problem (increasing threshold rule)
+- **Exercises:** 40.1--40.6
+
+#### Lesson 41: Discounted Reward and Bellman Equations
+
+> [lesson-41](02-core-rl/01-mdp/lesson-41-discounted-reward-bellman-equations.pdf)
+
+- **Definitions:** 4.1 Bellman expectation operator, 5.1 Bellman optimality operator, 6.1 greedy policy, 7.1 policy ordering, 8.1 Bellman optimality operator for Q
+- **Key results:** Thm 4.2 T^pi is a gamma-contraction, Thm 4.3 V^pi is the unique fixed point of T^pi, Lem 5.2 max-norm inequality for max operator, Thm 5.3 T* is a gamma-contraction, **Thm 5.4 Bellman optimality equations characterize V***, Thm 6.2 greedy policy w.r.t. V* is optimal, **Thm 7.3 policy improvement theorem**, Prop 8.2 T*_Q is a contraction with fixed point Q*
+- **Examples:** 4.4 policy evaluation via iteration, 8.3 solving Bellman optimality equation for two-state MDP, 8.4 gambling problem
+- **Exercises:** 41.1--41.5
+
+#### Lesson 42: Contraction and Value Iteration
+
+> [lesson-42](02-core-rl/01-mdp/lesson-42-contraction-and-value-iteration.pdf)
+
+- **Definitions:** 3.1 value iteration, 6.1 Q-value iteration, 7.1 policy iteration, 8.3 shift property of T*
+- **Key results:** **Thm 4.1 value iteration converges geometrically**, **Thm 4.2 a priori error bound for VI**, Thm 4.4 a posteriori error bound, **Thm 5.1 approximate policy extraction** (2gamma*epsilon/(1-gamma)-optimality), Prop 6.2 convergence of Q-value iteration, Thm 7.3 finite convergence of policy iteration, Prop 8.1 monotonicity of T*, Prop 8.2 shift property of T*
+- **Examples:** 4.3 iteration count for common parameters, 5.3 value iteration on two-state MDP, 7.4 policy iteration on two-state MDP
+- **Exercises:** 42.1--42.5
+
+#### Lesson 43: VI Error Bounds and Monotonicity
+
+> [lesson-43](02-core-rl/01-mdp/lesson-43-vi-error-bounds-and-monotonicity.pdf)
+
+- **Definitions:** 3.1 span seminorm, 6.1 greedy policy sequence
+- **Key results:** Prop 3.2 properties of the span, **Thm 3.3 span contraction of T***, **Thm 4.1 span-based a posteriori bound**, Thm 5.1 monotone convergence from below, Cor 5.2 standard initialization v^(0)=0, Thm 5.3 monotone convergence from above, **Thm 6.2 eventual policy stability**, Thm 7.1 Bellman residual bound, Cor 7.2 two-sided bound from Bellman residual
+- **Examples:** 4.3 span vs. sup-norm stopping, 5.5 monotone VI on three-state MDP, 6.5 early policy convergence
+- **Exercises:** 43.1--43.6
+
+#### Lesson 44: Average Reward MDPs
+
+> [lesson-44](02-core-rl/01-mdp/lesson-44-average-reward-mdp.pdf)
+
+- **Definitions:** 3.1 induced Markov chain, 3.2 communication classes, 3.3 chain types (irreducible/unichain/multichain), 4.1 average reward / gain, 4.3 optimal gain, 5.1 bias / relative value function, 6.2 average reward greedy policy, 8.1 relative value iteration, 9.1 Blackwell optimality
+- **Key results:** Prop 3.4 stationary distribution for unichain policies, **Thm 4.2 gain of a unichain policy**, **Thm 5.2 gain-bias equations (Poisson equations)**, Thm 6.1 average reward Bellman optimality equations, Thm 6.3 optimality of the greedy policy, **Thm 7.1 discount-to-average limit**, Thm 8.2 convergence of relative value iteration, **Thm 9.2 Blackwell's theorem**
+- **Examples:** 3.4 unichain vs. multichain, 4.4 average reward of a simple MDP, 5.4 computing gain and bias, 7.2 discounted to average reward, 8.3 relative value iteration, 9.4 Blackwell optimality in a two-action MDP
+- **Exercises:** 44.1--44.6
+
+#### Lesson 45: Policy Iteration
+
+> [lesson-45](02-core-rl/01-mdp/lesson-45-policy-iteration.pdf)
+
+- **Definitions:** 3.1 policy evaluation problem, 5.1 policy iteration, 7.1 modified policy iteration, 8.1 iteration complexity
+- **Key results:** Thm 3.2 policy evaluation via matrix inversion, **Thm 4.1 policy improvement theorem**, Prop 4.3 algebraic proof of policy improvement, **Thm 6.1 finite convergence of policy iteration** (at most A^S iterations), Thm 6.2 strict monotonicity of value sequence, **Thm 6.3 Howard's improvement principle**, Prop 7.2 extremes of modified PI, Thm 7.3 convergence of modified policy iteration, Prop 8.2 VI iteration complexity, Prop 8.3 PI iteration complexity
+- **Examples:** 3.5 policy evaluation on three-state MDP, 4.4 policy improvement step, 6.5 complete policy iteration trace, 8.5 computational comparison
+- **Exercises:** 45.1--45.6
+
+#### Lesson 46: LP Formulation and Occupancy Measures
+
+> [lesson-46](02-core-rl/01-mdp/lesson-46-lp-formulation-and-occupancy.pdf)
+
+- **Definitions:** 3.1 Bellman feasibility (superharmonic), 3.3 primal LP for discounted MDPs, 4.2 occupancy measure, 5.1 occupancy polytope, 7.1 feature expectations, 8.1 constrained MDP
+- **Key results:** Lem 3.2 V* is the smallest Bellman superharmonic vector, **Thm 3.4 primal LP solves the MDP**, Thm 4.1 dual LP for discounted MDPs, Prop 4.3 occupancy measures as dual feasible points, Prop 4.4 dual objective equals policy value, **Thm 5.1 characterization of the occupancy polytope**, Prop 5.3 deterministic policies are vertices, **Thm 6.1 strong duality for the MDP LP**, **Thm 7.2 LP formulation of CMDPs**, Prop 8.2 linear reward and feature expectations
+- **Examples:** 3.6 primal LP for two-state MDP, 5.4 occupancy measures for two-state MDP, 7.4 constrained two-state MDP, 8.4 feature matching in IRL
+- **Exercises:** 46.1--46.6
+- **Review:** Sec 10 summary table of all key results from Lessons 39--46
 
 ### 2.2 Reinforcement Learning Algorithms (Lessons 47--53)
 
 **For intuition:** Sutton, R.S. & Barto, A.G. *Reinforcement Learning* (2nd ed., 2018, free online)
 **For rigor:** Bertsekas, D.P. & Tsitsiklis, J.N. *Neuro-Dynamic Programming* (1996)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 47 | S&B Ch.6--7 + B&T Ch.4: TD(0), n-step TD | TD(0) update rule, n-step returns, bias-variance tradeoff | [lesson-47](02-core-rl/02-rl-algorithms/lesson-47-td0-and-nstep-td.pdf) |
-| 48 | B&T Ch.4: TD(lambda), eligibility traces | TD(lambda), forward/backward views, eligibility trace mechanism | [lesson-48](02-core-rl/02-rl-algorithms/lesson-48-td-lambda-eligibility-traces.pdf) |
-| 49 | S&B Ch.6 + B&T Ch.4: SARSA | SARSA update, on-policy TD control, convergence conditions | [lesson-49](02-core-rl/02-rl-algorithms/lesson-49-sarsa.pdf) |
-| 50 | S&B Ch.6 + B&T Ch.6: Q-learning | Q-learning update, off-policy control, convergence proof (Jaakkola, Jordan, Singh 1994) | [lesson-50](02-core-rl/02-rl-algorithms/lesson-50-q-learning.pdf) |
-| 51 | B&T Ch.2: function approximation | Linear function approximation, feature construction, projection operators | [lesson-51](02-core-rl/02-rl-algorithms/lesson-51-function-approximation.pdf) |
-| 52 | B&T Ch.3: approximate policy iteration | Approximate policy iteration, error propagation bounds | [lesson-52](02-core-rl/02-rl-algorithms/lesson-52-approximate-policy-iteration.pdf) |
-| 53 | S&B Ch.11 + B&T: the deadly triad | Deadly triad (function approx + bootstrapping + off-policy), Baird's counterexample, divergence | [lesson-53](02-core-rl/02-rl-algorithms/lesson-53-deadly-triad.pdf) |
+#### Lesson 47: TD(0) and n-Step TD
+
+> [lesson-47](02-core-rl/02-rl-algorithms/lesson-47-td0-and-nstep-td.pdf)
+
+- **Definitions:** 3.1 Monte Carlo update, 4.1 TD error, 4.2 TD(0) update rule, 4.3 TD(0) convergence conditions (assumption), 6.1 n-step return, 6.2 n-step TD update
+- **Key results:** Prop 3.1 convergence of MC prediction, Lem 3.2 variance of MC return, Lem 4.1 unbiasedness of TD error (martingale difference), **Lem 4.2 return as telescoping sum of TD errors**, **Thm 4.3 convergence of TD(0)**, Prop 5.1 bias of TD(0) target, Prop 5.2 variance reduction by TD(0), Lem 6.1 n-step return as telescoping sum, Thm 6.2 convergence of n-step TD
+- **Examples:** 4.1 two-state MDP, 5.1 variance comparison (chain with gamma=0.99), 6.1 n-step returns in a chain, 6.2 contraction rate vs variance
+- **Exercises:** 47.1--47.6
+
+#### Lesson 48: TD(lambda) and Eligibility Traces
+
+> [lesson-48](02-core-rl/02-rl-algorithms/lesson-48-td-lambda-eligibility-traces.pdf)
+
+- **Definitions:** 3.1 lambda-return, 5.1 accumulating eligibility trace, 5.2 TD(lambda) backward view update, 7.1 replacing traces, 7.2 Dutch traces
+- **Key results:** Prop 3.1 special cases of the lambda-return, **Thm 4.1 lambda-return decomposition**, Lem 5.1 explicit form of eligibility trace, **Thm 6.1 forward-backward equivalence**, Cor 7.1 convergence of TD(lambda)
+- **Examples:** 3.1 lambda-return interpolation, 4.1 finite episode decomposition, 5.1 trace evolution, 6.1 forward-backward equivalence verification
+- **Exercises:** 48.1--48.6
+
+#### Lesson 49: SARSA -- On-Policy TD Control
+
+> [lesson-49](02-core-rl/02-rl-algorithms/lesson-49-sarsa.pdf)
+
+- **Definitions:** 3.1 generalized policy iteration (GPI), 3.2 action-value Bellman expectation operator, 3.3 Bellman optimality operator on Q-values, 4.1 epsilon-greedy policy, 4.2 GLIE condition, 5.1 SARSA update rule, 6.1 SARSA convergence conditions (assumption)
+- **Key results:** Lem 3.1 contraction of action-value Bellman operators, Prop 4.1 epsilon-greedy policy improvement, **Thm 6.1 convergence of SARSA**, Prop 7.1 SARSA with fixed epsilon converges to Q^{pi_epsilon}
+- **Examples:** 4.1 standard GLIE schedule, 5.1 SARSA updates on a grid, 6.1 verifying the perturbation bound, 7.1 on-policy vs off-policy in a stochastic grid
+- **Exercises:** 49.1--49.6
+
+#### Lesson 50: Q-Learning and the Unified View of TD Control
+
+> [lesson-50](02-core-rl/02-rl-algorithms/lesson-50-q-learning.pdf)
+
+- **Definitions:** 3.1 Q-learning update rule, 5.1 Double Q-learning, 6.1 Expected SARSA update rule
+- **Key results:** **Thm 4.1 convergence of Q-learning**, Prop 5.1 maximization bias, Prop 5.2 Double Q-learning removes maximization bias, **Prop 6.1 Expected SARSA has lower variance than SARSA**, Thm 6.2 convergence of Expected SARSA, Prop 7.1 relationships between TD control targets
+- **Examples:** 3.1 Q-learning update, 4.1 off-policy data collection, 5.1 maximization bias in a simple MDP, 6.1 variance comparison (SARSA vs Expected SARSA), 7.1 unified view on a two-action MDP, 8.1 algorithm comparison on cliff-walking
+- **Exercises:** 50.1--50.6
+
+#### Lesson 51: Function Approximation in TD Learning
+
+> [lesson-51](02-core-rl/02-rl-algorithms/lesson-51-function-approximation.pdf)
+
+- **Definitions:** 3.1 feature vector and feature matrix, 3.2 linear value function approximation, 3.3 full column rank assumption, 4.1 stationary distribution, 4.2 mean squared value error (MSVE), 4.3 projection operator, 5.1 semi-gradient TD(0) update
+- **Key results:** Prop 4.1 properties of the projection operator (Pythagorean theorem), Lem 5.1 expected semi-gradient TD(0) update, Lem 6.1 contraction of P_pi in d^pi-norm, Thm 6.1 negative definiteness of A, **Thm 6.2 convergence of semi-gradient TD(0) with linear FA**, **Thm 7.1 TD(lambda) error bound with factor (1-gamma*lambda)/(1-gamma)**
+- **Examples:** 3.1 tabular features, 3.2 polynomial features on a grid, 4.1 projection in two-state case, 6.1 error bound for gamma=0.99, 7.1 comparing bounds for different lambda
+- **Exercises:** 51.1--51.6
+
+#### Lesson 52: Approximate Policy Iteration
+
+> [lesson-52](02-core-rl/02-rl-algorithms/lesson-52-approximate-policy-iteration.pdf)
+
+- **Definitions:** 3.1 policy iteration, 4.1 approximate policy evaluation, 4.2 approximate policy improvement, 4.3 approximate policy iteration, 6.1 LSTD algorithm, 7.1 LSTDQ (LSTD for action values), 7.2 LSPI algorithm, 8.1 fitted value iteration (FVI)
+- **Key results:** Prop 3.1 monotone improvement and convergence of exact PI, Lem 5.1 one-step error bound, **Thm 5.1 error propagation bound for approximate PI: O(epsilon/(1-gamma)^2)**, Cor 5.1 required accuracy for epsilon-optimality, Thm 6.1 consistency of LSTD, Prop 7.1 LSPI as approximate PI, Prop 8.1 FVI error bound epsilon/(1-gamma)
+- **Examples:** 5.1 accuracy requirement for long horizons, 6.1 LSTD on a small MDP, 7.1 LSPI for cart-pole
+- **Exercises:** 52.1--52.5
+
+#### Lesson 53: The Deadly Triad and Gradient-TD Methods
+
+> [lesson-53](02-core-rl/02-rl-algorithms/lesson-53-deadly-triad.pdf)
+
+- **Definitions:** 3.1 the deadly triad, 4.1 Baird's star MDP, 4.2 feature representation for Baird's MDP, 6.1 mean squared projected Bellman error (MSPBE), 6.2 GTD2 update rules, 7.1 GTD2 convergence conditions (assumption)
+- **Key results:** **Thm 3.1 safety of pairs (any two triad elements are safe)**, Lem 4.1 off-policy matrix for Baird's MDP, **Thm 4.1 divergence of semi-gradient TD(0) on Baird's MDP**, Prop 5.1 removing FA restores convergence, Prop 5.2 removing bootstrapping restores convergence, Prop 5.3 removing off-policy restores convergence, Prop 6.1 quadratic form of MSPBE, **Thm 7.1 convergence of GTD2**, Prop 8.1 target networks stabilize semi-gradient TD
+- **Examples:** 4.1 feature vectors explicitly, 4.2 numerical divergence trace, 7.1 GTD2 on Baird's MDP
+- **Exercises:** 53.1--53.5
+- **Review:** Sec 10 subdomain summary table reviewing Lessons 47--53 arc (tabular prediction to control, FA, deadly triad)
 
 ### 2.3 Policy Gradient Theory (Lessons 54--58)
 
 **Primary sources:** Sutton et al. (2000), Kakade (2002), Schulman et al. (2015, 2017)
 
-| Lesson | Reading | Key Results | Document |
-|--------|---------|-------------|----------|
-| 54 | S&B Ch.13: policy gradient theorem | Policy gradient theorem derivation: nabla J = E[nabla log pi * Q^pi] | [lesson-54](02-core-rl/03-policy-gradient/lesson-54-policy-gradient-theorem.pdf) |
-| 55 | Sutton et al. (2000): REINFORCE | REINFORCE algorithm, variance reduction via baselines | [lesson-55](02-core-rl/03-policy-gradient/lesson-55-reinforce-and-baselines.pdf) |
-| 56 | Kakade (2002): natural gradient | Natural policy gradient, Fisher information matrix, information geometry | [lesson-56](02-core-rl/03-policy-gradient/lesson-56-natural-policy-gradient.pdf) |
-| 57 | S&B Ch.13: actor-critic | Actor-critic architecture, advantage functions, GAE | [lesson-57](02-core-rl/03-policy-gradient/lesson-57-actor-critic-and-gae.pdf) |
-| 58 | Review + connections | Synthesis of policy gradient theory, connections to Phase 04 methods | [lesson-58](02-core-rl/03-policy-gradient/lesson-58-policy-gradient-synthesis.pdf) |
+#### Lesson 54: Policy Gradient Theorem
+
+> [lesson-54](02-core-rl/03-policy-gradient/lesson-54-policy-gradient-theorem.pdf)
+
+- **Definitions:** 3.1 parameterized policy, 3.2 performance objective (start-state), 3.3 discounted state visitation distribution, 3.5 average-reward objective, 6.1 differential value function, 8.1 compatible features
+- **Key results:** Lem 4.1 score function identity, Lem 4.2 score function has zero mean, **Thm 5.1 policy gradient theorem (episodic)**, Thm 6.3 policy gradient theorem (average-reward), Prop 7.1 baseline invariance, **Thm 8.2 compatible function approximation**
+- **Examples:** 3.6 softmax policy, 3.7 Gaussian policy, 4.3 score function for softmax policy, 4.4 score function for Gaussian policy
+- **Exercises:** 54.1--54.5
+
+#### Lesson 55: REINFORCE and Baselines
+
+> [lesson-55](02-core-rl/03-policy-gradient/lesson-55-reinforce-and-baselines.pdf)
+
+- **Definitions:** 3.1 trajectory and return, 4.1 baseline, 4.3 advantage function, 5.1 per-step gradient estimator, 6.1 REINFORCE update rule, 6.2 REINFORCE with baseline update rule
+- **Key results:** Lem 3.2 return as unbiased estimate of Q, **Thm 3.3 unbiasedness of REINFORCE**, Prop 4.2 unbiasedness with baseline, Prop 4.5 policy gradient via advantages, Lem 5.3 variance decomposition, **Thm 5.4 optimal baseline (scalar case)**, **Thm 5.5 optimal baseline (total variance)**, **Thm 7.3 convergence of REINFORCE**
+- **Examples:** 3.6 REINFORCE on a single-state bandit, 5.7 optimal baseline for a bandit, 8.1 two-state MDP
+- **Exercises:** 55.1--55.6
+
+#### Lesson 56: Natural Policy Gradient
+
+> [lesson-56](02-core-rl/03-policy-gradient/lesson-56-natural-policy-gradient.pdf)
+
+- **Definitions:** 3.1 reparameterization, 4.1 Fisher information matrix, 5.1 steepest ascent under a metric, 8.1 natural policy gradient algorithm
+- **Key results:** Prop 3.2 non-covariance of the vanilla gradient, Prop 4.2 properties of the Fisher information matrix, **Thm 4.3 Fisher information as KL Hessian**, **Thm 5.2 natural gradient**, **Thm 6.1 covariance under reparameterization**, **Thm 7.1 natural gradient via compatible features**, Thm 9.1 policy improvement under natural gradient
+- **Examples:** 3.3 scaling reparameterization, 4.4 Fisher information for softmax policy, 4.5 Fisher information for Gaussian policy, 6.2 covariance verification for scaling, 7.3 natural gradient for Gaussian policy, 10.1 comparing vanilla and natural gradients
+- **Exercises:** 56.1--56.5
+
+#### Lesson 57: Actor-Critic and Generalized Advantage Estimation
+
+> [lesson-57](02-core-rl/03-policy-gradient/lesson-57-actor-critic-and-gae.pdf)
+
+- **Definitions:** 3.1 actor-critic components, 3.2 one-step actor-critic update, 4.1 temporal difference error, 5.1 n-step advantage estimator, 6.1 generalized advantage estimation (GAE), 8.1 GAE policy gradient estimator
+- **Key results:** **Thm 4.2 TD error as unbiased advantage estimate**, Prop 4.4 bias from value function approximation, Prop 5.2 n-step estimator via TD errors, Thm 5.3 bias-variance of n-step estimators, **Thm 6.2 GAE as discounted sum of TD errors**, **Thm 7.1 bias of GAE**, Cor 7.2 unbiasedness at lambda=1, **Thm 7.3 variance of GAE**, Prop 8.2 bias of GAE policy gradient, **Thm 9.2 two-timescale convergence**
+- **Examples:** 5.4 comparing 1-step and infinity-step, 8.3 GAE computation on a simple trajectory, 10.1 effect of lambda on credit assignment
+- **Exercises:** 57.1--57.5
+
+#### Lesson 58: Policy Gradient Synthesis
+
+> [lesson-58](02-core-rl/03-policy-gradient/lesson-58-policy-gradient-synthesis.pdf)
+
+- **Definitions:** 3.1 general policy gradient signal, 3.2 signal choices, 4.1 variance of a policy gradient estimator, 5.1 convergence rate classes, 6.4 surrogate objective, 7.1 entropy-regularized objective, 7.2 soft value functions
+- **Key results:** **Thm 3.3 unbiasedness of signal choices**, Prop 3.4 bias of approximate signals, **Thm 4.2 variance ordering of signal choices**, **Thm 5.2 convergence rate of vanilla policy gradient**, **Thm 5.3 convergence rate of natural policy gradient**, Thm 5.4 local vs. global optimality, **Thm 6.1 performance difference lemma**, **Thm 6.5 conservative policy improvement bound**, **Thm 7.3 soft policy gradient theorem**
+- **Examples:** 4.3 combining all variance reduction techniques
+- **Exercises:** 58.1--58.6
+- **Review:** Sec 10 Phase 02 grand summary table reviewing all 20 lessons across the three subdomains
 
 ---
 
