@@ -1,0 +1,1415 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 63: Competitive and Mixed Multi-Agent RL}}
+\fancyhead[R]{\thepage}
+\title{Lesson 63: Competitive and Mixed Multi-Agent RL}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ========================================================================
+%% SECTION 1: Motivation and Overview
+%% ========================================================================
+\section{Motivation and Overview}
+
+Consider the game of Go, played on a $19 \times 19$ board between two
+players who alternately place black and white stones.  One player's
+territorial gain is the other's loss -- a zero-sum contest with a state
+space exceeding $10^{170}$ legal positions.  In 2017, AlphaGo Zero
+\citep{silver2017} achieved superhuman performance \emph{without any
+human game data}, learning entirely through self-play reinforcement
+learning.  How do we formalize learning in such adversarial settings?
+What convergence guarantees can we obtain when every agent's environment
+includes other adaptive learners?  And how do the algorithms change when
+the game is not purely competitive but involves a mixture of cooperation
+and competition?
+
+The tools developed in this lesson -- Minimax-Q learning, Nash
+Q-learning, MADDPG, LOLA, self-play analysis, and PSRO -- provide a
+rigorous foundation for multi-agent reinforcement learning in competitive
+and mixed-motive environments.
+
+\begin{rlconnection}
+\begin{itemize}
+  \item \textbf{AlphaGo / AlphaZero} \citep{silver2016,silver2017}:
+    Self-play in two-player zero-sum games, where convergence to Nash
+    equilibrium is guaranteed under appropriate conditions (Section~\ref{sec:selfplay}).
+  \item \textbf{Competitive robotics and adversarial training}: Minimax-Q
+    learning (Section~\ref{sec:minimaxq}) provides the foundational
+    algorithm for zero-sum stochastic games with discrete actions.
+  \item \textbf{Mixed cooperative-competitive environments}: MADDPG
+    (Section~\ref{sec:maddpg}) extends deep deterministic policy gradient
+    to multi-agent settings with continuous actions and partial
+    observability.
+  \item \textbf{Opponent modeling and shaping}: LOLA
+    (Section~\ref{sec:lola}) introduces opponent-aware gradient updates
+    that can promote cooperation in social dilemmas.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+This lesson assumes familiarity with the following material:
+\begin{itemize}
+  \item Stochastic games, Markov perfect equilibrium, and Shapley's
+    theorem for zero-sum stochastic games (Lesson~61).
+  \item Nash equilibrium in normal-form games, minimax theorem for
+    zero-sum games (Lesson~20, Phase~01).
+  \item Policy gradient theorem, REINFORCE, and actor-critic methods
+    (Lessons~54--58, Phase~02).
+  \item Stochastic approximation convergence theory: Robbins--Monro
+    conditions (Phase~01, Lesson~19).
+  \item DDPG for continuous control (Phase~04).
+\end{itemize}
+
+\paragraph{Learning objectives.}
+After completing this lesson, the student will be able to:
+\begin{itemize}
+  \item \textbf{Derive} the Minimax-Q Bellman equation and update rule
+    for two-player zero-sum stochastic games, and \textbf{prove} the
+    contraction property of the minimax Bellman operator.
+  \item \textbf{Analyze} the convergence conditions for Nash Q-learning
+    in general-sum games and \textbf{identify} settings where the
+    uniqueness assumption fails.
+  \item \textbf{Formalize} the MADDPG centralized-critic framework and
+    \textbf{prove} that its policy gradient is unbiased under
+    centralized state access.
+  \item \textbf{State} the LOLA opponent-modeling gradient and
+    \textbf{explain} how the opponent-shaping term arises from
+    differentiating through the opponent's learning step.
+  \item \textbf{Prove} that convergent self-play yields a Nash
+    equilibrium in two-player zero-sum games.
+  \item \textbf{Define} the PSRO framework and \textbf{prove} its
+    convergence to Nash equilibrium in finite games via the double oracle
+    argument.
+\end{itemize}
+
+
+%% ========================================================================
+%% SECTION 2: References
+%% ========================================================================
+\section{References}
+
+\begin{itemize}
+  \item \citet{littman1994} -- Introduces Minimax-Q learning for
+    two-player zero-sum Markov games; proves convergence via contraction
+    of the minimax Bellman operator.
+  \item \citet{hu2003} -- Nash Q-learning for general-sum stochastic
+    games; convergence under stage-game Nash equilibrium uniqueness.
+  \item \citet{lowe2017} -- MADDPG: multi-agent actor-critic with
+    centralized critics for mixed cooperative-competitive environments.
+  \item \citet{foerster2018lola} -- LOLA: learning with opponent-learning
+    awareness; opponent shaping via second-order gradient terms.
+  \item \citet{lanctot2017} -- PSRO: unifying game-theoretic solution
+    concepts with RL via policy-space response oracles.
+  \item \citet{silver2017} -- AlphaGo Zero: self-play reinforcement
+    learning with MCTS in the game of Go.
+\end{itemize}
+
+
+%% ========================================================================
+%% SECTION 3: Minimax-Q Learning
+%% ========================================================================
+\section{Minimax-Q Learning}
+\label{sec:minimaxq}
+
+\subsection{Two-Player Zero-Sum Stochastic Games}
+
+We work in the framework of two-player zero-sum stochastic games
+(Markov games) as formalized by \citet{shapley1953} and brought into the
+RL setting by \citet{littman1994}.
+
+\begin{definition}[Two-Player Zero-Sum Stochastic Game]
+\label{def:zerosum-sg}
+A \emph{two-player zero-sum stochastic game} is a tuple
+$(\States, \Actions_1, \Actions_2, \Trans, R, \discount)$ where:
+\begin{itemize}
+  \item $\States$ is a finite state space;
+  \item $\Actions_1, \Actions_2$ are finite action spaces for players 1
+    and 2;
+  \item $\Trans : \States \times \Actions_1 \times \Actions_2
+    \to \simplex(\States)$ is the transition function;
+  \item $R : \States \times \Actions_1 \times \Actions_2 \to \R$ is the
+    reward function for player~1 (player~2 receives $-R$);
+  \item $\discount \in [0,1)$ is the discount factor.
+\end{itemize}
+\end{definition}
+
+A \emph{stationary mixed strategy} for player~$i$ is a mapping
+$\sigma_i : \States \to \simplex(\Actions_i)$.  We write
+$\sigma_i(a_i \mid s)$ for the probability of action $a_i$ in state~$s$.
+
+\begin{definition}[Minimax Value and Q-Function]
+\label{def:minimax-value}
+The \emph{minimax value function} $\Vstar : \States \to \R$ is
+\begin{equation}
+\label{eq:minimax-value}
+  \Vstar(s)
+  = \max_{\sigma_1 \in \simplex(\Actions_1)}
+    \min_{a_2 \in \Actions_2}
+    \sum_{a_1 \in \Actions_1} \sigma_1(a_1)
+    \Bigl[ R(s, a_1, a_2)
+    + \discount \sum_{s' \in \States} \Trans(s' \mid s, a_1, a_2)\,
+      \Vstar(s') \Bigr].
+\end{equation}
+The \emph{minimax Q-function} $\Qstar : \States \times \Actions_1 \times
+\Actions_2 \to \R$ is
+\begin{equation}
+\label{eq:minimax-Q}
+  \Qstar(s, a_1, a_2)
+  = R(s, a_1, a_2)
+  + \discount \sum_{s' \in \States} \Trans(s' \mid s, a_1, a_2)\,
+    \Vstar(s'),
+\end{equation}
+so that $\Vstar(s) = \max_{\sigma_1 \in \simplex(\Actions_1)}
+\min_{a_2 \in \Actions_2} \sum_{a_1} \sigma_1(a_1)\, \Qstar(s, a_1, a_2)$.
+\end{definition}
+
+\subsection{The Minimax Bellman Operator}
+
+\begin{definition}[Minimax Bellman Operator]
+\label{def:minimax-bellman}
+For any function $Q : \States \times \Actions_1 \times \Actions_2 \to \R$,
+define the \emph{minimax Bellman operator} $\Bellman^{\mathrm{mm}}$ by
+\begin{equation}
+\label{eq:minimax-bellman-op}
+  (\Bellman^{\mathrm{mm}} Q)(s, a_1, a_2)
+  = R(s, a_1, a_2)
+  + \discount \sum_{s'} \Trans(s' \mid s, a_1, a_2)\,
+    \max_{\sigma_1 \in \simplex(\Actions_1)}
+    \min_{a_2' \in \Actions_2}
+    \sum_{a_1'} \sigma_1(a_1')\, Q(s', a_1', a_2').
+\end{equation}
+\end{definition}
+
+\begin{theorem}[Contraction of Minimax Bellman Operator]
+\label{thm:minimax-contraction}
+The operator $\Bellman^{\mathrm{mm}}$ is a $\discount$-contraction in the
+supremum norm: for any $Q, Q' : \States \times \Actions_1 \times
+\Actions_2 \to \R$,
+\[
+  \| \Bellman^{\mathrm{mm}} Q - \Bellman^{\mathrm{mm}} Q' \|_\infty
+  \le \discount \| Q - Q' \|_\infty.
+\]
+Consequently, $\Qstar$ is the unique fixed point of
+$\Bellman^{\mathrm{mm}}$.
+\end{theorem}
+
+\begin{proof}
+Fix a state $s$ and actions $(a_1, a_2)$.  Define the value of the
+matrix game with payoff matrix $M$ as
+$\mathrm{val}(M) = \max_{\sigma_1 \in \simplex(\Actions_1)}
+\min_{a_2} \sum_{a_1} \sigma_1(a_1) M(a_1, a_2)$.
+For any two matrices $M, M'$ of the same dimension, we have
+\begin{equation}
+\label{eq:val-lipschitz}
+  |\mathrm{val}(M) - \mathrm{val}(M')|
+  \le \max_{a_1, a_2} |M(a_1, a_2) - M'(a_1, a_2)|.
+\end{equation}
+To see this, let $\sigma_1^*$ achieve $\mathrm{val}(M)$.  Then
+\[
+  \mathrm{val}(M)
+  = \min_{a_2} \sum_{a_1} \sigma_1^*(a_1) M(a_1, a_2)
+  \le \min_{a_2} \sum_{a_1} \sigma_1^*(a_1) M'(a_1, a_2)
+    + \|M - M'\|_\infty
+  \le \mathrm{val}(M') + \|M - M'\|_\infty.
+\]
+Symmetrically, $\mathrm{val}(M') \le \mathrm{val}(M) + \|M - M'\|_\infty$,
+establishing \eqref{eq:val-lipschitz}.
+
+Now write $V_Q(s') = \mathrm{val}(Q(s', \cdot, \cdot))$ and
+$V_{Q'}(s') = \mathrm{val}(Q'(s', \cdot, \cdot))$.  By
+\eqref{eq:val-lipschitz},
+\[
+  |V_Q(s') - V_{Q'}(s')| \le \|Q - Q'\|_\infty
+  \quad \text{for all } s'.
+\]
+Therefore,
+\begin{align*}
+  |(\Bellman^{\mathrm{mm}} Q)(s,a_1,a_2) - (\Bellman^{\mathrm{mm}} Q')(s,a_1,a_2)|
+  &= \discount \Bigl| \sum_{s'} \Trans(s' \mid s,a_1,a_2)
+     [V_Q(s') - V_{Q'}(s')] \Bigr| \\
+  &\le \discount \sum_{s'} \Trans(s' \mid s,a_1,a_2)\, |V_Q(s') - V_{Q'}(s')| \\
+  &\le \discount \|Q - Q'\|_\infty.
+\end{align*}
+Taking the supremum over $(s, a_1, a_2)$ gives the result.  Uniqueness
+of the fixed point follows from the Banach fixed-point theorem on the
+complete metric space of bounded functions with the sup-norm.
+\end{proof}
+
+\subsection{The Minimax-Q Update Rule}
+
+In the model-free setting, the agent does not know $\Trans$ or $R$ and
+must learn from transitions $(s, a_1, a_2, r, s')$.  The Minimax-Q
+update is:
+
+\begin{equation}
+\label{eq:minimaxq-update}
+  Q(s, a_1, a_2)
+  \leftarrow (1 - \alpha_t)\, Q(s, a_1, a_2)
+  + \alpha_t \Bigl[ r + \discount
+    \max_{\sigma_1 \in \simplex(\Actions_1)}
+    \min_{a_2' \in \Actions_2}
+    \sum_{a_1'} \sigma_1(a_1')\, Q(s', a_1', a_2') \Bigr],
+\end{equation}
+where $\alpha_t$ is the learning rate at step~$t$.  The inner
+optimization $\max_{\sigma_1} \min_{a_2'} \sum_{a_1'} \sigma_1(a_1')
+Q(s', a_1', a_2')$ is a linear program (LP) that can be solved
+efficiently, since by the minimax theorem for finite zero-sum games,
+$\max_{\sigma_1} \min_{a_2'} = \min_{\sigma_2} \max_{a_1'}$ and the
+value equals the value of the matrix game $Q(s', \cdot, \cdot)$.
+
+\begin{theorem}[Convergence of Minimax-Q Learning]
+\label{thm:minimaxq-convergence}
+Consider Minimax-Q learning \eqref{eq:minimaxq-update} applied to a
+two-player zero-sum stochastic game with finite state and action spaces.
+Suppose:
+\begin{enumerate}[label=(\roman*)]
+  \item Every state-action triple $(s, a_1, a_2)$ is visited infinitely
+    often.
+  \item The learning rates satisfy $\sum_{t=0}^\infty \alpha_t(s,a_1,a_2)
+    = \infty$ and $\sum_{t=0}^\infty \alpha_t^2(s,a_1,a_2) < \infty$
+    for each $(s, a_1, a_2)$ (Robbins--Monro conditions).
+\end{enumerate}
+Then $Q_t \to \Qstar$ almost surely, where $\Qstar$ is the minimax
+Q-function.
+\end{theorem}
+
+\begin{proof}
+The proof follows the stochastic approximation framework for
+Q-learning-type algorithms.  Write the update as
+\[
+  Q_{t+1}(s,a_1,a_2)
+  = Q_t(s,a_1,a_2) + \alpha_t(s,a_1,a_2)
+    \bigl[ (\Bellman^{\mathrm{mm}} Q_t)(s,a_1,a_2) - Q_t(s,a_1,a_2)
+    + w_t(s,a_1,a_2) \bigr],
+\]
+where $w_t(s,a_1,a_2) = r + \discount\, \mathrm{val}(Q_t(s',\cdot,\cdot))
+- (\Bellman^{\mathrm{mm}} Q_t)(s,a_1,a_2)$ is a martingale difference
+noise term satisfying $\E[w_t \mid \mathcal{F}_t] = 0$ and
+$\E[w_t^2 \mid \mathcal{F}_t] \le C(1 + \|Q_t\|_\infty^2)$ for some
+constant~$C$ (since rewards are bounded).
+
+This is a stochastic approximation iteration with operator
+$F(Q) = \Bellman^{\mathrm{mm}} Q - Q$.  By
+Theorem~\ref{thm:minimax-contraction}, $\Bellman^{\mathrm{mm}}$ is a
+$\discount$-contraction, so $\Qstar$ is the unique zero of $F$.
+The standard asynchronous stochastic approximation convergence theorem
+(Robbins--Monro with contraction; see \citealt{suttonbarto2018},
+Appendix, or \citealt{filar1997}, Chapter~5) applies: under conditions
+(i)--(ii), the iterates converge to the unique fixed point $\Qstar$
+almost surely.
+
+The key step is verifying the contraction property of the expected
+update operator.  We have already shown in
+Theorem~\ref{thm:minimax-contraction} that $\Bellman^{\mathrm{mm}}$ is a
+$\discount$-contraction.  The noise $w_t$ is zero-mean and has bounded
+variance.  The Robbins--Monro step-size conditions ensure the noise is
+averaged out.  Therefore, $Q_t \cas \Qstar$.
+\end{proof}
+
+\begin{keyresult}[title={Minimax-Q Convergence}]
+In two-player zero-sum stochastic games with finite state and action
+spaces, the Minimax-Q learning algorithm converges almost surely to the
+minimax Q-function $\Qstar$ under Robbins--Monro step-size conditions
+and sufficient exploration.  Each update requires solving a linear
+program over the mixed strategy simplex.
+\end{keyresult}
+
+\begin{example}[Rock-Paper-Scissors Stochastic Game]
+\label{ex:rps}
+Consider a single-state ($|\States| = 1$) two-player zero-sum game
+with $\Actions_1 = \Actions_2 = \{R, P, S\}$ and payoff matrix for
+player~1:
+\[
+  M = \begin{pmatrix}
+    0 & -1 & 1 \\
+    1 & 0 & -1 \\
+    -1 & 1 & 0
+  \end{pmatrix},
+  \quad
+  M(a_1, a_2) = R(s, a_1, a_2).
+\]
+Since there is one state, $\Qstar(s, a_1, a_2) = M(a_1, a_2) / (1 - \discount)$
+does not involve transitions.  The minimax value is
+$\mathrm{val}(M) = 0$, achieved by the uniform mixed strategy
+$\sigma_1^* = \sigma_2^* = (1/3, 1/3, 1/3)$.
+
+Now extend to two states $\States = \{s_1, s_2\}$ where the payoff
+matrices differ: $M_1 = M$ (symmetric RPS) and
+\[
+  M_2 = \begin{pmatrix}
+    0 & -2 & 1 \\
+    2 & 0 & -1 \\
+    -1 & 1 & 0
+  \end{pmatrix}
+\]
+(biased RPS in state $s_2$).  If transitions depend on the joint action,
+the minimax Q-values couple across states.  Minimax-Q learning solves an
+LP at each state to extract the mixed strategy, and converges to the
+correct $\Qstar$ across both states.
+\end{example}
+
+We now turn to general-sum games, where the zero-sum structure is lost.
+
+
+%% ========================================================================
+%% SECTION 4: Nash Q-Learning
+%% ========================================================================
+\section{Nash Q-Learning for General-Sum Games}
+\label{sec:nashq}
+
+\subsection{General-Sum Stochastic Games}
+
+When the zero-sum assumption is relaxed, each player has a separate
+reward function and the minimax solution concept no longer applies.
+Instead, we seek Nash equilibria.
+
+\begin{definition}[$N$-Player General-Sum Stochastic Game]
+\label{def:general-sum-sg}
+An \emph{$N$-player general-sum stochastic game} is a tuple
+$(\States, \Players, \{\Actions_i\}_{i \in \Players},
+\Trans, \{R_i\}_{i \in \Players}, \discount)$ where:
+\begin{itemize}
+  \item $\Players = \{1, \ldots, N\}$ is the set of players;
+  \item $\Actions_i$ is the finite action space of player~$i$;
+  \item $\Trans : \States \times \prod_{i} \Actions_i \to
+    \simplex(\States)$ is the transition function;
+  \item $R_i : \States \times \prod_{i} \Actions_i \to \R$ is player
+    $i$'s reward function;
+  \item $\discount \in [0,1)$ is the common discount factor.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Nash Q-Function]
+\label{def:nash-q}
+For player~$i$, the \emph{Nash Q-function} is
+\[
+  Q_i^*(s, \mathbf{a})
+  = R_i(s, \mathbf{a})
+  + \discount \sum_{s'} \Trans(s' \mid s, \mathbf{a})\,
+    \mathrm{Nash}_i\bigl(Q_1^*(s', \cdot), \ldots, Q_N^*(s', \cdot)\bigr),
+\]
+where $\mathbf{a} = (a_1, \ldots, a_N)$ is the joint action and
+$\mathrm{Nash}_i(Q_1(s',\cdot), \ldots, Q_N(s',\cdot))$ denotes
+player~$i$'s expected payoff under a Nash equilibrium of the stage game
+at state $s'$ with payoff functions $\{Q_j(s', \cdot)\}_{j=1}^N$.
+\end{definition}
+
+\subsection{The Nash Q-Learning Update}
+
+\begin{definition}[Nash Q-Learning Update]
+\label{def:nashq-update}
+After observing transition $(s, \mathbf{a}, r_1, \ldots, r_N, s')$,
+each player~$i$ updates:
+\begin{equation}
+\label{eq:nashq-update}
+  Q_i(s, \mathbf{a})
+  \leftarrow (1 - \alpha_t)\, Q_i(s, \mathbf{a})
+  + \alpha_t \Bigl[ r_i + \discount\,
+    \mathrm{Nash}_i\bigl(Q_1(s', \cdot), \ldots, Q_N(s', \cdot)\bigr)
+    \Bigr].
+\end{equation}
+At each step, the agents compute a Nash equilibrium
+$(\sigma_1^*, \ldots, \sigma_N^*)$ of the stage game at $s'$ defined by
+the current Q-tables, and set
+\[
+  \mathrm{Nash}_i(Q_1(s',\cdot), \ldots, Q_N(s',\cdot))
+  = \sum_{\mathbf{a}'} \Bigl(\prod_{j=1}^N \sigma_j^*(a_j')\Bigr)
+    Q_i(s', \mathbf{a}').
+\]
+\end{definition}
+
+The critical challenge is that the stage game may have multiple Nash
+equilibria or none that are easy to compute.
+
+\begin{assumption}[Stage-Game Equilibrium Conditions]
+\label{assump:nashq}
+At every state $s'$ and at every iteration~$t$, the stage game defined
+by $\{Q_j^t(s', \cdot)\}_{j=1}^N$ satisfies one of the following:
+\begin{enumerate}[label=(\alph*)]
+  \item The Nash equilibrium is unique (the ``global optimum'' or
+    ``saddle point'' condition); or
+  \item All Nash equilibria yield the same payoff vector (the
+    ``interchangeability'' condition).
+\end{enumerate}
+\end{assumption}
+
+\begin{theorem}[Convergence of Nash Q-Learning]
+\label{thm:nashq-convergence}
+Under Assumption~\ref{assump:nashq}, Robbins--Monro step-size conditions,
+and sufficient exploration, Nash Q-learning converges almost surely:
+$Q_i^t \cas Q_i^*$ for all $i \in \Players$.
+\end{theorem}
+
+\begin{proof}
+Define the Nash Bellman operator for player~$i$:
+\[
+  (\Bellman_i^{\NE} Q)(s, \mathbf{a})
+  = R_i(s, \mathbf{a})
+  + \discount \sum_{s'} \Trans(s' \mid s, \mathbf{a})\,
+    \mathrm{Nash}_i(Q_1(s', \cdot), \ldots, Q_N(s', \cdot)).
+\]
+Under Assumption~\ref{assump:nashq}, the $\mathrm{Nash}_i$ operator is
+well-defined (single-valued).  The proof strategy from \citet{hu2003}
+proceeds by induction on the iterations.  At each stage game, the
+uniqueness (or interchangeability) of the Nash equilibrium ensures that
+all agents agree on the equilibrium selection.
+
+The key technical step is showing that the joint operator
+$\Bellman^{\NE} = (\Bellman_1^{\NE}, \ldots, \Bellman_N^{\NE})$ is a
+contraction in the sup-norm on the product space.  For two-player games,
+\citet{hu2003} prove this under the assumption that the stage games fall
+into one of three categories: (a) the game has a dominant strategy
+equilibrium, (b) the game has a unique Nash equilibrium that is also a
+saddle point, or (c) the payoffs at all Nash equilibria coincide.
+
+Under any of these conditions, the Nash value operator satisfies
+\[
+  |\mathrm{Nash}_i(Q(s', \cdot)) - \mathrm{Nash}_i(Q'(s', \cdot))|
+  \le \max_{\mathbf{a}'} |Q_i(s', \mathbf{a}') - Q_i'(s', \mathbf{a}')|
+  \le \|Q_i - Q_i'\|_\infty,
+\]
+analogous to the Lipschitz property \eqref{eq:val-lipschitz} in the
+zero-sum case.  The remainder of the argument follows the same
+stochastic approximation template as in
+Theorem~\ref{thm:minimaxq-convergence}: the operator is a
+$\discount$-contraction, the noise is a bounded martingale difference,
+and the Robbins--Monro conditions drive the iterates to the fixed point.
+\end{proof}
+
+\begin{warning}
+The assumption that stage-game Nash equilibria are unique or
+interchangeable (Assumption~\ref{assump:nashq}) is extremely restrictive.
+In practice, most general-sum games admit multiple equilibria with
+different payoffs.  When the assumption fails, Nash Q-learning may
+oscillate or diverge because different agents may select different
+equilibria, breaking the contraction argument.  This is a fundamental
+limitation, not merely a technical inconvenience.
+\end{warning}
+
+\begin{example}[Convergent Nash Q-Learning: Battle of the Sexes]
+\label{ex:nashq-converge}
+Consider a single-state two-player game with payoff matrices:
+\[
+  \text{Player 1:} \quad
+  A_1 = \begin{pmatrix} 3 & 0 \\ 0 & 2 \end{pmatrix},
+  \qquad
+  \text{Player 2:} \quad
+  A_2 = \begin{pmatrix} 2 & 0 \\ 0 & 3 \end{pmatrix}.
+\]
+This game has three Nash equilibria: $(a_1^1, a_2^1)$, $(a_1^2, a_2^2)$,
+and a mixed equilibrium $\sigma_1 = (3/5, 2/5)$,
+$\sigma_2 = (2/5, 3/5)$.  Although there are multiple equilibria, they
+\emph{do not} yield the same payoffs, so
+Assumption~\ref{assump:nashq}(b) fails.  However, if agents use a
+coordination mechanism to consistently select the same equilibrium (e.g.,
+always the Pareto-dominant one), Nash Q-learning can still converge.
+\end{example}
+
+\begin{example}[Failure of Nash Q-Learning: Matching Pennies Variant]
+\label{ex:nashq-fail}
+Consider a two-player game where the stage game at certain states
+has payoff matrices that are perturbations of matching pennies:
+\[
+  A_1 = \begin{pmatrix} 1+\epsilon_t & -1 \\ -1 & 1-\epsilon_t \end{pmatrix},
+  \qquad
+  A_2 = -A_1,
+\]
+where $\epsilon_t$ fluctuates due to Q-value updates.  In this nearly
+zero-sum game, the Nash equilibrium shifts continuously with
+$\epsilon_t$.  Since Minimax-Q is the correct algorithm for zero-sum
+games (Theorem~\ref{thm:minimaxq-convergence}), using Nash Q-learning
+here is not only unnecessary but can exhibit cycling behavior when
+small numerical asymmetries break the unique-equilibrium condition.
+\end{example}
+
+The limitations of Nash Q-learning motivate model-free multi-agent
+methods that bypass explicit equilibrium computation, which we develop
+next.
+
+
+%% ========================================================================
+%% SECTION 5: MADDPG
+%% ========================================================================
+\section{MADDPG: Multi-Agent Deep Deterministic Policy Gradient}
+\label{sec:maddpg}
+
+\subsection{Setting and Framework}
+
+We consider $N$ agents in a mixed cooperative-competitive environment
+with continuous action spaces.  Each agent~$i$ has a local observation
+$o_i$ (the environment may be partially observable), a deterministic
+policy $\mu_i : \mathcal{O}_i \to \Actions_i$ parameterized by
+$\theta_i$, and a centralized critic
+$Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)$ that has access to the
+global state $s$ and all agents' actions during training.
+
+\begin{definition}[MADDPG Framework]
+\label{def:maddpg}
+The \emph{Multi-Agent DDPG} (MADDPG) framework consists of:
+\begin{itemize}
+  \item \textbf{Decentralized actors:} Each agent~$i$ has a
+    deterministic policy $\mu_{\theta_i}(o_i)$ that maps local
+    observations to actions.
+  \item \textbf{Centralized critics:} Each agent~$i$ has a critic
+    $Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N ; \phi_i)$ that takes
+    the global state and all agents' actions as input.
+  \item \textbf{Experience replay:} Transitions
+    $(s, o_1, \ldots, o_N, a_1, \ldots, a_N, r_1, \ldots, r_N,
+    s', o_1', \ldots, o_N')$ are stored in a shared replay buffer.
+  \item \textbf{Target networks:} Each agent maintains target networks
+    $\mu_{\theta_i'}$ and $Q_i^{\boldsymbol{\mu}'}$ for stability.
+\end{itemize}
+\end{definition}
+
+\subsection{Policy Gradient Derivation}
+
+The objective for agent~$i$ is to maximize the expected discounted
+return:
+\begin{equation}
+\label{eq:maddpg-objective}
+  J(\theta_i) = \E_{s \sim \rho^{\boldsymbol{\mu}}}
+  \bigl[ Q_i^{\boldsymbol{\mu}}(s, \mu_1(o_1), \ldots, \mu_N(o_N)) \bigr],
+\end{equation}
+where $\rho^{\boldsymbol{\mu}}$ is the state distribution induced by the
+joint policy $\boldsymbol{\mu} = (\mu_1, \ldots, \mu_N)$.
+
+\begin{proposition}[MADDPG Policy Gradient]
+\label{prop:maddpg-gradient}
+The policy gradient for agent~$i$ under the MADDPG framework is
+\begin{equation}
+\label{eq:maddpg-gradient}
+  \nabla_{\theta_i} J(\theta_i)
+  = \E_{s, \mathbf{o} \sim \rho^{\boldsymbol{\mu}}}
+  \Bigl[
+    \nabla_{\theta_i} \mu_i(o_i)\,
+    \nabla_{a_i} Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)
+    \Big|_{a_j = \mu_j(o_j) \;\forall j}
+  \Bigr].
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Fix the policies of all agents $j \neq i$.  Agent~$i$'s objective
+\eqref{eq:maddpg-objective} depends on $\theta_i$ through two channels:
+the action $a_i = \mu_{\theta_i}(o_i)$ and (implicitly) through the
+state distribution $\rho^{\boldsymbol{\mu}}$.
+
+Under the deterministic policy gradient theorem \citep{lillicrap2016},
+when the Q-function is differentiable in the action and the policy is
+deterministic:
+\begin{align*}
+  \nabla_{\theta_i} J(\theta_i)
+  &= \E_{s \sim \rho^{\boldsymbol{\mu}}}
+     \Bigl[ \nabla_{\theta_i} Q_i^{\boldsymbol{\mu}}
+     (s, \mu_1(o_1), \ldots, \mu_i(o_i), \ldots, \mu_N(o_N)) \Bigr] \\
+  &= \E_{s \sim \rho^{\boldsymbol{\mu}}}
+     \Bigl[ \nabla_{a_i} Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)
+     \big|_{a_j = \mu_j(o_j)} \cdot
+     \nabla_{\theta_i} \mu_i(o_i) \Bigr],
+\end{align*}
+where the second equality applies the chain rule.  The gradient through
+the state distribution vanishes under the deterministic policy gradient
+theorem (analogous to the single-agent case), because $a_i$ does not
+affect the state distribution when we condition on sampling states from
+$\rho^{\boldsymbol{\mu}}$.  Since the critic
+$Q_i^{\boldsymbol{\mu}}$ is conditioned on the full state $s$ and all
+actions, this gradient is an unbiased estimate of the true policy
+gradient for agent~$i$ in the multi-agent MDP.
+\end{proof}
+
+\begin{keyresult}[title={MADDPG Policy Gradient}]
+The MADDPG gradient \eqref{eq:maddpg-gradient} extends the single-agent
+deterministic policy gradient to multi-agent settings.  The centralized
+critic $Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)$ observes all
+agents' actions during training, removing the non-stationarity of the
+environment from agent~$i$'s perspective.  At execution time, only the
+decentralized policy $\mu_i(o_i)$ is needed.
+\end{keyresult}
+
+\subsection{Handling Unknown Opponent Policies}
+
+In practice, agent~$i$ does not know the other agents' policy
+parameters.  \citet{lowe2017} propose learning approximate models
+$\hat{\mu}_j$ of the other agents' policies from observations in the
+replay buffer.  Agent~$i$ trains $\hat{\mu}_j$ to maximize the
+log-likelihood of agent~$j$'s observed actions:
+\begin{equation}
+\label{eq:policy-inference}
+  \max_{\hat{\theta}_j} \E_{(o_j, a_j) \sim \mathcal{D}}
+  \bigl[ \log \hat{\mu}_j(a_j \mid o_j; \hat{\theta}_j) \bigr],
+\end{equation}
+where $\mathcal{D}$ is the replay buffer.  The estimated policies
+$\hat{\mu}_j$ replace the true $\mu_j$ in the critic input.
+
+\begin{remark}
+The centralized-critic, decentralized-actor (CTDE) paradigm of MADDPG
+is not limited to competitive settings.  It applies equally to fully
+cooperative, fully competitive, and mixed environments.  The key insight
+is that centralized information is available during training (e.g., in
+a simulator) but not at execution time.
+\end{remark}
+
+\begin{rlconnection}
+MADDPG extends DDPG \citep{lillicrap2016} from single-agent to
+multi-agent settings.  The centralized critic addresses the
+\emph{non-stationarity} problem: from any single agent's perspective,
+the environment appears non-stationary because other agents are
+simultaneously learning.  By conditioning on all agents' actions, the
+critic sees a stationary Markov process, enabling stable learning.
+This is a concrete instance of the centralized training with
+decentralized execution (CTDE) paradigm introduced in Lesson~62.
+\end{rlconnection}
+
+
+%% ========================================================================
+%% SECTION 6: LOLA
+%% ========================================================================
+\section{LOLA: Learning with Opponent-Learning Awareness}
+\label{sec:lola}
+
+\subsection{Motivation: The Failure of Naive Independent Learning}
+
+When agents learn independently using standard policy gradient methods,
+each agent treats the other agents' policies as part of the environment.
+This ignores a crucial fact: the other agents are also learning.  In
+iterated social dilemmas (e.g., the Prisoner's Dilemma), naive
+independent learners converge to mutual defection, failing to discover
+cooperative strategies that would yield higher payoffs for all.
+
+\subsection{The LOLA Gradient}
+
+Consider a two-player setting where player~$i$ has parameters
+$\theta_i$ and expected return $V_i(\theta_1, \theta_2)$.  Under naive
+learning, player~1 updates along $\nabla_{\theta_1} V_1(\theta_1, \theta_2)$,
+treating $\theta_2$ as fixed.
+
+\begin{definition}[LOLA Update]
+\label{def:lola}
+In LOLA, player~1 \emph{anticipates} that player~2 will take a learning
+step.  Player~2's anticipated parameter update is:
+\begin{equation}
+\label{eq:opponent-step}
+  \Delta\theta_2 = \eta\, \nabla_{\theta_2} V_2(\theta_1, \theta_2),
+\end{equation}
+where $\eta > 0$ is player~2's learning rate.  Player~1 then optimizes
+with respect to the \emph{updated} opponent:
+\begin{equation}
+\label{eq:lola-objective}
+  \Delta\theta_1 \propto \nabla_{\theta_1}
+  V_1\bigl(\theta_1,\; \theta_2 + \Delta\theta_2\bigr).
+\end{equation}
+\end{definition}
+
+\begin{proposition}[First-Order LOLA Gradient]
+\label{prop:lola-gradient}
+Expanding \eqref{eq:lola-objective} to first order in $\eta$ yields the
+LOLA gradient for player~1:
+\begin{equation}
+\label{eq:lola-gradient}
+  \nabla_{\theta_1}^{\mathrm{LOLA}} V_1
+  = \underbrace{\nabla_{\theta_1} V_1(\theta_1, \theta_2)}_{\text{naive gradient}}
+  + \eta \underbrace{
+    \bigl(\nabla_{\theta_1} \nabla_{\theta_2}^\top V_2(\theta_1, \theta_2)\bigr)
+    \nabla_{\theta_2} V_1(\theta_1, \theta_2)
+  }_{\text{opponent-shaping term}}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Substituting \eqref{eq:opponent-step} into \eqref{eq:lola-objective}:
+\begin{align*}
+  \nabla_{\theta_1}
+  V_1(\theta_1, \theta_2 + \eta\, \nabla_{\theta_2} V_2)
+  &= \nabla_{\theta_1} V_1(\theta_1, \theta_2)
+    + \eta\, \nabla_{\theta_1} \Bigl[
+      \nabla_{\theta_2} V_2(\theta_1, \theta_2)^\top
+    \Bigr]
+    \nabla_{\theta_2} V_1(\theta_1, \theta_2)
+    + O(\eta^2),
+\end{align*}
+where we applied the first-order Taylor expansion of $V_1$ in its second
+argument around $\theta_2$:
+\[
+  V_1(\theta_1, \theta_2 + \delta)
+  \approx V_1(\theta_1, \theta_2)
+  + \nabla_{\theta_2} V_1(\theta_1, \theta_2)^\top \delta.
+\]
+Differentiating with respect to $\theta_1$ and setting
+$\delta = \eta\, \nabla_{\theta_2} V_2$:
+\begin{align*}
+  \nabla_{\theta_1} V_1(\theta_1, \theta_2 + \delta)
+  &\approx \nabla_{\theta_1} V_1(\theta_1, \theta_2)
+  + \nabla_{\theta_1}\bigl[
+    \nabla_{\theta_2} V_1(\theta_1, \theta_2)^\top \cdot
+    \eta\, \nabla_{\theta_2} V_2(\theta_1, \theta_2)
+  \bigr] \\
+  &= \nabla_{\theta_1} V_1
+  + \eta\, \bigl(\nabla_{\theta_1} \nabla_{\theta_2}^\top V_1\bigr)
+    \nabla_{\theta_2} V_2
+  + \eta\, \bigl(\nabla_{\theta_1} \nabla_{\theta_2}^\top V_2\bigr)
+    \nabla_{\theta_2} V_1.
+\end{align*}
+The LOLA formulation of \citet{foerster2018lola} drops the term
+$(\nabla_{\theta_1} \nabla_{\theta_2}^\top V_1) \nabla_{\theta_2} V_2$,
+which represents the effect of the opponent's update on player~1's own
+gradient through the cross-derivatives of $V_1$.  This simplification
+yields \eqref{eq:lola-gradient}.  The retained opponent-shaping term
+captures how player~1 can influence player~2's gradient step to
+benefit player~1.
+\end{proof}
+
+\begin{remark}
+The opponent-shaping term in \eqref{eq:lola-gradient} involves the
+mixed partial derivative $\nabla_{\theta_1} \nabla_{\theta_2}^\top V_2$,
+which is a matrix of dimension $|\theta_1| \times |\theta_2|$.  This
+requires differentiating through the opponent's objective -- hence the
+name ``learning with opponent-learning awareness.''
+\end{remark}
+
+\subsection{LOLA in Iterated Matrix Games}
+
+\begin{example}[LOLA in Iterated Prisoner's Dilemma]
+\label{ex:lola-ipd}
+Consider two agents playing the Iterated Prisoner's Dilemma (IPD) with
+payoff matrix for player~$i$:
+\[
+  \begin{array}{c|cc}
+    & C & D \\
+    \hline
+    C & (R, R) & (S, T) \\
+    D & (T, S) & (P, P)
+  \end{array}
+  \quad \text{with } T > R > P > S,\; 2R > T + S.
+\]
+Let each player use a memoryless stochastic policy
+$p_i = \Prob(\text{cooperate})$, parameterized by $\theta_i$ via
+$p_i = \sigma(\theta_i)$ where $\sigma$ is the sigmoid function.
+
+The expected payoff for player~1 is:
+\[
+  V_1(\theta_1, \theta_2) = p_1 p_2 R + p_1(1-p_2) S
+    + (1-p_1) p_2 T + (1-p_1)(1-p_2) P.
+\]
+The naive gradient $\nabla_{\theta_1} V_1$ pushes $p_1$ toward defection
+($p_1 \to 0$) since $T > R$ and $P > S$.  Both players defecting is the
+only Nash equilibrium of the stage game.
+
+Under LOLA, the opponent-shaping term accounts for how player~1's
+parameter change affects player~2's gradient.  Specifically:
+\[
+  \frac{\partial^2 V_2}{\partial \theta_1 \partial \theta_2}
+  = \sigma'(\theta_1)\sigma'(\theta_2)(R - S - T + P),
+\]
+and since $2R > T + S$ implies $R - S > T - R > 0$ (for standard IPD
+parameters), this cross-derivative is positive.  The shaping term
+encourages player~1 to increase cooperation probability, because doing
+so induces player~2 to also cooperate (via player~2's gradient), which
+benefits player~1.  \citet{foerster2018lola} show empirically that LOLA
+agents learn tit-for-tat-like strategies in the IPD.
+\end{example}
+
+\begin{warning}
+LOLA requires differentiating through the opponent's learning update,
+which makes two strong assumptions: (1)~the opponent's learning
+algorithm is known (specifically, gradient ascent with known learning
+rate $\eta$), and (2)~second-order derivatives
+$\nabla_{\theta_1} \nabla_{\theta_2}^\top V_2$ are computable.  In deep
+RL, the second-order computation is expensive ($O(|\theta_1| \cdot |\theta_2|)$),
+and the assumption about the opponent's algorithm may not hold.
+\citet{foerster2018lola} propose a first-order approximation using
+finite differences to reduce computational cost.
+\end{warning}
+
+
+%% ========================================================================
+%% SECTION 7: Self-Play
+%% ========================================================================
+\section{Self-Play}
+\label{sec:selfplay}
+
+\subsection{Definition and Setting}
+
+\begin{definition}[Self-Play]
+\label{def:selfplay}
+In \emph{self-play}, a single agent (or copies of it sharing the same
+parameters) plays all roles in a multi-player game.  Formally, in a
+two-player game, both players execute the same policy
+$\policy_\theta$: player~1 uses $\policy_\theta$ and player~2 uses
+$\policy_\theta$.  The training objective is
+\begin{equation}
+\label{eq:selfplay-objective}
+  J(\theta) = V_1(\policy_\theta, \policy_\theta),
+\end{equation}
+where $V_1(\policy, \policy')$ is player~1's value when player~1 uses
+$\policy$ and player~2 uses $\policy'$.
+\end{definition}
+
+Self-play is a natural training procedure for symmetric games.  Its
+theoretical justification is strongest in the two-player zero-sum
+setting.
+
+\begin{theorem}[Self-Play Convergence Implies Nash Equilibrium]
+\label{thm:selfplay-ne}
+Let $G$ be a two-player symmetric zero-sum game (i.e.,
+$V_1(\policy, \policy') = -V_2(\policy', \policy) = -V_1(\policy', \policy)$
+for all $\policy, \policy'$).  If self-play converges to a stationary
+policy $\policy^*$, then $(\policy^*, \policy^*)$ is a Nash equilibrium.
+\end{theorem}
+
+\begin{proof}
+Suppose self-play converges to $\policy^*$.  We must show that neither
+player can improve by unilateral deviation.
+
+Since the game is zero-sum and symmetric:
+$V_1(\policy, \policy') = -V_1(\policy', \policy)$ for all
+$\policy, \policy'$.  In particular,
+$V_1(\policy^*, \policy^*) = -V_1(\policy^*, \policy^*) = 0$.
+
+Now suppose, for contradiction, that player~1 can deviate to some
+$\tilde{\policy}$ with $V_1(\tilde{\policy}, \policy^*) > 0$.  By
+symmetry of the game, player~2 could also deviate to $\tilde{\policy}$
+(playing as player~2) and achieve
+$V_2(\policy^*, \tilde{\policy}) = -V_1(\policy^*, \tilde{\policy})
+= V_1(\tilde{\policy}, \policy^*) > 0$,
+where the last equality uses the symmetry
+$V_1(\policy', \policy) = -V_1(\policy, \policy') = V_2(\policy, \policy')$.
+
+Consider self-play starting from $\policy^*$.  If the agent can improve
+to $\tilde{\policy}$ (gaining $V_1(\tilde{\policy}, \policy^*) > 0$
+against itself), then the self-play process has not converged, because
+the gradient (or improvement operator) would move the parameters away
+from $\policy^*$.  More precisely, convergence of self-play means that
+$\policy^*$ is a fixed point of the self-play dynamics.  At a fixed
+point, the update direction must be zero:
+\[
+  \nabla_\theta V_1(\policy_\theta, \policy_\theta)\big|_{\theta = \theta^*}
+  = 0.
+\]
+By the envelope theorem applied to the zero-sum symmetric game, this
+condition implies:
+\[
+  \nabla_\theta V_1(\policy_\theta, \policy^*)\big|_{\theta = \theta^*}
+  + \nabla_\theta V_1(\policy^*, \policy_\theta)\big|_{\theta = \theta^*}
+  = 0.
+\]
+Using $V_1(\policy^*, \policy_\theta) = -V_1(\policy_\theta, \policy^*)$
+(zero-sum symmetry), we get
+$\nabla_\theta V_1(\policy_\theta, \policy^*)|_{\theta^*}
+- \nabla_\theta V_1(\policy_\theta, \policy^*)|_{\theta^*} = 0$,
+which is automatically satisfied.
+
+For the stronger result, we use the minimax characterization.  In a
+symmetric zero-sum game, a Nash equilibrium $(\policy^*, \policy^*)$
+satisfies $\policy^* \in \argmax_\policy \min_{\policy'} V_1(\policy, \policy')$.
+If self-play with a convergent algorithm (e.g., fictitious play, or
+policy gradient with appropriate regularization) reaches $\policy^*$
+such that $\policy^*$ is a best response to itself, then by the
+zero-sum property:
+\[
+  V_1(\policy, \policy^*) \le V_1(\policy^*, \policy^*) = 0
+  \quad \text{for all } \policy.
+\]
+The last inequality holds because $\policy^*$ is a best response to
+$\policy^*$ (convergence of the self-play best-response dynamics),
+and $V_1(\policy^*, \policy^*) = 0$ by symmetry.  By the zero-sum
+condition, $V_2(\policy^*, \policy) = -V_1(\policy^*, \policy)
+= V_1(\policy, \policy^*) \le 0$ for all $\policy$, so player~2 also
+cannot improve.  Hence $(\policy^*, \policy^*)$ is a Nash equilibrium.
+\end{proof}
+
+\begin{rlconnection}
+Self-play is theoretically grounded in two-player zero-sum games, where
+the minimax theorem guarantees the existence of a saddle-point
+equilibrium.  In general-sum games, self-play may cycle indefinitely
+without converging to any equilibrium.  For example, in coordination
+games with multiple equilibria, a single policy cannot simultaneously
+represent different equilibrium strategies for different roles.
+\end{rlconnection}
+
+\subsection{AlphaGo Zero: Self-Play with MCTS}
+
+The AlphaGo Zero system \citep{silver2017} combines self-play with Monte
+Carlo Tree Search (MCTS) and neural network function approximation.
+
+\begin{definition}[AlphaGo Zero Architecture]
+\label{def:alphagozero}
+The system maintains a neural network $f_\theta$ with two heads:
+\begin{itemize}
+  \item A \emph{policy head} $p_\theta(a \mid s)$ outputting a
+    probability distribution over moves;
+  \item A \emph{value head} $v_\theta(s)$ estimating the expected game
+    outcome from state $s$.
+\end{itemize}
+The training loop proceeds as follows:
+\begin{enumerate}
+  \item \textbf{Self-play data generation:} The current network
+    $f_\theta$ guides MCTS.  At each position $s_t$, MCTS runs $N$
+    simulations using $p_\theta$ for prior probabilities and $v_\theta$
+    for leaf evaluation.  The MCTS visit counts yield an improved policy
+    $\hat{\policy}_t$.  The game is played to completion, producing
+    outcome $z \in \{-1, +1\}$.
+  \item \textbf{Training:} The network is updated to minimize:
+    \begin{equation}
+    \label{eq:alphago-loss}
+      \ell(\theta) = \E_{(s_t, \hat{\policy}_t, z)}
+      \Bigl[ (z - v_\theta(s_t))^2
+        - \hat{\policy}_t^\top \log p_\theta(\cdot \mid s_t)
+        + c \|\theta\|^2 \Bigr],
+    \end{equation}
+    where the first term is a value prediction loss, the second is a
+    policy distillation loss (cross-entropy with MCTS-improved policy),
+    and the third is $L^2$ regularization.
+\end{enumerate}
+\end{definition}
+
+\begin{proposition}[Self-Play with MCTS as Approximate Policy Iteration]
+\label{prop:alphago-api}
+The AlphaGo Zero training loop is a form of approximate policy
+iteration in the two-player game tree:
+\begin{enumerate}
+  \item \textbf{Policy evaluation:} The value head $v_\theta$ is
+    trained to approximate $V^{\hat{\policy}}$, the value function under
+    the current MCTS-improved policy.
+  \item \textbf{Policy improvement:} MCTS, guided by $p_\theta$ and
+    $v_\theta$, produces an improved policy $\hat{\policy}$ that
+    satisfies
+    \begin{equation}
+    \label{eq:mcts-improvement}
+      V_1(\hat{\policy}, \policy_{\mathrm{old}})
+      \ge V_1(\policy_{\mathrm{old}}, \policy_{\mathrm{old}})
+    \end{equation}
+    for sufficiently many MCTS simulations, where $\policy_{\mathrm{old}}$
+    is the policy before the MCTS lookahead.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+The policy improvement property \eqref{eq:mcts-improvement} follows from
+the MCTS guarantee: with sufficient simulations, MCTS converges to the
+minimax-optimal action in the lookahead tree.  At the root node $s$,
+MCTS selects the action $a^* = \argmax_a N(s,a)$ (most visited child),
+which with sufficient simulations approximates
+$a^* \approx \argmax_a Q^{\mathrm{MCTS}}(s, a)$, where
+$Q^{\mathrm{MCTS}}$ is the MCTS action-value estimate.  Since
+$Q^{\mathrm{MCTS}}(s, a)$ incorporates deeper lookahead than the
+one-step policy $p_\theta$, we have
+$\max_a Q^{\mathrm{MCTS}}(s, a) \ge V^{p_\theta}(s)$ by the same
+argument as the single-agent policy improvement theorem (applied to the
+zero-sum game tree).  This gives
+$V_1(\hat{\policy}, \policy) \ge V_1(\policy, \policy)$.
+
+The policy evaluation step trains $v_\theta$ to predict game outcomes
+$z$ under self-play with the MCTS-improved policy.  Since $z$ is a
+noisy sample of the game value, minimizing $(z - v_\theta(s))^2$ is
+a Monte Carlo policy evaluation step.
+
+Together, alternating between MCTS-based policy improvement and neural
+network policy evaluation constitutes approximate policy iteration.
+\end{proof}
+
+
+%% ========================================================================
+%% SECTION 8: PSRO
+%% ========================================================================
+\section{PSRO: Policy-Space Response Oracles}
+\label{sec:psro}
+
+\subsection{The Double Oracle Algorithm}
+
+Before introducing PSRO, we recall the double oracle algorithm, which
+PSRO generalizes.
+
+\begin{definition}[Double Oracle Algorithm]
+\label{def:double-oracle}
+Given a finite two-player game with strategy sets $\Actions_1, \Actions_2$,
+the \emph{double oracle} algorithm maintains restricted strategy sets
+$\Pi_1 \subseteq \Actions_1$ and $\Pi_2 \subseteq \Actions_2$ and
+iterates:
+\begin{enumerate}
+  \item Compute a Nash equilibrium $(\sigma_1^*, \sigma_2^*)$ of the
+    restricted game over $\Pi_1 \times \Pi_2$.
+  \item For each player~$i$, compute a best response $a_i^{\BR}$ to
+    $\sigma_{-i}^*$ in the \emph{full} game.
+  \item If $a_i^{\BR} \notin \Pi_i$, add it: $\Pi_i \leftarrow \Pi_i
+    \cup \{a_i^{\BR}\}$.
+  \item If no new strategies were added, terminate.
+\end{enumerate}
+\end{definition}
+
+\begin{lemma}[Double Oracle Termination]
+\label{lem:double-oracle-termination}
+In a finite game, the double oracle algorithm terminates in at most
+$|\Actions_1| + |\Actions_2|$ iterations, and upon termination,
+$(\sigma_1^*, \sigma_2^*)$ is a Nash equilibrium of the full game.
+\end{lemma}
+
+\begin{proof}
+Each iteration adds at least one new strategy to some $\Pi_i$, so the
+algorithm terminates in at most $|\Actions_1| + |\Actions_2|$ iterations.
+
+Upon termination, no new strategies are added, meaning
+$a_i^{\BR} \in \Pi_i$ for each player~$i$.  Let $(\sigma_1^*, \sigma_2^*)$
+be the NE of the restricted game.  We claim this is also a NE of the
+full game.  Suppose player~1 deviates to some $a_1 \in \Actions_1$
+in the full game.  Player~1's payoff under the restricted NE is
+$u_1(\sigma_1^*, \sigma_2^*)$.  The best response $a_1^{\BR}$ maximizes
+$u_1(a_1, \sigma_2^*)$ over all $a_1 \in \Actions_1$.  Since
+$a_1^{\BR} \in \Pi_1$ (termination condition), and $\sigma_1^*$ is
+a best response to $\sigma_2^*$ within $\Pi_1$:
+\[
+  u_1(\sigma_1^*, \sigma_2^*)
+  \ge u_1(a_1^{\BR}, \sigma_2^*)
+  \ge u_1(a_1, \sigma_2^*)
+  \quad \text{for all } a_1 \in \Actions_1.
+\]
+Wait -- the first inequality requires clarification. Since $\sigma_1^*$
+is a NE of the restricted game, $u_1(\sigma_1^*, \sigma_2^*) \ge
+u_1(a_1, \sigma_2^*)$ for all $a_1 \in \Pi_1$.  Since
+$a_1^{\BR} \in \Pi_1$, we have
+$u_1(\sigma_1^*, \sigma_2^*) \ge u_1(a_1^{\BR}, \sigma_2^*)$.  But
+$a_1^{\BR} = \argmax_{a_1 \in \Actions_1} u_1(a_1, \sigma_2^*)$, so
+$u_1(a_1^{\BR}, \sigma_2^*) \ge u_1(a_1, \sigma_2^*)$ for all
+$a_1 \in \Actions_1$.  Combining:
+\[
+  u_1(\sigma_1^*, \sigma_2^*) \ge u_1(a_1^{\BR}, \sigma_2^*)
+  \ge u_1(a_1, \sigma_2^*)
+  \quad \text{for all } a_1 \in \Actions_1.
+\]
+The same argument applies to player~2.  Hence $(\sigma_1^*, \sigma_2^*)$
+is a Nash equilibrium of the full game.
+\end{proof}
+
+\subsection{PSRO: Generalizing Double Oracle with RL}
+
+\begin{definition}[Policy-Space Response Oracles (PSRO)]
+\label{def:psro}
+\emph{PSRO} \citep{lanctot2017} generalizes the double oracle algorithm
+to stochastic games where best responses are computed via RL.  The
+framework maintains a \emph{population} of policies for each player:
+\begin{enumerate}
+  \item \textbf{Initialize:} Each player~$i$ starts with a population
+    $\Pi_i^0 = \{\policyi^{(0)}\}$ containing a single (possibly random)
+    policy.
+  \item \textbf{Meta-game computation:} At iteration~$k$, compute the
+    \emph{empirical payoff matrix} (meta-game) $U_i^k$ where
+    $U_i^k(j, l) = V_i(\policy_1^{(j)}, \policy_2^{(l)})$ is obtained
+    by simulation or exact computation for each pair of policies in
+    $\Pi_1^k \times \Pi_2^k$.
+  \item \textbf{Meta-strategy:} Compute a Nash equilibrium
+    $\sigma^{*,k} = (\sigma_1^{*,k}, \sigma_2^{*,k})$ of the meta-game
+    $U^k$.  Each $\sigma_i^{*,k} \in \simplex(\Pi_i^k)$ is a
+    distribution over player~$i$'s population.
+  \item \textbf{Best response via RL:} For each player~$i$, train a new
+    policy $\policyi^{(k+1)}$ that is an (approximate) best response to
+    the opponent's meta-strategy $\sigma_{-i}^{*,k}$:
+    \begin{equation}
+    \label{eq:psro-br}
+      \policyi^{(k+1)}
+      \approx \BR_i(\sigma_{-i}^{*,k})
+      = \argmax_{\policyi} V_i\bigl(\policyi,\;
+        \sigma_{-i}^{*,k}\bigr),
+    \end{equation}
+    where $V_i(\policyi, \sigma_{-i}^{*,k})$ is the expected return of
+    $\policyi$ against the mixture of opponent policies.
+  \item \textbf{Population update:}
+    $\Pi_i^{k+1} = \Pi_i^k \cup \{\policyi^{(k+1)}\}$.
+  \item Repeat from step~2.
+\end{enumerate}
+\end{definition}
+
+\begin{theorem}[PSRO Convergence in Finite Games]
+\label{thm:psro-convergence}
+Consider a two-player finite game (normal form).  If exact best
+responses are computed at each iteration, PSRO converges to a Nash
+equilibrium in finitely many iterations.
+\end{theorem}
+
+\begin{proof}
+In a finite normal-form game, the pure strategy sets $\Actions_1$ and
+$\Actions_2$ are finite.  At each iteration, PSRO computes an exact
+best response to the meta-strategy.  If the best response is already in
+the population, no new strategy is added and the algorithm terminates.
+If the best response is not in the population, a new pure strategy is
+added.
+
+Since $|\Actions_1|$ and $|\Actions_2|$ are finite, the algorithm adds
+at most $|\Actions_1| + |\Actions_2|$ strategies before all best
+responses are contained in the population.  At termination, the
+meta-game NE is supported on a subset of strategies for which all best
+responses are already included.  By the same argument as
+Lemma~\ref{lem:double-oracle-termination}, this NE is also a NE of the
+full game.
+
+More precisely: at termination, for each player~$i$,
+$\BR_i(\sigma_{-i}^*) \in \Pi_i$.  The meta-game NE $\sigma^*$
+satisfies $u_i(\sigma_i^*, \sigma_{-i}^*) \ge u_i(a_i, \sigma_{-i}^*)$
+for all $a_i \in \Pi_i$.  Since $\BR_i(\sigma_{-i}^*) \in \Pi_i$ and
+$u_i(\BR_i(\sigma_{-i}^*), \sigma_{-i}^*) \ge u_i(a_i, \sigma_{-i}^*)$
+for all $a_i \in \Actions_i$, we conclude
+$u_i(\sigma_i^*, \sigma_{-i}^*) \ge u_i(a_i, \sigma_{-i}^*)$ for all
+$a_i \in \Actions_i$.
+\end{proof}
+
+\begin{keyresult}[title={PSRO Convergence}]
+PSRO converges to a Nash equilibrium in finite games when exact best
+responses are used.  In stochastic games with large or continuous state
+spaces, best responses are computed approximately via RL.  The quality
+of convergence then depends on the approximation error of the RL oracle.
+PSRO unifies several classical algorithms: fictitious play corresponds
+to choosing the meta-strategy as the empirical frequency of play, and
+double oracle corresponds to computing exact best responses in matrix
+games.
+\end{keyresult}
+
+\begin{example}[PSRO on Rock-Paper-Scissors]
+\label{ex:psro-rps}
+Consider Rock-Paper-Scissors with payoff matrix:
+\[
+  U_1 = \begin{pmatrix}
+    0 & -1 & 1 \\
+    1 & 0 & -1 \\
+    -1 & 1 & 0
+  \end{pmatrix}.
+\]
+\textbf{Iteration 0:} Both players start with $\Pi_i^0 = \{R\}$.
+Meta-game: $1 \times 1$ with payoff $U_1(R,R) = 0$.  Meta-NE:
+$\sigma^* = (1, 1)$ (trivially).  Best response to $R$: $P$ for
+player~1, $P$ for player~2.
+
+\textbf{Iteration 1:} $\Pi_i^1 = \{R, P\}$.  Meta-game:
+\[
+  U_1^1 = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}.
+\]
+Meta-NE: $\sigma_1^* = (0, 1)$ (play $P$), $\sigma_2^* = (0, 1)$.
+Best response to $P$: $S$ for both.
+
+\textbf{Iteration 2:} $\Pi_i^2 = \{R, P, S\}$.  Meta-game is the full
+$3 \times 3$ matrix.  Meta-NE: $\sigma^* = (1/3, 1/3, 1/3)$ for both.
+Best response to the uniform mixture: any pure strategy yields payoff~0,
+so $\BR \in \Pi_i^2$.  PSRO terminates.  The meta-NE
+$(1/3, 1/3, 1/3)$ is the unique Nash equilibrium of the full game.
+\end{example}
+
+\begin{rlconnection}
+PSRO bridges the gap between game-theoretic solution concepts and
+practical RL training.  In large games (e.g., poker, StarCraft), the
+policy populations represent diverse strategies, and the meta-game
+captures strategic interactions at a high level.  The RL oracle (step~4)
+can be any single-agent RL algorithm (DQN, PPO, etc.), making PSRO
+modular and flexible.  The theoretical convergence guarantee provides a
+principled alternative to ad-hoc self-play curricula.
+\end{rlconnection}
+
+
+%% ========================================================================
+%% SECTION 9: Exercises
+%% ========================================================================
+\section{Exercises}
+
+\begin{exercise}[Minimax-Q Bellman Equation Derivation]
+\textnormal{(\(*\))} \\
+Starting from the definition of the minimax value
+$\Vstar(s) = \max_{\sigma_1} \min_{\sigma_2} V_1^{\sigma_1, \sigma_2}(s)$
+in a two-player zero-sum stochastic game, derive the minimax Bellman
+equation \eqref{eq:minimax-value} and the minimax Q-function
+\eqref{eq:minimax-Q}.  Show that $\min_{\sigma_2}$ can be replaced by
+$\min_{a_2}$ (i.e., the minimizer can use a pure strategy without loss)
+by invoking the minimax theorem.
+\end{exercise}
+
+\begin{exercise}[Nash Q-Values for a Two-State Game]
+\textnormal{(\(*\))} \\
+Consider a two-player, two-state game with $\States = \{s_1, s_2\}$,
+$\Actions_1 = \Actions_2 = \{L, R\}$, discount factor $\discount = 0.5$,
+and payoff matrices:
+\[
+  R_1(s_1) = \begin{pmatrix} 4 & 0 \\ 0 & 2 \end{pmatrix}, \quad
+  R_2(s_1) = \begin{pmatrix} 2 & 0 \\ 0 & 4 \end{pmatrix}, \quad
+  R_1(s_2) = R_2(s_2) = \begin{pmatrix} 1 & 1 \\ 1 & 1 \end{pmatrix}.
+\]
+Transitions: from $s_1$, action profile $(L,L)$ leads to $s_1$ with
+probability~1; all other profiles lead to $s_2$ with probability~1.
+From $s_2$, all profiles lead to $s_2$.  Compute the Nash Q-values
+$Q_1^*(s, \mathbf{a})$ and $Q_2^*(s, \mathbf{a})$ for all state-action
+pairs.  \textit{Hint:} First solve $s_2$ (which is absorbing), then
+use those values for $s_1$.
+\end{exercise}
+
+\begin{exercise}[MADDPG Gradient Unbiasedness]
+\textnormal{(\(**\))} \\
+Consider $N$ agents with deterministic policies
+$\mu_i : \mathcal{O}_i \to \Actions_i$ and a centralized Q-function
+$Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)$.  Prove that the MADDPG
+gradient \eqref{eq:maddpg-gradient} is an unbiased estimate of
+$\nabla_{\theta_i} J(\theta_i)$ when the expectation is taken over
+states sampled from the joint state distribution
+$\rho^{\boldsymbol{\mu}}$ and the critic $Q_i^{\boldsymbol{\mu}}$ is
+exact.  Specifically, show that replacing the true Q-function with the
+centralized critic does not introduce bias, and that the gradient through
+the state distribution can be absorbed into the expectation.
+\end{exercise}
+
+\begin{exercise}[LOLA Gradient for a Matrix Game]
+\textnormal{(\(**\))} \\
+Consider two players in a one-shot matrix game with payoff functions
+$V_1(\theta_1, \theta_2)$ and $V_2(\theta_1, \theta_2)$, where
+$\theta_i \in \R$ parameterizes a Bernoulli policy
+$p_i = \sigma(\theta_i)$ (probability of choosing action~1).
+\begin{enumerate}[label=(\alph*)]
+  \item Derive the full LOLA gradient
+    $\nabla_{\theta_1}^{\mathrm{LOLA}} V_1$ as given in
+    \eqref{eq:lola-gradient} for general payoff matrix
+    $\bigl(\begin{smallmatrix} (a,e) & (b,f) \\ (c,g) & (d,h)
+    \end{smallmatrix}\bigr)$.
+  \item Specialize to the Prisoner's Dilemma with $T=5, R=3, P=1, S=0$.
+    Evaluate the LOLA gradient at $\theta_1 = \theta_2 = 0$ (both
+    players cooperate with probability 1/2).  Determine whether the
+    LOLA update encourages cooperation or defection.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Self-Play and Nash Equilibrium]
+\textnormal{(\(***\))} \\
+Let $G$ be a two-player symmetric zero-sum game with policy space
+$\Pi$ and value function $V_1(\policy, \policy')$.  Prove the following:
+\begin{enumerate}[label=(\alph*)]
+  \item If $\policy^*$ is a symmetric Nash equilibrium (i.e.,
+    $(\policy^*, \policy^*)$ is a NE), then
+    $V_1(\policy^*, \policy^*) = 0$.
+  \item If $\policy^* = \argmax_\policy \min_{\policy'} V_1(\policy, \policy')$,
+    then $(\policy^*, \policy^*)$ is a Nash equilibrium.
+  \item Give an example of a general-sum symmetric game where self-play
+    converges to a policy $\hat{\policy}$ that is \emph{not} part of
+    any Nash equilibrium.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[PSRO Convergence via Double Oracle]
+\textnormal{(\(***\))} \\
+Consider an $N$-player finite game.  Generalize the proof of
+Theorem~\ref{thm:psro-convergence} to $N$ players by showing:
+\begin{enumerate}[label=(\alph*)]
+  \item The PSRO algorithm adds at most $\sum_{i=1}^N |\Actions_i|$
+    strategies across all iterations.
+  \item At termination, the meta-game NE $\sigma^*$ satisfies
+    $u_i(\sigma_i^*, \sigma_{-i}^*) \ge u_i(a_i, \sigma_{-i}^*)$ for
+    all $a_i \in \Actions_i$ and all $i \in \Players$.
+  \item Discuss what happens when the RL oracle computes
+    $\epsilon$-best responses instead of exact best responses.
+    Specifically, show that PSRO then converges to an
+    $\epsilon/(1-\discount)$-Nash equilibrium in stochastic games.
+\end{enumerate}
+\textit{Hint:} For part (c), bound the exploitability of the
+meta-strategy when best responses have additive error $\epsilon$.
+\end{exercise}
+
+
+%% ========================================================================
+%% SECTION 10: Summary
+%% ========================================================================
+\section{Summary}
+
+\begin{itemize}
+  \item \textbf{Minimax-Q learning} solves two-player zero-sum
+    stochastic games by maintaining a Q-table and solving a linear
+    program (minimax over mixed strategies) at each update.  The minimax
+    Bellman operator is a $\discount$-contraction, guaranteeing
+    convergence under Robbins--Monro conditions
+    (Theorem~\ref{thm:minimaxq-convergence}).
+
+  \item \textbf{Nash Q-learning} extends the idea to general-sum games
+    by replacing the minimax with a Nash equilibrium computation at each
+    step.  Convergence requires the restrictive assumption that
+    stage-game Nash equilibria are unique or interchangeable
+    (Theorem~\ref{thm:nashq-convergence}).
+
+  \item \textbf{MADDPG} uses centralized critics
+    $Q_i^{\boldsymbol{\mu}}(s, a_1, \ldots, a_N)$ with decentralized
+    actors $\mu_i(o_i)$, extending DDPG to multi-agent continuous-action
+    settings.  The centralized critic removes non-stationarity during
+    training (Proposition~\ref{prop:maddpg-gradient}).
+
+  \item \textbf{LOLA} accounts for opponent adaptation by
+    differentiating through the opponent's learning step, producing an
+    opponent-shaping gradient term that can promote cooperation in social
+    dilemmas (Proposition~\ref{prop:lola-gradient}).
+
+  \item \textbf{Self-play} is theoretically justified in two-player
+    symmetric zero-sum games: convergent self-play yields a Nash
+    equilibrium (Theorem~\ref{thm:selfplay-ne}).  In general-sum games,
+    self-play may cycle without converging.
+
+  \item \textbf{AlphaGo Zero} implements self-play with MCTS for policy
+    improvement and neural network training for policy evaluation,
+    constituting a form of approximate policy iteration in the
+    two-player game tree.
+
+  \item \textbf{PSRO} generalizes the double oracle algorithm by using
+    RL to compute best responses to meta-game Nash equilibria over
+    growing policy populations.  It converges to a Nash equilibrium in
+    finite games (Theorem~\ref{thm:psro-convergence}).
+
+  \item The choice of algorithm depends on the game structure:
+    \emph{zero-sum} games admit minimax solutions; \emph{general-sum}
+    games require Nash-based methods (with caveats); \emph{large-scale}
+    games need scalable approaches like MADDPG, self-play, or PSRO.
+
+  \item A recurring theme is the tension between \emph{convergence
+    guarantees} (strong in zero-sum, weak in general-sum) and
+    \emph{scalability} (tabular methods like Minimax-Q vs.\ deep methods
+    like MADDPG).
+\end{itemize}
+
+
+%% ========================================================================
+%% SECTION 11: Further Reading
+%% ========================================================================
+\section{Further Reading}
+
+\begin{itemize}
+  \item \textbf{Forward pointers:} Lesson~64 develops mean-field game
+    theory, which provides tractable approximations for competitive
+    games with large numbers of agents.  Lesson~65 introduces
+    communication protocols in multi-agent RL, where agents can
+    partially cooperate even in mixed-motive settings.
+
+  \item \textbf{Convergence in games:} \citet{bowling2001} analyze
+    convergence properties of learning algorithms in games, introducing
+    the concepts of rationality and convergence as desiderata for
+    multi-agent learners.
+
+  \item \textbf{Comprehensive surveys:} \citet{zhang2021} provide a
+    thorough overview of MARL theory and algorithms, covering both
+    competitive and cooperative settings.
+    \citet{hernandezleal2019} survey deep MARL with a focus on
+    practical challenges and open problems.
+
+  \item \textbf{Classical foundations:} \citet{shapley1953} introduced
+    stochastic games and proved the existence of minimax values in
+    two-player zero-sum cases.  \citet{filar1997} provide a comprehensive
+    treatment of competitive Markov decision processes.
+    \citet{shoham2008} cover the game-theoretic foundations needed for
+    multi-agent systems.
+
+  \item \textbf{PSRO and fictitious play:} PSRO \citep{lanctot2017}
+    generalizes both fictitious play and the double oracle algorithm.
+    The connection to fictitious play (where the meta-strategy is the
+    empirical frequency of play) provides a bridge between classical
+    game theory and modern RL.
+
+  \item \textbf{Historical note:} The study of learning in games dates
+    to \citet{shapley1953} and the fictitious play algorithm of Brown
+    (1951).  The integration with RL began with \citet{littman1994}
+    and has since grown into a major research area at the intersection
+    of game theory and machine learning.
+\end{itemize}
+
+\bibliography{competitive-refs}
+
+\end{document}

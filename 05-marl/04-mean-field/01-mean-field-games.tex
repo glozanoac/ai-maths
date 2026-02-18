@@ -1,0 +1,1387 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 64: Mean-Field Games}}
+\fancyhead[R]{\thepage}
+\title{Lesson 64: Mean-Field Games}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a highway network carrying thousands of autonomous vehicles,
+each selecting routes and speeds to minimize its own travel time.
+Modeling this as an $N$-player stochastic game requires tracking the
+joint state of all vehicles -- a state space that grows exponentially
+in $N$.  Computing a Nash equilibrium in such a game is intractable
+for realistic population sizes.  Yet the agents are \emph{symmetric}:
+they share the same dynamics, the same action space, and the same
+reward structure, differing only in their individual states.  Each
+driver does not care about the identity of the other vehicles, only
+about the \emph{aggregate traffic density} on each road segment.
+
+This symmetry suggests a radical simplification.  Instead of tracking
+$N$ individual states, we represent the collective behavior of all
+other agents by a single probability distribution -- the
+\emph{mean-field distribution} $\meanfield$ over states.  In the
+limit $N \to \infty$, the law of large numbers ensures that the
+empirical distribution of agent states concentrates around a
+deterministic flow, and each individual agent faces what is
+effectively a single-agent MDP parameterized by this population
+distribution.  The tools developed in this lesson -- McKean--Vlasov
+dynamics, the forward-backward equilibrium system, and fixed-point
+existence theorems -- will let us formalize this mean-field game
+(MFG) framework and connect it to practical multi-agent reinforcement
+learning algorithms.
+
+\begin{rlconnection}[title={Why Mean-Field Games Matter for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Fleet management and ride-sharing.}  Mean-field
+    models enable scalable optimization of thousands of vehicles
+    competing for passengers in ride-sharing platforms.
+  \item \textbf{Crowd dynamics and evacuation.}  MFGs model
+    pedestrian flows where each individual optimizes against the
+    aggregate crowd density.
+  \item \textbf{Large-scale multi-agent RL.}  Algorithms such as
+    mean-field Q-learning \citep{yang2018} and mean-field
+    actor-critic \citep{gu2021} scale MARL to populations of
+    hundreds or thousands of agents.
+  \item \textbf{Network congestion and resource allocation.}
+    MFGs capture congestion effects in communication networks
+    and shared computing resources where many identical agents
+    compete for bandwidth.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Stochastic game formalism and Markov perfect equilibrium (Lesson~61).
+Probability measures, weak convergence, and the simplex
+$\simplex(\States)$ (Phase~01 measure theory, Lessons~13--14).
+Fixed-point theorems: Banach contraction mapping theorem and
+Schauder's fixed-point theorem (Lessons~15--16, Theorems on
+contractions and compact convex mappings).  Bellman equations and
+value iteration for MDPs (Lesson~42).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} a mean-field game and \textbf{explain} how
+    it arises as the infinite-population limit of a symmetric
+    $N$-player stochastic game.
+  \item \textbf{Derive} the McKean--Vlasov dynamics governing the
+    evolution of the population distribution under a given policy.
+  \item \textbf{Formulate} the forward-backward system that
+    characterizes mean-field equilibria.
+  \item \textbf{Prove} the existence of mean-field equilibria via
+    Schauder's fixed-point theorem and \textbf{state} conditions
+    for uniqueness via contraction arguments.
+  \item \textbf{Describe} the mean-field Q-learning algorithm and
+    \textbf{relate} it to the fixed-point iteration on the
+    equilibrium operator.
+  \item \textbf{Analyze} the quality of the mean-field approximation
+    for finite $N$-player games, establishing the
+    $O(1/\sqrt{N})$ approximation bound.
+\end{itemize}
+
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet[Chapters 1--5]{carmona2018i} -- Comprehensive
+    treatment of mean-field game foundations, McKean--Vlasov
+    equations, and existence theory in continuous time.
+  \item \citet{lasry2007} -- Original formulation of mean-field
+    games via the coupled Hamilton--Jacobi--Bellman and
+    Fokker--Planck PDE system.
+  \item \citet{huang2006} -- Independent co-discovery of the
+    mean-field game framework through the Nash certainty
+    equivalence principle.
+  \item \citet{yang2018} -- Mean-field multi-agent reinforcement
+    learning: practical algorithms bridging MFG theory and
+    deep RL.
+  \item \citet{cardaliaguet2010} -- Lecture notes providing an
+    accessible introduction to mean-field games with complete
+    proofs in the finite-state setting.
+\end{itemize}
+
+
+%% ============================================================
+%% SECTION 3: FROM N-PLAYER GAMES TO MEAN-FIELD LIMITS
+%% ============================================================
+\section{From $N$-Player Games to Mean-Field Limits}
+\label{sec:n-player-to-mf}
+
+We begin by formalizing the class of $N$-player games for which the
+mean-field approximation is appropriate.  The key structural
+requirement is \emph{symmetry}: agents are interchangeable, and
+each agent's dynamics and rewards depend on the others only through
+the empirical distribution of their states.
+
+\begin{definition}[Symmetric $N$-player stochastic game]
+\label{def:symmetric-game}
+A \emph{symmetric $N$-player stochastic game} is a tuple
+$\mathcal{G}^N = (\Players, \States, \Actions, P^N, R^N, \discount)$
+where:
+\begin{enumerate}[nosep]
+  \item $\Players = \{1, \ldots, N\}$ is the set of agents.
+  \item $\States$ is a finite state space shared by all agents.
+        The joint state is $\mathbf{s} = (s_1, \ldots, s_N)
+        \in \States^N$.
+  \item $\Actions$ is a finite action space shared by all agents.
+  \item The transition kernel for agent $i$ is
+    \[
+      P^N(s_i' \mid s_i, a_i, \mathbf{s}_{-i})
+      = P^N\!\left(s_i' \,\Big|\, s_i, a_i,
+        \frac{1}{N-1}\sum_{j \neq i} \delta_{s_j}\right),
+    \]
+    depending on the other agents' states only through their
+    empirical distribution.
+  \item The reward for agent $i$ is
+    \[
+      R^N(s_i, a_i, \mathbf{s}_{-i})
+      = R^N\!\left(s_i, a_i,
+        \frac{1}{N-1}\sum_{j \neq i} \delta_{s_j}\right),
+    \]
+    again depending on others only through the empirical measure.
+  \item $\discount \in [0,1)$ is the common discount factor.
+\end{enumerate}
+\end{definition}
+
+The crucial feature is that the functions $P^N$ and $R^N$ depend on
+the other agents only through the \emph{empirical measure} of their
+states.  We denote this empirical measure explicitly.
+
+\begin{definition}[Empirical state distribution]
+\label{def:empirical-measure}
+Given joint state $\mathbf{s} = (s_1, \ldots, s_N) \in \States^N$,
+the \emph{empirical state distribution} is
+\[
+  \meanfield^N(\cdot \mid \mathbf{s})
+  = \frac{1}{N}\sum_{i=1}^N \delta_{s_i}(\cdot)
+  \in \simplex(\States),
+\]
+where $\delta_{s_i}$ is the Dirac measure at $s_i$ and
+$\simplex(\States)$ is the probability simplex over $\States$.
+When excluding agent $i$, we write
+$\meanfield^{N,-i} = \frac{1}{N-1}\sum_{j \neq i} \delta_{s_j}$.
+\end{definition}
+
+As the number of agents grows, the empirical measure concentrates
+around a deterministic limit.
+
+\begin{proposition}[Concentration of the empirical measure]
+\label{prop:empirical-concentration}
+Suppose the states $(s_1, \ldots, s_N)$ are drawn independently
+from a common distribution $\meanfield \in \simplex(\States)$.
+Then for every $s \in \States$ and every $\epsilon > 0$,
+\[
+  \Prob\!\left(\left|\meanfield^N(s) - \meanfield(s)\right|
+  \geq \epsilon\right) \leq 2\exp\!\left(-2N\epsilon^2\right).
+\]
+Consequently, $\meanfield^N \to \meanfield$ almost surely as
+$N \to \infty$.
+\end{proposition}
+
+\begin{proof}
+Fix $s \in \States$.  Define $X_i = \indicator_{\{s_i = s\}}$ for
+$i = 1, \ldots, N$.  Since the states are drawn independently from
+$\meanfield$, the random variables $X_1, \ldots, X_N$ are i.i.d.\
+with $\E[X_i] = \meanfield(s)$ and $X_i \in [0,1]$.  The empirical
+measure satisfies $\meanfield^N(s) = \frac{1}{N}\sum_{i=1}^N X_i$.
+By Hoeffding's inequality,
+\[
+  \Prob\!\left(\left|\meanfield^N(s) - \meanfield(s)\right|
+  \geq \epsilon\right)
+  \leq 2\exp\!\left(-2N\epsilon^2\right).
+\]
+Taking a union bound over the finite set $\States$ and applying
+the Borel--Cantelli lemma, $\|\meanfield^N - \meanfield\|_\infty
+\to 0$ almost surely as $N \to \infty$.
+\end{proof}
+
+\begin{example}[Cars on a ring road]
+\label{ex:ring-road}
+Consider $N$ cars on a circular road with $|\States| = K$ equally
+spaced positions.  Each car chooses speed $a \in \Actions
+= \{0, 1, 2\}$ (stop, slow, fast).  The transition probability
+depends on whether the next position is congested:
+\[
+  P^N(s' \mid s, a, \meanfield^{N,-i})
+  = \begin{cases}
+    1 - c \cdot \meanfield^{N,-i}(s') & \text{if } s' = s + a
+      \pmod{K}, \\
+    c \cdot \meanfield^{N,-i}(s') & \text{if } s' = s
+      \quad (\text{blocked}),
+  \end{cases}
+\]
+where $c \in (0,1)$ is a congestion parameter.  In the limit
+$N \to \infty$, each car faces an MDP where the blocking
+probability at position $s'$ is determined by the
+population density $\meanfield_t(s')$ rather than by the random
+empirical measure of finitely many other cars.
+\end{example}
+
+The example illustrates the fundamental insight: in the limit
+$N \to \infty$, each agent faces a single-agent optimization
+problem parameterized by the population distribution.  We
+formalize this in the next section.
+
+
+%% ============================================================
+%% SECTION 4: MEAN-FIELD GAME FORMULATION (DISCRETE TIME)
+%% ============================================================
+\section{Mean-Field Game Formulation (Discrete Time)}
+\label{sec:mfg-formulation}
+
+Having motivated the transition from $N$-player games to
+population-level descriptions, we now define the mean-field game
+in discrete time.
+
+\begin{definition}[Discrete-time mean-field game]
+\label{def:mfg}
+A \emph{discrete-time mean-field game} is a tuple
+$\mathcal{M} = (\States, \Actions, P, R, \discount)$ where:
+\begin{enumerate}[nosep]
+  \item $\States$ is a finite state space.
+  \item $\Actions$ is a finite action space.
+  \item $P: \States \times \Actions \times \simplex(\States)
+    \to \simplex(\States)$ is the transition kernel, where
+    $P(s' \mid s, a, \meanfield)$ gives the probability of
+    transitioning to $s'$ when in state $s$, taking action $a$,
+    and the population distribution is $\meanfield$.
+  \item $R: \States \times \Actions \times \simplex(\States)
+    \to \R$ is the reward function.
+  \item $\discount \in [0,1)$ is the discount factor.
+\end{enumerate}
+\end{definition}
+
+The key distinction from a standard MDP is that both the transition
+kernel and the reward depend on the population distribution
+$\meanfield \in \simplex(\States)$.  For a fixed population flow,
+however, each agent faces a (time-varying) MDP.
+
+\begin{definition}[Mean-field MDP]
+\label{def:mf-mdp}
+Given a population flow $(\meanfield_t)_{t \geq 0}$ with
+$\meanfield_t \in \simplex(\States)$ for each $t$, the
+\emph{mean-field MDP} is the single-agent MDP with time-varying
+transition kernel $P(\cdot \mid s, a, \meanfield_t)$ and
+time-varying reward $R(s, a, \meanfield_t)$.  The value function
+of a policy $\policy$ is
+\[
+  V_t^{\policy}(s; (\meanfield_\tau)_{\tau \geq t})
+  = \E\!\left[\sum_{k=0}^{\infty} \discount^k
+    R(s_{t+k}, a_{t+k}, \meanfield_{t+k})
+    \,\Big|\, s_t = s\right],
+\]
+where $a_{t+k} \sim \policy(\cdot \mid s_{t+k})$ and
+$s_{t+k+1} \sim P(\cdot \mid s_{t+k}, a_{t+k}, \meanfield_{t+k})$.
+\end{definition}
+
+When the population distribution is \emph{stationary}
+($\meanfield_t = \meanfield$ for all $t$), the mean-field MDP
+becomes a standard time-homogeneous MDP.
+
+\begin{proposition}[Bellman equation for the stationary mean-field MDP]
+\label{prop:bellman-mf}
+For a fixed stationary population distribution $\meanfield \in
+\simplex(\States)$, the optimal value function $V^*(s; \meanfield)$
+satisfies the Bellman optimality equation
+\begin{equation}
+\label{eq:bellman-mf}
+  V^*(s; \meanfield) = \max_{a \in \Actions}\left[
+    R(s, a, \meanfield)
+    + \discount \sum_{s' \in \States}
+      P(s' \mid s, a, \meanfield)\, V^*(s'; \meanfield)
+  \right].
+\end{equation}
+The corresponding optimal policy is
+\[
+  \policy^*(s; \meanfield) \in \argmax_{a \in \Actions}\left[
+    R(s, a, \meanfield)
+    + \discount \sum_{s' \in \States}
+      P(s' \mid s, a, \meanfield)\, V^*(s'; \meanfield)
+  \right].
+\]
+\end{proposition}
+
+\begin{proof}
+For fixed $\meanfield$, the mean-field MDP is a standard discounted
+MDP with finite state and action spaces, transition kernel
+$P(\cdot \mid s, a, \meanfield)$, and reward $R(s, a, \meanfield)$.
+The Bellman optimality equation~\eqref{eq:bellman-mf} follows
+directly from the standard MDP theory (Lesson~41, Theorem on
+Bellman optimality).  Existence of an optimal deterministic
+stationary policy follows from the finiteness of $\Actions$.
+\end{proof}
+
+\begin{rlconnection}[title={Mean-Field MDP as a Standard MDP}]
+Since the mean-field MDP with fixed $\meanfield$ is a standard MDP,
+\emph{all single-agent RL algorithms apply directly}: value
+iteration, policy iteration, Q-learning, and policy gradient methods
+can all be used to solve the agent's optimization problem for a given
+population distribution.  The challenge of the mean-field game is
+that $\meanfield$ is itself determined by the agents' policies.
+\end{rlconnection}
+
+We now turn to the equation that governs the population distribution
+-- the forward equation, or McKean--Vlasov dynamics.
+
+
+%% ============================================================
+%% SECTION 5: MCKEAN-VLASOV DYNAMICS
+%% ============================================================
+\section{McKean--Vlasov Dynamics}
+\label{sec:mckean-vlasov}
+
+In the $N$-player game, the empirical state distribution evolves
+stochastically as agents take actions and transition between states.
+In the mean-field limit, this empirical distribution converges to a
+deterministic flow governed by the \emph{McKean--Vlasov equation}.
+
+\begin{definition}[McKean--Vlasov dynamics (discrete time)]
+\label{def:mckean-vlasov}
+Given a policy $\policy: \States \to \simplex(\Actions)$ and a
+population distribution $\meanfield_t \in \simplex(\States)$, the
+\emph{McKean--Vlasov equation} determines the next-step population
+distribution:
+\begin{equation}
+\label{eq:mckean-vlasov}
+  \meanfield_{t+1}(s') = \sum_{s \in \States}
+    \sum_{a \in \Actions}
+    P(s' \mid s, a, \meanfield_t)\,
+    \policy(a \mid s)\,
+    \meanfield_t(s),
+    \qquad \forall\, s' \in \States.
+\end{equation}
+Starting from an initial distribution $\meanfield_0$, repeated
+application of~\eqref{eq:mckean-vlasov} generates the
+\emph{population flow} $(\meanfield_t)_{t \geq 0}$.
+\end{definition}
+
+\begin{remark}
+\label{rem:forward-equation}
+Equation~\eqref{eq:mckean-vlasov} is the \emph{forward equation}
+of the mean-field game.  It is the discrete-time analogue of the
+Fokker--Planck (or Kolmogorov forward) equation in continuous time.
+The equation is nonlinear because the transition kernel $P$ itself
+depends on $\meanfield_t$.
+\end{remark}
+
+We verify that the McKean--Vlasov dynamics preserve the simplex.
+
+\begin{lemma}[Simplex invariance]
+\label{lem:simplex-invariance}
+If $\meanfield_t \in \simplex(\States)$ and $\policy(\cdot \mid s)
+\in \simplex(\Actions)$ for all $s$, then $\meanfield_{t+1}$ defined
+by~\eqref{eq:mckean-vlasov} satisfies $\meanfield_{t+1}
+\in \simplex(\States)$.
+\end{lemma}
+
+\begin{proof}
+Non-negativity is immediate since $P$, $\policy$, and $\meanfield_t$
+are all non-negative.  For normalization:
+\begin{align*}
+  \sum_{s' \in \States} \meanfield_{t+1}(s')
+  &= \sum_{s'} \sum_{s} \sum_{a}
+    P(s' \mid s, a, \meanfield_t)\,
+    \policy(a \mid s)\, \meanfield_t(s) \\
+  &= \sum_{s} \sum_{a} \policy(a \mid s)\, \meanfield_t(s)
+    \underbrace{\sum_{s'} P(s' \mid s, a, \meanfield_t)}_{=1} \\
+  &= \sum_{s} \meanfield_t(s)
+    \underbrace{\sum_{a} \policy(a \mid s)}_{=1}
+  = \sum_{s} \meanfield_t(s) = 1. \qedhere
+\end{align*}
+\end{proof}
+
+We define the operator that maps a policy to its induced population
+flow, which will play a central role in the equilibrium analysis.
+
+\begin{definition}[Forward operator]
+\label{def:forward-operator}
+The \emph{forward operator} $\Phi$ maps a policy $\policy$ and an
+initial distribution $\meanfield_0$ to the population flow:
+\[
+  \Phi(\policy, \meanfield_0)
+  = (\meanfield_0, \meanfield_1, \meanfield_2, \ldots)
+\]
+where $\meanfield_{t+1}$ is computed from $\meanfield_t$ and
+$\policy$ via~\eqref{eq:mckean-vlasov}.  In the stationary case,
+we seek a fixed distribution $\meanfield^*$ such that
+$\Phi(\policy, \meanfield^*) = (\meanfield^*, \meanfield^*,
+\ldots)$, i.e., $\meanfield^*$ is a \emph{stationary distribution}
+of the McKean--Vlasov dynamics under $\policy$.
+\end{definition}
+
+\begin{definition}[Backward operator]
+\label{def:backward-operator}
+The \emph{backward operator} $\Psi$ maps a population flow
+$(\meanfield_t)_{t \geq 0}$ to the optimal policy for the
+corresponding mean-field MDP:
+\[
+  \Psi((\meanfield_t)_{t \geq 0}) = \policy^*,
+\]
+where $\policy^*$ is the optimal policy for the MDP with transitions
+$P(\cdot \mid s, a, \meanfield_t)$ and rewards $R(s, a,
+\meanfield_t)$.  In the stationary case,
+$\Psi(\meanfield) = \policy^*(\cdot; \meanfield)$ solves the
+Bellman equation~\eqref{eq:bellman-mf}.
+\end{definition}
+
+The forward and backward equations form a coupled system: the
+forward equation propagates the population distribution given a
+policy (Section~5), while the backward equation computes the
+optimal policy given a population flow (Section~4).  A
+mean-field equilibrium requires solving both simultaneously.
+
+\begin{example}[Two-state McKean--Vlasov dynamics]
+\label{ex:two-state-mv}
+Let $\States = \{0, 1\}$, $\Actions = \{L, R\}$, and suppose the
+transition kernel is
+\[
+  P(1 \mid 0, R, \meanfield) = 1 - c \cdot \meanfield(1),
+  \qquad
+  P(0 \mid 1, L, \meanfield) = 1 - c \cdot \meanfield(0),
+\]
+with $c = 0.5$, and all other transitions determined by
+normalization.  Under a uniform random policy $\policy(L \mid s)
+= \policy(R \mid s) = 0.5$, starting from $\meanfield_0 = (0.5,
+0.5)$, one step of the McKean--Vlasov dynamics gives
+\begin{align*}
+  \meanfield_1(1)
+  &= \meanfield_0(0) \cdot \policy(R \mid 0)
+    \cdot P(1 \mid 0, R, \meanfield_0) \\
+  &\quad + \meanfield_0(0) \cdot \policy(L \mid 0)
+    \cdot P(1 \mid 0, L, \meanfield_0) \\
+  &\quad + \meanfield_0(1) \cdot \policy(R \mid 1)
+    \cdot P(1 \mid 1, R, \meanfield_0) \\
+  &\quad + \meanfield_0(1) \cdot \policy(L \mid 1)
+    \cdot P(1 \mid 1, L, \meanfield_0).
+\end{align*}
+With the specific transition model and $\meanfield_0(1) = 0.5$,
+this evaluates to a concrete number determined by the congestion
+parameter $c$.  The distribution $\meanfield_1(0) = 1 -
+\meanfield_1(1)$ follows by normalization.
+\end{example}
+
+We now formalize the notion of equilibrium that couples the forward
+and backward equations.
+
+
+%% ============================================================
+%% SECTION 6: MEAN-FIELD EQUILIBRIUM
+%% ============================================================
+\section{Mean-Field Equilibrium}
+\label{sec:mf-equilibrium}
+
+The central concept of mean-field game theory is the
+\emph{mean-field equilibrium} (MFE), which requires the
+population flow and the individual optimal policy to be mutually
+consistent.
+
+\begin{definition}[Mean-field equilibrium -- stationary case]
+\label{def:mfe-stationary}
+A pair $(\policy^*, \meanfield^*)$ is a \emph{stationary
+mean-field equilibrium} (MFE) if:
+\begin{enumerate}[nosep]
+  \item \textbf{Optimality:} $\policy^*$ is an optimal policy for
+    the mean-field MDP with stationary population distribution
+    $\meanfield^*$, i.e., $\policy^* = \Psi(\meanfield^*)$.
+  \item \textbf{Consistency:} $\meanfield^*$ is the stationary
+    distribution of the McKean--Vlasov dynamics
+    under $\policy^*$, i.e.,
+    \[
+      \meanfield^*(s')
+      = \sum_{s \in \States} \sum_{a \in \Actions}
+        P(s' \mid s, a, \meanfield^*)\,
+        \policy^*(a \mid s)\, \meanfield^*(s),
+        \qquad \forall\, s' \in \States.
+    \]
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Mean-field equilibrium -- general case]
+\label{def:mfe-general}
+A pair $(\policy^*, (\meanfield_t^*)_{t \geq 0})$ is a
+\emph{mean-field equilibrium} if:
+\begin{enumerate}[nosep]
+  \item $\policy^*$ is optimal for the mean-field MDP with
+    population flow $(\meanfield_t^*)_{t \geq 0}$.
+  \item $(\meanfield_t^*)_{t \geq 0}$ is the McKean--Vlasov flow
+    induced by $\policy^*$ starting from initial distribution
+    $\meanfield_0$.
+\end{enumerate}
+\end{definition}
+
+The equilibrium condition is a \emph{fixed-point condition}.  We
+make this precise by defining the combined equilibrium operator.
+
+\begin{definition}[Equilibrium operator]
+\label{def:equilibrium-operator}
+The \emph{equilibrium operator} $\Lambda: \simplex(\States)
+\to \simplex(\States)$ (in the stationary case) is defined by
+the composition
+\[
+  \Lambda(\meanfield)
+  = \Phi\!\bigl(\Psi(\meanfield),\, \meanfield\bigr),
+\]
+where $\Psi(\meanfield) = \policy^*(\cdot; \meanfield)$ is the
+optimal policy for the mean-field MDP with distribution $\meanfield$
+(backward step), and $\Phi(\policy^*, \meanfield)$ is the stationary
+distribution of the Markov chain with transition kernel
+\[
+  T(s' \mid s; \meanfield)
+  = \sum_{a \in \Actions}
+    P(s' \mid s, a, \meanfield)\, \policy^*(a \mid s; \meanfield)
+\]
+(forward step).  A stationary MFE is a fixed point of $\Lambda$:
+$\Lambda(\meanfield^*) = \meanfield^*$.
+\end{definition}
+
+\begin{keyresult}[title={Mean-Field Equilibrium as a Fixed Point}]
+A stationary mean-field equilibrium $(\policy^*, \meanfield^*)$ is
+characterized by the fixed-point equation
+\[
+  \meanfield^* = \Lambda(\meanfield^*),
+\]
+where $\Lambda = \Phi \circ \Psi$ composes the backward operator
+(solve the MDP) with the forward operator (compute the stationary
+distribution).  The existence and uniqueness of MFE reduce to
+fixed-point theory for the operator $\Lambda$ on the compact convex
+set $\simplex(\States)$.
+\end{keyresult}
+
+\begin{remark}
+\label{rem:analogy-ne}
+The MFE is the infinite-population analogue of a symmetric Nash
+equilibrium: every agent plays the same policy $\policy^*$, and no
+agent has an incentive to deviate given the population distribution
+$\meanfield^*$.  The consistency condition replaces the finite-game
+requirement that each player's strategy be a best response to the
+others' strategies.
+\end{remark}
+
+
+%% ============================================================
+%% SECTION 7: EXISTENCE AND UNIQUENESS OF MEAN-FIELD EQUILIBRIA
+%% ============================================================
+\section{Existence and Uniqueness of Mean-Field Equilibria}
+\label{sec:existence-uniqueness}
+
+We now establish the existence of MFE via topological fixed-point
+arguments and provide conditions for uniqueness via contraction
+mappings.
+
+\begin{assumption}[Regularity conditions]
+\label{ass:regularity}
+Throughout this section we assume:
+\begin{enumerate}[nosep]
+  \item $\States$ and $\Actions$ are finite sets.
+  \item The transition kernel $P(s' \mid s, a, \meanfield)$ is
+    continuous in $\meanfield \in \simplex(\States)$ for every
+    fixed $(s, s', a)$.
+  \item The reward function $R(s, a, \meanfield)$ is continuous
+    in $\meanfield$ for every fixed $(s, a)$.
+  \item The Markov chain with transition kernel
+    $T(s' \mid s; \meanfield) = \sum_a P(s' \mid s, a, \meanfield)
+    \, \policy^*(a \mid s; \meanfield)$ is ergodic (irreducible
+    and aperiodic) for every $\meanfield \in \simplex(\States)$.
+\end{enumerate}
+\end{assumption}
+
+The ergodicity assumption ensures that the forward operator
+$\Phi(\policy, \cdot)$ has a unique stationary distribution for
+each policy, making $\Lambda$ well-defined as a map on
+$\simplex(\States)$.
+
+\begin{lemma}[Continuity of the backward operator]
+\label{lem:backward-continuity}
+Under Assumption~\ref{ass:regularity}, the optimal value function
+$V^*(s; \meanfield)$ is continuous in $\meanfield$ for each $s$,
+and the optimal policy correspondence $\meanfield \mapsto
+\policy^*(\cdot; \meanfield)$ admits a continuous selection.
+\end{lemma}
+
+\begin{proof}
+For fixed $\meanfield$, the Bellman operator $\Bellman_\meanfield$
+on $\R^{|\States|}$ is defined by
+\[
+  (\Bellman_\meanfield V)(s) = \max_{a \in \Actions}\!\left[
+    R(s, a, \meanfield) + \discount \sum_{s'}
+    P(s' \mid s, a, \meanfield)\, V(s')
+  \right].
+\]
+Since $\Bellman_\meanfield$ is a $\discount$-contraction on
+$(\R^{|\States|}, \|\cdot\|_\infty)$, its unique fixed point
+$V^*(\cdot; \meanfield)$ depends continuously on $\meanfield$ by
+the following argument.  For any $\meanfield, \meanfield' \in
+\simplex(\States)$,
+\begin{align*}
+  \|V^*(\cdot; \meanfield) - V^*(\cdot; \meanfield')\|_\infty
+  &= \|\Bellman_\meanfield V^*(\cdot; \meanfield)
+    - \Bellman_{\meanfield'} V^*(\cdot; \meanfield')\|_\infty \\
+  &\leq \|\Bellman_\meanfield V^*(\cdot; \meanfield)
+    - \Bellman_\meanfield V^*(\cdot; \meanfield')\|_\infty \\
+  &\quad + \|\Bellman_\meanfield V^*(\cdot; \meanfield')
+    - \Bellman_{\meanfield'} V^*(\cdot; \meanfield')\|_\infty \\
+  &\leq \discount \|V^*(\cdot; \meanfield)
+    - V^*(\cdot; \meanfield')\|_\infty
+    + \epsilon(\meanfield, \meanfield'),
+\end{align*}
+where $\epsilon(\meanfield, \meanfield') = \|\Bellman_\meanfield
+V^*(\cdot; \meanfield') - \Bellman_{\meanfield'} V^*(\cdot;
+\meanfield')\|_\infty \to 0$ as $\meanfield' \to \meanfield$ by
+continuity of $R$ and $P$ in $\meanfield$.  Rearranging,
+$\|V^*(\cdot; \meanfield) - V^*(\cdot; \meanfield')\|_\infty
+\leq \epsilon(\meanfield, \meanfield') / (1 - \discount) \to 0$.
+
+For the policy, when the optimal action is unique at every state
+(which holds generically), $\policy^*(a \mid s; \meanfield)$ is
+continuous in $\meanfield$.  In general, one can select a
+measurable (in fact continuous) optimal policy by Berge's maximum
+theorem, since the objective $Q^*(s, a; \meanfield) = R(s, a,
+\meanfield) + \discount \sum_{s'} P(s' \mid s, a, \meanfield)
+V^*(s'; \meanfield)$ is continuous in $\meanfield$ and the
+constraint set $\Actions$ is finite (hence trivially continuous
+as a correspondence).
+\end{proof}
+
+\begin{lemma}[Continuity of the forward operator]
+\label{lem:forward-continuity}
+Under Assumption~\ref{ass:regularity}, the stationary distribution
+of the Markov chain with transition kernel $T(\cdot \mid \cdot;
+\meanfield)$ depends continuously on $\meanfield$.
+\end{lemma}
+
+\begin{proof}
+By the ergodicity assumption, for each $\meanfield$ the chain has a
+unique stationary distribution $\nu(\meanfield) \in \simplex(\States)$
+satisfying $\nu(\meanfield)^\top T(\meanfield) = \nu(\meanfield)^\top$,
+where $T(\meanfield)$ is the $|\States| \times |\States|$ transition
+matrix.  The entries of $T(\meanfield)$ are continuous in $\meanfield$
+because $P$ and $\policy^*$ are continuous in $\meanfield$ (the
+latter by Lemma~\ref{lem:backward-continuity}).
+
+The stationary distribution is the left eigenvector of
+$T(\meanfield)$ corresponding to eigenvalue~$1$, normalized to sum
+to~$1$.  Since $T(\meanfield)$ is ergodic, eigenvalue~$1$ is simple,
+and by standard perturbation theory for simple eigenvalues of
+matrices, the corresponding eigenvector depends continuously on
+the matrix entries.  Hence $\nu(\meanfield)$ is continuous in
+$\meanfield$.
+\end{proof}
+
+\begin{theorem}[Existence of MFE via Schauder]
+\label{thm:existence}
+Under Assumption~\ref{ass:regularity}, a stationary mean-field
+equilibrium exists.
+\end{theorem}
+
+\begin{proof}
+The equilibrium operator $\Lambda: \simplex(\States) \to
+\simplex(\States)$ is defined by $\Lambda(\meanfield) =
+\Phi(\Psi(\meanfield), \meanfield)$, which maps $\meanfield$ to
+the stationary distribution of the Markov chain induced by the
+optimal policy $\Psi(\meanfield)$ and population distribution
+$\meanfield$.
+
+We verify the hypotheses of Schauder's fixed-point theorem
+(Lesson~16, Theorem on fixed points for continuous maps on
+compact convex sets):
+
+\begin{enumerate}
+  \item \textbf{Domain:} $\simplex(\States) \subset \R^{|\States|}$
+    is compact and convex.
+
+  \item \textbf{Self-mapping:} By Lemma~\ref{lem:simplex-invariance}
+    and the uniqueness of stationary distributions under ergodicity,
+    $\Lambda(\meanfield) \in \simplex(\States)$ for every $\meanfield
+    \in \simplex(\States)$.
+
+  \item \textbf{Continuity:} $\Lambda = \Phi \circ \Psi$ is the
+    composition of two continuous maps.  The backward operator $\Psi$
+    is continuous by Lemma~\ref{lem:backward-continuity}, and the
+    forward operator $\Phi$ (mapping policy to stationary
+    distribution) is continuous by Lemma~\ref{lem:forward-continuity}.
+\end{enumerate}
+
+Since $\Lambda$ is a continuous self-map of the compact convex set
+$\simplex(\States) \subset \R^{|\States|}$, Schauder's fixed-point
+theorem guarantees the existence of $\meanfield^* \in
+\simplex(\States)$ with $\Lambda(\meanfield^*) = \meanfield^*$.
+Setting $\policy^* = \Psi(\meanfield^*)$, the pair $(\policy^*,
+\meanfield^*)$ is a stationary MFE by
+Definition~\ref{def:mfe-stationary}.
+\end{proof}
+
+\begin{keyresult}[title={Existence of Mean-Field Equilibrium}]
+Under continuity and ergodicity assumptions
+(Assumption~\ref{ass:regularity}), every discrete-time mean-field
+game with finite state and action spaces admits at least one
+stationary mean-field equilibrium.  The proof relies on Schauder's
+fixed-point theorem applied to the equilibrium operator
+$\Lambda: \simplex(\States) \to \simplex(\States)$.
+\end{keyresult}
+
+We now turn to uniqueness, which requires stronger conditions.
+
+\begin{assumption}[Lipschitz conditions]
+\label{ass:lipschitz}
+There exist constants $L_P, L_R > 0$ such that for all
+$s, s' \in \States$, $a \in \Actions$, and $\meanfield, \meanfield'
+\in \simplex(\States)$:
+\begin{align*}
+  |P(s' \mid s, a, \meanfield) - P(s' \mid s, a, \meanfield')|
+  &\leq L_P \|\meanfield - \meanfield'\|_1, \\
+  |R(s, a, \meanfield) - R(s, a, \meanfield')|
+  &\leq L_R \|\meanfield - \meanfield'\|_1.
+\end{align*}
+\end{assumption}
+
+\begin{theorem}[Uniqueness via contraction]
+\label{thm:uniqueness}
+Under Assumptions~\ref{ass:regularity}--\ref{ass:lipschitz},
+suppose the discount factor satisfies
+\begin{equation}
+\label{eq:uniqueness-condition}
+  \discount \cdot \left(
+    L_P \cdot \frac{R_{\max}}{(1-\discount)^2}
+    + \frac{L_P + L_R}{1-\discount}
+  \right) \cdot C_T < 1,
+\end{equation}
+where $R_{\max} = \max_{s,a,\meanfield} |R(s,a,\meanfield)|$ and
+$C_T$ is the sensitivity constant of the stationary distribution
+with respect to transition matrix perturbations.  Then $\Lambda$
+is a contraction on $(\simplex(\States), \|\cdot\|_1)$, and
+the MFE is unique.
+\end{theorem}
+
+\begin{proof}
+We bound the Lipschitz constant of $\Lambda$ by bounding the
+sensitivity of each component.
+
+\textbf{Step 1: Sensitivity of the value function.}
+From the proof of Lemma~\ref{lem:backward-continuity}, for any
+$\meanfield, \meanfield'$:
+\[
+  \|V^*(\cdot; \meanfield) - V^*(\cdot; \meanfield')\|_\infty
+  \leq \frac{1}{1-\discount}\left(
+    L_R + \frac{\discount \, L_P \, R_{\max}}{1-\discount}
+  \right) \|\meanfield - \meanfield'\|_1.
+\]
+This follows by bounding $\epsilon(\meanfield, \meanfield')$ in
+terms of the Lipschitz constants.  Specifically,
+\begin{align*}
+  |(\Bellman_\meanfield V)(s) - (\Bellman_{\meanfield'} V)(s)|
+  &\leq \max_a \bigl[|R(s,a,\meanfield) - R(s,a,\meanfield')| \\
+  &\quad + \discount |P(\cdot|s,a,\meanfield) - P(\cdot|s,a,
+    \meanfield')| \cdot \|V\|_\infty \bigr] \\
+  &\leq L_R \|\meanfield-\meanfield'\|_1
+    + \discount\, L_P \|V\|_\infty \|\meanfield-\meanfield'\|_1.
+\end{align*}
+Setting $V = V^*(\cdot; \meanfield')$ with $\|V^*(\cdot;
+\meanfield')\|_\infty \leq R_{\max}/(1-\discount)$ gives the bound.
+
+\textbf{Step 2: Sensitivity of the optimal policy.}
+The Q-function $Q^*(s,a;\meanfield)$ inherits the Lipschitz
+property from $V^*$.  When the optimal action is unique, the
+policy is locally constant and hence Lipschitz with constant~$0$.
+In general, by considering soft-max policies (or policies that
+break ties consistently), the policy varies Lipschitz-continuously
+in $\meanfield$ with a constant controlled by the value function
+sensitivity.
+
+\textbf{Step 3: Sensitivity of the stationary distribution.}
+By standard perturbation theory for ergodic Markov chains
+\citep[Chapter~3]{bensoussan2013}, the stationary distribution
+$\nu$ of a transition matrix $T$ satisfies
+\[
+  \|\nu(T) - \nu(T')\|_1 \leq C_T \|T - T'\|_\infty,
+\]
+where $C_T$ depends on the spectral gap of the chain.  The
+perturbation $\|T(\meanfield) - T(\meanfield')\|_\infty$ is
+bounded by the combined sensitivity of $P$ and $\policy^*$ to
+$\meanfield$.
+
+\textbf{Step 4: Composing the bounds.}
+Combining Steps 1--3:
+\[
+  \|\Lambda(\meanfield) - \Lambda(\meanfield')\|_1
+  \leq \underbrace{\discount \cdot \left(
+    L_P \cdot \frac{R_{\max}}{(1-\discount)^2}
+    + \frac{L_P + L_R}{1-\discount}
+  \right) \cdot C_T}_{=:\, \kappa}
+  \|\meanfield - \meanfield'\|_1.
+\]
+When $\kappa < 1$ (condition~\eqref{eq:uniqueness-condition}),
+$\Lambda$ is a contraction.  By the Banach fixed-point theorem,
+the fixed point is unique.
+\end{proof}
+
+\begin{warning}[title={Non-Uniqueness of Mean-Field Equilibria}]
+Without the contraction condition~\eqref{eq:uniqueness-condition},
+multiple MFEs can exist.  This is analogous to the multiplicity
+of Nash equilibria in finite games.  In particular, when the
+discount factor is large (agents are patient) or the
+mean-field dependence is strong ($L_P, L_R$ are large), the
+equilibrium operator $\Lambda$ may have multiple fixed points.
+Example~\ref{ex:multiple-mfe} below illustrates this phenomenon.
+\end{warning}
+
+\begin{example}[Congestion game with explicit MFE]
+\label{ex:congestion-mfe}
+Consider $\States = \{0, 1\}$ (two routes), $\Actions = \{0, 1\}$
+(stay or switch), and the congestion-dependent reward
+$R(s, a, \meanfield) = 1 - \meanfield(s)$ (higher reward when
+the current route is less congested).  Transitions:
+$P(1-s \mid s, 1, \meanfield) = 1$ (switching always succeeds) and
+$P(s \mid s, 0, \meanfield) = 1$ (staying is deterministic).
+
+With discount $\discount$ close to~$0$, agents are myopic and the
+MFE approaches the static Nash equilibrium.  If agents are
+symmetric with initial $\meanfield_0 = (0.5, 0.5)$, the unique
+stationary MFE is $\meanfield^* = (0.5, 0.5)$ with the optimal
+policy ``stay'' at each state (since switching does not improve
+the reward when both routes are equally congested).  We verify:
+\begin{itemize}[nosep]
+  \item \textbf{Optimality:} With $\meanfield^* = (0.5, 0.5)$,
+    the reward for staying is $1 - 0.5 = 0.5$ and the reward for
+    switching is also $1 - 0.5 = 0.5$ (since both routes have
+    density $0.5$).  Any policy is optimal, including ``stay.''
+  \item \textbf{Consistency:} Under ``stay,'' $\meanfield_{t+1}
+    = \meanfield_t = (0.5, 0.5)$, confirming stationarity.
+\end{itemize}
+\end{example}
+
+
+%% ============================================================
+%% SECTION 8: MEAN-FIELD Q-LEARNING
+%% ============================================================
+\section{Mean-Field Q-Learning}
+\label{sec:mf-q-learning}
+
+The fixed-point characterization of MFE suggests a natural
+computational approach: alternate between solving the backward
+equation (optimizing the agent's policy given the population) and
+the forward equation (updating the population given the policy).
+This is the basis of \emph{mean-field Q-learning}
+\citep{yang2018}.
+
+\begin{definition}[Mean-field Q-function]
+\label{def:mf-q}
+The \emph{mean-field Q-function} is defined as
+\begin{equation}
+\label{eq:mf-q}
+  Q(s, a, \meanfield) = R(s, a, \meanfield)
+  + \discount \sum_{s' \in \States}
+    P(s' \mid s, a, \meanfield)\, V(s', \meanfield'),
+\end{equation}
+where $V(s, \meanfield) = \max_{a \in \Actions} Q(s, a, \meanfield)$
+and $\meanfield'$ is the next-step population distribution consistent
+with the current policy derived from $Q$.
+\end{definition}
+
+\begin{definition}[Mean-field Q-learning algorithm]
+\label{def:mf-q-algorithm}
+The \emph{mean-field Q-learning} algorithm alternates two steps at
+each iteration $k = 0, 1, 2, \ldots$:
+
+\textbf{Step 1 (Q-update):} With the current population distribution
+$\meanfield_k$ held fixed, perform a Q-learning update:
+\begin{equation}
+\label{eq:mf-q-update}
+  Q_{k+1}(s, a, \meanfield_k)
+  = (1 - \alpha_k)\, Q_k(s, a, \meanfield_k)
+  + \alpha_k \!\left[R(s, a, \meanfield_k)
+    + \discount \max_{a'} Q_k(s', a', \meanfield_k)\right],
+\end{equation}
+where $\alpha_k \in (0,1)$ is the learning rate and $s' \sim
+P(\cdot \mid s, a, \meanfield_k)$.
+
+\textbf{Step 2 (Mean-field update):} Update the population
+distribution using a Boltzmann policy derived from the current
+Q-function:
+\begin{equation}
+\label{eq:mf-boltzmann}
+  \meanfield_{k+1}(s') = \sum_{s \in \States}
+    \sum_{a \in \Actions}
+    P(s' \mid s, a, \meanfield_k)\,
+    \sigma_\beta(a \mid s, \meanfield_k)\,
+    \meanfield_k(s),
+\end{equation}
+where $\sigma_\beta(a \mid s, \meanfield) =
+\frac{\exp(\beta\, Q_k(s, a, \meanfield))}
+{\sum_{a'} \exp(\beta\, Q_k(s, a', \meanfield))}$
+is the Boltzmann (soft-max) policy with inverse temperature
+$\beta > 0$.
+\end{definition}
+
+\begin{proposition}[Fixed-point interpretation]
+\label{prop:fp-interpretation}
+The mean-field Q-learning algorithm is a form of fixed-point
+iteration on the equilibrium operator $\Lambda$.  Specifically:
+\begin{itemize}[nosep]
+  \item Step~1 approximates the backward operator $\Psi$: given
+    $\meanfield_k$, it computes the optimal Q-function (and hence
+    the optimal policy) for the mean-field MDP with distribution
+    $\meanfield_k$.
+  \item Step~2 approximates the forward operator $\Phi$: given the
+    policy $\sigma_\beta$ derived from $Q_k$, it advances the
+    population distribution by one step of the McKean--Vlasov
+    dynamics.
+\end{itemize}
+In the limit $\beta \to \infty$, the Boltzmann policy converges
+to the greedy policy, and the algorithm reduces to exact
+fixed-point iteration on $\Lambda$.
+\end{proposition}
+
+\begin{proof}
+At convergence ($Q_k \to Q^*$, $\meanfield_k \to \meanfield^*$),
+Step~1 yields the fixed point of the Bellman operator for the
+mean-field MDP with distribution $\meanfield^*$, so $Q^*$ encodes
+the optimal policy $\policy^* = \Psi(\meanfield^*)$.  Step~2 with
+$\beta \to \infty$ reduces to the McKean--Vlasov equation under
+$\policy^*$, so $\meanfield^*$ is the stationary distribution of
+the forward dynamics under $\policy^*$, i.e.,
+$\meanfield^* = \Phi(\policy^*, \meanfield^*)$.  Together,
+$\meanfield^* = \Lambda(\meanfield^*)$, which is the MFE
+fixed-point condition.
+\end{proof}
+
+\begin{proposition}[Convergence of mean-field Q-learning]
+\label{prop:mf-q-convergence}
+Under Assumptions~\ref{ass:regularity}--\ref{ass:lipschitz} and the
+contraction condition~\eqref{eq:uniqueness-condition}, suppose the
+learning rates satisfy the Robbins--Monro conditions
+$\sum_k \alpha_k = \infty$, $\sum_k \alpha_k^2 < \infty$, and
+the inverse temperature $\beta_k \to \infty$ sufficiently slowly.
+Then the iterates $(Q_k, \meanfield_k)$ of the mean-field
+Q-learning algorithm converge to the unique MFE $(Q^*, \meanfield^*)$
+almost surely.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+The convergence analysis proceeds in two stages following the
+two-timescale stochastic approximation framework
+(Lesson~19, SA theory).
+
+\textbf{Fast timescale (Q-update):} For fixed $\meanfield_k$,
+Step~1 is standard tabular Q-learning on a finite MDP.  Under the
+Robbins--Monro conditions on $\alpha_k$ and appropriate
+exploration, $Q_k(\cdot, \cdot, \meanfield_k) \to Q^*(\cdot,
+\cdot, \meanfield_k)$ by the convergence theorem for Q-learning
+(Lesson~50).
+
+\textbf{Slow timescale (mean-field update):} Viewing $Q_k$ as
+approximately converged (the fast timescale has equilibrated),
+Step~2 becomes deterministic iteration of $\Lambda$
+(with a vanishing Boltzmann smoothing error as $\beta_k \to
+\infty$).  Under the contraction
+condition~\eqref{eq:uniqueness-condition}, $\Lambda$ is a
+contraction, so $\meanfield_k \to \meanfield^*$.
+
+The two-timescale analysis of \citet[Chapter~6]{bensoussan2013}
+formalizes the separation of timescales and establishes the almost
+sure convergence of the joint iterates.
+\end{proof}
+
+\begin{rlconnection}[title={From Theory to Practice in Mean-Field MARL}]
+\begin{itemize}[nosep]
+  \item \textbf{Scalability.}  Mean-field Q-learning scales to
+    hundreds of agents because each agent maintains a Q-function
+    of size $|\States| \times |\Actions|$ rather than
+    $|\States|^N \times |\Actions|^N$.
+  \item \textbf{Function approximation.}  In practice, $Q(s, a,
+    \meanfield)$ is parameterized by a neural network that takes
+    state, action, and a representation of $\meanfield$ as inputs,
+    enabling generalization across population distributions.
+  \item \textbf{Decentralized execution.}  Once the MFE policy
+    $\policy^*$ is learned, each agent can execute independently
+    using only its local state, since the policy does not depend
+    on other agents' identities.
+\end{itemize}
+\end{rlconnection}
+
+\begin{example}[Mean-field Q-learning on the congestion game]
+\label{ex:mf-q-congestion}
+Returning to Example~\ref{ex:congestion-mfe} with $\States = \{0,1\}$,
+$\Actions = \{0,1\}$, $R(s,a,\meanfield) = 1 - \meanfield(s)$,
+and deterministic transitions.  Initialize $Q_0(s,a,\meanfield_0)
+= 0$ and $\meanfield_0 = (0.6, 0.4)$.  At iteration $k=0$:
+
+\textbf{Step 1:} The immediate reward under $\meanfield_0 =
+(0.6, 0.4)$ is $R(0, \cdot, \meanfield_0) = 1 - 0.6 = 0.4$ and
+$R(1, \cdot, \meanfield_0) = 1 - 0.4 = 0.6$.  With $\alpha_0 = 1$
+and $Q_0 = 0$, one full update gives $Q_1(s,a,\meanfield_0) =
+R(s,a,\meanfield_0)$.
+
+\textbf{Step 2:} With $\beta = 5$, the Boltzmann policy at state~$0$
+favors switching (since $R(0, 1, \meanfield_0) = 0.6 > 0.4 =
+R(0, 0, \meanfield_0)$, and after switching the agent moves to
+state~$1$).  The population shifts toward $\meanfield_1$ with more
+mass on state~$1$.
+
+Subsequent iterations continue to equalize the population across
+states, converging to $\meanfield^* = (0.5, 0.5)$.
+\end{example}
+
+
+%% ============================================================
+%% SECTION 9: CONNECTION TO N-PLAYER GAMES
+%% ============================================================
+\section{Connection to $N$-Player Games}
+\label{sec:n-player-connection}
+
+The mean-field game is useful only insofar as its equilibria
+approximate the behavior of large but finite populations.  The
+following theorem makes this connection precise: an MFE yields an
+approximate Nash equilibrium for the $N$-player game with
+approximation error $O(1/\sqrt{N})$.
+
+\begin{definition}[$\epsilon$-Nash equilibrium]
+\label{def:eps-ne}
+A symmetric policy profile $(\policy, \ldots, \policy)$ is an
+\emph{$\epsilon$-Nash equilibrium} of the $N$-player game
+$\mathcal{G}^N$ if for every agent $i$ and every alternative
+policy $\tilde{\policy}$:
+\[
+  V_i^{(\tilde{\policy}, \policymi)}(s_i)
+  \leq V_i^{(\policy, \ldots, \policy)}(s_i) + \epsilon,
+  \qquad \forall\, s_i \in \States,
+\]
+where $V_i^{(\cdot)}$ is agent $i$'s discounted value under the
+given policy profile.
+\end{definition}
+
+\begin{theorem}[$N$-player approximation by MFE]
+\label{thm:n-player-approx}
+Let $(\policy^*, \meanfield^*)$ be a stationary MFE for the
+mean-field game $\mathcal{M} = (\States, \Actions, P, R,
+\discount)$, and let $\mathcal{G}^N$ be the corresponding
+$N$-player symmetric stochastic game
+(Definition~\ref{def:symmetric-game}).  Under
+Assumption~\ref{ass:lipschitz}, if agents' initial states are
+drawn i.i.d.\ from $\meanfield^*$, then the symmetric profile
+$(\policy^*, \ldots, \policy^*)$ is an $\epsilon_N$-Nash
+equilibrium of $\mathcal{G}^N$ with
+\[
+  \epsilon_N = \frac{C}{\sqrt{N}},
+\]
+where $C = \frac{2(L_R + \discount\, L_P\, R_{\max} /
+(1-\discount))}{(1-\discount)} \cdot
+|\States|^{1/2}$ depends on the Lipschitz constants and the
+problem parameters but not on $N$.
+\end{theorem}
+
+\begin{proof}
+Fix agent $i$ and suppose all other agents $j \neq i$ use $\policy^*$.
+Since the initial states are drawn i.i.d.\ from $\meanfield^*$ and
+all agents use $\policy^*$, the empirical measure $\meanfield^{N,-i}_t
+= \frac{1}{N-1}\sum_{j \neq i} \delta_{s_j(t)}$ of other agents'
+states at time $t$ deviates from the mean-field flow $\meanfield^*$
+(which is stationary under $\policy^*$).
+
+\textbf{Step 1: Concentration bound.}  At time $t$, conditional on
+the history, the states $s_j(t)$ for $j \neq i$ are not independent
+(they depend on the shared empirical measure at previous times).
+However, a propagation-of-chaos argument
+\citep[Chapter~4]{carmona2018i} shows that the dependence weakens
+as $N \to \infty$, and the empirical measure concentrates:
+\begin{equation}
+\label{eq:empirical-concentration-t}
+  \E\!\left[\|\meanfield^{N,-i}_t - \meanfield^*\|_1\right]
+  \leq \frac{C_1 |\States|^{1/2}}{\sqrt{N}},
+\end{equation}
+where $C_1$ depends on $L_P$ and $T$ but not on $N$.  For the
+stationary case, the bound holds uniformly over all $t$.
+
+\textbf{Step 2: Value perturbation.}  Agent $i$'s value in the
+$N$-player game under $(\policy^*, \ldots, \policy^*)$ differs from
+the mean-field value $V^{\policy^*}(s_i; \meanfield^*)$ by
+\begin{align*}
+  &\left|V_i^{(\policy^*, \ldots, \policy^*)}(s_i)
+    - V^{\policy^*}(s_i; \meanfield^*)\right| \\
+  &\leq \E\!\left[\sum_{t=0}^{\infty} \discount^t
+    \left|R(s_t, a_t, \meanfield^{N,-i}_t)
+    - R(s_t, a_t, \meanfield^*)\right|\right] \\
+  &\quad + \E\!\left[\sum_{t=0}^{\infty} \discount^t
+    \text{(transition perturbation terms)}\right] \\
+  &\leq \frac{1}{1-\discount}\left(L_R
+    + \frac{\discount\, L_P\, R_{\max}}{1-\discount}\right)
+    \cdot \frac{C_1 |\States|^{1/2}}{\sqrt{N}}.
+\end{align*}
+The reward perturbation uses Assumption~\ref{ass:lipschitz} and
+the concentration bound~\eqref{eq:empirical-concentration-t}.
+The transition perturbation propagates similarly through the
+Bellman recursion.
+
+\textbf{Step 3: Deviation bound.}  Now suppose agent $i$ deviates
+to an arbitrary policy $\tilde{\policy}$.  Since agent $i$ is a
+single agent among $N$, its deviation changes the empirical measure
+$\meanfield^{N,-i}$ by at most $O(1/N)$, which is dominated by
+the $O(1/\sqrt{N})$ fluctuation.  Agent $i$'s value under
+$\tilde{\policy}$ in the $N$-player game is close to its value
+under $\tilde{\policy}$ in the mean-field MDP with distribution
+$\meanfield^*$.  But $\policy^*$ is optimal for the mean-field MDP,
+so
+\[
+  V^{\tilde{\policy}}(s_i; \meanfield^*)
+  \leq V^{\policy^*}(s_i; \meanfield^*).
+\]
+Combining with Step~2 applied to both $\policy^*$ and
+$\tilde{\policy}$:
+\[
+  V_i^{(\tilde{\policy}, \policymi^*)}(s_i)
+  \leq V_i^{(\policy^*, \ldots, \policy^*)}(s_i)
+  + \frac{2C_1(L_R + \discount L_P R_{\max}/(1-\discount))}
+    {(1-\discount)\sqrt{N}}.
+\]
+Setting $C = 2C_1(L_R + \discount L_P R_{\max}/(1-\discount))
+/(1-\discount) \cdot |\States|^{1/2}$ gives $\epsilon_N = C/\sqrt{N}$.
+\end{proof}
+
+\begin{keyresult}[title={Quality of the Mean-Field Approximation}]
+A mean-field equilibrium $(\policy^*, \meanfield^*)$ provides an
+$O(1/\sqrt{N})$-Nash equilibrium for the corresponding $N$-player
+symmetric stochastic game.  This justifies the mean-field approach
+for large populations: the approximation improves as the number of
+agents increases, and the computational cost is independent of $N$.
+\end{keyresult}
+
+\begin{remark}
+\label{rem:rate-tightness}
+The $O(1/\sqrt{N})$ rate is generally tight.  It matches the
+central limit theorem rate for fluctuations of the empirical
+measure around its mean.  For certain structured problems (e.g.,
+linear-quadratic MFGs), the rate can be improved to $O(1/N)$
+using more refined concentration arguments
+\citep[Chapter~5]{carmona2018i}.
+\end{remark}
+
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[McKean--Vlasov dynamics for a two-state game]
+\textnormal{(\(*\))} \\
+Consider the mean-field game with $\States = \{0,1\}$,
+$\Actions = \{L, R\}$, transition kernel
+\[
+  P(1 \mid 0, R, \meanfield) = 0.8 - 0.3\,\meanfield(1),
+  \qquad
+  P(0 \mid 1, L, \meanfield) = 0.7 - 0.2\,\meanfield(0),
+\]
+and $P(s \mid s, a, \meanfield) = 1 - P(1-s \mid s, a, \meanfield)$
+for all other cases.  Starting from $\meanfield_0 = (0.4, 0.6)$ and
+the policy $\policy(R \mid 0) = 0.7$, $\policy(L \mid 1) = 0.6$,
+compute $\meanfield_1$ and $\meanfield_2$ using the McKean--Vlasov
+equation~\eqref{eq:mckean-vlasov}.
+\end{exercise}
+
+\begin{exercise}[Verifying a mean-field equilibrium]
+\textnormal{(\(*\))} \\
+Consider the congestion game from Example~\ref{ex:congestion-mfe}
+with $R(s, a, \meanfield) = 1 - \meanfield(s)$, deterministic
+transitions (stay or switch), and $\discount = 0.9$.  Verify that
+$(\policy^*, \meanfield^*) = (\text{``stay''}, (0.5, 0.5))$ is
+an MFE by checking both the optimality and consistency conditions
+of Definition~\ref{def:mfe-stationary}.  Is this the unique MFE?
+\end{exercise}
+
+\begin{exercise}[Schauder existence for finite-horizon MFG]
+\textnormal{(\(**\))} \\
+Consider a finite-horizon mean-field game over $T$ periods with
+finite $\States$ and $\Actions$.  Define the equilibrium operator
+$\Lambda_T: \simplex(\States)^T \to \simplex(\States)^T$ that maps
+a population flow $(\meanfield_0, \ldots, \meanfield_{T-1})$ to the
+flow induced by backward induction (compute optimal policies via
+dynamic programming) followed by forward propagation (McKean--Vlasov
+dynamics).  Under continuity assumptions on $P$ and $R$, prove that
+$\Lambda_T$ has a fixed point.
+
+\textit{Hint:} $\simplex(\States)^T \subset \R^{|\States| \cdot T}$
+is compact and convex.  Verify that $\Lambda_T$ is continuous
+(use the continuity of finite-horizon dynamic programming in the
+reward and transition parameters) and apply Brouwer's fixed-point
+theorem.
+\end{exercise}
+
+\begin{exercise}[Deriving the mean-field Q-learning update]
+\textnormal{(\(**\))} \\
+Starting from the mean-field Bellman equation
+\[
+  Q^*(s, a, \meanfield) = R(s,a,\meanfield) + \discount
+  \sum_{s'} P(s' \mid s, a, \meanfield) \max_{a'} Q^*(s', a',
+  \meanfield'),
+\]
+derive the stochastic approximation update~\eqref{eq:mf-q-update}
+by replacing the expected next-state value with a sample.  State
+the Robbins--Monro conditions on $(\alpha_k)$ that guarantee
+convergence for fixed $\meanfield$, and explain why the Boltzmann
+mean-field update~\eqref{eq:mf-boltzmann} is a natural companion
+step.
+\end{exercise}
+
+\begin{exercise}[Approximation bound for finite populations]
+\textnormal{(\(***\))} \\
+Let $(\policy^*, \meanfield^*)$ be a stationary MFE.  Suppose
+$N$ agents each use $\policy^*$ with initial states drawn i.i.d.\
+from $\meanfield^*$.  Prove that for any single agent $i$ and any
+deviation policy $\tilde{\policy}$:
+\[
+  V_i^{(\tilde{\policy}, \policymi^*)}(s_i)
+  - V_i^{(\policy^*, \ldots, \policy^*)}(s_i)
+  \leq \frac{C}{\sqrt{N}}
+\]
+for a constant $C$ independent of $N$.  You may assume the
+Lipschitz conditions of Assumption~\ref{ass:lipschitz} and the
+concentration bound~\eqref{eq:empirical-concentration-t}.
+
+\textit{Hint:} Bound the value difference by decomposing into (i)
+the gap between the $N$-player value and the mean-field value for
+both $\policy^*$ and $\tilde{\policy}$, and (ii) the optimality of
+$\policy^*$ in the mean-field MDP.
+\end{exercise}
+
+\begin{exercise}[Constructing an MFG with multiple equilibria]
+\textnormal{(\(***\))} \\
+Construct a mean-field game with $\States = \{0, 1\}$, $\Actions =
+\{0, 1\}$, and $\discount = 0.95$ that admits at least two distinct
+stationary MFEs.  Specify $P(s' \mid s, a, \meanfield)$ and
+$R(s, a, \meanfield)$ explicitly.  Verify each MFE by checking both
+optimality and consistency.
+
+\textit{Hint:} Use a reward function with a coordination component,
+e.g., $R(s, a, \meanfield) = s \cdot \meanfield(1) + (1-s) \cdot
+\meanfield(0)$ (agents prefer to be in the majority), to create a
+bistable system.
+\end{exercise}
+
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A \emph{symmetric $N$-player stochastic game} is one where
+    agents are exchangeable and each agent's transitions and rewards
+    depend on the others only through the empirical state
+    distribution $\meanfield^N = \frac{1}{N}\sum_i \delta_{s_i}$.
+
+  \item As $N \to \infty$, the empirical measure concentrates
+    around a deterministic population distribution $\meanfield$,
+    reducing the $N$-player game to a \emph{mean-field game} where
+    each agent solves a single-agent MDP parameterized by
+    $\meanfield$.
+
+  \item The \emph{McKean--Vlasov equation} is the forward equation
+    governing the evolution of $\meanfield_t$ under a given policy:
+    $\meanfield_{t+1}(s') = \sum_{s,a} P(s'|s,a,\meanfield_t)\,
+    \policy(a|s)\, \meanfield_t(s)$.
+
+  \item A \emph{mean-field equilibrium} (MFE) is a pair $(\policy^*,
+    \meanfield^*)$ where $\policy^*$ is optimal for the mean-field
+    MDP with distribution $\meanfield^*$, and $\meanfield^*$ is the
+    stationary distribution of the McKean--Vlasov dynamics under
+    $\policy^*$.
+
+  \item The MFE is characterized as a fixed point of the equilibrium
+    operator $\Lambda = \Phi \circ \Psi$, composing the backward
+    operator (solve MDP) with the forward operator (compute
+    stationary distribution).
+
+  \item \emph{Existence} of MFE follows from Schauder's fixed-point
+    theorem: $\Lambda$ is a continuous self-map of the compact
+    convex set $\simplex(\States)$.
+
+  \item \emph{Uniqueness} holds when the discount factor is small
+    enough and the mean-field coupling is weak enough to make
+    $\Lambda$ a contraction.
+
+  \item \emph{Mean-field Q-learning} alternates between Q-learning
+    (backward step) and McKean--Vlasov updates (forward step),
+    implementing fixed-point iteration on $\Lambda$ with convergence
+    guaranteed under contraction conditions.
+
+  \item An MFE provides an $O(1/\sqrt{N})$-Nash equilibrium for the
+    $N$-player game, justifying the mean-field approximation for
+    large populations.
+
+  \item The computational cost of solving the mean-field game is
+    \emph{independent of $N$}, making it the only tractable approach
+    for very large populations.
+\end{itemize}
+
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item \textbf{Continuous-time formulation.}
+    In continuous time, the McKean--Vlasov equation becomes the
+    Fokker--Planck PDE and the backward equation becomes the
+    Hamilton--Jacobi--Bellman PDE.  The coupled HJB-FP system is
+    the classical formulation of \citet{lasry2007} and
+    \citet{huang2006}.  See \citet{cardaliaguet2010} for lecture
+    notes with complete proofs.
+
+  \item \textbf{Common noise and the master equation.}
+    \citet{carmona2018ii} extends the theory to settings where
+    agents share a common source of randomness (e.g., weather
+    affecting all vehicles).  The \emph{master equation} is a
+    PDE on the space of probability measures that encodes the
+    entire MFG solution.
+
+  \item \textbf{Connections to optimal transport.}
+    The McKean--Vlasov dynamics can be viewed through the lens
+    of optimal transport theory, where the population flow
+    minimizes a cost functional over paths in the space of
+    measures.  See \citet[Chapter~5]{carmona2018i}.
+
+  \item \textbf{Mean-field MARL algorithms.}
+    Beyond mean-field Q-learning \citep{yang2018}, recent work
+    includes mean-field actor-critic methods \citep{gu2021} and
+    decentralized approaches.  \citet{zhang2021} provides a
+    comprehensive survey of multi-agent RL algorithms, including
+    mean-field methods.
+
+  \item \textbf{Forward to Lesson~65 (Communication in MARL).}
+    Lesson~65 studies communication protocols in multi-agent
+    systems, complementing the mean-field approach with explicit
+    information exchange between agents.  While MFGs assume
+    agents interact only through the population distribution,
+    communication-based methods allow richer agent interactions.
+
+  \item \textbf{Historical notes.}
+    Mean-field games were independently introduced by
+    \citet{lasry2007} (Lasry and Lions, mathematicians) and
+    \citet{huang2006} (Huang, Malham\'{e}, and Caines, engineers)
+    in 2006--2007.  The term ``mean field'' is borrowed from
+    statistical physics, where it describes the approximation of
+    particle interactions by an average field.
+\end{itemize}
+
+\bibliography{mean-field-refs}
+
+\end{document}

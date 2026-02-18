@@ -10,7 +10,7 @@ This is a collection of rigorous mathematical treatment documents (PDFs) coverin
 
 Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 aligned with curriculum.pdf -- 102 sessions). Each phase directory has its own `README.md` with full details.
 
-**Total: 70 documents** (54 exist, 16 planned)
+**Total: 70 documents** (59 exist, 11 planned)
 
 ### Phase 00 -- Prerequisites (12 lessons)
 
@@ -101,11 +101,11 @@ Documents are organized across 7 phases (Phase 00 prerequisites + Phases 01-06 a
 
 | # | Path | Topic | Status |
 |---|------|-------|--------|
-| 61 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
-| 62 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
-| 63 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
-| 64 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
-| 65 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
+| 61 | `05-marl/01-stochastic-games/01-stochastic-game-theory` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | **exists** |
+| 62 | `05-marl/02-cooperative/01-cooperative-marl` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | **exists** |
+| 63 | `05-marl/03-competitive/01-competitive-and-mixed-marl` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | **exists** |
+| 64 | `05-marl/04-mean-field/01-mean-field-games` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | **exists** |
+| 65 | `05-marl/05-communication/01-communication-in-marl` | CommNet, DIAL, RIAL, TarMAC, emergent communication | **exists** |
 
 ### Phase 06 -- Aerospace Applications (5 docs)
 

@@ -1,0 +1,1326 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 62: Cooperative Multi-Agent Reinforcement Learning}}
+\fancyhead[R]{\thepage}
+\title{Lesson 62: Cooperative Multi-Agent\\Reinforcement Learning}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a team of $N$ warehouse robots operating in a shared facility.
+Each robot must pick up packages from storage shelves and deliver them
+to shipping docks.  The team receives a single shared reward: the total
+number of packages delivered per hour.  Each robot observes only its
+local surroundings---nearby shelves, packages in its gripper, and
+robots within sensor range---yet must coordinate with the rest of
+the team to avoid collisions, balance workload across docks, and
+maximize throughput.  A centralized controller that observes the
+entire warehouse could, in principle, compute an optimal joint
+policy; but communication latency and bandwidth constraints
+require each robot to act based on local observations alone.
+
+This tension between \emph{global cooperation} and \emph{local
+execution} lies at the heart of cooperative multi-agent reinforcement
+learning (MARL).  Formalizing the problem leads to the Decentralized
+Partially Observable Markov Decision Process (Dec-POMDP), a model
+so general that finding an optimal joint policy is NEXP-complete.
+To make the problem tractable, practical algorithms adopt the
+Centralized Training with Decentralized Execution (CTDE) paradigm:
+during training, a centralized process has access to global state
+and joint actions; during execution, each agent acts using only its
+local observation history.  The tools developed in this lesson will
+let us formalize the Dec-POMDP model, understand its computational
+barriers, and derive the value decomposition and policy gradient
+methods that make cooperative MARL feasible.
+
+\begin{rlconnection}[title={Why Cooperative MARL Matters}]
+\begin{itemize}[nosep]
+  \item \textbf{StarCraft micromanagement (SMAC).}  Teams of units
+    must coordinate attack focus and positioning using only local
+    observations; QMIX and MAPPO achieve state-of-the-art performance
+    on this benchmark \citep{samvelyan2019}.
+  \item \textbf{Autonomous vehicle platooning.}  Vehicles in a platoon
+    share a common fuel-efficiency objective but each vehicle controls
+    only its own throttle and braking based on local sensor readings.
+  \item \textbf{Robotic manipulation teams.}  Multiple robotic arms
+    assembling a product must coordinate grasps and placements;
+    credit assignment determines which arm's action contributed to
+    success or failure.
+  \item \textbf{Network routing.}  Routers in a communication network
+    cooperatively minimize global latency while each router observes
+    only local queue lengths.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Stochastic games and Markov perfect equilibrium (Lesson~61,
+Definitions~3.1--3.3).  MDP formulation, Bellman equations, and
+value iteration (Lessons~39--42).  Policy gradient theorem and
+actor-critic methods (Lessons~54--57).  PPO clipped surrogate
+objective (Lesson~57, Section~4 in Phase~04).  Nash equilibrium
+and minimax theorem (Lesson~20, Phase~01 game theory).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} the Dec-POMDP model and \textbf{explain}
+    how it specializes the stochastic game framework to the
+    cooperative setting.
+  \item \textbf{State} and \textbf{explain} the NEXP-completeness
+    result for optimal Dec-POMDP policy computation.
+  \item \textbf{Derive} the VDN additive value decomposition and
+    \textbf{prove} that greedy action selection decomposes under it.
+  \item \textbf{State} the Individual-Global-Max (IGM) condition
+    and \textbf{prove} that the QMIX monotonicity condition implies
+    IGM.
+  \item \textbf{Analyze} the representational hierarchy
+    VDN $\subset$ QMIX $\subset$ QTRAN and \textbf{construct}
+    examples demonstrating strict inclusions.
+  \item \textbf{Describe} the MAPPO algorithm and \textbf{explain}
+    how centralized advantage estimation supports decentralized
+    policy improvement.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet{bernstein2002} -- Original proof of NEXP-completeness
+    for Dec-POMDPs; the foundational complexity result of Section~\ref{sec:decpomdp}.
+  \item \citet[Chapters 2--5]{oliehoek2016} -- Comprehensive textbook
+    treatment of Dec-POMDPs, including exact and approximate solution
+    methods.
+  \item \citet{rashid2018} -- Introduces QMIX and the monotonicity
+    condition for value factorization; primary reference for Section~\ref{sec:qmix}.
+  \item \citet[Sections 4--5]{zhang2021} -- Survey of cooperative MARL
+    algorithms covering value decomposition and policy gradient methods.
+  \item \citet{yu2022} -- Empirical and theoretical analysis of MAPPO;
+    demonstrates the surprising effectiveness of centralized-critic PPO
+    in cooperative games.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: DEC-POMDP
+%% ============================================================
+\section{Decentralized Partially Observable MDP}
+\label{sec:decpomdp}
+
+The cooperative multi-agent problem is formalized by the Dec-POMDP,
+which extends the single-agent POMDP to $N$ agents sharing a common
+reward.
+
+\begin{definition}[Decentralized POMDP]
+\label{def:decpomdp}
+A \emph{Decentralized Partially Observable Markov Decision Process}
+(Dec-POMDP) is a tuple
+\[
+  \mathcal{M} = (\Players, \States, \{\Actions_i\}_{i \in \Players},
+  \Trans, R, \{\Omega_i\}_{i \in \Players}, O, \discount),
+\]
+where:
+\begin{itemize}[nosep]
+  \item $\Players = \{1, \ldots, N\}$ is the finite set of agents.
+  \item $\States$ is a finite set of global states.
+  \item $\Actions_i$ is the finite action set of agent $i$; the joint
+    action space is $\JointActions = \Actions_1 \times \cdots \times \Actions_N$.
+  \item $\Trans : \States \times \JointActions \to \simplex(\States)$
+    is the state transition function, where $\Trans(s' \mid s, \mathbf{a})$
+    is the probability of transitioning to $s'$ given state $s$ and
+    joint action $\mathbf{a} = (a_1, \ldots, a_N)$.
+  \item $R : \States \times \JointActions \to \R$ is the shared
+    (team) reward function.
+  \item $\Omega_i$ is the finite observation set of agent $i$, with
+    joint observation space $\boldsymbol{\Omega} = \Omega_1 \times
+    \cdots \times \Omega_N$.
+  \item $O : \States \times \JointActions \to \simplex(\boldsymbol{\Omega})$
+    is the observation function, where $O(\mathbf{o} \mid s', \mathbf{a})$
+    gives the probability of joint observation $\mathbf{o} = (o_1,
+    \ldots, o_N)$ after transitioning to $s'$ via action $\mathbf{a}$.
+  \item $\discount \in [0, 1)$ is the discount factor.
+\end{itemize}
+\end{definition}
+
+\begin{remark}
+\label{rem:decpomdp-vs-sg}
+A Dec-POMDP is a special case of a partially observable stochastic
+game (POSG, Lesson~61) in which all agents share the same reward
+function $R$.  This common-payoff structure makes the problem
+\emph{cooperative}: the agents' interests are perfectly aligned.
+When $N = 1$, the Dec-POMDP reduces to a standard POMDP; when
+observations fully reveal the state ($\Omega_i = \States$ and
+$O$ is the identity), it reduces to a multi-agent MDP.
+\end{remark}
+
+\paragraph{Observation histories and local policies.}
+Since agent $i$ cannot observe the global state, it must base
+decisions on its \emph{observation-action history}.  At time $t$,
+agent $i$ has observed the sequence
+\[
+  \tau_i^t = (o_i^0, a_i^0, o_i^1, a_i^1, \ldots, o_i^{t-1},
+  a_i^{t-1}, o_i^t) \in (\Omega_i \times \Actions_i)^t \times \Omega_i.
+\]
+We write $\mathcal{T}_i^t$ for the set of all such histories of
+length $t$, and $\mathcal{T}_i = \bigcup_{t=0}^{\infty} \mathcal{T}_i^t$
+for the set of all finite histories.
+
+\begin{definition}[Local and Joint Policies]
+\label{def:local-joint-policy}
+A \emph{local (decentralized) policy} for agent $i$ is a mapping
+\[
+  \policyi : \mathcal{T}_i \to \simplex(\Actions_i),
+\]
+which assigns a distribution over actions to each observation-action
+history.  A \emph{joint policy} is the tuple
+$\policyj = (\policy_1, \ldots, \policy_N)$.
+\end{definition}
+
+\begin{definition}[Joint Value Function]
+\label{def:joint-value}
+Given a joint policy $\policyj$ and initial state $s_0 \in \States$,
+the \emph{joint value function} is
+\[
+  V^{\policyj}(s_0) = \E^{\policyj}\!\left[
+    \sum_{t=0}^{\infty} \discount^t\, R(s_t, \mathbf{a}_t)
+    \;\middle|\; s_0
+  \right],
+\]
+where the expectation is over the stochastic process induced by
+the transition kernel $\Trans$, observation function $O$, and
+local policies $\policyi$.
+\end{definition}
+
+The optimization problem is to find a joint policy $\policyj^*$
+that maximizes $V^{\policyj}(s_0)$ for every initial state $s_0$
+(or, in the finite-horizon case, for a given initial state
+distribution).
+
+\begin{theorem}[NEXP-Completeness of Dec-POMDP]
+\label{thm:nexp}
+The problem of determining whether there exists a joint policy for
+a finite-horizon Dec-POMDP whose expected total reward exceeds a
+given threshold $k$ is NEXP-complete.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+We outline the two directions following \citet{bernstein2002}.
+
+\emph{Membership in NEXP.}  A nondeterministic exponential-time
+algorithm can guess a joint policy (which, for a finite horizon
+$T$, is specified by at most $N$ decision trees each of depth $T$,
+hence of exponential size) and verify it in exponential time by
+computing the expected reward via dynamic programming over the
+joint belief space.
+
+\emph{NEXP-hardness.}  The reduction proceeds from the
+NEXP-complete \emph{tiling problem}: given a finite set of tile
+types with matching constraints on edges, determine whether an
+exponentially large grid $2^n \times 2^n$ can be validly tiled.
+The construction encodes the grid into a Dec-POMDP with two agents.
+Agent~1 is responsible for rows and agent~2 for columns.  The
+global state encodes the current grid position $(i, j)$.  Each
+agent observes only its respective coordinate ($i$ or $j$) and
+must output a tile type for that position.  The reward function
+assigns $+1$ if the chosen tile is consistent with all adjacency
+constraints for position $(i, j)$ and $0$ otherwise.  The key
+difficulty is that the agents cannot communicate their tile
+choices to each other, so a valid tiling can be achieved if and
+only if there exist local policies (deterministic history-dependent
+strategies) that jointly produce a valid tiling.  Since the grid
+has $2^n \times 2^n$ cells, the observation histories have
+exponential length, matching the NEXP complexity.
+
+For the complete formal construction, see \citet[Theorem~3.1]{bernstein2002}.
+\end{proof}
+
+\begin{keyresult}[title={Computational Intractability of Dec-POMDPs}]
+Finding an optimal joint policy for a Dec-POMDP is NEXP-complete
+(Theorem~\ref{thm:nexp}).  This stands in contrast to:
+\begin{itemize}[nosep]
+  \item Single-agent MDPs: solvable in polynomial time (P) via
+    linear programming \citep{puterman2014}.
+  \item Single-agent POMDPs: PSPACE-complete.
+  \item Centralized multi-agent MDPs (full observability, common
+    reward): solvable in P as a single large MDP.
+\end{itemize}
+The source of intractability is the combination of
+\emph{decentralization} (local policies) and \emph{partial
+observability} (agents cannot condition on global state).
+\end{keyresult}
+
+\begin{example}[Two-Agent Dec-POMDP: Cooperative Tiger]
+\label{ex:tiger}
+Consider a variant of the classic tiger problem.  Two agents stand
+before two doors.  Behind one door is a tiger (penalty $-50$); behind
+the other is a reward ($+10$).  Each agent independently listens
+(receiving a noisy signal about the tiger's location with accuracy
+$0.85$) or opens a door.  If either agent opens the tiger door,
+both receive $-50$; if either opens the reward door (and neither
+opens the tiger door), both receive $+10$; if both listen, both
+receive $-1$.
+
+Even in this two-agent, two-state, three-action problem, the
+optimal joint policy requires agents to coordinate the number of
+listening steps before committing.  Agent~1 cannot condition on
+agent~2's observations, so the optimal policy must balance
+information gathering against the risk of uncoordinated door
+opening.  Solving this optimally requires enumerating all possible
+joint observation histories---an exponential computation even for
+moderate horizons.
+\end{example}
+
+We now turn to practical frameworks that sidestep the NEXP barrier
+by exploiting additional structure available during training.
+
+%% ============================================================
+%% SECTION 4: CTDE
+%% ============================================================
+\section{Centralized Training with Decentralized Execution}
+\label{sec:ctde}
+
+The NEXP-completeness of Dec-POMDPs (Theorem~\ref{thm:nexp})
+motivates approximation frameworks that exploit asymmetry between
+training and execution phases.
+
+\begin{definition}[CTDE Paradigm]
+\label{def:ctde}
+The \emph{Centralized Training with Decentralized Execution}
+(CTDE) paradigm is a two-phase approach to cooperative MARL:
+\begin{enumerate}[nosep]
+  \item \textbf{Training phase.}  A centralized learning algorithm
+    has access to global information: the state $s_t$, all agents'
+    actions $\mathbf{a}_t = (a_1^t, \ldots, a_N^t)$, all observations
+    $\mathbf{o}_t = (o_1^t, \ldots, o_N^t)$, and the shared reward
+    $r_t = R(s_t, \mathbf{a}_t)$.
+  \item \textbf{Execution phase.}  Each agent $i$ executes a
+    \emph{decentralized policy} $\policyi(\cdot \mid \tau_i)$ that
+    conditions only on its local observation-action history $\tau_i$.
+\end{enumerate}
+\end{definition}
+
+The CTDE framework does \emph{not} change the Dec-POMDP model or
+its complexity class.  Rather, it relaxes the \emph{learning}
+problem: during training, we may use global information to shape
+the learning signal (e.g., a centralized critic), provided the
+resulting policies are decentralizable.
+
+\paragraph{Centralized critic, decentralized actors.}
+A natural instantiation of CTDE uses a \emph{centralized value
+function} $V(s)$ or $Q(s, \mathbf{a})$ that conditions on the
+global state (or joint observations) to provide low-variance
+gradient estimates.  Each agent $i$ maintains a local actor
+$\policyi(\cdot \mid \tau_i)$ that is updated using policy
+gradient or value-based methods with the centralized critic
+as the learning signal.
+
+\begin{rlconnection}[title={CTDE as the Dominant Paradigm}]
+Virtually all modern cooperative MARL algorithms adopt the CTDE
+paradigm, including:
+\begin{itemize}[nosep]
+  \item \textbf{Value decomposition} (VDN, QMIX, QTRAN): train a
+    centralized $\Qtot$ that factorizes into per-agent utilities.
+  \item \textbf{Centralized critic methods} (MAPPO, MADDPG): train
+    a centralized value function to reduce variance of decentralized
+    policy gradients.
+  \item \textbf{Communication methods} (CommNet, TarMAC): train
+    communication protocols that enable richer coordination while
+    keeping execution decentralized.
+\end{itemize}
+CTDE is successful because modern training environments (simulators)
+provide full state access, while real-world deployment demands
+decentralization due to communication constraints.
+\end{rlconnection}
+
+The remainder of this lesson develops two families of CTDE
+algorithms: value decomposition methods (Sections~\ref{sec:vdn}--\ref{sec:qtran})
+and policy gradient methods (Section~\ref{sec:mappo}).
+
+%% ============================================================
+%% SECTION 5: VDN
+%% ============================================================
+\section{Value Decomposition Networks (VDN)}
+\label{sec:vdn}
+
+The first approach to cooperative MARL under CTDE decomposes the
+joint action-value function into per-agent utilities, enabling
+decentralized greedy action selection.
+
+\paragraph{Problem setup.}
+Suppose the team operates in a multi-agent MDP (fully observable
+variant of Dec-POMDP) or that each agent maintains an observation
+history $\tau_i$.  We seek a joint action-value function
+$\Qtot(\boldsymbol{\tau}, \mathbf{a})$ where $\boldsymbol{\tau}
+= (\tau_1, \ldots, \tau_N)$ and $\mathbf{a} = (a_1, \ldots, a_N)$.
+For decentralized execution, each agent $i$ must be able to select
+$\actioni$ using only $\tau_i$, without knowledge of other agents'
+histories or actions.
+
+\begin{definition}[Additive Value Decomposition]
+\label{def:vdn}
+The \emph{Value Decomposition Network} (VDN) \citep{sunehag2018}
+decomposes the joint action-value function as an additive sum:
+\[
+  \Qtot(\boldsymbol{\tau}, \mathbf{a})
+  = \sum_{i=1}^{N} Q_i(\tau_i, \actioni),
+\]
+where each $Q_i : \mathcal{T}_i \times \Actions_i \to \R$ is
+agent $i$'s individual utility function.
+\end{definition}
+
+\begin{theorem}[Decentralized Greedy Action Selection under VDN]
+\label{thm:vdn-greedy}
+Under the additive decomposition of Definition~\ref{def:vdn},
+the greedy joint action decomposes into individual greedy actions:
+\[
+  \argmax_{\mathbf{a} \in \JointActions}
+  \Qtot(\boldsymbol{\tau}, \mathbf{a})
+  = \left(
+    \argmax_{a_1 \in \Actions_1} Q_1(\tau_1, a_1),\;
+    \ldots,\;
+    \argmax_{a_N \in \Actions_N} Q_N(\tau_N, a_N)
+  \right).
+\]
+\end{theorem}
+
+\begin{proof}
+Since $\Qtot(\boldsymbol{\tau}, \mathbf{a}) = \sum_{i=1}^N
+Q_i(\tau_i, \actioni)$, and each term $Q_i(\tau_i, \actioni)$
+depends only on $\actioni$, the joint maximization decomposes
+into $N$ independent maximizations:
+\[
+  \max_{\mathbf{a} \in \JointActions}
+  \sum_{i=1}^N Q_i(\tau_i, \actioni)
+  = \sum_{i=1}^N \max_{\actioni \in \Actions_i} Q_i(\tau_i, \actioni).
+\]
+This equality holds because the feasible set $\JointActions =
+\Actions_1 \times \cdots \times \Actions_N$ is a Cartesian product,
+and the objective is separable.  Any joint action
+$\mathbf{a}^* = (a_1^*, \ldots, a_N^*)$ achieving the left-hand
+side must satisfy $a_i^* \in \argmax_{\actioni} Q_i(\tau_i, \actioni)$
+for each $i$, since otherwise replacing $a_i^*$ with a maximizer
+of $Q_i$ would strictly increase the sum.
+\end{proof}
+
+\begin{example}[VDN in a Two-Agent Delivery Task]
+\label{ex:vdn-works}
+Consider two robots ($N = 2$) delivering packages in a grid.
+Robot~1 operates in the left half and robot~2 in the right half,
+with minimal interaction.  Let $Q_1(\tau_1, a_1)$ represent the
+expected packages robot~1 delivers, and similarly for $Q_2$.
+Since the robots operate in disjoint regions, the team reward
+is approximately $R \approx R_1 + R_2$, so the true $\Qtot$
+is well-approximated by an additive decomposition.  Each robot
+independently maximizes its own $Q_i$, and the joint action is
+jointly optimal.
+\end{example}
+
+\begin{example}[Failure of VDN: Non-Additive Coordination]
+\label{ex:vdn-fails}
+Consider a two-agent, two-action coordination game with the
+following joint reward matrix:
+\[
+\begin{array}{c|cc}
+  R(a_1, a_2) & a_2 = L & a_2 = R \\
+  \hline
+  a_1 = L & 8 & 0 \\
+  a_1 = R & 0 & 5 \\
+\end{array}
+\]
+The optimal joint action is $(L, L)$ with reward $8$.  Suppose
+VDN decomposes as $\Qtot(a_1, a_2) = Q_1(a_1) + Q_2(a_2)$.
+Then we need $Q_1(L) + Q_2(L) = 8$ and $Q_1(R) + Q_2(R) = 5$,
+but also $Q_1(L) + Q_2(R) = 0$ and $Q_1(R) + Q_2(L) = 0$.
+From these four equations: $Q_1(L) - Q_1(R) = 8 - 0 = 8$
+(first and fourth) but also $Q_1(L) - Q_1(R) = 0 - 5 = -5$
+(third and second), a contradiction.  Thus VDN \emph{cannot}
+represent this game's payoff structure.
+\end{example}
+
+The failure in Example~\ref{ex:vdn-fails} arises because the
+reward exhibits \emph{interaction effects} between agents'
+actions.  This motivates richer decomposition classes.
+
+%% ============================================================
+%% SECTION 6: QMIX AND IGM
+%% ============================================================
+\section{QMIX and the IGM Condition}
+\label{sec:qmix}
+
+To overcome the representational limitations of VDN while preserving
+decentralized action selection, \citet{rashid2018} introduced QMIX,
+which relies on the \emph{Individual-Global-Max} (IGM) condition.
+
+\begin{definition}[Individual-Global-Max (IGM) Condition]
+\label{def:igm}
+A factorization $(\Qtot, Q_1, \ldots, Q_N)$ satisfies the
+\emph{Individual-Global-Max} (IGM) condition if for all
+$\boldsymbol{\tau}$:
+\[
+  \argmax_{\mathbf{a} \in \JointActions}
+  \Qtot(\boldsymbol{\tau}, \mathbf{a})
+  = \left(
+    \argmax_{a_1 \in \Actions_1} Q_1(\tau_1, a_1),\;
+    \ldots,\;
+    \argmax_{a_N \in \Actions_N} Q_N(\tau_N, a_N)
+  \right).
+\]
+That is, the globally optimal joint action can be recovered by
+each agent independently maximizing its own utility $Q_i$.
+\end{definition}
+
+IGM is the minimal structural condition needed for decentralized
+execution: if it holds, each agent can compute its part of the
+optimal joint action using only local information.  The challenge
+is to design $\Qtot$ as a function of $Q_1, \ldots, Q_N$ such
+that IGM is guaranteed.
+
+\begin{definition}[Monotonicity Condition]
+\label{def:monotonicity}
+A mixing function $\Qtot(\boldsymbol{\tau}, \mathbf{a}) =
+f(Q_1(\tau_1, a_1), \ldots, Q_N(\tau_N, a_N); \boldsymbol{\tau})$
+satisfies the \emph{monotonicity condition} if
+\[
+  \frac{\partial \Qtot}{\partial Q_i} \geq 0
+  \quad \text{for all } i \in \Players.
+\]
+\end{definition}
+
+\begin{proposition}[Monotonicity Implies IGM]
+\label{prop:mono-igm}
+If $\Qtot = f(Q_1, \ldots, Q_N; \boldsymbol{\tau})$ satisfies
+the monotonicity condition (Definition~\ref{def:monotonicity}),
+then the IGM condition (Definition~\ref{def:igm}) holds.
+\end{proposition}
+
+\begin{proof}
+Let $\bar{a}_i \in \argmax_{\actioni \in \Actions_i} Q_i(\tau_i,
+\actioni)$ for each $i$, and let $\bar{\mathbf{a}} = (\bar{a}_1,
+\ldots, \bar{a}_N)$.  We must show that $\bar{\mathbf{a}} \in
+\argmax_{\mathbf{a}} \Qtot(\boldsymbol{\tau}, \mathbf{a})$.
+
+Take any $\mathbf{a} = (a_1, \ldots, a_N) \in \JointActions$.
+We construct a sequence of joint actions interpolating from
+$\mathbf{a}$ to $\bar{\mathbf{a}}$ by replacing one component
+at a time.  Define $\mathbf{a}^{(0)} = \mathbf{a}$ and for
+$k = 1, \ldots, N$:
+\[
+  \mathbf{a}^{(k)} = (\bar{a}_1, \ldots, \bar{a}_k, a_{k+1},
+  \ldots, a_N).
+\]
+So $\mathbf{a}^{(N)} = \bar{\mathbf{a}}$.  Consider the
+transition from $\mathbf{a}^{(k-1)}$ to $\mathbf{a}^{(k)}$,
+which replaces $a_k$ with $\bar{a}_k$.  Since $\bar{a}_k$
+maximizes $Q_k(\tau_k, \cdot)$, we have $Q_k(\tau_k, \bar{a}_k)
+\geq Q_k(\tau_k, a_k)$.  The monotonicity condition ensures
+$\Qtot$ is non-decreasing in each $Q_i$.  Therefore, increasing
+(or not changing) $Q_k$ while holding all other $Q_j$ fixed
+cannot decrease $\Qtot$:
+\[
+  \Qtot(\boldsymbol{\tau}, \mathbf{a}^{(k)})
+  = f(\ldots, Q_k(\tau_k, \bar{a}_k), \ldots)
+  \geq f(\ldots, Q_k(\tau_k, a_k), \ldots)
+  = \Qtot(\boldsymbol{\tau}, \mathbf{a}^{(k-1)}).
+\]
+Chaining over $k = 1, \ldots, N$:
+\[
+  \Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}})
+  = \Qtot(\boldsymbol{\tau}, \mathbf{a}^{(N)})
+  \geq \Qtot(\boldsymbol{\tau}, \mathbf{a}^{(0)})
+  = \Qtot(\boldsymbol{\tau}, \mathbf{a}).
+\]
+Since $\mathbf{a}$ was arbitrary, $\bar{\mathbf{a}}$ maximizes
+$\Qtot$.
+\end{proof}
+
+\paragraph{QMIX architecture.}
+QMIX \citep{rashid2018} instantiates the monotonicity condition
+using a \emph{mixing network}.  Each agent $i$ maintains a utility
+network $Q_i(\tau_i, \actioni; \phi_i)$ parameterized by $\phi_i$.
+The mixing network computes:
+\begin{equation}
+\label{eq:qmix}
+  \Qtot(\boldsymbol{\tau}, \mathbf{a}; s)
+  = f_{\mathrm{mix}}\!\big(Q_1(\tau_1, a_1), \ldots,
+    Q_N(\tau_N, a_N);\, s\big),
+\end{equation}
+where $f_{\mathrm{mix}}$ is a feedforward network whose weights
+are generated by \emph{hypernetworks} that take the global state
+$s$ as input.  The critical architectural choice is that the
+hypernetworks produce mixing weights via an absolute value
+activation:
+\[
+  W_{\ell}(s) = |g_{\ell}(s)|,
+\]
+where $g_{\ell}$ is a learnable function of $s$ and $|\cdot|$
+denotes element-wise absolute value.  This ensures $W_{\ell}(s)
+\geq 0$, so each layer of the mixing network is a non-negative
+linear combination (plus bias) followed by an ELU activation.
+Since compositions of non-decreasing functions are non-decreasing,
+the overall $f_{\mathrm{mix}}$ satisfies $\partial \Qtot /
+\partial Q_i \geq 0$.
+
+\begin{theorem}[QMIX Strictly Generalizes VDN]
+\label{thm:qmix-superset}
+The class of $\Qtot$ functions representable by QMIX strictly
+contains the class representable by VDN.  That is, every VDN
+decomposition is a special case of QMIX, and there exist $\Qtot$
+functions representable by QMIX but not by VDN.
+\end{theorem}
+
+\begin{proof}
+\emph{VDN $\subseteq$ QMIX.}  The VDN decomposition
+$\Qtot = \sum_i Q_i$ is a special case of a monotonic mixing
+function: take $f_{\mathrm{mix}}(q_1, \ldots, q_N) =
+\sum_i q_i$, which is a single-layer linear network with all
+weights equal to $1$ and zero bias.  This satisfies $\partial
+\Qtot / \partial Q_i = 1 > 0$.
+
+\emph{Strict inclusion.}  Consider $N = 2$ agents with
+$Q_1, Q_2 \in \R$ and the mixing function
+$\Qtot = Q_1 \cdot Q_2$ (product, not sum).  When $Q_1, Q_2 > 0$,
+we have $\partial \Qtot / \partial Q_i = Q_j > 0$, satisfying
+monotonicity.  This is representable by a QMIX network (a
+two-layer mixing network can implement multiplication for
+positive inputs).  However, $\Qtot = Q_1 \cdot Q_2$ is not
+additive: there exist no functions $f, g$ such that
+$Q_1 \cdot Q_2 = f(Q_1) + g(Q_2)$ for all $Q_1, Q_2 > 0$.
+To verify, suppose $Q_1 Q_2 = f(Q_1) + g(Q_2)$.  Setting
+$Q_2 = 1$: $Q_1 = f(Q_1) + g(1)$, so $f(Q_1) = Q_1 - c$
+for $c = g(1)$.  Setting $Q_1 = 1$: $Q_2 = (1 - c) + g(Q_2)$,
+so $g(Q_2) = Q_2 - 1 + c$.  Then $f(Q_1) + g(Q_2) =
+Q_1 + Q_2 - 1 \neq Q_1 Q_2$ in general.
+\end{proof}
+
+\begin{keyresult}[title={IGM and Monotonic Value Factorization}]
+\begin{itemize}[nosep]
+  \item The \textbf{IGM condition} (Definition~\ref{def:igm})
+    is the necessary and sufficient structural property for
+    decentralized greedy action selection to recover the jointly
+    optimal action.
+  \item The \textbf{monotonicity condition} (Definition~\ref{def:monotonicity})
+    is a sufficient condition for IGM that is architecturally
+    enforceable via non-negative mixing weights.
+  \item QMIX enforces monotonicity through hypernetwork-generated
+    non-negative weights, yielding a class strictly larger than
+    VDN (Theorem~\ref{thm:qmix-superset}).
+\end{itemize}
+\end{keyresult}
+
+\begin{warning}[title={Limitations of Monotonicity}]
+The monotonicity condition prevents QMIX from representing
+\emph{non-monotonic} interactions between agents.  Consider
+a game where the optimal strategy requires agent~1 to take
+action $L$ when agent~2 takes $L$, but action $R$ when
+agent~2 takes $R$---and the joint Q-values are such that
+increasing $Q_2$ for action $L$ would require decreasing
+$\Qtot$ for some joint actions.  Formally, any game matrix
+where $\Qtot(L, L) > \Qtot(R, L)$ but $\Qtot(L, R) <
+\Qtot(R, R)$ requires $\partial \Qtot / \partial Q_1$ to
+change sign, violating monotonicity.
+\end{warning}
+
+\begin{example}[QMIX on a Predator-Prey Task]
+\label{ex:qmix-predprey}
+Consider $N = 3$ predators on a grid who must surround a prey
+to capture it.  The team reward is $+10$ for capture and $0$
+otherwise.  Each predator $i$ observes a $5 \times 5$ local
+patch and maintains $Q_i(\tau_i, \actioni)$ representing its
+utility for moving in direction $\actioni \in \{N, S, E, W,
+\text{stay}\}$.  The mixing network takes the global state
+$s$ (all positions) and produces non-negative weights that
+combine the $Q_i$ values.  Since successful capture requires
+all predators to be adjacent to the prey, the reward is
+\emph{super-additive}: the value of the team is greater than
+the sum of individual values.  QMIX's state-dependent mixing
+weights can capture this---when the global state shows two
+predators already adjacent, the mixing network upweights the
+third predator's contribution, reflecting the increased
+marginal value of the final encirclement move.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: QTRAN
+%% ============================================================
+\section{QTRAN: Beyond Monotonic Decomposition}
+\label{sec:qtran}
+
+While QMIX achieves strong empirical results, its monotonicity
+constraint limits the class of representable joint value functions.
+\citet{son2019} introduced QTRAN, which achieves IGM without
+requiring monotonicity.
+
+\paragraph{Motivation.}
+Consider a two-agent game where the optimal joint action is
+$(L, L)$ but the off-diagonal entries of the reward matrix
+violate monotonicity (as in the warning above).  QMIX cannot
+represent such games, but IGM may still hold if we allow a
+more flexible factorization.
+
+\begin{definition}[QTRAN Factorization]
+\label{def:qtran}
+The QTRAN factorization introduces three components:
+\begin{enumerate}[nosep]
+  \item Individual utility functions $Q_i(\tau_i, \actioni)$
+    for each agent $i$.
+  \item A joint state-value function
+    $V_{\mathrm{jt}}(\boldsymbol{\tau})$.
+  \item Individual state-value functions $V_i(\tau_i)$ for
+    each agent $i$.
+\end{enumerate}
+The factorization posits that for the optimal joint action
+$\bar{\mathbf{a}}(\boldsymbol{\tau}) = (\bar{a}_1, \ldots,
+\bar{a}_N)$ where $\bar{a}_i = \argmax_{\actioni} Q_i(\tau_i,
+\actioni)$:
+\begin{align}
+  \Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}})
+  &= \sum_{i=1}^N Q_i(\tau_i, \bar{a}_i)
+     + V_{\mathrm{jt}}(\boldsymbol{\tau})
+     - \sum_{i=1}^N V_i(\tau_i),
+     \label{eq:qtran-opt} \\
+  \Qtot(\boldsymbol{\tau}, \mathbf{a})
+  &\leq \sum_{i=1}^N Q_i(\tau_i, \actioni)
+     + V_{\mathrm{jt}}(\boldsymbol{\tau})
+     - \sum_{i=1}^N V_i(\tau_i),
+     \quad \forall\, \mathbf{a} \neq \bar{\mathbf{a}}.
+     \label{eq:qtran-subopt}
+\end{align}
+\end{definition}
+
+\begin{proposition}[QTRAN Conditions Imply IGM]
+\label{prop:qtran-igm}
+If conditions~\eqref{eq:qtran-opt}--\eqref{eq:qtran-subopt}
+hold, then the IGM condition (Definition~\ref{def:igm}) is
+satisfied.
+\end{proposition}
+
+\begin{proof}
+Let $\bar{\mathbf{a}}$ be the joint action with $\bar{a}_i =
+\argmax_{\actioni} Q_i(\tau_i, \actioni)$ for each $i$.
+We must show $\bar{\mathbf{a}} \in \argmax_{\mathbf{a}}
+\Qtot(\boldsymbol{\tau}, \mathbf{a})$.
+
+For any $\mathbf{a} \neq \bar{\mathbf{a}}$, using
+\eqref{eq:qtran-opt} and \eqref{eq:qtran-subopt}:
+\begin{align*}
+  \Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}})
+  &= \sum_{i=1}^N Q_i(\tau_i, \bar{a}_i)
+     + V_{\mathrm{jt}}(\boldsymbol{\tau})
+     - \sum_{i=1}^N V_i(\tau_i) \\
+  &\geq \sum_{i=1}^N Q_i(\tau_i, \actioni)
+     + V_{\mathrm{jt}}(\boldsymbol{\tau})
+     - \sum_{i=1}^N V_i(\tau_i) \\
+  &\geq \Qtot(\boldsymbol{\tau}, \mathbf{a}).
+\end{align*}
+The first inequality uses $\bar{a}_i = \argmax_{\actioni}
+Q_i(\tau_i, \actioni)$, so $\sum_i Q_i(\tau_i, \bar{a}_i)
+\geq \sum_i Q_i(\tau_i, \actioni)$.  The second inequality
+is condition~\eqref{eq:qtran-subopt} rearranged.
+Therefore $\Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}}) \geq
+\Qtot(\boldsymbol{\tau}, \mathbf{a})$ for all $\mathbf{a}$,
+establishing IGM.
+\end{proof}
+
+\paragraph{Practical implementation.}
+The QTRAN conditions~\eqref{eq:qtran-opt}--\eqref{eq:qtran-subopt}
+are difficult to enforce exactly.  In practice, \citet{son2019}
+relax them into soft constraints within the loss function.  Define:
+\begin{align*}
+  \hat{Q}_{\mathrm{jt}}(\boldsymbol{\tau}, \mathbf{a})
+  &= \sum_{i=1}^N Q_i(\tau_i, \actioni)
+     + V_{\mathrm{jt}}(\boldsymbol{\tau})
+     - \sum_{i=1}^N V_i(\tau_i).
+\end{align*}
+The QTRAN loss combines three terms:
+\begin{align}
+  \mathcal{L}_{\mathrm{td}} &= \left(
+    \Qtot(\boldsymbol{\tau}, \mathbf{a})
+    - y_{\mathrm{td}}
+  \right)^2,
+    \label{eq:qtran-loss-td} \\
+  \mathcal{L}_{\mathrm{opt}} &= \left(
+    \hat{Q}_{\mathrm{jt}}(\boldsymbol{\tau}, \bar{\mathbf{a}})
+    - \Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}})
+  \right)^2,
+    \label{eq:qtran-loss-opt} \\
+  \mathcal{L}_{\mathrm{nopt}} &= \left(
+    \min\!\big(\hat{Q}_{\mathrm{jt}}(\boldsymbol{\tau}, \mathbf{a})
+    - \Qtot(\boldsymbol{\tau}, \mathbf{a}),\, 0\big)
+  \right)^2,
+    \label{eq:qtran-loss-nopt}
+\end{align}
+where $y_{\mathrm{td}}$ is the TD target.  The loss
+$\mathcal{L}_{\mathrm{opt}}$ enforces the equality
+condition~\eqref{eq:qtran-opt}, while $\mathcal{L}_{\mathrm{nopt}}$
+enforces the inequality~\eqref{eq:qtran-subopt} via a hinge-like
+penalty.
+
+\paragraph{Representational hierarchy.}
+We can now summarize the relationship among the three factorization
+methods.
+
+\begin{proposition}[Representational Ordering]
+\label{prop:hierarchy}
+In terms of the classes of joint value functions that satisfy IGM
+under each method:
+\[
+  \mathcal{F}_{\mathrm{VDN}} \subsetneq \mathcal{F}_{\mathrm{QMIX}}
+  \subsetneq \mathcal{F}_{\mathrm{QTRAN}}.
+\]
+\end{proposition}
+
+\begin{proof}
+$\mathcal{F}_{\mathrm{VDN}} \subsetneq \mathcal{F}_{\mathrm{QMIX}}$
+was established in Theorem~\ref{thm:qmix-superset}.
+
+For $\mathcal{F}_{\mathrm{QMIX}} \subseteq \mathcal{F}_{\mathrm{QTRAN}}$:
+any monotonic factorization satisfies IGM (Proposition~\ref{prop:mono-igm}).
+For any such factorization, set $V_{\mathrm{jt}}(\boldsymbol{\tau}) =
+\Qtot(\boldsymbol{\tau}, \bar{\mathbf{a}}) - \sum_i Q_i(\tau_i,
+\bar{a}_i) + \sum_i V_i(\tau_i)$ and choose $V_i(\tau_i) =
+\max_{\actioni} Q_i(\tau_i, \actioni)$.  Then
+condition~\eqref{eq:qtran-opt} holds by construction, and
+condition~\eqref{eq:qtran-subopt} holds because $\bar{\mathbf{a}}$
+maximizes $\Qtot$ under monotonicity.
+
+For strict inclusion: Example~\ref{ex:vdn-fails} provides a
+game where VDN fails.  We show QTRAN can represent it but QMIX
+cannot.  The reward matrix has $R(L,L) = 8 > R(R,L) = 0$ but
+$R(L,R) = 0 < R(R,R) = 5$.  Set $Q_1(L) = 1, Q_1(R) = 0$
+(so $\bar{a}_1 = L$) and $Q_2(L) = 1, Q_2(R) = 0$ (so $\bar{a}_2
+= L$).  The individual maxima select $(L, L)$, which is indeed
+optimal ($R(L,L) = 8$).  Set $V_1(\tau_1) = 1, V_2(\tau_2) = 1$,
+and $V_{\mathrm{jt}} = 8 - 1 - 1 + 1 + 1 = 8$.  Then
+$\hat{Q}_{\mathrm{jt}}(L,L) = 1 + 1 + 8 - 1 - 1 = 8 = R(L,L)$
+(equality holds).  For $(L, R)$: $\hat{Q}_{\mathrm{jt}}(L,R) = 1
++ 0 + 8 - 1 - 1 = 7 \geq R(L,R) = 0$ (inequality holds).
+Similarly for other off-diagonal entries.  However, QMIX requires
+monotonicity, which fails here since $R(L,L) > R(R,L)$ implies
+$Q_1(L) > Q_1(R)$ yet $R(L,R) < R(R,R)$ would require
+$Q_1(L) < Q_1(R)$ under any monotonic decomposition, a
+contradiction.
+\end{proof}
+
+%% ============================================================
+%% SECTION 8: MAPPO
+%% ============================================================
+\section{Multi-Agent Proximal Policy Optimization}
+\label{sec:mappo}
+
+Value decomposition methods (VDN, QMIX, QTRAN) address cooperative
+MARL through value-based learning.  An alternative CTDE approach
+uses \emph{policy gradient} methods with a centralized critic.
+Multi-Agent PPO (MAPPO) \citep{yu2022} adapts the single-agent
+PPO algorithm to the multi-agent setting and has demonstrated
+surprisingly strong performance.
+
+\paragraph{Setup.}
+Each agent $i$ maintains a decentralized stochastic policy
+$\policyi(\actioni \mid \tau_i;\, \theta_i)$ parameterized by
+$\theta_i$.  A centralized value function $V(s;\, \psi)$
+parameterized by $\psi$ estimates the expected return from
+global state $s$ under the current joint policy.
+
+\begin{definition}[MAPPO Objective]
+\label{def:mappo}
+For each agent $i$, the MAPPO objective is the clipped surrogate:
+\begin{equation}
+\label{eq:mappo-clip}
+  L_i^{\mathrm{CLIP}}(\theta_i)
+  = \E_{\boldsymbol{\tau}, \mathbf{a}}\!\left[
+    \min\!\left(
+      r_i(\theta_i)\, \hat{A}_i,\;
+      \mathrm{clip}\!\big(r_i(\theta_i),\, 1 - \epsilon,\,
+        1 + \epsilon\big)\, \hat{A}_i
+    \right)
+  \right],
+\end{equation}
+where:
+\begin{itemize}[nosep]
+  \item $r_i(\theta_i) = \policyi(\actioni \mid \tau_i;\, \theta_i)
+    \,/\, \policyi(\actioni \mid \tau_i;\, \theta_i^{\mathrm{old}})$
+    is the importance sampling ratio for agent $i$.
+  \item $\hat{A}_i = \hat{A}(s_t, \mathbf{a}_t)$ is the
+    advantage estimate computed from the centralized value function:
+    $\hat{A}_i = \sum_{\ell=0}^{T-t-1} (\discount \lambda)^\ell
+    \delta_{t+\ell}$ with TD errors $\delta_t = r_t + \discount\,
+    V(s_{t+1};\, \psi) - V(s_t;\, \psi)$ (GAE-$\lambda$).
+  \item $\epsilon > 0$ is the clipping parameter.
+\end{itemize}
+\end{definition}
+
+\paragraph{Shared vs.\ independent parameters.}
+In many cooperative tasks, agents are \emph{homogeneous} (same
+observation and action spaces).  MAPPO can exploit this with
+\emph{parameter sharing}: all agents use the same policy network
+$\policy(\actioni \mid \tau_i, i;\, \theta)$, where agent identity
+$i$ is provided as an additional input.  This dramatically reduces
+the number of parameters from $N \cdot |\theta|$ to $|\theta|$ and
+enables faster learning, though it restricts the class of
+representable joint policies to those with symmetric structure
+(up to the identity embedding).
+
+\begin{theorem}[Monotonic Improvement under MAPPO]
+\label{thm:mappo-improvement}
+Let $\policyj = (\policy_1, \ldots, \policy_N)$ be the current
+joint policy and $\policyj' = (\policy_1', \ldots, \policy_N')$
+be the updated joint policy where each $\policy_i'$ maximizes
+$L_i^{\mathrm{CLIP}}(\theta_i)$.  Under the following conditions:
+\begin{enumerate}[nosep]
+  \item The advantage estimates $\hat{A}_i$ are computed using
+    the centralized value function $V(s;\, \psi)$ with GAE-$\lambda$.
+  \item The clipping parameter $\epsilon$ is sufficiently small.
+  \item Policy updates are performed sequentially (one agent at
+    a time) or the total KL divergence $\sum_i
+    \KL(\policyi^{\mathrm{old}} \| \policyi')$ is bounded.
+\end{enumerate}
+Then the joint policy performance satisfies
+\begin{equation}
+\label{eq:mappo-bound}
+  V^{\policyj'}(s) \geq V^{\policyj}(s) - C \sum_{i=1}^N
+  \max_{\tau_i} \KL\!\big(\policyi(\cdot \mid \tau_i;\,
+  \theta_i^{\mathrm{old}}) \,\big\|\, \policyi(\cdot \mid
+  \tau_i;\, \theta_i)\big),
+\end{equation}
+where $C = \frac{4 \discount \max_{s,\mathbf{a}} |A^{\policyj}
+(s, \mathbf{a})|}{(1 - \discount)^2}$ and $A^{\policyj}$ is
+the joint advantage function.
+\end{theorem}
+
+\begin{proof}
+The proof extends the single-agent PPO monotonic improvement
+bound \citep[Theorem~1]{yu2022} to the multi-agent setting.
+
+Define the joint advantage $A^{\policyj}(s, \mathbf{a}) =
+Q^{\policyj}(s, \mathbf{a}) - V^{\policyj}(s)$.  By the
+performance difference lemma:
+\[
+  V^{\policyj'}(s) - V^{\policyj}(s)
+  = \frac{1}{1 - \discount} \E_{s' \sim d_{\policyj'}^s}\!\left[
+    \E_{\mathbf{a} \sim \policyj'(\cdot \mid s')}\!\big[
+      A^{\policyj}(s', \mathbf{a})
+    \big]
+  \right],
+\]
+where $d_{\policyj'}^s$ is the discounted state visitation
+distribution under $\policyj'$ starting from $s$.  The key step
+is bounding the difference in expectations under $\policyj'$ vs.\
+$\policyj$.  Since the joint policy factorizes as
+$\policyj'(\mathbf{a} \mid s) = \prod_i \policyi'(\actioni \mid
+\tau_i)$, the total variation distance between $\policyj'$ and
+$\policyj$ satisfies:
+\[
+  \|\policyj'(\cdot \mid s) - \policyj(\cdot \mid s)\|_{\mathrm{TV}}
+  \leq \sum_{i=1}^N \|\policyi'(\cdot \mid \tau_i) -
+  \policyi(\cdot \mid \tau_i)\|_{\mathrm{TV}}.
+\]
+Applying Pinsker's inequality ($\|p - q\|_{\mathrm{TV}} \leq
+\sqrt{\frac{1}{2} \KL(p \| q)}$) to each term and combining
+with the performance difference lemma yields the bound~\eqref{eq:mappo-bound}.
+\end{proof}
+
+\begin{rlconnection}[title={MAPPO on SMAC}]
+\citet{yu2022} showed that MAPPO, despite its simplicity,
+matches or exceeds the performance of value decomposition methods
+(QMIX, QTRAN) on the StarCraft Multi-Agent Challenge.  Key
+practical insights include:
+\begin{itemize}[nosep]
+  \item \textbf{Centralized value function:} using the global
+    state $s$ as input to $V$ (rather than local observations)
+    significantly reduces variance.
+  \item \textbf{Parameter sharing:} homogeneous agents benefit
+    from shared policy networks with agent-ID conditioning.
+  \item \textbf{Large batch sizes:} PPO's on-policy nature
+    requires large batches for stable multi-agent learning;
+    typical batch sizes are $10$--$100\times$ larger than
+    single-agent settings.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 9: CREDIT ASSIGNMENT
+%% ============================================================
+\section{Credit Assignment}
+\label{sec:credit}
+
+A fundamental challenge in cooperative MARL is \emph{credit
+assignment}: given a shared team reward, how should the
+contribution of each agent be assessed?
+
+\begin{definition}[Credit Assignment Problem]
+\label{def:credit}
+The \emph{credit assignment problem} in cooperative MARL is the
+problem of decomposing a team reward signal $R(s, \mathbf{a})$
+into agent-specific feedback signals $r_i$ such that optimizing
+each $r_i$ individually leads to optimization of the team objective.
+\end{definition}
+
+We survey three principled approaches.
+
+\subsection{Difference Rewards}
+
+\begin{definition}[Difference Reward]
+\label{def:diff-reward}
+The \emph{difference reward} for agent $i$ is
+\begin{equation}
+\label{eq:diff-reward}
+  D_i(s, \mathbf{a}) = R(s, \mathbf{a})
+  - R(s, (\actionmi, c_i)),
+\end{equation}
+where $c_i \in \Actions_i$ is a fixed \emph{default action}
+for agent $i$, and $(\actionmi, c_i)$ denotes the joint action
+with agent $i$'s action replaced by $c_i$.
+\end{definition}
+
+\begin{proposition}[Alignment of Difference Rewards]
+\label{prop:diff-alignment}
+If each agent $i$ maximizes the expected sum of discounted
+difference rewards $\E[\sum_t \discount^t D_i(s_t, \mathbf{a}_t)]$,
+then the resulting joint policy is a Nash equilibrium of the
+common-payoff game with reward $R$.
+\end{proposition}
+
+\begin{proof}
+Fix agent $i$ and suppose all other agents $j \neq i$ follow
+fixed policies $\policymi$.  Agent $i$'s expected return under
+difference rewards is:
+\[
+  J_i^D(\policyi) = \E^{\policyi, \policymi}\!\left[
+    \sum_t \discount^t D_i(s_t, \mathbf{a}_t)
+  \right]
+  = \E^{\policyi, \policymi}\!\left[
+    \sum_t \discount^t R(s_t, \mathbf{a}_t)
+  \right]
+  - \E^{\policymi}\!\left[
+    \sum_t \discount^t R(s_t, (\actionmi^t, c_i))
+  \right].
+\]
+The second term does not depend on $\policyi$ (since $c_i$ is
+fixed and the other agents' policies are fixed).  Therefore,
+$\argmax_{\policyi} J_i^D(\policyi) = \argmax_{\policyi}
+\E^{\policyi, \policymi}[\sum_t \discount^t R(s_t, \mathbf{a}_t)]$.
+If this holds for all $i$ simultaneously, each agent's policy
+is a best response to the others under the team reward $R$,
+which is the definition of Nash equilibrium.  In a common-payoff
+game, Nash equilibria coincide with team-optimal policies when
+the equilibrium is Pareto-efficient.
+\end{proof}
+
+\subsection{Shapley Value-Based Credit Assignment}
+
+The Shapley value, from cooperative game theory (Phase~01,
+Lesson~20), provides a principled way to attribute team performance
+to individual agents.
+
+\begin{definition}[Shapley Value for MARL]
+\label{def:shapley}
+Given a cooperative game with characteristic function
+$v : 2^{\Players} \to \R$ where $v(S)$ represents the value
+achievable by coalition $S \subseteq \Players$, the
+\emph{Shapley value} of agent $i$ is
+\begin{equation}
+\label{eq:shapley}
+  \phi_i(v) = \sum_{S \subseteq \Players \setminus \{i\}}
+  \frac{|S|!\,(N - |S| - 1)!}{N!}
+  \big(v(S \cup \{i\}) - v(S)\big).
+\end{equation}
+In the MARL context, we define $v(S) = \E[R(s, \mathbf{a}_S,
+\mathbf{c}_{-S})]$, where agents in $S$ follow their learned
+policies and agents outside $S$ take default actions.
+\end{definition}
+
+\begin{remark}
+The Shapley value satisfies four desirable axioms: efficiency
+($\sum_i \phi_i = v(\Players) - v(\emptyset)$), symmetry, null
+player, and additivity.  However, computing it exactly requires
+evaluating $2^N$ coalitions, making it intractable for large $N$.
+Approximations via sampling random permutations of agents are
+commonly used.
+\end{remark}
+
+\subsection{Counterfactual Baselines: COMA}
+
+\begin{definition}[Counterfactual Advantage]
+\label{def:coma}
+The \emph{Counterfactual Multi-Agent} (COMA) advantage for agent
+$i$ is
+\begin{equation}
+\label{eq:coma}
+  A_i^{\mathrm{CF}}(s, \mathbf{a})
+  = Q(s, \mathbf{a}) - \sum_{a_i' \in \Actions_i}
+    \policyi(a_i' \mid \tau_i)\, Q(s, (\actionmi, a_i')),
+\end{equation}
+where $Q(s, \mathbf{a})$ is the centralized joint action-value
+function and the baseline is the expected Q-value over agent $i$'s
+policy, marginalizing out $\actioni$ while holding $\actionmi$ fixed.
+\end{definition}
+
+\begin{proposition}[Unbiasedness of COMA Baseline]
+\label{prop:coma-unbiased}
+The COMA advantage satisfies
+$\E_{\actioni \sim \policyi}[A_i^{\mathrm{CF}}(s, \mathbf{a})]
+= 0$, so it is a valid baseline for variance reduction in
+policy gradient methods.
+\end{proposition}
+
+\begin{proof}
+\begin{align*}
+  \E_{\actioni \sim \policyi}\!\big[A_i^{\mathrm{CF}}(s, \mathbf{a})\big]
+  &= \E_{\actioni \sim \policyi}\!\big[Q(s, \mathbf{a})\big]
+     - \E_{\actioni \sim \policyi}\!\bigg[
+       \sum_{a_i'} \policyi(a_i' \mid \tau_i)\, Q(s, (\actionmi, a_i'))
+     \bigg] \\
+  &= \sum_{\actioni} \policyi(\actioni \mid \tau_i)\,
+     Q(s, (\actionmi, \actioni))
+     - \sum_{a_i'} \policyi(a_i' \mid \tau_i)\,
+     Q(s, (\actionmi, a_i')) \\
+  &= 0.
+\end{align*}
+The baseline is independent of the sampled $\actioni$ (it
+averages over all possible actions), so subtracting it does not
+introduce bias into the policy gradient.
+\end{proof}
+
+\begin{rlconnection}[title={Credit Assignment in Practice}]
+\begin{itemize}[nosep]
+  \item \textbf{VDN/QMIX:} implicitly perform credit assignment
+    through the learned individual utilities $Q_i$---each
+    agent's $Q_i$ reflects its ``share'' of the team value.
+  \item \textbf{COMA:} explicitly computes counterfactual
+    baselines, requiring a centralized critic that can evaluate
+    $Q(s, (\actionmi, a_i'))$ for all $a_i'$.
+  \item \textbf{Shapley values:} provide the most principled
+    attribution but at exponential computational cost; practical
+    only for small $N$ or with sampling approximations.
+\end{itemize}
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[VDN Decomposition and IGM]
+\textnormal{(\(*\))} \\
+Let $N = 3$ agents with action spaces $\Actions_i = \{L, R\}$ and
+a VDN decomposition $\Qtot(\mathbf{a}) = Q_1(a_1) + Q_2(a_2) +
+Q_3(a_3)$ with $Q_1(L) = 3, Q_1(R) = 1$, $Q_2(L) = 2, Q_2(R) = 4$,
+$Q_3(L) = 5, Q_3(R) = 2$.  Verify that the IGM condition holds by
+computing $\argmax_{\mathbf{a}} \Qtot(\mathbf{a})$ both jointly
+(by enumeration) and via individual maximization.
+\end{exercise}
+
+\begin{exercise}[Joint Value in a Dec-POMDP]
+\textnormal{(\(*\))} \\
+Consider a $2$-agent, $2$-state Dec-POMDP with $\States = \{s_0,
+s_1\}$, $\Actions_i = \{L, R\}$, discount $\discount = 0.9$,
+and deterministic transitions: from $s_0$, joint action $(L, L)$
+leads to $s_1$ with reward $5$; all other joint actions keep the
+state at $s_0$ with reward $1$.  From $s_1$, all actions lead to
+$s_1$ with reward $3$.  Assuming full observability (so each
+agent sees the state), compute $V^{\policyj}(s_0)$ for the
+joint policy $\policyj = (\text{always } L, \text{always } L)$.
+\end{exercise}
+
+\begin{exercise}[Monotonicity Implies IGM -- Formal Proof]
+\textnormal{(\(**\))} \\
+Let $f : \R^N \to \R$ be a continuously differentiable function
+satisfying $\frac{\partial f}{\partial x_i} \geq 0$ for all $i$
+and all $\mathbf{x} \in \R^N$.  Let $g_i : \Actions_i \to \R$
+for $i = 1, \ldots, N$, and define
+$\Qtot(\mathbf{a}) = f(g_1(a_1), \ldots, g_N(a_N))$.  Prove that
+\[
+  \argmax_{\mathbf{a}} \Qtot(\mathbf{a})
+  \supseteq \left\{
+    \big(\argmax_{a_1} g_1(a_1), \ldots,
+    \argmax_{a_N} g_N(a_N)\big)
+  \right\}.
+\]
+Under what additional condition on $f$ is equality guaranteed?
+
+\textit{Hint:} Use the coordinate-wise replacement argument from
+Proposition~\ref{prop:mono-igm}.  For equality, consider strict
+monotonicity.
+\end{exercise}
+
+\begin{exercise}[QMIX Fails, QTRAN Succeeds]
+\textnormal{(\(**\))} \\
+Consider the $2$-agent coordination game with reward matrix:
+\[
+\begin{array}{c|ccc}
+  R(a_1, a_2) & a_2 = A & a_2 = B & a_2 = C \\
+  \hline
+  a_1 = A & 8 & 0 & 6 \\
+  a_1 = B & 0 & 8 & 0 \\
+  a_1 = C & 6 & 0 & 6 \\
+\end{array}
+\]
+\begin{enumerate}[label=(\alph*)]
+  \item Show that no monotonic decomposition $\Qtot(a_1, a_2) =
+    f(Q_1(a_1), Q_2(a_2))$ with $f$ non-decreasing in both
+    arguments can represent this game (so QMIX fails).
+  \item Construct individual utilities $Q_1, Q_2$, joint value
+    $V_{\mathrm{jt}}$, and individual values $V_1, V_2$ such
+    that the QTRAN conditions~\eqref{eq:qtran-opt}--\eqref{eq:qtran-subopt}
+    hold with $\bar{\mathbf{a}} = (A, A)$.
+\end{enumerate}
+
+\textit{Hint:} For part~(a), consider the implications of
+$R(A, B) = 0 < R(B, B) = 8$ and $R(A, A) = 8 > R(B, A) = 0$
+for monotonicity in $Q_1$.
+\end{exercise}
+
+\begin{exercise}[NEXP-Hardness and Exponential Policies]
+\textnormal{(\(***\))} \\
+In the proof sketch of Theorem~\ref{thm:nexp}, we noted that the
+reduction from the tiling problem encodes a $2^n \times 2^n$ grid.
+\begin{enumerate}[label=(\alph*)]
+  \item Explain why a Dec-POMDP with horizon $T = 2^{2n}$ requires
+    policies that are, in general, exponentially large decision
+    trees.
+  \item Show that if agents could communicate one bit per time step,
+    the complexity would drop from NEXP to NEXP $\cap$ co-NEXP
+    (informally: communication reduces the ``decentralization
+    penalty'').  Discuss what this implies for the value of
+    communication protocols in cooperative MARL.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Credit Assignment Bias Analysis]
+\textnormal{(\(***\))} \\
+Consider $N$ agents with a team reward $R(s, \mathbf{a}) =
+\sum_{i=1}^N f_i(s, \actioni) + g(s, \mathbf{a})$, where $f_i$
+captures agent $i$'s individual contribution and $g$ captures
+interaction effects.  Define the difference reward with default
+action $c_i$ for each agent.
+\begin{enumerate}[label=(\alph*)]
+  \item Derive an expression for $D_i(s, \mathbf{a})$ in terms
+    of $f_i$ and $g$.
+  \item Show that if $g \equiv 0$ (no interactions), then $D_i$
+    equals $f_i(\actioni) - f_i(c_i)$, so maximizing $D_i$ is
+    equivalent to maximizing $f_i$.
+  \item When $g \not\equiv 0$, analyze the bias introduced by
+    difference rewards.  Specifically, show that the gradient
+    $\nabla_{\theta_i} \E[D_i]$ may not align with
+    $\nabla_{\theta_i} \E[R]$ and characterize the conditions
+    under which they do align.
+\end{enumerate}
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item The \textbf{Dec-POMDP} formalizes cooperative MARL as a
+    tuple $(\Players, \States, \{\Actions_i\}, \Trans, R,
+    \{\Omega_i\}, O, \discount)$ where all agents share a common
+    reward $R$ but observe only local information.
+
+  \item Finding an optimal joint policy for a Dec-POMDP is
+    \textbf{NEXP-complete} (Theorem~\ref{thm:nexp}), far harder
+    than single-agent MDPs (P) or POMDPs (PSPACE-complete).  The
+    intractability stems from the combination of decentralization
+    and partial observability.
+
+  \item The \textbf{CTDE paradigm} (Centralized Training with
+    Decentralized Execution) sidesteps the complexity barrier by
+    using global information during training while producing
+    decentralized policies for execution.
+
+  \item \textbf{VDN} decomposes $\Qtot = \sum_i Q_i$, guaranteeing
+    that greedy action selection decomposes, but cannot represent
+    non-additive agent interactions (Theorem~\ref{thm:vdn-greedy}).
+
+  \item The \textbf{IGM condition} (Definition~\ref{def:igm})
+    is the fundamental structural requirement for decentralized
+    greedy action selection.  The monotonicity condition
+    $\partial \Qtot / \partial Q_i \geq 0$ is a sufficient
+    condition for IGM (Proposition~\ref{prop:mono-igm}).
+
+  \item \textbf{QMIX} enforces monotonicity via non-negative
+    mixing network weights generated by hypernetworks, strictly
+    generalizing VDN (Theorem~\ref{thm:qmix-superset}).
+
+  \item \textbf{QTRAN} achieves IGM without monotonicity by
+    introducing an additive correction term and enforcing
+    equality/inequality conditions
+    (Proposition~\ref{prop:qtran-igm}), yielding the
+    representational hierarchy VDN $\subsetneq$ QMIX $\subsetneq$
+    QTRAN.
+
+  \item \textbf{MAPPO} adapts PPO to multi-agent settings with
+    a centralized value function, preserving approximate monotonic
+    improvement guarantees (Theorem~\ref{thm:mappo-improvement}).
+
+  \item \textbf{Credit assignment}---attributing team reward to
+    individual agents---can be addressed via difference rewards,
+    Shapley values, or counterfactual baselines (COMA), each
+    offering different bias-variance-computation tradeoffs.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item \textbf{Competitive and mixed MARL (Lesson~63)} extends
+    the multi-agent framework to zero-sum and general-sum games,
+    covering Minimax-Q, Nash-Q, MADDPG, and self-play methods
+    including PSRO.
+
+  \item \textbf{Mean-field games (Lesson~64)} addresses the
+    scalability challenge when $N \to \infty$ by replacing
+    agent-level interactions with interactions against a
+    population distribution.
+
+  \item \textbf{Communication in MARL (Lesson~65)} studies
+    learned communication protocols (CommNet, DIAL, TarMAC)
+    that allow agents to share information during execution,
+    relaxing the strict decentralization assumption of
+    Dec-POMDPs.
+
+  \item \textbf{QPLEX} \citep{wang2021} introduces duplex
+    dueling architectures that decompose $\Qtot$ into
+    advantage and value components, achieving IGM with
+    greater representational capacity than QMIX while
+    maintaining tractable training.
+
+  \item \textbf{MAVEN} \citep{mahajan2019} addresses the
+    exploration challenge in value decomposition methods by
+    introducing a shared latent variable that conditions
+    agent exploration, promoting diverse joint behaviors.
+
+  \item \textbf{SMAC benchmark} \citep{samvelyan2019} provides
+    a standardized suite of StarCraft~II micromanagement
+    scenarios for evaluating cooperative MARL algorithms,
+    with varying difficulty levels and team compositions.
+
+  \item \textbf{Comprehensive surveys.}  \citet{zhang2021}
+    provides a selective overview of MARL theory and algorithms.
+    \citet[Chapters~6--8]{oliehoek2016} covers approximate
+    methods for Dec-POMDPs in depth.  \citet{kraemer2016}
+    surveys multi-agent reinforcement learning as a framework
+    for decentralized planning.
+\end{itemize}
+
+\bibliography{cooperative-refs}
+
+\end{document}

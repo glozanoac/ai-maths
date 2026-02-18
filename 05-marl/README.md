@@ -14,11 +14,11 @@ Extends RL to multi-agent settings: stochastic games as the foundational framewo
 
 | File | Directory | Topic | Status |
 |------|-----------|-------|--------|
-| `01-stochastic-game-theory` | `01-stochastic-games/` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | planned |
-| `01-cooperative-marl` | `02-cooperative/` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | planned |
-| `01-competitive-and-mixed-marl` | `03-competitive/` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | planned |
-| `01-mean-field-games` | `04-mean-field/` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | planned |
-| `01-communication-in-marl` | `05-communication/` | CommNet, DIAL, RIAL, TarMAC, emergent communication | planned |
+| `01-stochastic-game-theory` | `01-stochastic-games/` | Stochastic game formalism, Markov perfect equilibrium, Shapley's theorem, existence via fixed points | **exists** |
+| `01-cooperative-marl` | `02-cooperative/` | Dec-POMDP, CTDE, VDN, QMIX, QTRAN, MAPPO, IGM condition, credit assignment | **exists** |
+| `01-competitive-and-mixed-marl` | `03-competitive/` | Minimax-Q, Nash-Q, MADDPG, LOLA, self-play, PSRO | **exists** |
+| `01-mean-field-games` | `04-mean-field/` | Mean field game theory, McKean-Vlasov dynamics, forward-backward SDEs, mean field equilibria | **exists** |
+| `01-communication-in-marl` | `05-communication/` | CommNet, DIAL, RIAL, TarMAC, emergent communication | **exists** |
 
 ## Prerequisites
 

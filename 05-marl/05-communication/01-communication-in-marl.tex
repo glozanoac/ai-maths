@@ -1,0 +1,1283 @@
+\documentclass[11pt,a4paper]{article}
+\input{../lesson-preamble}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{Lesson 65: Communication in Multi-Agent RL}}
+\fancyhead[R]{\thepage}
+\title{Lesson 65: Communication in Multi-Agent RL}
+\author{AI/ML Mathematics}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%% ============================================================
+%% SECTION 1: MOTIVATION AND OVERVIEW
+%% ============================================================
+\section{Motivation and Overview}
+\label{sec:motivation}
+
+Consider a team of autonomous search-and-rescue drones deployed
+over a disaster zone.  Each drone has a limited field of view and
+can only observe a small region of the terrain at any time step.
+When one drone spots a survivor, it cannot carry out the rescue
+alone---it needs teammates to converge on the location, perhaps
+bringing medical supplies or forming a relay to a base station.
+The challenge is immediate: the drone that detects the survivor
+must somehow \emph{inform} its teammates, who are distributed
+across the zone, each processing only their own local
+observations.  But what should the message contain?  The raw
+observation?  A compressed encoding?  A directive?  And to whom
+should the message be sent---all drones (broadcast) or only the
+nearest ones (targeted)?
+
+This scenario exposes a fundamental tension in multi-agent
+reinforcement learning: decentralized agents operating under
+partial observability can, in principle, achieve near-centralized
+performance---\emph{if} they communicate effectively.  The tools
+developed in this lesson will let us formalize communication
+channels within the Dec-POMDP framework, analyze when
+communication provably improves team performance, and derive
+end-to-end learning algorithms for communication protocols.
+
+\begin{rlconnection}[title={Why Communication Matters for RL/ML}]
+\begin{itemize}[nosep]
+  \item \textbf{Robot swarm coordination.}  Swarms of robots
+    performing exploration, construction, or foraging rely on
+    learned communication to coordinate without centralized
+    control.
+  \item \textbf{Autonomous vehicle negotiation.}  Vehicles at
+    intersections without traffic signals must exchange intentions
+    to avoid collisions, requiring compact communication protocols.
+  \item \textbf{Distributed sensor networks.}  Bandwidth-limited
+    sensors must decide what information to transmit to a fusion
+    center, balancing informativeness against channel cost.
+  \item \textbf{Emergent language in AI.}  Studying how RL agents
+    develop communication protocols from scratch connects to
+    fundamental questions about the origins of language.
+\end{itemize}
+\end{rlconnection}
+
+\paragraph{Prerequisites.}
+Stochastic game formalism and Markov perfect equilibrium
+(Lesson~61, Definitions~3.1--3.4).  Cooperative MARL, Dec-POMDP
+framework, and centralized training with decentralized execution
+(Lesson~62, Sections~3--5).  Policy gradient theorem and
+REINFORCE (Lessons~54--55).  Neural network forward and backward
+propagation (Phase~03, Lessons~59--66).
+
+\paragraph{Learning objectives.}
+After completing this lesson, you will be able to:
+\begin{itemize}[nosep]
+  \item \textbf{Define} a communication-augmented Dec-POMDP and
+    \textbf{classify} communication protocols by channel type,
+    topology, and learning method.
+  \item \textbf{Derive} the CommNet gradient and \textbf{explain}
+    why end-to-end backpropagation through continuous communication
+    is well-defined.
+  \item \textbf{Compare} DIAL and RIAL for discrete communication,
+    identifying the variance trade-off between reparameterization
+    and REINFORCE-style gradients.
+  \item \textbf{Formalize} TarMAC's attention-based targeted
+    communication mechanism and \textbf{prove} that it subsumes
+    CommNet as a special case.
+  \item \textbf{Analyze} conditions under which emergent
+    communication arises and \textbf{evaluate} metrics for
+    compositionality.
+  \item \textbf{Justify} when communication improves team
+    performance over non-communicative baselines using the value of
+    communication framework.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 2: REFERENCES
+%% ============================================================
+\section{References}
+\label{sec:references}
+
+\begin{itemize}
+  \item \citet{sukhbaatar2016} --- CommNet: continuous
+    communication via mean-pooled hidden states with end-to-end
+    backpropagation.
+  \item \citet{foerster2016} --- DIAL and RIAL: differentiable
+    and reinforced approaches to discrete inter-agent
+    communication.
+  \item \citet{das2019} --- TarMAC: targeted multi-agent
+    communication using soft attention over agent messages.
+  \item \citet{zhang2021} --- Comprehensive survey of multi-agent
+    RL theory and algorithms, including communication methods.
+  \item \citet{hernandezleal2019} --- Critical survey of deep
+    MARL covering communication architectures and open problems.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 3: COMMUNICATION-AUGMENTED DEC-POMDP
+%% ============================================================
+\section{Communication-Augmented Dec-POMDP}
+\label{sec:comm-dec-pomdp}
+
+We begin by extending the standard Dec-POMDP framework of
+Lesson~62 with explicit communication channels.  The key idea
+is that agents can exchange messages before (or simultaneously
+with) selecting actions, and these messages become part of the
+information available for decision-making.
+
+\begin{definition}[Message Space]
+\label{def:message-space}
+For a multi-agent system with agent set $\Players = \{1, \ldots,
+N\}$, the \emph{message space} of agent $i$ is a set
+$\mathcal{M}_i$.  A message $m_i \in \mathcal{M}_i$ is a signal
+that agent $i$ can transmit at each time step.  The message may
+be continuous ($\mathcal{M}_i \subseteq \R^d$) or discrete
+($\mathcal{M}_i = \{1, \ldots, M\}$).
+\end{definition}
+
+\begin{definition}[Communication-Augmented Dec-POMDP]
+\label{def:comm-dec-pomdp}
+A \emph{communication-augmented Dec-POMDP} (Comm-Dec-POMDP) is a
+tuple
+\[
+  \mathcal{G} = \bigl(\Players, \States, \{\Actions_i\}_{i \in
+  \Players}, \Trans, \{r_i\}_{i \in \Players}, \{\Omega_i\}_{i
+  \in \Players}, \{O_i\}_{i \in \Players}, \{\mathcal{M}_i\}_{i
+  \in \Players}, \mathcal{C}, \discount \bigr),
+\]
+where $\States$ is the state space, $\Actions_i$ is agent $i$'s
+action space, $\Trans$ is the transition kernel, $r_i$ is agent
+$i$'s reward, $\Omega_i$ is agent $i$'s observation space,
+$O_i : \States \to \simplex(\Omega_i)$ is the observation
+function, $\mathcal{M}_i$ is the message space, $\mathcal{C}$
+is the \emph{communication protocol}, and $\discount \in [0,1)$
+is the discount factor.
+
+The communication protocol $\mathcal{C}$ specifies:
+\begin{enumerate}[nosep]
+  \item \textbf{Timing:} whether messages are sent before or
+    simultaneously with actions;
+  \item \textbf{Topology:} a directed graph $G = (\Players, E)$
+    where $(i,j) \in E$ means agent $i$ can send messages to
+    agent $j$;
+  \item \textbf{Bandwidth:} constraints on $|\mathcal{M}_i|$ or
+    $\dim(\mathcal{M}_i)$.
+\end{enumerate}
+
+Agent $i$'s policy maps its local observation and received
+messages to a joint action-message output:
+\[
+  \policyi : \Omega_i \times \prod_{j : (j,i) \in E}
+  \mathcal{M}_j \;\longrightarrow\; \simplex(\Actions_i \times
+  \mathcal{M}_i).
+\]
+\end{definition}
+
+\begin{remark}[Reduction to Centralized POMDP]
+\label{rem:centralized-reduction}
+Consider a Comm-Dec-POMDP with broadcast topology ($E = \Players
+\times \Players \setminus \{(i,i)\}$) and message spaces
+satisfying $|\mathcal{M}_i| \geq |\Omega_i|$ for all $i$.  Then
+each agent can transmit its full observation, and after one round
+of communication every agent has access to the joint observation
+$(o_1, \ldots, o_N)$.  The resulting information structure is
+equivalent to a centralized POMDP.
+\end{remark}
+
+\begin{proposition}[Communication Reduces Complexity]
+\label{prop:complexity-reduction}
+The optimal finite-horizon Dec-POMDP problem is NEXP-complete
+\citep{busoniu2008}.  If communication channels satisfy
+$|\mathcal{M}_i| \geq |\Omega_i|$ for all $i \in \Players$ with
+broadcast topology, then the Comm-Dec-POMDP reduces to a
+centralized POMDP, which is PSPACE-complete.
+\end{proposition}
+
+\begin{proof}
+Under broadcast communication with $|\mathcal{M}_i| \geq
+|\Omega_i|$, agent $i$ can encode its observation $o_i$ into
+a message $m_i = \text{enc}(o_i)$ with a bijective encoding.
+After one communication round, every agent $j$ receives
+$\{m_i\}_{i \neq j}$ and can decode to obtain $\{o_i\}_{i \neq
+j}$.  Combined with its own observation $o_j$, agent $j$ has
+access to the full joint observation $(o_1, \ldots, o_N)$.
+
+When all agents observe the same information, the joint policy
+optimization can be cast as a single-agent POMDP with state space
+$\States$, action space $\Actions_1 \times \cdots \times
+\Actions_N$, and observation space $\Omega_1 \times \cdots \times
+\Omega_N$.  The finite-horizon POMDP is PSPACE-complete (Papadimitriou
+and Tsitsiklis, 1987), so the Comm-Dec-POMDP inherits this
+complexity class under sufficient communication.
+\end{proof}
+
+The following taxonomy organizes the main axes along which
+communication protocols differ.
+
+\begin{definition}[Communication Taxonomy]
+\label{def:comm-taxonomy}
+Communication protocols in MARL are classified along three axes:
+\begin{enumerate}[nosep]
+  \item \textbf{Channel type:} \emph{Continuous}
+    ($\mathcal{M}_i \subseteq \R^d$) vs.\ \emph{discrete}
+    ($\mathcal{M}_i$ finite).
+  \item \textbf{Topology:} \emph{Broadcast} (all-to-all) vs.\
+    \emph{targeted} (agent-specific recipients) vs.\
+    \emph{bandwidth-limited} (fixed number of recipients).
+  \item \textbf{Learning method:} \emph{End-to-end
+    differentiable} vs.\ \emph{reinforcement-based} vs.\
+    \emph{pre-defined} (hand-crafted protocol).
+\end{enumerate}
+\end{definition}
+
+\begin{rlconnection}[title={Bridging Centralized and Decentralized
+    Performance}]
+Communication is the mechanism that interpolates between two
+extremes: fully decentralized execution (no communication, each
+agent acts on local observations alone) and fully centralized
+control (a single controller with access to all observations).
+The communication bandwidth determines where in this spectrum
+the system operates.  In practice, even a small amount of learned
+communication can dramatically close the gap between decentralized
+and centralized performance \citep{sukhbaatar2016}.
+\end{rlconnection}
+
+We now turn to the three major algorithmic paradigms for learning
+communication protocols: continuous communication (Section~\ref{sec:commnet}),
+discrete communication (Section~\ref{sec:dial-rial}), and
+targeted communication (Section~\ref{sec:tarmac}).
+
+%% ============================================================
+%% SECTION 4: CONTINUOUS COMMUNICATION: COMMNET
+%% ============================================================
+\section{Continuous Communication: CommNet}
+\label{sec:commnet}
+
+CommNet \citep{sukhbaatar2016} is the canonical continuous
+communication architecture.  All agents share a single neural
+network, and messages are the hidden states of other agents,
+averaged and fed back as input.
+
+\subsection{Architecture}
+
+Consider $N$ agents with shared parameters $\theta$.  At each
+time step $t$, the CommNet computation proceeds in $K$
+communication rounds.
+
+\begin{definition}[CommNet]
+\label{def:commnet}
+The CommNet architecture with $K$ communication rounds is defined
+by the following recurrence.  For each agent $i \in \Players$:
+\begin{enumerate}[nosep]
+  \item \textbf{Encoding:}
+    $\mathbf{h}_i^{(0)} = f_{\mathrm{enc}}(o_i; \theta_{\mathrm{enc}})$,
+    where $f_{\mathrm{enc}} : \Omega_i \to \R^d$.
+  \item \textbf{Communication rounds} ($k = 1, \ldots, K$):
+    \begin{align}
+      \mathbf{c}_i^{(k)} &= \frac{1}{N-1} \sum_{j \neq i}
+        \mathbf{h}_j^{(k-1)},
+        \label{eq:commnet-msg} \\
+      \mathbf{h}_i^{(k)} &= \sigma\!\bigl(W_1^{(k)}
+        \mathbf{h}_i^{(k-1)} + W_2^{(k)}
+        \mathbf{c}_i^{(k)}\bigr),
+        \label{eq:commnet-update}
+    \end{align}
+    where $W_1^{(k)}, W_2^{(k)} \in \R^{d \times d}$ are
+    learnable weight matrices and $\sigma$ is an element-wise
+    nonlinearity (e.g., ReLU or tanh).
+  \item \textbf{Decoding:}
+    $\policyi(\cdot \mid o_i, \mathbf{c}_i) =
+    \mathrm{softmax}\!\bigl(f_{\mathrm{dec}}(\mathbf{h}_i^{(K)};
+    \theta_{\mathrm{dec}})\bigr)$.
+\end{enumerate}
+\end{definition}
+
+The ``message'' in CommNet is the mean of other agents' hidden
+states---a continuous vector in $\R^d$.  This design ensures
+that the entire computation graph, from observations to actions,
+is a composition of differentiable operations.
+
+\subsection{End-to-End Differentiability}
+
+\begin{theorem}[CommNet Gradient]
+\label{thm:commnet-gradient}
+Let $J(\theta) = \E\bigl[\sum_{t=0}^{T} \discount^t \sum_{i
+\in \Players} r_i(s_t, \mathbf{a}_t)\bigr]$ be the team
+objective under CommNet with parameters $\theta = \{
+\theta_{\mathrm{enc}}, \{W_1^{(k)}, W_2^{(k)}\}_{k=1}^K,
+\theta_{\mathrm{dec}}\}$.  Then $\nabla_\theta J(\theta)$ is
+well-defined and can be computed by standard backpropagation
+through the communication rounds.
+\end{theorem}
+
+\begin{proof}
+We show that every operation in the CommNet computation graph is
+differentiable with respect to $\theta$.
+
+\textbf{Step 1: Encoding.}  The encoder $f_{\mathrm{enc}}$ is a
+neural network with differentiable activation functions, so
+$\partial \mathbf{h}_i^{(0)} / \partial \theta_{\mathrm{enc}}$
+exists.
+
+\textbf{Step 2: Communication rounds.}  Fix round $k$.  The
+communication message \eqref{eq:commnet-msg} is a linear
+combination (mean) of the hidden states $\{\mathbf{h}_j^{(k-1)}
+\}_{j \neq i}$, which is differentiable.  The hidden state
+update \eqref{eq:commnet-update} is a composition of an affine
+map $(W_1^{(k)}, W_2^{(k)})$ and the nonlinearity $\sigma$.  If
+$\sigma$ is differentiable almost everywhere (as with ReLU or
+tanh), then $\mathbf{h}_i^{(k)}$ is differentiable with respect
+to both $\mathbf{h}_i^{(k-1)}$ and the parameters $W_1^{(k)},
+W_2^{(k)}$.
+
+\textbf{Step 3: Induction.}  By induction on $k$, each
+$\mathbf{h}_i^{(k)}$ is differentiable with respect to $\theta$.
+The key observation is that the mean operation in
+\eqref{eq:commnet-msg} couples all agents: $\partial
+\mathbf{c}_i^{(k)} / \partial \mathbf{h}_j^{(k-1)} = \frac{1}{N-1}
+I_d$ for $j \neq i$.  This coupling propagates gradients across
+agents.
+
+\textbf{Step 4: Decoding and objective.}  The decoder
+$f_{\mathrm{dec}}$ and softmax are differentiable.  For
+deterministic action selection, the gradient flows directly.
+For stochastic policies, we apply the reparameterization trick
+(for continuous actions) or the log-derivative trick combined
+with the fact that the logits are differentiable in $\theta$.
+
+The overall gradient $\nabla_\theta J$ is obtained by
+backpropagating through the temporal sequence and through the
+communication rounds at each time step.  Since the composition
+of differentiable functions is differentiable, the gradient is
+well-defined.
+\end{proof}
+
+\begin{keyresult}[title={End-to-End Differentiable Communication}]
+CommNet's use of continuous messages (mean-pooled hidden states)
+makes the entire multi-agent system differentiable with respect to
+shared parameters.  Standard backpropagation computes the gradient
+without requiring REINFORCE-style estimators for the communication
+component, yielding low-variance gradient estimates.
+\end{keyresult}
+
+\subsection{Properties and Limitations}
+
+\begin{example}[Three-Agent Hallway Navigation]
+\label{ex:hallway}
+Consider three agents in a hallway with three rooms.  Each agent
+observes only its current room.  The team receives reward $+1$
+when all agents are in different rooms at the same time step.
+Without communication, agents must resort to randomized
+strategies.
+
+With CommNet ($K=1$), each agent broadcasts its encoded
+observation.  The received message $\mathbf{c}_i^{(1)} =
+\frac{1}{2}(\mathbf{h}_j^{(0)} + \mathbf{h}_k^{(0)})$ encodes
+the average position of the other two agents.  This suffices for
+each agent to infer a ``free'' room and navigate to it, achieving
+near-optimal coordination.
+\end{example}
+
+\begin{remark}[Limitations of Mean-Pooled Communication]
+\label{rem:commnet-limits}
+CommNet has two principal limitations:
+\begin{enumerate}[nosep]
+  \item \textbf{No targeted messaging.}  Every agent receives
+    the same aggregate message (the mean of all others' hidden
+    states), so agent-specific information is lost.
+  \item \textbf{Permutation symmetry.}  The mean operation is
+    invariant to permutations of agents, which can be beneficial
+    (scalability) but also limits expressiveness when agent
+    identities matter.
+\end{enumerate}
+These limitations motivate the targeted communication mechanisms
+of Section~\ref{sec:tarmac}.
+\end{remark}
+
+%% ============================================================
+%% SECTION 5: DISCRETE COMMUNICATION: DIAL AND RIAL
+%% ============================================================
+\section{Discrete Communication: DIAL and RIAL}
+\label{sec:dial-rial}
+
+In many real-world deployments, communication channels carry
+discrete signals: binary flags, categorical indices, or natural
+language tokens.  The fundamental challenge is that discrete
+message selection (e.g., $\argmax$) is not differentiable, which
+breaks the end-to-end gradient path exploited by CommNet.
+\citet{foerster2016} proposed two approaches: RIAL (reinforced)
+and DIAL (differentiable).
+
+\subsection{RIAL: Reinforced Inter-Agent Learning}
+
+\begin{definition}[RIAL Policy]
+\label{def:rial}
+In RIAL, agent $i$'s policy produces both an environment action
+and a discrete message:
+\[
+  \policyi(\actioni, m_i \mid o_i, \mathbf{m}_{-i}^{\mathrm{recv}})
+  = \policyi^a(\actioni \mid o_i, \mathbf{m}_{-i}^{\mathrm{recv}})
+  \;\cdot\; \policyi^m(m_i \mid o_i,
+  \mathbf{m}_{-i}^{\mathrm{recv}}),
+\]
+where $m_i \in \{1, \ldots, M\}$ is a discrete message,
+$\mathbf{m}_{-i}^{\mathrm{recv}}$ denotes the messages received
+from other agents, and the action and message components may share
+a common hidden representation.
+\end{definition}
+
+In RIAL, the message $m_i$ is treated as an additional action.
+The gradient for the message component is estimated via the
+policy gradient (REINFORCE):
+\begin{equation}
+  \nabla_\theta J^{\mathrm{RIAL}} = \E\Bigl[
+    \sum_{i \in \Players} \nabla_\theta \log \policyi(\actioni,
+    m_i \mid \cdot\,; \theta) \; \hat{A}_i \Bigr],
+  \label{eq:rial-gradient}
+\end{equation}
+where $\hat{A}_i$ is an advantage estimate.  Crucially, there is
+\emph{no gradient flowing through the communication channel}:
+agent $j$ treats the received message $m_i$ as part of the
+environment, not as a function of $\theta$.
+
+\subsection{DIAL: Differentiable Inter-Agent Learning}
+
+\begin{definition}[Discretize/Regularize Unit (DRU)]
+\label{def:dru}
+The DRU maps a continuous pre-message $\tilde{m} \in \R^d$ to a
+channel-compatible signal:
+\[
+  \mathrm{DRU}_\tau(\tilde{m}) =
+  \begin{cases}
+    \sigma(\tilde{m} / \tau), & \text{during training
+      (temperature } \tau > 0\text{)}, \\[3pt]
+    \indicator[\tilde{m} > 0], & \text{during execution
+      (hard discretization)},
+  \end{cases}
+\]
+where $\sigma$ denotes the logistic sigmoid applied
+element-wise, $\tau$ is a temperature parameter, and
+$\indicator[\cdot > 0]$ is the element-wise indicator function.
+\end{definition}
+
+\begin{definition}[DIAL]
+\label{def:dial}
+In DIAL, agent $i$ produces a continuous pre-message
+$\tilde{m}_i = g_i(o_i, \mathbf{m}_{-i}^{\mathrm{recv}};
+\theta)$ via a neural network.  During training, the message
+transmitted is $m_i = \mathrm{DRU}_\tau(\tilde{m}_i)$, which
+is differentiable in $\theta$.  During execution, the message
+is discretized: $m_i = \indicator[\tilde{m}_i > 0]$.
+\end{definition}
+
+The DIAL gradient for the communication component is:
+\begin{equation}
+  \frac{\partial J}{\partial \theta} \;\ni\;
+  \frac{\partial J}{\partial a_j}
+  \frac{\partial a_j}{\partial m_i}
+  \frac{\partial m_i}{\partial \tilde{m}_i}
+  \frac{\partial \tilde{m}_i}{\partial \theta},
+  \label{eq:dial-gradient-chain}
+\end{equation}
+where $\partial m_i / \partial \tilde{m}_i = \sigma'(\tilde{m}_i
+/ \tau) / \tau$ during training.  This is a
+reparameterization-like gradient that passes through the
+communication channel.
+
+\subsection{Variance Comparison}
+
+\begin{proposition}[DIAL Has Lower Variance Than RIAL]
+\label{prop:dial-variance}
+For the communication component of the gradient, DIAL provides
+lower-variance estimates than RIAL.  Specifically, let
+$g^{\mathrm{DIAL}}$ and $g^{\mathrm{RIAL}}$ denote the gradient
+estimators for the message parameters.  Then
+\[
+  \Var[g^{\mathrm{DIAL}}] \leq \Var[g^{\mathrm{RIAL}}].
+\]
+\end{proposition}
+
+\begin{proof}
+The RIAL gradient estimator for the message component has the
+REINFORCE form:
+\[
+  g^{\mathrm{RIAL}} = \nabla_\theta \log \policyi^m(m_i \mid
+  \cdot\,; \theta) \;\cdot\; \hat{A}_i.
+\]
+This is the product of the score function and the advantage,
+and its variance includes the term $\Var[\hat{A}_i] \cdot
+\E[\|\nabla_\theta \log \policyi^m\|^2]$ plus cross-terms.
+
+The DIAL gradient estimator uses the pathwise derivative:
+\[
+  g^{\mathrm{DIAL}} = \frac{\partial J}{\partial m_i}
+  \cdot \frac{\partial \mathrm{DRU}_\tau(\tilde{m}_i)}
+  {\partial \tilde{m}_i} \cdot \frac{\partial \tilde{m}_i}
+  {\partial \theta}.
+\]
+Each factor is computed by backpropagation through deterministic
+operations (given the sampled trajectory).  The variance arises
+only from the stochasticity of the trajectory, not from a
+log-probability score function.
+
+By the general result that pathwise (reparameterization)
+estimators have lower variance than score-function (REINFORCE)
+estimators when both are applicable \citep{suttonbarto2018}, we
+conclude $\Var[g^{\mathrm{DIAL}}] \leq \Var[g^{\mathrm{RIAL}}]$.
+\end{proof}
+
+\subsection{Comparison Summary}
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+& \textbf{Gradient type} & \textbf{Variance} &
+\textbf{Channel} & \textbf{Execution} \\
+\midrule
+RIAL & REINFORCE (score) & High & Discrete &
+  Discrete \\
+DIAL & Pathwise (reparam.) & Low & Continuous
+  (train) & Discrete \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warning}[Training-Execution Gap in DIAL]
+During training, DIAL uses the continuous relaxation
+$\sigma(\tilde{m}/\tau)$, but during execution, messages are
+discretized to $\indicator[\tilde{m} > 0]$.  If the temperature
+$\tau$ is not annealed toward zero during training, the learned
+policy may depend on continuous message values that are lost
+upon discretization, causing performance degradation at test
+time.  Careful scheduling of $\tau \to 0$ is essential.
+\end{warning}
+
+\begin{example}[Two-Agent Switch Riddle]
+\label{ex:switch}
+Two agents are placed in separate rooms, each containing a switch
+(up or down).  Agent 1 observes the state of both switches but
+can only flip switch 1.  Agent 2 can flip switch 2 but observes
+nothing.  The team receives reward $+1$ if both switches end up
+in the same position.
+
+Without communication, agent 2 must guess.  With a 1-bit
+communication channel ($m_1 \in \{0,1\}$), agent 1 can signal
+the state of switch 2, and agent 2 can act optimally.  RIAL
+learns this by reinforcing the correct message; DIAL learns it
+by backpropagating the reward signal through the sigmoid-relaxed
+channel.  In experiments \citep{foerster2016}, DIAL converges
+faster due to its lower-variance gradient.
+\end{example}
+
+%% ============================================================
+%% SECTION 6: TARGETED COMMUNICATION: TARMAC
+%% ============================================================
+\section{Targeted Communication: TarMAC}
+\label{sec:tarmac}
+
+CommNet broadcasts a uniform average to all agents, ignoring
+the fact that different agents may need different information.
+TarMAC \citep{das2019} introduces an attention mechanism that
+allows agents to send targeted messages, weighted by relevance.
+
+\subsection{Architecture}
+
+\begin{definition}[TarMAC]
+\label{def:tarmac}
+In TarMAC, each agent $i$ produces three quantities from its
+hidden state $\mathbf{h}_i$:
+\begin{align}
+  \mathbf{v}_i &= f_v(\mathbf{h}_i; \theta_v)
+    \in \R^{d_v}, & &\text{(value/message)},
+    \label{eq:tarmac-value} \\
+  \mathbf{k}_i &= f_k(\mathbf{h}_i; \theta_k)
+    \in \R^{d_k}, & &\text{(key/signature)},
+    \label{eq:tarmac-key} \\
+  \mathbf{q}_i &= f_q(\mathbf{h}_i; \theta_q)
+    \in \R^{d_k}, & &\text{(query)}.
+    \label{eq:tarmac-query}
+\end{align}
+The attention weight from agent $i$ to agent $j$ is:
+\begin{equation}
+  \alpha_{j \leftarrow i} = \frac{\exp(\mathbf{q}_j^\top
+  \mathbf{k}_i / \sqrt{d_k})}{\sum_{l \neq j} \exp(
+  \mathbf{q}_j^\top \mathbf{k}_l / \sqrt{d_k})},
+  \label{eq:tarmac-attention}
+\end{equation}
+and the aggregated message received by agent $j$ is:
+\begin{equation}
+  \mathbf{c}_j = \sum_{i \neq j} \alpha_{j \leftarrow i}
+  \;\mathbf{v}_i.
+  \label{eq:tarmac-message}
+\end{equation}
+Agent $j$ then conditions its policy on
+$(\mathbf{h}_j, \mathbf{c}_j)$.
+\end{definition}
+
+This is precisely the scaled dot-product attention mechanism
+from transformer architectures, applied across agents rather
+than across sequence positions.  Multi-head variants extend this
+by computing $H$ independent attention heads and concatenating
+the results.
+
+\subsection{Subsumption of CommNet}
+
+\begin{proposition}[TarMAC Subsumes CommNet]
+\label{prop:tarmac-subsumes}
+If the attention weights in TarMAC are uniform, i.e.,
+$\alpha_{j \leftarrow i} = 1/(N-1)$ for all $i \neq j$, and
+the value function is the identity $\mathbf{v}_i =
+\mathbf{h}_i$, then TarMAC reduces to CommNet's mean
+communication.
+\end{proposition}
+
+\begin{proof}
+Under uniform attention, the aggregated message
+\eqref{eq:tarmac-message} becomes
+\[
+  \mathbf{c}_j = \sum_{i \neq j} \frac{1}{N-1} \;\mathbf{v}_i
+  = \frac{1}{N-1} \sum_{i \neq j} \mathbf{h}_i,
+\]
+where the last equality uses $\mathbf{v}_i = \mathbf{h}_i$.
+This is exactly the CommNet communication
+\eqref{eq:commnet-msg}.
+\end{proof}
+
+\begin{keyresult}[title={Attention-Based Targeted Communication}]
+TarMAC's attention mechanism allows each agent to selectively
+attend to the most relevant messages, generalizing CommNet's
+uniform broadcast.  The attention weights are learned end-to-end,
+enabling the system to discover which agents should communicate
+with which.  As a strict generalization of CommNet, TarMAC
+achieves at least the same representational power.
+\end{keyresult}
+
+\begin{rlconnection}[title={Attention and Scalability}]
+The attention-based communication in TarMAC mirrors the
+self-attention mechanism in transformers.  This connection
+suggests that advances in efficient attention (sparse attention,
+linear attention) can be directly applied to scale multi-agent
+communication to large agent populations.  Furthermore,
+attention weights provide interpretability: examining
+$\alpha_{j \leftarrow i}$ reveals which agents are communicating
+most, aiding in debugging and understanding emergent strategies.
+\end{rlconnection}
+
+\begin{example}[Predator-Prey with Targeted Communication]
+\label{ex:predator-prey}
+Consider four predators pursuing a single prey in a grid world.
+Each predator observes a $5 \times 5$ patch centered on itself.
+When a predator is near the prey but needs help to capture it
+(capture requires two predators adjacent to the prey
+simultaneously), it should communicate primarily with the
+nearest other predator, not all of them.
+
+With TarMAC, the predator near the prey learns to produce a
+high-attention key $\mathbf{k}_i$ that matches the query
+$\mathbf{q}_j$ of the nearest predator $j$.  The attention
+weight $\alpha_{j \leftarrow i}$ becomes large, routing the
+positional information to the most relevant teammate.
+Distant predators receive low attention weight and are not
+distracted by irrelevant messages.
+\end{example}
+
+%% ============================================================
+%% SECTION 7: EMERGENT COMMUNICATION AND LANGUAGE GROUNDING
+%% ============================================================
+\section{Emergent Communication and Language Grounding}
+\label{sec:emergent}
+
+Sections~\ref{sec:commnet}--\ref{sec:tarmac} treated
+communication as a mechanism for improving team performance.
+A deeper question is whether agents can develop a structured
+\emph{language} from scratch---a communication protocol with
+compositional, interpretable structure.
+
+\begin{definition}[Emergent Communication]
+\label{def:emergent-comm}
+\emph{Emergent communication} refers to a communication protocol
+that arises purely from multi-agent RL training, without any
+pre-defined language, message semantics, or explicit supervision
+on the communication channel.  The protocol is shaped solely by
+the reward signal.
+\end{definition}
+
+\subsection{Referential Games}
+
+The standard testbed for emergent communication is the
+\emph{referential game} \citep{lazaridou2017}.
+
+\begin{definition}[Referential Game]
+\label{def:referential-game}
+A referential game consists of:
+\begin{itemize}[nosep]
+  \item A \emph{speaker} agent $S$ that observes a target object
+    $x \in \mathcal{X}$ (e.g., an image);
+  \item A message space $\mathcal{M}$ (typically a sequence of
+    discrete symbols);
+  \item A \emph{listener} agent $L$ that receives the message
+    $m$ and must identify $x$ from a set of candidates
+    $\{x_1, \ldots, x_C\}$;
+  \item Reward: $r = \indicator[L \text{ selects the correct
+    } x]$.
+\end{itemize}
+\end{definition}
+
+\subsection{Compositionality}
+
+\begin{definition}[Compositionality]
+\label{def:compositionality}
+An emergent language is \emph{compositional} if it exhibits
+systematic structure: the meaning of a complex message is
+determined by the meanings of its parts and the rules for
+combining them.  Formally, let $\mathcal{X}$ be a structured
+input space (e.g., objects described by attributes such as
+color, shape, size) and let $\phi : \mathcal{X} \to
+\mathcal{M}$ be the speaker's encoding.  The language is
+compositional if there exists a decomposition
+\[
+  \phi(x) = (\phi_1(\text{attr}_1(x)), \;\phi_2(\text{attr}_2(x)),
+  \;\ldots)
+\]
+where each $\phi_k$ maps the $k$-th attribute independently
+to a message component.
+\end{definition}
+
+\begin{definition}[Topographic Similarity]
+\label{def:topo-sim}
+The \emph{topographic similarity} (topo-sim) of a communication
+protocol $\phi$ is the Spearman correlation between distances
+in meaning space and distances in message space:
+\[
+  \rho_{\mathrm{topo}} = \mathrm{Spearman}\!\bigl(\{d_{\mathcal{X}}
+  (x, x')\}_{x \neq x'}, \;\{d_{\mathcal{M}}(\phi(x),
+  \phi(x'))\}_{x \neq x'}\bigr),
+\]
+where $d_{\mathcal{X}}$ and $d_{\mathcal{M}}$ are distance
+metrics on the input and message spaces, respectively.  A
+topo-sim close to $+1$ indicates that semantically similar
+inputs are mapped to similar messages (compositionality).
+\end{definition}
+
+\subsection{Conditions for Emergence}
+
+\begin{theorem}[Conditions for Non-Trivial Communication]
+\label{thm:emergence-conditions}
+In a cooperative multi-agent setting with aligned incentives,
+non-trivial emergent communication (i.e., communication that
+improves team reward over non-communicative baselines) arises
+when the following conditions hold:
+\begin{enumerate}[nosep]
+  \item \textbf{Partial observability:} no single agent observes
+    the full state;
+  \item \textbf{Complementary information:} different agents have
+    access to different relevant features of the state;
+  \item \textbf{Action interdependence:} the optimal action for
+    at least one agent depends on information held by another;
+  \item \textbf{Sufficient channel capacity:}
+    $|\mathcal{M}_i|$ is large enough to encode the relevant
+    information.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+We prove this by establishing necessity.
+
+\textbf{Necessity of (1):} If all agents observe the full state
+$s$, then each agent can independently compute the optimal action
+$a_i^*(s)$ without any communication.  Hence $\text{VoC} = 0$
+(see Definition~\ref{def:voc}).
+
+\textbf{Necessity of (2):} If agents have identical observations
+($o_i = o_j$ for all $i, j$), then no agent possesses
+information that others lack.  Any message is redundant since the
+receiver already has the same information as the sender.
+
+\textbf{Necessity of (3):} If agent $i$'s optimal action does not
+depend on the observations of any other agent---i.e., $a_i^*(o_i)
+= \argmax_{a_i} \E[r_i \mid o_i, a_i]$ regardless of $a_{-i}$
+and $o_{-i}$---then communication cannot improve $i$'s policy.
+If this holds for all agents, $\text{VoC} = 0$.
+
+\textbf{Necessity of (4):} If the channel capacity is zero
+($|\mathcal{M}_i| = 1$), no information can be transmitted.
+More generally, the channel must support encoding of the relevant
+information with sufficient fidelity.
+
+\textbf{Sufficiency:} When all four conditions hold, there
+exists at least one state $s$ and pair of agents $(i,j)$ such
+that agent $j$ can improve its action by receiving information
+from agent $i$ that is not available in $o_j$.  A communication
+protocol mapping $o_i$ to a message $m_i$ that encodes this
+information yields strictly positive value of communication.
+\end{proof}
+
+\begin{warning}[Interpretability of Emergent Protocols]
+Emergent communication protocols are typically not interpretable
+by humans.  Agents may exploit artifacts of the channel (e.g.,
+encoding information in the \emph{timing} or \emph{magnitude}
+of messages) rather than developing a human-readable language.
+Compositionality, when it emerges, often requires explicit
+pressure such as limited channel bandwidth or structured input
+distributions \citep{lazaridou2017}.
+\end{warning}
+
+\begin{rlconnection}[title={Emergent Communication and Language
+    Evolution}]
+The study of emergent communication in MARL connects to deep
+questions in linguistics and cognitive science about how human
+languages evolved.  Referential games serve as simplified models
+of the naming game studied in evolutionary linguistics.
+Computational experiments have shown that compositionality---a
+hallmark of human language---can emerge under appropriate
+pressures (limited bandwidth, generalization requirements),
+bridging MARL and computational linguistics.
+\end{rlconnection}
+
+%% ============================================================
+%% SECTION 8: THEORETICAL ANALYSIS OF COMMUNICATION BENEFITS
+%% ============================================================
+\section{Theoretical Analysis of Communication Benefits}
+\label{sec:theory}
+
+We now formalize the question: \emph{when does communication
+provably help?}
+
+\begin{definition}[Value of Communication]
+\label{def:voc}
+For a Dec-POMDP $\mathcal{G}$, let $V^*_{\mathrm{comm}}$ denote
+the optimal team value achievable with a communication channel
+$\mathcal{C}$, and let $V^*_{\mathrm{no\text{-}comm}}$ denote
+the optimal team value without communication.  The \emph{value
+of communication} is
+\[
+  \mathrm{VoC}(\mathcal{C}) = V^*_{\mathrm{comm}} -
+  V^*_{\mathrm{no\text{-}comm}} \;\geq\; 0.
+\]
+\end{definition}
+
+The non-negativity $\mathrm{VoC} \geq 0$ follows because any
+non-communicative policy is a special case of a communicative
+policy (with all messages set to a constant).
+
+\begin{proposition}[Zero Value of Communication]
+\label{prop:voc-zero}
+$\mathrm{VoC}(\mathcal{C}) = 0$ if there exists, for each
+agent $i$, a sufficient statistic $T_i(o_i)$ for the optimal
+action $a_i^*$ that depends only on $o_i$.  Formally, if
+\[
+  \policyi^*(\actioni \mid o_i) = \policyi^*(\actioni \mid o_i,
+  m_{-i}) \quad \text{for all } m_{-i} \in \prod_{j \neq i}
+  \mathcal{M}_j,
+\]
+for every agent $i$, then communication has zero value.
+\end{proposition}
+
+\begin{proof}
+If agent $i$'s optimal policy is invariant to received messages
+for every $i$, then the optimal communicative policy can be
+achieved by a non-communicative policy (simply ignore all
+messages).  Hence $V^*_{\mathrm{comm}} =
+V^*_{\mathrm{no\text{-}comm}}$.
+\end{proof}
+
+\begin{proposition}[Positive Value of Communication]
+\label{prop:voc-positive}
+$\mathrm{VoC}(\mathcal{C}) > 0$ if and only if the following
+three conditions hold simultaneously:
+\begin{enumerate}[nosep]
+  \item \textbf{Partial observability:} there exists a state
+    $s \in \States$ and agent $i$ such that $o_i$ does not
+    determine $s$;
+  \item \textbf{Complementary information:} there exist agents
+    $i, j$ and states $s, s'$ such that $o_i(s) \neq o_i(s')$
+    but $o_j(s) = o_j(s')$ (agent $i$ distinguishes states that
+    agent $j$ cannot);
+  \item \textbf{Action interdependence:} agent $j$'s optimal
+    action differs between $s$ and $s'$:
+    $a_j^*(s) \neq a_j^*(s')$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{(If):}  Under conditions (1)--(3), agent $j$ faces
+states $s, s'$ that it cannot distinguish ($o_j(s) = o_j(s')$)
+but that require different optimal actions.  Without
+communication, $j$ must choose a single action for both states.
+With communication, agent $i$ (who can distinguish $s$ from
+$s'$) sends a message encoding this distinction.  Agent $j$
+conditions on the message and selects the state-appropriate
+action.  The expected reward strictly increases, so
+$\mathrm{VoC} > 0$.
+
+\textbf{(Only if):}  If (1) fails, all agents observe the full
+state and communication is redundant.  If (2) fails, no agent
+has information that another lacks.  If (3) fails, the optimal
+action is the same in all states that only communication could
+distinguish, so the additional information is useless.
+\end{proof}
+
+\begin{theorem}[Communication Complexity Bound]
+\label{thm:comm-complexity}
+Consider a cooperative Comm-Dec-POMDP with $N$ agents, finite
+state space $|\States|$, and horizon $T$.  An $\epsilon$-optimal
+joint policy (achieving value within $\epsilon$ of $V^*_{\mathrm{comm}}$)
+can be achieved with at most
+\[
+  B = O\!\left(|\States| \log \frac{T}{\epsilon}\right)
+\]
+bits of communication per agent per time step, assuming broadcast
+topology.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The key insight is that the relevant information for optimal
+decision-making is the sufficient statistic for the joint
+belief state.
+
+\textbf{Step 1: Belief state representation.}  The joint belief
+$b_t \in \simplex(\States)$ requires at most $|\States| - 1$
+real numbers to specify.  Quantizing each coordinate to
+$\epsilon/(T \cdot |\States|)$ precision (to ensure total error
+over $T$ steps is bounded by $\epsilon$) requires
+$\log(T \cdot |\States| / \epsilon)$ bits per coordinate.
+
+\textbf{Step 2: Sufficient communication.}  If each agent
+broadcasts its local belief update (contribution to the joint
+belief), the team can reconstruct the joint belief.  Each
+agent's contribution involves at most $|\States|$ coordinates,
+each requiring $O(\log(T/\epsilon))$ bits.
+
+\textbf{Step 3: Total.}  The total communication per agent per
+step is $O(|\States| \log(T/\epsilon))$ bits.  With this
+precision, the team can implement a policy that is
+$\epsilon$-close to the optimal centralized policy.
+\end{proof}
+
+\begin{keyresult}[title={Conditions for Communication Value}]
+The value of communication is positive if and only if agents
+have complementary partial observations and interdependent
+optimal actions.  The communication bandwidth required for
+$\epsilon$-optimal performance scales as $O(|\States|
+\log(T/\epsilon))$ bits per agent per step---logarithmic in the
+horizon and the accuracy requirement, but linear in the state
+space size.
+\end{keyresult}
+
+\begin{example}[VoC in the Switch Riddle]
+\label{ex:voc-switch}
+Return to the switch riddle of Example~\ref{ex:switch}.
+The state space is $\States = \{(\text{up}, \text{up}),
+(\text{up}, \text{down}), (\text{down}, \text{up}),
+(\text{down}, \text{down})\}$.
+
+\textbf{Without communication:}  Agent 2 observes nothing,
+so its policy must be independent of the state.  The best
+strategy achieves reward $1/2$ in expectation (guess randomly
+whether to flip).
+
+\textbf{With 1-bit communication:}  Agent 1 sends $m_1 =
+\indicator[\text{switch 2 is up}]$.  Agent 2 conditions on
+$m_1$ and acts optimally, achieving reward $1$.  Hence
+$\mathrm{VoC} = 1 - 1/2 = 1/2 > 0$.
+
+All three conditions of Proposition~\ref{prop:voc-positive}
+hold: (1) agent 2 has no observation; (2) agent 1 observes
+what agent 2 cannot; (3) agent 2's optimal action differs
+based on the unobserved switch state.
+\end{example}
+
+\begin{example}[VoC = 0 in Independent Tasks]
+\label{ex:voc-zero}
+Consider $N$ agents each solving an independent bandit problem:
+agent $i$ observes its own bandit state $o_i$ and selects arm
+$\actioni$.  The team reward is $\sum_i r_i(o_i, \actioni)$
+with no interaction.  Since each $r_i$ depends only on $(o_i,
+\actioni)$, the optimal policy for agent $i$ is $a_i^*(o_i)$
+regardless of other agents' observations.  Condition (3) of
+Proposition~\ref{prop:voc-positive} fails, so $\mathrm{VoC} =
+0$.
+\end{example}
+
+%% ============================================================
+%% SECTION 9: SURVEY AND COMPARISON OF METHODS
+%% ============================================================
+\section{Survey and Comparison of Methods}
+\label{sec:survey}
+
+We conclude the technical development with a comparative overview
+of the major communication methods in MARL.
+
+\subsection{Summary Table}
+
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Method} & \textbf{Channel} & \textbf{Topology} &
+\textbf{Gradient} & \textbf{Scalability} & \textbf{Key
+Innovation} \\
+\midrule
+CommNet & Continuous & Broadcast & Backprop &
+  Moderate & Mean-pooled hidden states \\
+RIAL & Discrete & Broadcast & REINFORCE &
+  Moderate & Message as RL action \\
+DIAL & Discrete (exec.) & Broadcast & Backprop (train) &
+  Moderate & DRU continuous relaxation \\
+TarMAC & Continuous & Targeted & Backprop &
+  Good & Attention over messages \\
+IC3Net & Continuous & Gated & Backprop &
+  Good & Gating when to communicate \\
+ATOC & Continuous & Dynamic & Backprop &
+  Good & Attention + dynamic groups \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+IC3Net \citep{singh2019} extends CommNet with a learned gating
+mechanism that decides \emph{when} to communicate, reducing
+unnecessary bandwidth usage.  ATOC \citep{jiang2018} uses an
+attention mechanism to form dynamic communication groups based on
+agent proximity and relevance.
+
+\subsection{Method Selection Guidelines}
+
+\begin{itemize}[nosep]
+  \item \textbf{CommNet:}  Appropriate for simple cooperative
+    tasks with a moderate number of agents ($N \leq 20$) where
+    all agents benefit from a shared summary of the group state.
+  \item \textbf{RIAL:}  When the execution channel is strictly
+    discrete and training-execution consistency is paramount.
+    Accepts higher gradient variance in exchange for no
+    train-test gap.
+  \item \textbf{DIAL:}  When discrete execution is required but
+    sample efficiency is critical.  The continuous relaxation
+    during training significantly accelerates learning.
+  \item \textbf{TarMAC:}  Large agent populations ($N \geq 10$)
+    where agents have heterogeneous roles and targeted
+    communication matters.  The attention mechanism provides
+    natural scalability and interpretability.
+  \item \textbf{IC3Net:}  Mixed cooperative-competitive settings
+    where agents should selectively withhold communication from
+    opponents.
+\end{itemize}
+
+\subsection{Open Problems}
+
+Several fundamental challenges remain:
+\begin{enumerate}[nosep]
+  \item \textbf{Scalability to thousands of agents.}  Current
+    methods scale to tens or hundreds of agents.  Mean-field
+    approximations (Lesson~64) may help, but integrating them
+    with learned communication is largely unexplored.
+  \item \textbf{Adversarial robustness.}  If agents can
+    intercept or corrupt messages, communication protocols must
+    be robust.  Connections to Byzantine fault tolerance and
+    robust game theory are open.
+  \item \textbf{Communication cost.}  Most methods assume free
+    communication.  Incorporating explicit bandwidth costs into
+    the objective function changes the optimization landscape
+    significantly.
+  \item \textbf{Interpretability.}  Developing communication
+    protocols that are both performant and human-interpretable
+    remains a grand challenge connecting MARL to natural language
+    processing.
+\end{enumerate}
+
+%% ============================================================
+%% SECTION 10: EXERCISES
+%% ============================================================
+\section{Exercises}
+\label{sec:exercises}
+
+\begin{exercise}[CommNet Mean Observation]
+\textnormal{(\(*\))} \\
+Consider a CommNet with $K = 1$ communication round and identity
+encoder ($f_{\mathrm{enc}}(o_i) = o_i$ with observations
+$o_i \in \R^d$).  Show that if $W_1^{(1)} = 0$ and
+$W_2^{(1)} = I_d$ (identity), and $\sigma$ is the identity
+function, then each agent's hidden state after one round equals
+the mean of all \emph{other} agents' observations:
+$\mathbf{h}_i^{(1)} = \frac{1}{N-1} \sum_{j \neq i} o_j$.
+\end{exercise}
+
+\begin{exercise}[RIAL Policy Gradient]
+\textnormal{(\(*\))} \\
+Consider two agents ($\Players = \{1, 2\}$) with binary
+message space $\mathcal{M}_i = \{0, 1\}$ and binary action
+space $\Actions_i = \{0, 1\}$.  Agent 1 observes $o_1$ and
+sends message $m_1$.  Agent 2 observes $o_2$ and receives
+$m_1$.  Write the RIAL policy gradient $\nabla_\theta J$ for
+this game, expanding all terms in $\policyi(\actioni, m_i
+\mid o_i, m_{-i}^{\mathrm{recv}})$ explicitly.  Identify which
+terms contribute to learning the communication protocol.
+\end{exercise}
+
+\begin{exercise}[TarMAC Subsumes CommNet]
+\textnormal{(\(**\))} \\
+Provide a complete proof that TarMAC (Definition~\ref{def:tarmac})
+reduces to CommNet (Definition~\ref{def:commnet}) when:
+(a)~$\mathbf{v}_i = \mathbf{h}_i$ (identity value function),
+(b)~$\mathbf{q}_j = \mathbf{q}$ for all $j$ (uniform query),
+and (c)~$\mathbf{k}_i = \mathbf{k}$ for all $i$ (uniform key).
+Verify that conditions (b) and (c) imply uniform attention
+weights, and substitute into the TarMAC aggregation formula.
+\end{exercise}
+
+\begin{exercise}[DRU Gradient Analysis]
+\textnormal{(\(**\))} \\
+For the DRU (Definition~\ref{def:dru}) with temperature $\tau$,
+compute:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item The gradient $\partial \mathrm{DRU}_\tau(\tilde{m}) /
+    \partial \tilde{m}$ during training for scalar $\tilde{m}
+    \in \R$.
+  \item Show that as $\tau \to 0^+$, the DRU output approaches
+    the hard threshold $\indicator[\tilde{m} > 0]$ and the
+    gradient approaches a scaled Dirac delta at
+    $\tilde{m} = 0$.
+  \item Compare the variance of the DIAL gradient (using the
+    DRU) with the REINFORCE gradient for a single binary
+    message, using a concrete example with a known reward
+    function.
+\end{enumerate}
+\textit{Hint:} For part (b), use the fact that
+$\sigma(x/\tau) \to \indicator[x > 0]$ pointwise as
+$\tau \to 0^+$, and $\sigma'(x/\tau)/\tau \to \delta(x)$.
+\end{exercise}
+
+\begin{exercise}[Constructing a Dec-POMDP with VoC = 0]
+\textnormal{(\(***\))} \\
+Construct a Dec-POMDP with two agents, partial observability
+(neither agent observes the full state), and yet
+$\mathrm{VoC} = 0$.  Specifically:
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item Define a state space $\States$, observation functions
+    $O_1, O_2$, and reward function such that each agent's
+    observations are incomplete but its optimal action depends
+    only on its own observation.
+  \item Prove formally that $\mathrm{VoC} = 0$ by showing that
+    condition (3) of Proposition~\ref{prop:voc-positive} fails.
+  \item Explain intuitively why partial observability alone is
+    not sufficient for communication to help.
+\end{enumerate}
+\end{exercise}
+
+\begin{exercise}[Communication Protocol Design]
+\textnormal{(\(***\))} \\
+Consider three agents in a grid world.  Agent 1 observes the
+target location $\ell \in \{1, \ldots, 9\}$ (one of 9 grid
+cells).  Agents 2 and 3 observe nothing about the target.  All
+agents can send messages from $\mathcal{M}_i = \{0, 1\}^b$
+($b$-bit messages).
+\begin{enumerate}[nosep,label=(\alph*)]
+  \item What is the minimum value of $b$ such that agent 1 can
+    communicate the target location exactly?  Justify using
+    information-theoretic arguments.
+  \item Design an explicit communication protocol (mapping from
+    $\ell$ to messages) for the minimum $b$.
+  \item Suppose communication is noisy: each bit is flipped
+    independently with probability $p < 1/2$.  Compute the
+    probability of correct target identification as a function
+    of $b$ and $p$, and determine the minimum $b$ to achieve
+    error probability at most $0.01$ for $p = 0.1$.
+\end{enumerate}
+\textit{Hint:} For (c), use repetition coding and apply
+Hoeffding's inequality.
+\end{exercise}
+
+%% ============================================================
+%% SECTION 11: SUMMARY
+%% ============================================================
+\section{Summary}
+\label{sec:summary}
+
+\begin{itemize}
+  \item A \emph{communication-augmented Dec-POMDP} extends the
+    standard Dec-POMDP with message spaces, a communication
+    protocol, and policies that condition on received messages
+    as well as local observations
+    (Definition~\ref{def:comm-dec-pomdp}).
+  \item With sufficient bandwidth and broadcast topology,
+    communication reduces the Dec-POMDP from NEXP-complete to
+    PSPACE-complete by enabling centralized information
+    aggregation (Proposition~\ref{prop:complexity-reduction}).
+  \item \textbf{CommNet} achieves end-to-end differentiable
+    communication by passing the mean of agents' hidden states
+    as a continuous message, enabling standard backpropagation
+    through the communication channel
+    (Theorem~\ref{thm:commnet-gradient}).
+  \item \textbf{RIAL} treats discrete messages as reinforcement
+    learning actions, using REINFORCE-style gradients; \textbf{DIAL}
+    uses a continuous relaxation (DRU) during training for
+    lower-variance gradients, discretizing only at execution
+    (Proposition~\ref{prop:dial-variance}).
+  \item \textbf{TarMAC} introduces attention-based targeted
+    communication, allowing each agent to selectively attend to
+    the most relevant messages.  TarMAC strictly generalizes
+    CommNet (Proposition~\ref{prop:tarmac-subsumes}).
+  \item \emph{Emergent communication} arises when agents develop
+    protocols from scratch via RL training; compositionality can
+    be measured by topographic similarity
+    (Definition~\ref{def:topo-sim}).
+  \item Non-trivial communication emerges under four necessary
+    conditions: partial observability, complementary information,
+    action interdependence, and sufficient channel capacity
+    (Theorem~\ref{thm:emergence-conditions}).
+  \item The \emph{value of communication} $\mathrm{VoC}$ is
+    positive if and only if agents have complementary
+    observations and interdependent optimal actions
+    (Proposition~\ref{prop:voc-positive}); achieving
+    $\epsilon$-optimal performance requires
+    $O(|\States|\log(T/\epsilon))$ bits per agent per step
+    (Theorem~\ref{thm:comm-complexity}).
+  \item Key open problems include scalability to thousands of
+    agents, adversarial robustness of communication, explicit
+    communication cost modeling, and interpretability of learned
+    protocols.
+\end{itemize}
+
+%% ============================================================
+%% SECTION 12: FURTHER READING
+%% ============================================================
+\section{Further Reading}
+\label{sec:further-reading}
+
+\begin{itemize}
+  \item \textbf{Phase 06 applications.}  Lesson~66 (continuous
+    control) and Lesson~70 (multi-vehicle coordination) apply
+    communication-based MARL to aerospace scenarios, including
+    formation control with limited bandwidth and
+    communication-aware collision avoidance.
+  \item \textbf{Learning when to communicate.}
+    \citet{singh2019} introduce IC3Net, which augments CommNet
+    with a learned gating mechanism that decides at each time
+    step whether an agent should communicate, significantly
+    reducing bandwidth in cooperative-competitive settings.
+  \item \textbf{Attentional communication.}  \citet{jiang2018}
+    propose ATOC, which uses an attention mechanism to form
+    dynamic communication groups, and demonstrate scalability
+    advantages in large-scale cooperative navigation.
+  \item \textbf{Bidirectionally-coordinated nets.}
+    \citet{peng2017} develop BiCNet for StarCraft micromanagement,
+    using bidirectional recurrent communication for real-time
+    coordination among heterogeneous units.
+  \item \textbf{Emergent language and NLP.}  \citet{lazaridou2017}
+    study multi-agent cooperation and the emergence of natural
+    language properties.  The connection between emergent
+    communication and computational pragmatics is surveyed in
+    the broader NLP literature on language grounding.
+  \item \textbf{Comprehensive surveys.}  \citet{zhang2021}
+    provide a theoretical treatment of MARL including
+    communication, while \citet{hernandezleal2019} offer a
+    critical perspective on deep MARL methods and their
+    limitations.
+  \item \textbf{Historical note.}  The study of communication in
+    multi-agent systems predates deep RL, with roots in
+    distributed AI and the speech act theory of Austin and Searle.
+    \citet{shoham2008} cover the logical and game-theoretic
+    foundations of multi-agent communication protocols.
+\end{itemize}
+
+\bibliography{communication-refs}
+
+\end{document}
