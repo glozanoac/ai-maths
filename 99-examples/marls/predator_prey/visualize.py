@@ -3,7 +3,7 @@
 import argparse
 import numpy as np
 
-from predator_prey.env import PredatorPreyEnv
+from predator_prey.env import PredatorPreyEnv, MAPS
 from predator_prey.env.renderer import Renderer
 from predator_prey.agents import RandomAgent, IQLAgent, VDNAgent
 
@@ -26,12 +26,13 @@ def run_episode(env, select_action_fn):
 def main():
     parser = argparse.ArgumentParser(description="Visualize agents")
     parser.add_argument("--agent", choices=["random", "iql", "vdn"], default="random")
+    parser.add_argument("--env", choices=list(MAPS.keys()), default="env0")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--fps", type=int, default=5)
     args = parser.parse_args()
 
     reward_mode = "cooperative" if args.agent == "vdn" else "individual"
-    env = PredatorPreyEnv(reward_mode=reward_mode)
+    env = PredatorPreyEnv(reward_mode=reward_mode, walls=MAPS[args.env]["walls"])
 
     if args.agent == "random":
         agents = {name: RandomAgent() for name in env.agents}

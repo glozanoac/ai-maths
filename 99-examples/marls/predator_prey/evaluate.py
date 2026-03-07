@@ -1,11 +1,12 @@
 """Compare trained policies: Random vs IQL vs VDN."""
 
+import argparse
 import os
 
 import numpy as np
 from tqdm import trange
 
-from predator_prey.env import PredatorPreyEnv
+from predator_prey.env import PredatorPreyEnv, MAPS
 from predator_prey.agents import RandomAgent, IQLAgent, VDNAgent
 from predator_prey.utils import MetricsTracker
 
@@ -30,11 +31,16 @@ def evaluate(env, select_action_fn, n_episodes=100, desc="Eval"):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", choices=list(MAPS.keys()), default="env0")
+    args = parser.parse_args()
+
+    walls = MAPS[args.env]["walls"]
     n_eval = 200
     results = {}
 
     # Random baseline
-    env = PredatorPreyEnv()
+    env = PredatorPreyEnv(walls=walls)
     random_agents = {name: RandomAgent() for name in env.agents}
     random_metrics = evaluate(
         env,
@@ -67,7 +73,7 @@ def main():
     # VDN
     vdn_path = "checkpoints/vdn.pt"
     if os.path.exists(vdn_path):
-        env_coop = PredatorPreyEnv(reward_mode="cooperative")
+        env_coop = PredatorPreyEnv(reward_mode="cooperative", walls=walls)
         vdn = VDNAgent()
         vdn.load(vdn_path)
         vdn_metrics = evaluate(

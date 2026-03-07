@@ -1,16 +1,21 @@
 """Sanity check: run random agents to establish baseline capture rate."""
 
+import argparse
 import os
 
 from tqdm import trange
 
-from predator_prey.env import PredatorPreyEnv
+from predator_prey.env import PredatorPreyEnv, MAPS
 from predator_prey.agents import RandomAgent
 from predator_prey.utils import MetricsTracker
 
 
 def main():
-    env = PredatorPreyEnv()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", choices=list(MAPS.keys()), default="env0")
+    args = parser.parse_args()
+
+    env = PredatorPreyEnv(walls=MAPS[args.env]["walls"])
     agents = {name: RandomAgent() for name in env.agents}
     metrics = MetricsTracker()
     n_episodes = 1000

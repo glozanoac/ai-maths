@@ -1,17 +1,22 @@
 """Train VDN (Value Decomposition Network) agents."""
 
+import argparse
 import os
 
 import numpy as np
 from tqdm import trange
 
-from predator_prey.env import PredatorPreyEnv
+from predator_prey.env import PredatorPreyEnv, MAPS
 from predator_prey.agents import VDNAgent
 from predator_prey.utils import ReplayBuffer, MetricsTracker
 
 
 def main():
-    env = PredatorPreyEnv(reward_mode="cooperative")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", choices=list(MAPS.keys()), default="env0")
+    args = parser.parse_args()
+
+    env = PredatorPreyEnv(reward_mode="cooperative", walls=MAPS[args.env]["walls"])
     vdn = VDNAgent()
     buffer = ReplayBuffer(capacity=50000)
     metrics = MetricsTracker()
