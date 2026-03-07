@@ -1,5 +1,0 @@
-numpy>=1.24.0
-matplotlib>=3.6.0
-torch>=2.0.0
-tqdm>=4.64.0
-pygame>=2.5.0
