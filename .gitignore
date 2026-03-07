@@ -8,3 +8,9 @@
 *.synctex.gz
 *.fls
 *.fdb_latexmk
+
+*.pkl
+*.pt
+**/env/
+
+*.pyc
